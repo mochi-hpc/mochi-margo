@@ -42,6 +42,7 @@ int main(int argc, char **argv)
 
     /* set primary ES to idle without polling */
     ret = ABT_snoozer_xstream_self_set();
+    if(ret != 0)
     {
         fprintf(stderr, "Error: ABT_snoozer_xstream_self_set()\n");
         return(-1);
@@ -49,11 +50,13 @@ int main(int argc, char **argv)
 
     /* retrieve current pool to use for ULT creation */
     ret = ABT_xstream_self(&xstream);
+    if(ret != 0)
     {
         fprintf(stderr, "Error: ABT_xstream_self()\n");
         return(-1);
     }
     ret = ABT_xstream_get_main_pools(xstream, 1, &pool);
+    if(ret != 0)
     {
         fprintf(stderr, "Error: ABT_xstream_get_main_pools()\n");
         return(-1);
