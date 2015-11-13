@@ -250,23 +250,4 @@ hg_return_t margo_bulk_transfer(
 
     return(hret);
 }
- 
-static void sched_eloop_breaker_cb(EV_P_ ev_async *w, int revents)
-{
-    /* do nothing except break out of the event loop */
-    ev_break(EV_A_ EVBREAK_ONE);
-    return;
-}
 
-int margo_setup_ev(struct margo_ev *ev)
-{
-    ev->sched_eloop_breaker = malloc(sizeof(*ev->sched_eloop_breaker));
-    if(!ev->sched_eloop_breaker)
-        return(-1);
-
-    ev->sched_eloop = ev_default_loop(EVFLAG_AUTO);
-    ev_async_init(ev->sched_eloop_breaker, sched_eloop_breaker_cb);
-    ev_async_start(ev->sched_eloop, ev->sched_eloop_breaker);
-
-    return(0);
-}
