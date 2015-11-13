@@ -19,9 +19,3 @@ Example configuration:
     ../configure --prefix=/home/pcarns/working/install \
         PKG_CONFIG_PATH=/home/pcarns/working/install/lib/pkgconfig \
         CFLAGS="-g -Wall"
-
-## To Do:
-
-* Fix licensing 
-* Convert dedicated thread that drives HG to an xstream
-
