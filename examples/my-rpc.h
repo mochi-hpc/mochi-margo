@@ -7,7 +7,7 @@
 #ifndef __MY_RPC
 #define __MY_RPC
 
-#include "hgargo.h"
+#include <margo.h>
 
 /* visible API for example RPC operation */
 

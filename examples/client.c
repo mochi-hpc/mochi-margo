@@ -8,8 +8,9 @@
 #include <assert.h>
 #include <unistd.h>
 #include <abt.h>
+#include <abt-snoozer.h>
+#include <margo.h>
 
-#include "hgargo.h"
 #include "my-rpc.h"
 
 /* This is an example client program that issues 4 concurrent RPCs, each of
@@ -31,10 +32,6 @@ int main(int argc, char **argv)
     int ret;
     ABT_xstream xstream;
     ABT_pool pool;
-    ABT_sched sched;
-    ABT_pool_def pool_def;
-    struct hgargo_sched_data *sched_data;
-    struct hgargo_pool_data *pool_data;
     
     ret = ABT_init(argc, argv);
     if(ret != 0)
@@ -43,53 +40,29 @@ int main(int argc, char **argv)
         return(-1);
     }
 
+    /* set primary ES to idle without polling */
+    ret = ABT_snoozer_xstream_self_set();
+    {
+        fprintf(stderr, "Error: ABT_snoozer_xstream_self_set()\n");
+        return(-1);
+    }
+
+    /* retrieve current pool to use for ULT creation */
     ret = ABT_xstream_self(&xstream);
-    if(ret != 0)
     {
         fprintf(stderr, "Error: ABT_xstream_self()\n");
         return(-1);
     }
-
-    ret = hgargo_pool_get_def(ABT_POOL_ACCESS_MPMC, &pool_def);
-    if(ret != 0)
+    ret = ABT_xstream_get_main_pools(xstream, 1, &pool);
     {
-        fprintf(stderr, "Error: hgargo_pool_get_def()\n");
-        return(-1);
-    }
-    ret = ABT_pool_create(&pool_def, ABT_POOL_CONFIG_NULL, &pool);
-    if(ret != 0)
-    {
-        fprintf(stderr, "Error: ABT_pool_create()\n");
-        return(-1);
-    }
-
-    hgargo_create_scheds(1, &pool, &sched);
-
-    ABT_sched_get_data(sched, (void**)(&sched_data));
-    ABT_pool_get_data(pool, (void**)(&pool_data));
-
-    ret = hgargo_setup_ev(&sched_data->ev);
-    if(ret < 0)
-    {
-        fprintf(stderr, "Error: hgargo_setup_ev()\n");
-        return(-1);
-    }
-    pool_data->ev = sched_data->ev;
-
-    ABT_sched_set_data(sched, sched_data);
-    ABT_pool_set_data(pool, pool_data);
-
-    ret = ABT_xstream_set_main_sched(xstream, sched);
-    if(ret != 0)
-    {
-        fprintf(stderr, "Error: ABT_xstream_set_main_sched()\n");
+        fprintf(stderr, "Error: ABT_xstream_get_main_pools()\n");
         return(-1);
     }
 
     /* initialize
      *   note: address here is really just being used to identify transport 
      */
-    hgargo_init(NA_FALSE, "tcp://localhost:1234");
+    margo_init(NA_FALSE, "tcp://localhost:1234");
 
     /* register RPC */
     my_rpc_id = my_rpc_register();
@@ -129,7 +102,7 @@ int main(int argc, char **argv)
         }
     }
 
-    hgargo_finalize();
+    margo_finalize();
     ABT_finalize();
 
     return(0);
@@ -156,11 +129,11 @@ static void run_my_rpc(void *_arg)
     sprintf((char*)buffer, "Hello world!\n");
 
     /* find addr for server */
-    ret = hgargo_addr_lookup("tcp://localhost:1234", &svr_addr);
+    ret = margo_addr_lookup("tcp://localhost:1234", &svr_addr);
     assert(ret == 0);
 
     /* create handle */
-    ret = hgargo_create_handle(svr_addr, my_rpc_id, &handle);
+    ret = margo_create_handle(svr_addr, my_rpc_id, &handle);
     assert(ret == 0);
 
     /* register buffer for rdma/bulk access by server */
@@ -174,7 +147,7 @@ static void run_my_rpc(void *_arg)
      * input struct.  It was set above. 
      */ 
     in.input_val = *((int*)(_arg));
-    hgargo_forward(handle, &in);
+    margo_forward(handle, &in);
 
     /* decode response */
     ret = HG_Get_output(handle, &out);
