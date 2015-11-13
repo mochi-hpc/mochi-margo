@@ -1,0 +1,4 @@
+src_libhgargo_a_SOURCES += \
+ src/hgargo.c \
+ src/hgargo-sched.c \
+ src/hgargo-pool.c

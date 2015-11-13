@@ -1,0 +1,11 @@
+bin_PROGRAMS += examples/client examples/server
+
+examples_client_SOURCES = \
+ examples/client.c \
+ examples/my-rpc.c
+examples_client_LDADD = src/libhgargo.a
+
+examples_server_SOURCES = \
+ examples/server.c \
+ examples/my-rpc.c
+examples_server_LDADD = src/libhgargo.a
