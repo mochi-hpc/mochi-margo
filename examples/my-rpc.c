@@ -52,7 +52,7 @@ static void my_rpc_ult(void *_arg)
     assert(ret == 0);
 
     /* do bulk transfer from client to server */
-    ret = hgargo_bulk_transfer(hgi->bulk_context, HG_BULK_PULL, 
+    ret = margo_bulk_transfer(hgi->bulk_context, HG_BULK_PULL, 
         hgi->addr, in.bulk_handle, 0,
         bulk_handle, 0, size);
     assert(ret == 0);
@@ -87,7 +87,7 @@ hg_id_t my_rpc_register(void)
     hg_class_t* hg_class;
     hg_id_t tmp;
 
-    hg_class = hgargo_get_class();
+    hg_class = margo_get_class();
 
     tmp = MERCURY_REGISTER(hg_class, "my_rpc", my_rpc_in_t, my_rpc_out_t, 
         my_rpc_ult_handler);
