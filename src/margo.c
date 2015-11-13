@@ -6,10 +6,10 @@
  */
 
 #include <assert.h>
-#include <pthread.h>
 #include <unistd.h>
 #include <errno.h>
 #include <abt.h>
+#include <abt-snoozer.h>
 
 #include "margo.h"
 
@@ -18,11 +18,13 @@ static na_context_t *na_context = NULL;
 static hg_context_t *hg_context = NULL;
 static hg_class_t *hg_class = NULL;
 
-static pthread_t hg_progress_tid;
+static ABT_thread hg_progress_tid;
 static int hg_progress_shutdown_flag = 0;
-static void* hg_progress_fn(void* foo);
+static void hg_progress_fn(void* foo);
 
 static ABT_pool main_pool;
+static ABT_pool engine_pool;
+static ABT_xstream engine_xstream;
 
 struct handler_entry
 {
@@ -86,14 +88,20 @@ int margo_init(na_bool_t listen, const char* local_addr)
         return(-1);
     }
 
-    /* start up thread to drive progress */
-    ret = pthread_create(&hg_progress_tid, NULL, hg_progress_fn, NULL);
+    /* create an ES and ULT to drive Mercury progress */
+    ret = ABT_snoozer_xstream_create(&engine_pool, &engine_xstream);
     if(ret != 0)
     {
-        HG_Context_destroy(hg_context);
-        HG_Finalize(hg_class);
-        NA_Context_destroy(network_class, na_context);
-        NA_Finalize(network_class);
+        /* TODO: err handling */
+        fprintf(stderr, "Error: ABT_snoozer_xstream_create()\n");
+        return(-1);
+    }
+    ret = ABT_thread_create(engine_pool, hg_progress_fn, NULL, 
+        ABT_THREAD_ATTR_NULL, &hg_progress_tid);
+    if(ret != 0)
+    {
+        /* TODO: err handling */
+        fprintf(stderr, "Error: ABT_thread_create()\n");
         return(-1);
     }
 
@@ -102,14 +110,14 @@ int margo_init(na_bool_t listen, const char* local_addr)
 
 void margo_finalize(void)
 {
-    int ret;
-
     /* tell progress thread to wrap things up */
     hg_progress_shutdown_flag = 1;
 
     /* wait for it to shutdown cleanly */
-    ret = pthread_join(hg_progress_tid, NULL);
-    assert(ret == 0);
+    ABT_thread_join(hg_progress_tid);
+    ABT_thread_free(&hg_progress_tid);
+    ABT_xstream_join(engine_xstream);
+    ABT_xstream_free(&engine_xstream);
 
     HG_Context_destroy(hg_context);
     HG_Finalize(hg_class);
@@ -120,7 +128,7 @@ void margo_finalize(void)
 }
 
 /* dedicated thread function to drive Mercury progress */
-static void* hg_progress_fn(void* foo)
+static void hg_progress_fn(void* foo)
 {
     int ret;
     unsigned int actual_count;
@@ -135,7 +143,7 @@ static void* hg_progress_fn(void* foo)
             HG_Progress(hg_class, hg_context, 100);
     }
 
-    return(NULL);
+    return;
 }
 
 hg_class_t* margo_get_class(void)
