@@ -21,7 +21,7 @@ int main(int argc, char **argv)
 {
     int ret;
     ABT_eventual eventual;
-    int shutdown;
+    int *shutdown;
     
     ret = ABT_init(argc, argv);
     if(ret != 0)
@@ -44,7 +44,7 @@ int main(int argc, char **argv)
     my_rpc_register();
 
     /* suspend this ULT until someone tells us to shut down */
-    ret = ABT_eventual_create(sizeof(shutdown), &eventual);
+    ret = ABT_eventual_create(sizeof(*shutdown), &eventual);
     if(ret != 0)
     {
         fprintf(stderr, "Error: ABT_eventual_create()\n");
