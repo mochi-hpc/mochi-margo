@@ -89,7 +89,7 @@ int margo_init(na_bool_t listen, const char* local_addr)
     }
 
     /* create an ES and ULT to drive Mercury progress */
-    ret = ABT_snoozer_xstream_create(&engine_pool, &engine_xstream);
+    ret = ABT_snoozer_xstream_create(1, &engine_pool, &engine_xstream);
     if(ret != 0)
     {
         /* TODO: err handling */
