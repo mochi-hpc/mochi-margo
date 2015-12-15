@@ -22,6 +22,7 @@ int main(int argc, char **argv)
     int ret;
     ABT_eventual eventual;
     int *shutdown;
+    margo_instance_id mid;
     
     ret = ABT_init(argc, argv);
     if(ret != 0)
@@ -38,10 +39,10 @@ int main(int argc, char **argv)
         return(-1);
     }
 
-    margo_init(NA_TRUE, "tcp://localhost:1234");
+    mid = margo_init(NA_TRUE, "tcp://localhost:1234");
 
     /* register RPC */
-    my_rpc_register();
+    my_rpc_register(mid);
 
     /* suspend this ULT until someone tells us to shut down */
     ret = ABT_eventual_create(sizeof(*shutdown), &eventual);
@@ -53,7 +54,7 @@ int main(int argc, char **argv)
 
     ABT_eventual_wait(eventual, (void**)&shutdown);
 
-    margo_finalize();
+    margo_finalize(mid);
     ABT_finalize();
 
     return(0);

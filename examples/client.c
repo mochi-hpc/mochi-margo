@@ -20,18 +20,25 @@
  * The HG forward call is executed using asynchronous operations.
  */
 
+struct run_my_rpc_args
+{
+    int val;
+    margo_instance_id mid;
+};
+
 static void run_my_rpc(void *_arg);
 
 static hg_id_t my_rpc_id;
 
 int main(int argc, char **argv) 
 {
-    int values[4];
+    struct run_my_rpc_args args[4];
     ABT_thread threads[4];
     int i;
     int ret;
     ABT_xstream xstream;
     ABT_pool pool;
+    margo_instance_id mid;
     
     ret = ABT_init(argc, argv);
     if(ret != 0)
@@ -65,18 +72,19 @@ int main(int argc, char **argv)
     /* initialize
      *   note: address here is really just being used to identify transport 
      */
-    margo_init(NA_FALSE, "tcp://localhost:1234");
+    mid = margo_init(NA_FALSE, "tcp://localhost:1234");
 
     /* register RPC */
-    my_rpc_id = my_rpc_register();
+    my_rpc_id = my_rpc_register(mid);
 
     for(i=0; i<4; i++)
     {
-        values[i] = i;
-        /* Each fiber gets a pointer to an element of the values array to use
+        args[i].val = i;
+        args[i].mid = mid;
+        /* Each fiber gets a pointer to an element of the array to use
          * as input for the run_my_rpc() function.
          */
-        ret = ABT_thread_create(pool, run_my_rpc, &values[i],
+        ret = ABT_thread_create(pool, run_my_rpc, &args[i],
             ABT_THREAD_ATTR_NULL, &threads[i]);
         if(ret != 0)
         {
@@ -105,7 +113,7 @@ int main(int argc, char **argv)
         }
     }
 
-    margo_finalize();
+    margo_finalize(mid);
     ABT_finalize();
 
     return(0);
@@ -113,7 +121,7 @@ int main(int argc, char **argv)
 
 static void run_my_rpc(void *_arg)
 {
-    int* val = (int*)_arg;
+    struct run_my_rpc_args *arg = _arg;
     na_addr_t svr_addr = NA_ADDR_NULL;
     hg_handle_t handle;
     my_rpc_in_t in;
@@ -123,7 +131,7 @@ static void run_my_rpc(void *_arg)
     void* buffer;
     struct hg_info *hgi;
 
-    printf("ULT [%d] running.\n", *val);
+    printf("ULT [%d] running.\n", arg->val);
 
     /* allocate buffer for bulk transfer */
     size = 512;
@@ -132,11 +140,11 @@ static void run_my_rpc(void *_arg)
     sprintf((char*)buffer, "Hello world!\n");
 
     /* find addr for server */
-    ret = margo_addr_lookup("tcp://localhost:1234", &svr_addr);
+    ret = margo_addr_lookup(arg->mid, "tcp://localhost:1234", &svr_addr);
     assert(ret == 0);
 
     /* create handle */
-    ret = margo_create_handle(svr_addr, my_rpc_id, &handle);
+    ret = margo_create_handle(arg->mid, svr_addr, my_rpc_id, &handle);
     assert(ret == 0);
 
     /* register buffer for rdma/bulk access by server */
@@ -149,8 +157,8 @@ static void run_my_rpc(void *_arg)
     /* Send rpc. Note that we are also transmitting the bulk handle in the
      * input struct.  It was set above. 
      */ 
-    in.input_val = *((int*)(_arg));
-    margo_forward(handle, &in);
+    in.input_val = arg->val;
+    margo_forward(arg->mid, handle, &in);
 
     /* decode response */
     ret = HG_Get_output(handle, &out);
@@ -164,7 +172,7 @@ static void run_my_rpc(void *_arg)
     HG_Destroy(handle);
     free(buffer);
 
-    printf("ULT [%d] done.\n", *val);
+    printf("ULT [%d] done.\n", arg->val);
     return;
 }
 

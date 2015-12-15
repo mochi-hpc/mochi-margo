@@ -32,6 +32,7 @@ static void my_rpc_ult(void *_arg)
     struct hg_info *hgi;
     int fd;
     char filename[256];
+    margo_instance_id mid;
 
     ret = HG_Get_input(*handle, &in);
     assert(ret == HG_SUCCESS);
@@ -51,8 +52,10 @@ static void my_rpc_ult(void *_arg)
         &size, HG_BULK_WRITE_ONLY, &bulk_handle);
     assert(ret == 0);
 
+    mid = margo_hg_class_to_instance(hgi->hg_class);
+
     /* do bulk transfer from client to server */
-    ret = margo_bulk_transfer(hgi->bulk_context, HG_BULK_PULL, 
+    ret = margo_bulk_transfer(mid, hgi->bulk_context, HG_BULK_PULL, 
         hgi->addr, in.bulk_handle, 0,
         bulk_handle, 0, size);
     assert(ret == 0);
@@ -82,12 +85,12 @@ static void my_rpc_ult(void *_arg)
 }
 DEFINE_ARGO_RPC_HANDLER(my_rpc_ult)
 
-hg_id_t my_rpc_register(void)
+hg_id_t my_rpc_register(margo_instance_id mid)
 {
     hg_class_t* hg_class;
     hg_id_t tmp;
 
-    hg_class = margo_get_class();
+    hg_class = margo_get_class(mid);
 
     tmp = MERCURY_REGISTER(hg_class, "my_rpc", my_rpc_in_t, my_rpc_out_t, 
         my_rpc_ult_handler);
