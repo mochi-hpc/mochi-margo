@@ -15,16 +15,13 @@
 
 struct margo_instance
 {
-    /* not needed */
-    na_class_t *network_class;
-    na_context_t *na_context;
-
     /* provided by caller */
     hg_context_t *hg_context;
     hg_class_t *hg_class;
     ABT_pool handler_pool;
     ABT_pool progress_pool;
 
+    /* internal to margo for this particular instance */
     ABT_thread hg_progress_tid;
     int hg_progress_shutdown_flag;
     int table_index;
@@ -50,7 +47,8 @@ struct handler_entry
     struct handler_entry *next; 
 };
 
-margo_instance_id margo_init(na_bool_t listen, const char* local_addr, ABT_pool progress_pool, ABT_pool handler_pool)
+margo_instance_id margo_init(ABT_pool progress_pool, ABT_pool handler_pool,
+    hg_context_t *hg_context, hg_class_t *hg_class)
 {
     int ret;
     struct margo_instance *mid;
@@ -65,47 +63,15 @@ margo_instance_id margo_init(na_bool_t listen, const char* local_addr, ABT_pool 
 
     mid->progress_pool = progress_pool;
     mid->handler_pool = handler_pool;
-
-    /* boilerplate HG initialization steps */
-    mid->network_class = NA_Initialize(local_addr, listen);
-    if(!mid->network_class)
-    {
-        free(mid);
-        return(NULL);
-    }
-
-    mid->na_context = NA_Context_create(mid->network_class);
-    if(!mid->na_context)
-    {
-        NA_Finalize(mid->network_class);
-        free(mid);
-        return(NULL);
-    }
-
-    mid->hg_class = HG_Init(mid->network_class, mid->na_context, NULL);
-    if(!mid->hg_class)
-    {
-        NA_Context_destroy(mid->network_class, mid->na_context);
-        NA_Finalize(mid->network_class);
-        free(mid);
-        return(NULL);
-    }
-
-    mid->hg_context = HG_Context_create(mid->hg_class);
-    if(!mid->hg_context)
-    {
-        HG_Finalize(mid->hg_class);
-        NA_Context_destroy(mid->network_class, mid->na_context);
-        NA_Finalize(mid->network_class);
-        return(NULL);
-    }
+    mid->hg_class = hg_class;
+    mid->hg_context = hg_context;
 
     ret = ABT_thread_create(mid->progress_pool, hg_progress_fn, mid, 
         ABT_THREAD_ATTR_NULL, &mid->hg_progress_tid);
     if(ret != 0)
     {
-        /* TODO: err handling */
         fprintf(stderr, "Error: ABT_thread_create()\n");
+        free(mid);
         return(NULL);
     }
 
@@ -127,11 +93,6 @@ void margo_finalize(margo_instance_id mid)
     /* wait for it to shutdown cleanly */
     ABT_thread_join(mid->hg_progress_tid);
     ABT_thread_free(&mid->hg_progress_tid);
-
-    HG_Context_destroy(mid->hg_context);
-    HG_Finalize(mid->hg_class);
-    NA_Context_destroy(mid->network_class, mid->na_context);
-    NA_Finalize(mid->network_class);
 
     for(i=mid->table_index; i<(handler_mapping_table_size-1); i++)
     {
@@ -161,32 +122,6 @@ static void hg_progress_fn(void* foo)
 
     return;
 }
-
-/****************************/
-hg_class_t* margo_get_class(margo_instance_id mid)
-{
-    return(mid->hg_class);
-}
-
-hg_return_t margo_create_handle(margo_instance_id mid, na_addr_t addr, 
-    hg_id_t id, hg_handle_t *handle)
-{
-    hg_return_t ret;
-
-    ret = HG_Create(mid->hg_class, mid->hg_context, addr, id, handle);
-
-    return ret;
-}
-
-na_return_t margo_addr_lookup(margo_instance_id mid, const char* name, na_addr_t* addr)
-{
-    na_return_t ret;
-
-    ret = NA_Addr_lookup_wait(mid->network_class, name, addr);
-
-    return ret;
-}
-/****************************/
 
 ABT_pool* margo_get_handler_pool(margo_instance_id mid)
 {

@@ -15,17 +15,7 @@
 
 /* TODO: update doxygen, especially with mid arguments */
 
-/* TODO: should this library encapsulate the Mercury initialization steps?
- * Right now it does for caller simplicity, but there isn't any
- * technical reason.  Because it hides the initialization (and context
- * creation), it must provide utility functions for address lookup and handle
- * creation because those require access to context pointers that are
- * produced at init time.
- */
-
-
 struct margo_instance;
-
 typedef struct margo_instance* margo_instance_id;
 
 /**
@@ -35,7 +25,8 @@ typedef struct margo_instance* margo_instance_id;
  * @param [in] local_addr address to listen on if listen is set
  * @returns margo instance id on success, NULL upon error
  */
-margo_instance_id margo_init(na_bool_t listen, const char* local_addr, ABT_pool progress_pool, ABT_pool handler_pool);
+margo_instance_id margo_init(ABT_pool progress_pool, ABT_pool handler_pool,
+    hg_context_t *hg_context, hg_class_t *hg_class);
 
 /**
  * Shuts down margo library and its underlying evfibers and mercury resources
@@ -43,34 +34,10 @@ margo_instance_id margo_init(na_bool_t listen, const char* local_addr, ABT_pool 
 void margo_finalize(margo_instance_id mid);
 
 /**
- * Retrieve the HG class for the running Mercury instance
- * @returns pointer on success, NULL upon error
- */
-hg_class_t* margo_get_class(margo_instance_id mid);
-
-/**
  * Retrieve the ABT pool associated with the main caller (whoever invoked the
  * init function); this is where margo will execute RPC handlers.
  */
 ABT_pool* margo_get_handler_pool(margo_instance_id mid);
-
-/**
- * Lookup the Mercury/NA address associated with the given string
- * @param [in] name string address of remote host
- * @param [out] addr Mercury NA address for remote host
- * @returns 0 on success, na_return_t values on error
- */
-na_return_t margo_addr_lookup(margo_instance_id mid, const char* name, na_addr_t* addr);
-
-/** 
- * Creates a handle to refer to an RPC that will be issued
- * @param [in] addr address of remote host to send RPC to
- * @param [in] id identifier for RPC operation
- * @param [out] handle
- * @returns 0 on success, hg_return_t values on error
- */
-hg_return_t margo_create_handle(margo_instance_id mid, na_addr_t addr, hg_id_t id,
-    hg_handle_t *handle);
 
 /**
  * Forward an RPC request to a remote host
@@ -116,7 +83,7 @@ margo_instance_id margo_hg_class_to_instance(hg_class_t *class);
  * @param [in] __name name of handler function
  */
 #define DEFINE_ARGO_RPC_HANDLER(__name) \
-static hg_return_t __name##_handler(hg_handle_t handle) { \
+hg_return_t __name##_handler(hg_handle_t handle) { \
     int __ret; \
     ABT_pool* __pool; \
     margo_instance_id __mid; \
@@ -133,5 +100,7 @@ static hg_return_t __name##_handler(hg_handle_t handle) { \
     } \
     return(HG_SUCCESS); \
 }
+
+#define DECLARE_ARGO_RPC_HANDLER(__name) hg_return_t __name##_handler(hg_handle_t handle);
 
 #endif /* __MARGO */

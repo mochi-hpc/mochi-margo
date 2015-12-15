@@ -84,17 +84,3 @@ static void my_rpc_ult(void *_arg)
     return;
 }
 DEFINE_ARGO_RPC_HANDLER(my_rpc_ult)
-
-hg_id_t my_rpc_register(margo_instance_id mid)
-{
-    hg_class_t* hg_class;
-    hg_id_t tmp;
-
-    hg_class = margo_get_class(mid);
-
-    tmp = MERCURY_REGISTER(hg_class, "my_rpc", my_rpc_in_t, my_rpc_out_t, 
-        my_rpc_ult_handler);
-
-    return(tmp);
-}
-

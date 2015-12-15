@@ -27,7 +27,44 @@ int main(int argc, char **argv)
     ABT_pool handler_pool;
     ABT_xstream progress_xstream;
     ABT_pool progress_pool;
+    na_class_t *network_class;
+    na_context_t *na_context;
+    hg_context_t *hg_context;
+    hg_class_t *hg_class;
     
+    /* boilerplate HG initialization steps */
+    network_class = NA_Initialize("tcp://localhost:1234", NA_TRUE);
+    if(!network_class)
+    {
+        fprintf(stderr, "Error: NA_Initialize()\n");
+        return(-1);
+    }
+    na_context = NA_Context_create(network_class);
+    if(!na_context)
+    {
+        fprintf(stderr, "Error: NA_Context_create()\n");
+        NA_Finalize(network_class);
+        return(-1);
+    }
+    hg_class = HG_Init(network_class, na_context, NULL);
+    if(!hg_class)
+    {
+        fprintf(stderr, "Error: HG_Init()\n");
+        NA_Context_destroy(network_class, na_context);
+        NA_Finalize(network_class);
+        return(-1);
+    }
+    hg_context = HG_Context_create(hg_class);
+    if(!hg_context)
+    {
+        fprintf(stderr, "Error: HG_Context_create()\n");
+        HG_Finalize(hg_class);
+        NA_Context_destroy(network_class, na_context);
+        NA_Finalize(network_class);
+        return(-1);
+    }
+
+    /* set up argobots */
     ret = ABT_init(argc, argv);
     if(ret != 0)
     {
@@ -65,10 +102,12 @@ int main(int argc, char **argv)
         return(-1);
     }
 
-    mid = margo_init(NA_TRUE, "tcp://localhost:1234", progress_pool, handler_pool);
+    /* actually start margo */
+    mid = margo_init(progress_pool, handler_pool, hg_context, hg_class);
 
     /* register RPC */
-    my_rpc_register(mid);
+    MERCURY_REGISTER(hg_class, "my_rpc", my_rpc_in_t, my_rpc_out_t, 
+        my_rpc_ult_handler);
 
     /* suspend this ULT until someone tells us to shut down */
     ret = ABT_eventual_create(sizeof(*shutdown), &eventual);
@@ -86,6 +125,11 @@ int main(int argc, char **argv)
     ABT_xstream_free(&progress_xstream);
 
     ABT_finalize();
+
+    HG_Context_destroy(hg_context);
+    HG_Finalize(hg_class);
+    NA_Context_destroy(network_class, na_context);
+    NA_Finalize(network_class);
 
     return(0);
 }

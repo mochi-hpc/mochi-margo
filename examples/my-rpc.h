@@ -15,7 +15,6 @@ MERCURY_GEN_PROC(my_rpc_out_t, ((int32_t)(ret)))
 MERCURY_GEN_PROC(my_rpc_in_t,
     ((int32_t)(input_val))\
     ((hg_bulk_t)(bulk_handle)))
-
-hg_id_t my_rpc_register(margo_instance_id mid);
+DECLARE_ARGO_RPC_HANDLER(my_rpc_ult)
 
 #endif /* __MY_RPC */

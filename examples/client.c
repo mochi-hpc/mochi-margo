@@ -24,6 +24,10 @@ struct run_my_rpc_args
 {
     int val;
     margo_instance_id mid;
+    na_class_t *network_class;
+    na_context_t *na_context;
+    hg_context_t *hg_context;
+    hg_class_t *hg_class;
 };
 
 static void run_my_rpc(void *_arg);
@@ -41,7 +45,44 @@ int main(int argc, char **argv)
     margo_instance_id mid;
     ABT_xstream progress_xstream;
     ABT_pool progress_pool;
-    
+    na_class_t *network_class;
+    na_context_t *na_context;
+    hg_context_t *hg_context;
+    hg_class_t *hg_class;
+        
+    /* boilerplate HG initialization steps */
+    network_class = NA_Initialize("tcp://localhost:1234", NA_FALSE);
+    if(!network_class)
+    {
+        fprintf(stderr, "Error: NA_Initialize()\n");
+        return(-1);
+    }
+    na_context = NA_Context_create(network_class);
+    if(!na_context)
+    {
+        fprintf(stderr, "Error: NA_Context_create()\n");
+        NA_Finalize(network_class);
+        return(-1);
+    }
+    hg_class = HG_Init(network_class, na_context, NULL);
+    if(!hg_class)
+    {
+        fprintf(stderr, "Error: HG_Init()\n");
+        NA_Context_destroy(network_class, na_context);
+        NA_Finalize(network_class);
+        return(-1);
+    }
+    hg_context = HG_Context_create(hg_class);
+    if(!hg_context)
+    {
+        fprintf(stderr, "Error: HG_Context_create()\n");
+        HG_Finalize(hg_class);
+        NA_Context_destroy(network_class, na_context);
+        NA_Finalize(network_class);
+        return(-1);
+    }
+
+    /* set up argobots */
     ret = ABT_init(argc, argv);
     if(ret != 0)
     {
@@ -79,20 +120,25 @@ int main(int argc, char **argv)
         return(-1);
     }
 
-    /* initialize
-     *   note: address here is really just being used to identify transport 
-     *   note: the handler_pool is NULL because this is a client and is not
+    /* actually start margo */
+    /*   note: the handler_pool is NULL because this is a client and is not
      *   expected to run rpc handlers.
      */
-    mid = margo_init(NA_FALSE, "tcp://localhost:1234", progress_pool, ABT_POOL_NULL);
+    mid = margo_init(progress_pool, ABT_POOL_NULL, hg_context, hg_class);
 
     /* register RPC */
-    my_rpc_id = my_rpc_register(mid);
+    my_rpc_id = MERCURY_REGISTER(hg_class, "my_rpc", my_rpc_in_t, my_rpc_out_t, 
+        my_rpc_ult_handler);
 
     for(i=0; i<4; i++)
     {
         args[i].val = i;
         args[i].mid = mid;
+        args[i].hg_class = hg_class;
+        args[i].hg_context = hg_context;
+        args[i].na_context = na_context;
+        args[i].network_class = network_class;
+
         /* Each fiber gets a pointer to an element of the array to use
          * as input for the run_my_rpc() function.
          */
@@ -132,6 +178,11 @@ int main(int argc, char **argv)
 
     ABT_finalize();
 
+    HG_Context_destroy(hg_context);
+    HG_Finalize(hg_class);
+    NA_Context_destroy(network_class, na_context);
+    NA_Finalize(network_class);
+
     return(0);
 }
 
@@ -156,11 +207,11 @@ static void run_my_rpc(void *_arg)
     sprintf((char*)buffer, "Hello world!\n");
 
     /* find addr for server */
-    ret = margo_addr_lookup(arg->mid, "tcp://localhost:1234", &svr_addr);
+    ret = NA_Addr_lookup_wait(arg->network_class, "tcp://localhost:1234", &svr_addr);
     assert(ret == 0);
 
     /* create handle */
-    ret = margo_create_handle(arg->mid, svr_addr, my_rpc_id, &handle);
+    ret = HG_Create(arg->hg_class, arg->hg_context, svr_addr, my_rpc_id, &handle);
     assert(ret == 0);
 
     /* register buffer for rdma/bulk access by server */
