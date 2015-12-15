@@ -15,15 +15,18 @@
 
 struct margo_instance
 {
+    /* not needed */
     na_class_t *network_class;
     na_context_t *na_context;
+
+    /* provided by caller */
     hg_context_t *hg_context;
     hg_class_t *hg_class;
+    ABT_pool handler_pool;
+    ABT_pool progress_pool;
+
     ABT_thread hg_progress_tid;
     int hg_progress_shutdown_flag;
-    ABT_pool main_pool;
-    ABT_pool engine_pool;
-    ABT_xstream engine_xstream;
     int table_index;
 };
 
@@ -47,10 +50,9 @@ struct handler_entry
     struct handler_entry *next; 
 };
 
-margo_instance_id margo_init(na_bool_t listen, const char* local_addr)
+margo_instance_id margo_init(na_bool_t listen, const char* local_addr, ABT_pool progress_pool, ABT_pool handler_pool)
 {
     int ret;
-    ABT_xstream xstream;
     struct margo_instance *mid;
 
     if(handler_mapping_table_size >= MAX_HANDLER_MAPPING)
@@ -60,6 +62,9 @@ margo_instance_id margo_init(na_bool_t listen, const char* local_addr)
     if(!mid)
         return(NULL);
     memset(mid, 0, sizeof(*mid));
+
+    mid->progress_pool = progress_pool;
+    mid->handler_pool = handler_pool;
 
     /* boilerplate HG initialization steps */
     mid->network_class = NA_Initialize(local_addr, listen);
@@ -95,34 +100,7 @@ margo_instance_id margo_init(na_bool_t listen, const char* local_addr)
         return(NULL);
     }
 
-    /* get the primary pool for the caller, this is where we will run ULTs to
-     * handle incoming requests
-     */    
-    ret = ABT_xstream_self(&xstream);
-    if(ret != 0)
-    {
-        /* TODO: err handling */
-        fprintf(stderr, "Error: ABT_xstream_self()\n");
-        return(NULL);
-    }
-
-    ret = ABT_xstream_get_main_pools(xstream, 1, &mid->main_pool);
-    if(ret != 0)
-    {
-        /* TODO: err handling */
-        fprintf(stderr, "Error: ABT_xstream_get_main_pools()\n");
-        return(NULL);
-    }
-
-    /* create an ES and ULT to drive Mercury progress */
-    ret = ABT_snoozer_xstream_create(1, &mid->engine_pool, &mid->engine_xstream);
-    if(ret != 0)
-    {
-        /* TODO: err handling */
-        fprintf(stderr, "Error: ABT_snoozer_xstream_create()\n");
-        return(NULL);
-    }
-    ret = ABT_thread_create(mid->engine_pool, hg_progress_fn, mid, 
+    ret = ABT_thread_create(mid->progress_pool, hg_progress_fn, mid, 
         ABT_THREAD_ATTR_NULL, &mid->hg_progress_tid);
     if(ret != 0)
     {
@@ -149,8 +127,6 @@ void margo_finalize(margo_instance_id mid)
     /* wait for it to shutdown cleanly */
     ABT_thread_join(mid->hg_progress_tid);
     ABT_thread_free(&mid->hg_progress_tid);
-    ABT_xstream_join(mid->engine_xstream);
-    ABT_xstream_free(&mid->engine_xstream);
 
     HG_Context_destroy(mid->hg_context);
     HG_Finalize(mid->hg_class);
@@ -186,23 +162,10 @@ static void hg_progress_fn(void* foo)
     return;
 }
 
+/****************************/
 hg_class_t* margo_get_class(margo_instance_id mid)
 {
     return(mid->hg_class);
-}
-
-ABT_pool* margo_get_main_pool(margo_instance_id mid)
-{
-    return(&mid->main_pool);
-}
-
-na_return_t margo_addr_lookup(margo_instance_id mid, const char* name, na_addr_t* addr)
-{
-    na_return_t ret;
-
-    ret = NA_Addr_lookup_wait(mid->network_class, name, addr);
-
-    return ret;
 }
 
 hg_return_t margo_create_handle(margo_instance_id mid, na_addr_t addr, 
@@ -213,6 +176,21 @@ hg_return_t margo_create_handle(margo_instance_id mid, na_addr_t addr,
     ret = HG_Create(mid->hg_class, mid->hg_context, addr, id, handle);
 
     return ret;
+}
+
+na_return_t margo_addr_lookup(margo_instance_id mid, const char* name, na_addr_t* addr)
+{
+    na_return_t ret;
+
+    ret = NA_Addr_lookup_wait(mid->network_class, name, addr);
+
+    return ret;
+}
+/****************************/
+
+ABT_pool* margo_get_handler_pool(margo_instance_id mid)
+{
+    return(&mid->handler_pool);
 }
 
 static hg_return_t margo_forward_cb(const struct hg_cb_info *info)

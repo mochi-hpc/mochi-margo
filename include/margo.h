@@ -35,7 +35,7 @@ typedef struct margo_instance* margo_instance_id;
  * @param [in] local_addr address to listen on if listen is set
  * @returns margo instance id on success, NULL upon error
  */
-margo_instance_id margo_init(na_bool_t listen, const char* local_addr);
+margo_instance_id margo_init(na_bool_t listen, const char* local_addr, ABT_pool progress_pool, ABT_pool handler_pool);
 
 /**
  * Shuts down margo library and its underlying evfibers and mercury resources
@@ -52,7 +52,7 @@ hg_class_t* margo_get_class(margo_instance_id mid);
  * Retrieve the ABT pool associated with the main caller (whoever invoked the
  * init function); this is where margo will execute RPC handlers.
  */
-ABT_pool* margo_get_main_pool(margo_instance_id mid);
+ABT_pool* margo_get_handler_pool(margo_instance_id mid);
 
 /**
  * Lookup the Mercury/NA address associated with the given string
@@ -126,7 +126,7 @@ static hg_return_t __name##_handler(hg_handle_t handle) { \
     *__handle = handle; \
     __hgi = HG_Get_info(handle); \
     __mid = margo_hg_class_to_instance(__hgi->hg_class); \
-    __pool = margo_get_main_pool(__mid); \
+    __pool = margo_get_handler_pool(__mid); \
     __ret = ABT_thread_create(*__pool, __name, __handle, ABT_THREAD_ATTR_NULL, NULL); \
     if(__ret != 0) { \
         return(HG_NOMEM_ERROR); \

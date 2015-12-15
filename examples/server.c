@@ -23,6 +23,10 @@ int main(int argc, char **argv)
     ABT_eventual eventual;
     int *shutdown;
     margo_instance_id mid;
+    ABT_xstream handler_xstream;
+    ABT_pool handler_pool;
+    ABT_xstream progress_xstream;
+    ABT_pool progress_pool;
     
     ret = ABT_init(argc, argv);
     if(ret != 0)
@@ -39,7 +43,29 @@ int main(int argc, char **argv)
         return(-1);
     }
 
-    mid = margo_init(NA_TRUE, "tcp://localhost:1234");
+    /* Find primary pool to use for running rpc handlers */
+    ret = ABT_xstream_self(&handler_xstream);
+    if(ret != 0)
+    {
+        fprintf(stderr, "Error: ABT_xstream_self()\n");
+        return(-1);
+    }
+    ret = ABT_xstream_get_main_pools(handler_xstream, 1, &handler_pool);
+    if(ret != 0)
+    {
+        fprintf(stderr, "Error: ABT_xstream_get_main_pools()\n");
+        return(-1);
+    }
+
+    /* create a dedicated ES drive Mercury progress */
+    ret = ABT_snoozer_xstream_create(1, &progress_pool, &progress_xstream);
+    if(ret != 0)
+    {
+        fprintf(stderr, "Error: ABT_snoozer_xstream_create()\n");
+        return(-1);
+    }
+
+    mid = margo_init(NA_TRUE, "tcp://localhost:1234", progress_pool, handler_pool);
 
     /* register RPC */
     my_rpc_register(mid);
@@ -55,6 +81,10 @@ int main(int argc, char **argv)
     ABT_eventual_wait(eventual, (void**)&shutdown);
 
     margo_finalize(mid);
+
+    ABT_xstream_join(progress_xstream);
+    ABT_xstream_free(&progress_xstream);
+
     ABT_finalize();
 
     return(0);

@@ -39,6 +39,8 @@ int main(int argc, char **argv)
     ABT_xstream xstream;
     ABT_pool pool;
     margo_instance_id mid;
+    ABT_xstream progress_xstream;
+    ABT_pool progress_pool;
     
     ret = ABT_init(argc, argv);
     if(ret != 0)
@@ -69,10 +71,20 @@ int main(int argc, char **argv)
         return(-1);
     }
 
+    /* create a dedicated ES drive Mercury progress */
+    ret = ABT_snoozer_xstream_create(1, &progress_pool, &progress_xstream);
+    if(ret != 0)
+    {
+        fprintf(stderr, "Error: ABT_snoozer_xstream_create()\n");
+        return(-1);
+    }
+
     /* initialize
      *   note: address here is really just being used to identify transport 
+     *   note: the handler_pool is NULL because this is a client and is not
+     *   expected to run rpc handlers.
      */
-    mid = margo_init(NA_FALSE, "tcp://localhost:1234");
+    mid = margo_init(NA_FALSE, "tcp://localhost:1234", progress_pool, ABT_POOL_NULL);
 
     /* register RPC */
     my_rpc_id = my_rpc_register(mid);
@@ -114,6 +126,10 @@ int main(int argc, char **argv)
     }
 
     margo_finalize(mid);
+    
+    ABT_xstream_join(progress_xstream);
+    ABT_xstream_free(&progress_xstream);
+
     ABT_finalize();
 
     return(0);
