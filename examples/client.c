@@ -51,6 +51,7 @@ int main(int argc, char **argv)
     hg_class_t *hg_class;
         
     /* boilerplate HG initialization steps */
+    /***************************************/
     network_class = NA_Initialize("tcp://localhost:1234", NA_FALSE);
     if(!network_class)
     {
@@ -83,6 +84,7 @@ int main(int argc, char **argv)
     }
 
     /* set up argobots */
+    /***************************************/
     ret = ABT_init(argc, argv);
     if(ret != 0)
     {
@@ -121,9 +123,12 @@ int main(int argc, char **argv)
     }
 
     /* actually start margo */
-    /*   note: the handler_pool is NULL because this is a client and is not
-     *   expected to run rpc handlers.
+    /* provide argobots pools for driving communication progress and
+     * executing rpc handlers as well as class and context for Mercury
+     * communication.  The rpc handler pool is null in this example program
+     * because this is a pure client that will not be servicing rpc requests.
      */
+    /***************************************/
     mid = margo_init(progress_pool, ABT_POOL_NULL, hg_context, hg_class);
 
     /* register RPC */
@@ -171,6 +176,7 @@ int main(int argc, char **argv)
         }
     }
 
+    /* shut down everything */
     margo_finalize(mid);
     
     ABT_xstream_join(progress_xstream);
