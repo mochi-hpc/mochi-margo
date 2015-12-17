@@ -89,7 +89,8 @@ na_return_t margo_na_addr_lookup(
     margo_instance_id mid,
     na_class_t   *na_class,
     na_context_t *context,
-    const char   *name);
+    const char   *name,
+    na_addr_t    *addr);
 
 /**
  * Retrive the Margo instance that has been associated with a Mercury class
