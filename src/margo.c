@@ -167,6 +167,17 @@ hg_return_t margo_forward(
     return(hret);
 }
 
+static na_return_t margo_na_addr_lookup_cb(const struct na_cb_info *callback_info)
+{
+    na_return_t nret = callback_info->ret;
+    ABT_eventual *eventual = callback_info->arg;
+
+    /* propagate return code out through eventual */
+    ABT_eventual_set(*eventual, &nret, sizeof(nret));
+    
+    return(NA_SUCCESS);
+}
+
 static hg_return_t margo_bulk_transfer_cb(const struct hg_bulk_cb_info *hg_bulk_cb_info)
 {
     hg_return_t hret = hg_bulk_cb_info->ret;
@@ -176,6 +187,35 @@ static hg_return_t margo_bulk_transfer_cb(const struct hg_bulk_cb_info *hg_bulk_
     ABT_eventual_set(*eventual, &hret, sizeof(hret));
     
     return(HG_SUCCESS);
+}
+
+na_return_t margo_na_addr_lookup(
+    na_class_t   *na_class,
+    na_context_t *context,
+    const char   *name)
+{
+    na_return_t nret;
+    na_return_t *waited_nret;
+    ABT_eventual eventual;
+    int ret;
+
+    ret = ABT_eventual_create(sizeof(nret), &eventual);
+    if(ret != 0)
+    {
+        return(HG_NOMEM_ERROR);        
+    }
+
+    nret = NA_Addr_lookup(na_class, context, margo_na_addr_lookup_cb,
+        &eventual, name, NA_OP_ID_IGNORE);
+    if(nret == 0)
+    {
+        ABT_eventual_wait(eventual, (void**)&waited_nret);
+        nret = *waited_nret;
+    }
+
+    ABT_eventual_free(&eventual);
+
+    return(nret);
 }
 
 hg_return_t margo_bulk_transfer(
