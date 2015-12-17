@@ -21,6 +21,8 @@ extern "C" {
 struct margo_instance;
 typedef struct margo_instance* margo_instance_id;
 
+#define MARGO_INSTANCE_NULL ((margo_instance_id)NULL)
+
 /**
  * Initializes margo library from given argobots and Mercury instances.
  * @param [in] progress_pool Argobots pool to drive communication

@@ -54,11 +54,11 @@ margo_instance_id margo_init(ABT_pool progress_pool, ABT_pool handler_pool,
     struct margo_instance *mid;
 
     if(handler_mapping_table_size >= MAX_HANDLER_MAPPING)
-        return(NULL);
+        return(MARGO_INSTANCE_NULL);
 
     mid = malloc(sizeof(*mid));
     if(!mid)
-        return(NULL);
+        return(MARGO_INSTANCE_NULL);
     memset(mid, 0, sizeof(*mid));
 
     mid->progress_pool = progress_pool;
@@ -72,7 +72,7 @@ margo_instance_id margo_init(ABT_pool progress_pool, ABT_pool handler_pool,
     {
         fprintf(stderr, "Error: ABT_thread_create()\n");
         free(mid);
-        return(NULL);
+        return(MARGO_INSTANCE_NULL);
     }
 
     handler_mapping_table[handler_mapping_table_size].mid = mid;
