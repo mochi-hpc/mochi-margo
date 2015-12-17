@@ -214,13 +214,13 @@ hg_return_t margo_bulk_transfer(
     return(hret);
 }
 
-margo_instance_id margo_hg_class_to_instance(hg_class_t *class)
+margo_instance_id margo_hg_class_to_instance(hg_class_t *cl)
 {
     int i;
 
     for(i=0; i<handler_mapping_table_size; i++)
     {
-        if(handler_mapping_table[i].class == class)
+        if(handler_mapping_table[i].class == cl)
             return(handler_mapping_table[i].mid);
     }
     return(NULL);

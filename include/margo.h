@@ -84,10 +84,10 @@ hg_return_t margo_bulk_transfer(
 
 /**
  * Retrive the Margo instance that has been associated with a Mercury class
- * @param [in] class Mercury class
+ * @param [in] cl Mercury class
  * @returns Margo instance on success, NULL on error
  */
-margo_instance_id margo_hg_class_to_instance(hg_class_t *class);
+margo_instance_id margo_hg_class_to_instance(hg_class_t *cl);
 
 /**
  * macro that defines a function to glue an RPC handler to a fiber
