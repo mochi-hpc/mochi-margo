@@ -213,7 +213,7 @@ static void run_my_rpc(void *_arg)
     sprintf((char*)buffer, "Hello world!\n");
 
     /* find addr for server */
-    ret = NA_Addr_lookup_wait(arg->network_class, "tcp://localhost:1234", &svr_addr);
+    ret = margo_na_addr_lookup(arg->mid, arg->network_class, arg->na_context, "tcp://localhost:1234", &svr_addr);
     assert(ret == 0);
 
     /* create handle */

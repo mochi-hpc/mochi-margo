@@ -84,6 +84,20 @@ hg_return_t margo_bulk_transfer(
     size_t size);
 
 /**
+ * address lookup
+ * @param [in] na_class         pointer to NA class
+ * @param [in] context          pointer to context of execution
+ * @param [in] name             lookup name
+ * @returns NA_SUCCESS on on success
+ */
+na_return_t margo_na_addr_lookup(
+    margo_instance_id mid,
+    na_class_t   *na_class,
+    na_context_t *context,
+    const char   *name,
+    na_addr_t    *addr);
+
+/**
  * Retrive the Margo instance that has been associated with a Mercury class
  * @param [in] cl Mercury class
  * @returns Margo instance on success, NULL on error
