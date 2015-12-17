@@ -22,8 +22,7 @@ struct margo_instance;
 typedef struct margo_instance* margo_instance_id;
 
 /**
- * Initializes margo library, including initializing underlying libevfibers
- *    and Mercury instances.
+ * Initializes margo library from given argobots and Mercury instances.
  * @param [in] progress_pool Argobots pool to drive communication
  * @param [in] handler_pool Argobots pool to service RPC handlers
  * @param [in] hg_context Mercury context
