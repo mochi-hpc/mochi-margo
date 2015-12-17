@@ -190,6 +190,7 @@ static hg_return_t margo_bulk_transfer_cb(const struct hg_bulk_cb_info *hg_bulk_
 }
 
 na_return_t margo_na_addr_lookup(
+    margo_instance_id mid,
     na_class_t   *na_class,
     na_context_t *context,
     const char   *name)
