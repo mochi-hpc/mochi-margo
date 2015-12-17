@@ -7,6 +7,10 @@
 #ifndef __MARGO
 #define __MARGO
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <mercury_bulk.h>
 #include <mercury.h>
 #include <mercury_macros.h>
@@ -114,5 +118,9 @@ hg_return_t __name##_handler(hg_handle_t handle) { \
  * @param [in] __name name of handler function
  */
 #define DECLARE_ARGO_RPC_HANDLER(__name) hg_return_t __name##_handler(hg_handle_t handle);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __MARGO */
