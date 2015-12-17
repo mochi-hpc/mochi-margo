@@ -13,7 +13,6 @@
 #include <abt.h>
 #include <ev.h>
 
-/* TODO: update doxygen, especially with mid arguments */
 
 struct margo_instance;
 typedef struct margo_instance* margo_instance_id;
@@ -21,8 +20,10 @@ typedef struct margo_instance* margo_instance_id;
 /**
  * Initializes margo library, including initializing underlying libevfibers
  *    and Mercury instances.
- * @param [in] listen flag indicating whether to accept inbound RPCs or not
- * @param [in] local_addr address to listen on if listen is set
+ * @param [in] progress_pool Argobots pool to drive communication
+ * @param [in] handler_pool Argobots pool to service RPC handlers
+ * @param [in] hg_context Mercury context
+ * @param [in] hg_class Mercury class
  * @returns margo instance id on success, NULL upon error
  */
 margo_instance_id margo_init(ABT_pool progress_pool, ABT_pool handler_pool,
@@ -30,17 +31,20 @@ margo_instance_id margo_init(ABT_pool progress_pool, ABT_pool handler_pool,
 
 /**
  * Shuts down margo library and its underlying evfibers and mercury resources
+ * @param [in] mid Margo instance
  */
 void margo_finalize(margo_instance_id mid);
 
 /**
- * Retrieve the ABT pool associated with the main caller (whoever invoked the
- * init function); this is where margo will execute RPC handlers.
+ * Retrieve the abt_handler pool that was associated with the instance at 
+ *    initialization time
+ * @param [in] mid Margo instance
  */
 ABT_pool* margo_get_handler_pool(margo_instance_id mid);
 
 /**
  * Forward an RPC request to a remote host
+ * @param [in] mid Margo instance
  * @param [in] handle identifier for the RPC to be sent
  * @param [in] in_struct input argument struct for RPC
  * @returns 0 on success, hg_return_t values on error
@@ -52,6 +56,7 @@ hg_return_t margo_forward(
 
 /** 
  * Perform a bulk transfer
+ * @param [in] mid Margo instance
  * @param [in] context Mercury bulk context
  * @param [in] op type of operation to perform
  * @param [in] origin_addr remote Mercury address
@@ -73,8 +78,10 @@ hg_return_t margo_bulk_transfer(
     size_t local_offset,
     size_t size);
 
-/* given a particular hg_class, find the ABT pool that we intend to use to
- * execute handlers.
+/**
+ * Retrive the Margo instance that has been associated with a Mercury class
+ * @param [in] class Mercury class
+ * @returns Margo instance on success, NULL on error
  */
 margo_instance_id margo_hg_class_to_instance(hg_class_t *class);
 
@@ -101,6 +108,11 @@ hg_return_t __name##_handler(hg_handle_t handle) { \
     return(HG_SUCCESS); \
 }
 
+/**
+ * macro that declares the prototype for a function to glue an RPC 
+ * handler to a fiber
+ * @param [in] __name name of handler function
+ */
 #define DECLARE_ARGO_RPC_HANDLER(__name) hg_return_t __name##_handler(hg_handle_t handle);
 
 #endif /* __MARGO */
