@@ -83,4 +83,4 @@ static void my_rpc_ult(void *_arg)
 
     return;
 }
-DEFINE_ARGO_RPC_HANDLER(my_rpc_ult)
+DEFINE_MARGO_RPC_HANDLER(my_rpc_ult)

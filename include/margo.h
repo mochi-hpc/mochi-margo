@@ -108,7 +108,7 @@ margo_instance_id margo_hg_class_to_instance(hg_class_t *cl);
  * macro that defines a function to glue an RPC handler to a fiber
  * @param [in] __name name of handler function
  */
-#define DEFINE_ARGO_RPC_HANDLER(__name) \
+#define DEFINE_MARGO_RPC_HANDLER(__name) \
 hg_return_t __name##_handler(hg_handle_t handle) { \
     int __ret; \
     ABT_pool* __pool; \
@@ -132,7 +132,7 @@ hg_return_t __name##_handler(hg_handle_t handle) { \
  * handler to a fiber
  * @param [in] __name name of handler function
  */
-#define DECLARE_ARGO_RPC_HANDLER(__name) hg_return_t __name##_handler(hg_handle_t handle);
+#define DECLARE_MARGO_RPC_HANDLER(__name) hg_return_t __name##_handler(hg_handle_t handle);
 
 #ifdef __cplusplus
 }
