@@ -114,7 +114,7 @@ hg_return_t __name##_handler(hg_handle_t handle) { \
     ABT_pool* __pool; \
     margo_instance_id __mid; \
     struct hg_info *__hgi; \
-    hg_handle_t* __handle = malloc(sizeof(*__handle)); \
+    hg_handle_t* __handle = (hg_handle_t*) malloc(sizeof(*__handle)); \
     if(!__handle) return(HG_NOMEM_ERROR); \
     *__handle = handle; \
     __hgi = HG_Get_info(handle); \
