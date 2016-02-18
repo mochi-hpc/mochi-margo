@@ -119,7 +119,7 @@ static void hg_progress_fn(void* foo)
 
         if(!mid->hg_progress_shutdown_flag)
         {
-            ABT_pool_get_size(mid->progress_pool, &size);
+            ABT_pool_get_total_size(mid->progress_pool, &size);
             if(size > 0)
             {
                 HG_Progress(mid->hg_class, mid->hg_context, 0);
