@@ -31,7 +31,27 @@ int main(int argc, char **argv)
     na_context_t *na_context;
     hg_context_t *hg_context;
     hg_class_t *hg_class;
+    int single_pool_mode = 0;
     
+    if(argc > 2)
+    {
+        fprintf(stderr, "Usage: ./server <single>\n");
+        fprintf(stderr, "   Note: the optional \"single\" argument makes the server use a single ABT pool for both HG progress and RPC handlers.\n");
+        return(-1);
+    }
+
+    if(argc == 2)
+    {
+        if(strcmp(argv[1], "single") == 0)
+            single_pool_mode = 1;
+        else
+        {
+            fprintf(stderr, "Usage: ./server <single>\n");
+            fprintf(stderr, "   Note: the optional \"single\" argument makes the server use a single ABT pool for both HG progress and RPC handlers.\n");
+            return(-1);
+        }
+    }
+
     /* boilerplate HG initialization steps */
     /***************************************/
     network_class = NA_Initialize("tcp://localhost:1234", NA_TRUE);
@@ -96,12 +116,15 @@ int main(int argc, char **argv)
         return(-1);
     }
 
-    /* create a dedicated ES drive Mercury progress */
-    ret = ABT_snoozer_xstream_create(1, &progress_pool, &progress_xstream);
-    if(ret != 0)
+    if(!single_pool_mode)
     {
-        fprintf(stderr, "Error: ABT_snoozer_xstream_create()\n");
-        return(-1);
+        /* create a dedicated ES drive Mercury progress */
+        ret = ABT_snoozer_xstream_create(1, &progress_pool, &progress_xstream);
+        if(ret != 0)
+        {
+            fprintf(stderr, "Error: ABT_snoozer_xstream_create()\n");
+            return(-1);
+        }
     }
 
     /* actually start margo */
@@ -110,7 +133,10 @@ int main(int argc, char **argv)
      * communication.
      */
     /***************************************/
-    mid = margo_init(progress_pool, handler_pool, hg_context, hg_class);
+    if(single_pool_mode)
+        mid = margo_init(handler_pool, handler_pool, hg_context, hg_class);
+    else
+        mid = margo_init(progress_pool, handler_pool, hg_context, hg_class);
 
     /* register RPC */
     MERCURY_REGISTER(hg_class, "my_rpc", my_rpc_in_t, my_rpc_out_t, 
@@ -129,8 +155,11 @@ int main(int argc, char **argv)
     /* shut down everything */
     margo_finalize(mid);
 
-    ABT_xstream_join(progress_xstream);
-    ABT_xstream_free(&progress_xstream);
+    if(!single_pool_mode)
+    {
+        ABT_xstream_join(progress_xstream);
+        ABT_xstream_free(&progress_xstream);
+    }
 
     ABT_finalize();
 

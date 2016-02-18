@@ -109,6 +109,7 @@ static void hg_progress_fn(void* foo)
     int ret;
     unsigned int actual_count;
     struct margo_instance *mid = (struct margo_instance *)foo;
+    size_t size;
 
     while(!mid->hg_progress_shutdown_flag)
     {
@@ -117,7 +118,18 @@ static void hg_progress_fn(void* foo)
         } while((ret == HG_SUCCESS) && actual_count && !mid->hg_progress_shutdown_flag);
 
         if(!mid->hg_progress_shutdown_flag)
-            HG_Progress(mid->hg_class, mid->hg_context, 100);
+        {
+            ABT_pool_get_total_size(mid->progress_pool, &size);
+            if(size > 1)
+            {
+                HG_Progress(mid->hg_class, mid->hg_context, 0);
+                ABT_thread_yield();
+            }
+            else
+            {
+                HG_Progress(mid->hg_class, mid->hg_context, 100);
+            }
+        }
     }
 
     return;
