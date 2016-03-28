@@ -114,7 +114,7 @@ static void hg_progress_fn(void* foo)
     while(!mid->hg_progress_shutdown_flag)
     {
         do {
-            ret = HG_Trigger(mid->hg_class, mid->hg_context, 0, 1, &actual_count);
+            ret = HG_Trigger(mid->hg_context, 0, 1, &actual_count);
         } while((ret == HG_SUCCESS) && actual_count && !mid->hg_progress_shutdown_flag);
 
         if(!mid->hg_progress_shutdown_flag)
@@ -122,12 +122,12 @@ static void hg_progress_fn(void* foo)
             ABT_pool_get_total_size(mid->progress_pool, &size);
             if(size > 0)
             {
-                HG_Progress(mid->hg_class, mid->hg_context, 0);
+                HG_Progress(mid->hg_context, 0);
                 ABT_thread_yield();
             }
             else
             {
-                HG_Progress(mid->hg_class, mid->hg_context, 100);
+                HG_Progress(mid->hg_context, 100);
             }
         }
     }
@@ -246,7 +246,7 @@ na_return_t margo_na_addr_lookup(
 
 hg_return_t margo_bulk_transfer(
     margo_instance_id mid,
-    hg_bulk_context_t *context,
+    hg_context_t *context,
     hg_bulk_op_t op,
     na_addr_t origin_addr,
     hg_bulk_t origin_handle,

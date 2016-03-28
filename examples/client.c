@@ -65,7 +65,7 @@ int main(int argc, char **argv)
         NA_Finalize(network_class);
         return(-1);
     }
-    hg_class = HG_Init(network_class, na_context, NULL);
+    hg_class = HG_Init(network_class, na_context);
     if(!hg_class)
     {
         fprintf(stderr, "Error: HG_Init()\n");
@@ -217,13 +217,13 @@ static void run_my_rpc(void *_arg)
     assert(ret == 0);
 
     /* create handle */
-    ret = HG_Create(arg->hg_class, arg->hg_context, svr_addr, my_rpc_id, &handle);
+    ret = HG_Create(arg->hg_context, svr_addr, my_rpc_id, &handle);
     assert(ret == 0);
 
     /* register buffer for rdma/bulk access by server */
     hgi = HG_Get_info(handle);
     assert(hgi);
-    ret = HG_Bulk_create(hgi->hg_bulk_class, 1, &buffer, &size, 
+    ret = HG_Bulk_create(hgi->hg_class, 1, &buffer, &size, 
         HG_BULK_READ_ONLY, &in.bulk_handle);
     assert(ret == 0);
 

@@ -48,14 +48,14 @@ static void my_rpc_ult(void *_arg)
     /* register local target buffer for bulk access */
     hgi = HG_Get_info(*handle);
     assert(hgi);
-    ret = HG_Bulk_create(hgi->hg_bulk_class, 1, &buffer,
+    ret = HG_Bulk_create(hgi->hg_class, 1, &buffer,
         &size, HG_BULK_WRITE_ONLY, &bulk_handle);
     assert(ret == 0);
 
     mid = margo_hg_class_to_instance(hgi->hg_class);
 
     /* do bulk transfer from client to server */
-    ret = margo_bulk_transfer(mid, hgi->bulk_context, HG_BULK_PULL, 
+    ret = margo_bulk_transfer(mid, hgi->context, HG_BULK_PULL, 
         hgi->addr, in.bulk_handle, 0,
         bulk_handle, 0, size);
     assert(ret == 0);

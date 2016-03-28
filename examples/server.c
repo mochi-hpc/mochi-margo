@@ -67,7 +67,7 @@ int main(int argc, char **argv)
         NA_Finalize(network_class);
         return(-1);
     }
-    hg_class = HG_Init(network_class, na_context, NULL);
+    hg_class = HG_Init(network_class, na_context);
     if(!hg_class)
     {
         fprintf(stderr, "Error: HG_Init()\n");

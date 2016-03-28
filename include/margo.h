@@ -62,7 +62,7 @@ hg_return_t margo_forward(
 /** 
  * Perform a bulk transfer
  * @param [in] mid Margo instance
- * @param [in] context Mercury bulk context
+ * @param [in] context Mercury context
  * @param [in] op type of operation to perform
  * @param [in] origin_addr remote Mercury address
  * @param [in] origin_handle remote Mercury bulk memory handle
@@ -74,7 +74,7 @@ hg_return_t margo_forward(
  */
 hg_return_t margo_bulk_transfer(
     margo_instance_id mid,
-    hg_bulk_context_t *context,
+    hg_context_t *context,
     hg_bulk_op_t op,
     na_addr_t origin_addr,
     hg_bulk_t origin_handle,
