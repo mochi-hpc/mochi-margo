@@ -21,7 +21,6 @@ int main(int argc, char **argv)
 {
     int ret;
     ABT_eventual eventual;
-    int *shutdown;
     margo_instance_id mid;
     ABT_xstream handler_xstream;
     ABT_pool handler_pool;
@@ -143,14 +142,14 @@ int main(int argc, char **argv)
         my_rpc_ult_handler);
 
     /* suspend this ULT until someone tells us to shut down */
-    ret = ABT_eventual_create(sizeof(*shutdown), &eventual);
+    ret = ABT_eventual_create(0, &eventual);
     if(ret != 0)
     {
         fprintf(stderr, "Error: ABT_eventual_create()\n");
         return(-1);
     }
 
-    ABT_eventual_wait(eventual, (void**)&shutdown);
+    ABT_eventual_wait(eventual, NULL);
 
     /* shut down everything */
     margo_finalize(mid);
