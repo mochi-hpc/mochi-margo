@@ -18,6 +18,8 @@
  * close.
  */
 
+extern ABT_eventual* shutdown_eventual;
+
 static void my_rpc_ult(void *_arg)
 {
     hg_handle_t *handle = _arg;
@@ -84,3 +86,30 @@ static void my_rpc_ult(void *_arg)
     return;
 }
 DEFINE_MARGO_RPC_HANDLER(my_rpc_ult)
+
+static void my_rpc_shutdown_ult(void *_arg)
+{
+    hg_handle_t *handle = _arg;
+
+    hg_return_t hret;
+    struct hg_info *hgi;
+    margo_instance_id mid;
+
+    printf("Got RPC request to shutdown\n");
+
+    hgi = HG_Get_info(*handle);
+    assert(hgi);
+    mid = margo_hg_class_to_instance(hgi->hg_class);
+
+    hret = HG_Respond(*handle, NULL, NULL, NULL);
+    assert(hret == HG_SUCCESS);
+    
+    HG_Destroy(*handle);
+
+    margo_finalize(mid);
+
+    ABT_eventual_set(*shutdown_eventual, NULL, 0);
+
+    return;
+}
+DEFINE_MARGO_RPC_HANDLER(my_rpc_shutdown_ult)

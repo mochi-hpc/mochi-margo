@@ -33,6 +33,7 @@ struct run_my_rpc_args
 static void run_my_rpc(void *_arg);
 
 static hg_id_t my_rpc_id;
+static hg_id_t my_rpc_shutdown_id;
 
 int main(int argc, char **argv) 
 {
@@ -49,6 +50,8 @@ int main(int argc, char **argv)
     na_context_t *na_context;
     hg_context_t *hg_context;
     hg_class_t *hg_class;
+    na_addr_t svr_addr = NA_ADDR_NULL;
+    hg_handle_t handle;
         
     /* boilerplate HG initialization steps */
     /***************************************/
@@ -133,7 +136,9 @@ int main(int argc, char **argv)
 
     /* register RPC */
     my_rpc_id = MERCURY_REGISTER(hg_class, "my_rpc", my_rpc_in_t, my_rpc_out_t, 
-        my_rpc_ult_handler);
+        NULL);
+    my_rpc_shutdown_id = MERCURY_REGISTER(hg_class, "my_shutdown_rpc", void, void, 
+        NULL);
 
     for(i=0; i<4; i++)
     {
@@ -175,6 +180,17 @@ int main(int argc, char **argv)
             return(-1);
         }
     }
+
+    /* send one rpc to server to shut it down */
+    /* find addr for server */
+    ret = margo_na_addr_lookup(mid, network_class, na_context, "tcp://localhost:1234", &svr_addr);
+    assert(ret == 0);
+
+    /* create handle */
+    ret = HG_Create(hg_context, svr_addr, my_rpc_shutdown_id, &handle);
+    assert(ret == 0);
+
+    margo_forward(mid, handle, NULL);
 
     /* shut down everything */
     margo_finalize(mid);

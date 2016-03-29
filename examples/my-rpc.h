@@ -17,4 +17,6 @@ MERCURY_GEN_PROC(my_rpc_in_t,
     ((hg_bulk_t)(bulk_handle)))
 DECLARE_MARGO_RPC_HANDLER(my_rpc_ult)
 
+DECLARE_MARGO_RPC_HANDLER(my_rpc_shutdown_ult)
+
 #endif /* __MY_RPC */

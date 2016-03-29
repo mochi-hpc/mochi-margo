@@ -13,6 +13,8 @@
 
 #include "my-rpc.h"
 
+ABT_eventual* shutdown_eventual;
+
 /* example server program.  Starts HG engine, registers the example RPC type,
  * and then executes indefinitely.
  */
@@ -32,6 +34,8 @@ int main(int argc, char **argv)
     hg_class_t *hg_class;
     int single_pool_mode = 0;
     
+    shutdown_eventual = &eventual;
+
     if(argc > 2)
     {
         fprintf(stderr, "Usage: ./server <single>\n");
@@ -136,10 +140,13 @@ int main(int argc, char **argv)
         mid = margo_init(handler_pool, handler_pool, hg_context, hg_class);
     else
         mid = margo_init(progress_pool, handler_pool, hg_context, hg_class);
+    assert(mid);
 
     /* register RPC */
     MERCURY_REGISTER(hg_class, "my_rpc", my_rpc_in_t, my_rpc_out_t, 
         my_rpc_ult_handler);
+    MERCURY_REGISTER(hg_class, "my_shutdown_rpc", void, void, 
+        my_rpc_shutdown_ult_handler);
 
     /* suspend this ULT until someone tells us to shut down */
     ret = ABT_eventual_create(0, &eventual);
@@ -149,10 +156,8 @@ int main(int argc, char **argv)
         return(-1);
     }
 
+    /* wait for shutdown (assume that margo will be finalized by an RPC) */
     ABT_eventual_wait(eventual, NULL);
-
-    /* shut down everything */
-    margo_finalize(mid);
 
     if(!single_pool_mode)
     {
