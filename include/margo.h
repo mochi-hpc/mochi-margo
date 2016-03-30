@@ -71,6 +71,24 @@ hg_return_t margo_forward(
     hg_handle_t handle,
     void *in_struct);
 
+/**
+ * Send an RPC response, waiting for completion before returning
+ * control to the calling ULT.
+ * Note: this call is typically not needed as RPC listeners need not concern
+ * themselves with what happens after an RPC finishes. However, there are cases
+ * when this is useful (deferring resource cleanup, calling margo_finalize()
+ * for e.g. a shutdown RPC).
+ * @param [in] mid Margo instance
+ * @param [in] handle identifier for the RPC for which a response is being
+ * sent
+ * @param [in] out_struct output argument struct for response
+ * @return HG_SUCCESS on success, hg_return_t values on error. See HG_Respond.
+ */
+hg_return_t margo_respond(
+    margo_instance_id mid,
+    hg_handle_t handle,
+    void *out_struct);
+
 /** 
  * Perform a bulk transfer
  * @param [in] mid Margo instance

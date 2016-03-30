@@ -205,7 +205,7 @@ ABT_pool* margo_get_handler_pool(margo_instance_id mid)
     return(&mid->handler_pool);
 }
 
-static hg_return_t margo_forward_cb(const struct hg_cb_info *info)
+static hg_return_t margo_cb(const struct hg_cb_info *info)
 {
     hg_return_t hret = info->ret;
 
@@ -232,7 +232,35 @@ hg_return_t margo_forward(
         return(HG_NOMEM_ERROR);        
     }
 
-    hret = HG_Forward(handle, margo_forward_cb, &eventual, in_struct);
+    hret = HG_Forward(handle, margo_cb, &eventual, in_struct);
+    if(hret == 0)
+    {
+        ABT_eventual_wait(eventual, (void**)&waited_hret);
+        hret = *waited_hret;
+    }
+
+    ABT_eventual_free(&eventual);
+
+    return(hret);
+}
+
+hg_return_t margo_respond(
+    margo_instance_id mid,
+    hg_handle_t handle,
+    void *out_struct)
+{
+    hg_return_t hret = HG_TIMEOUT;
+    ABT_eventual eventual;
+    int ret;
+    hg_return_t* waited_hret;
+
+    ret = ABT_eventual_create(sizeof(hret), &eventual);
+    if(ret != 0)
+    {
+        return(HG_NOMEM_ERROR);
+    }
+
+    hret = HG_Respond(handle, margo_cb, &eventual, out_struct);
     if(hret == 0)
     {
         ABT_eventual_wait(eventual, (void**)&waited_hret);

@@ -100,9 +100,9 @@ static void my_rpc_shutdown_ult(void *_arg)
     assert(hgi);
     mid = margo_hg_class_to_instance(hgi->hg_class);
 
-    hret = HG_Respond(*handle, NULL, NULL, NULL);
+    hret = margo_respond(mid, *handle, NULL);
     assert(hret == HG_SUCCESS);
-    
+
     HG_Destroy(*handle);
 
     /* NOTE: we assume that the server daemon is using
