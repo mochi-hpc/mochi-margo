@@ -13,8 +13,6 @@
 
 #include "my-rpc.h"
 
-ABT_eventual* shutdown_eventual;
-
 /* example server program.  Starts HG engine, registers the example RPC type,
  * and then executes indefinitely.
  */
@@ -22,7 +20,6 @@ ABT_eventual* shutdown_eventual;
 int main(int argc, char **argv) 
 {
     int ret;
-    ABT_eventual eventual;
     margo_instance_id mid;
     ABT_xstream handler_xstream;
     ABT_pool handler_pool;
@@ -34,8 +31,6 @@ int main(int argc, char **argv)
     hg_class_t *hg_class;
     int single_pool_mode = 0;
     
-    shutdown_eventual = &eventual;
-
     if(argc > 2)
     {
         fprintf(stderr, "Usage: ./server <single>\n");
@@ -148,16 +143,21 @@ int main(int argc, char **argv)
     MERCURY_REGISTER(hg_class, "my_shutdown_rpc", void, void, 
         my_rpc_shutdown_ult_handler);
 
-    /* suspend this ULT until someone tells us to shut down */
-    ret = ABT_eventual_create(0, &eventual);
-    if(ret != 0)
-    {
-        fprintf(stderr, "Error: ABT_eventual_create()\n");
-        return(-1);
-    }
-
-    /* wait for shutdown (assume that margo will be finalized by an RPC) */
-    ABT_eventual_wait(eventual, NULL);
+    /* NOTE: at this point this server ULT has two options.  It can wait on
+     * whatever mechanism it wants to (however long the daemon should run and
+     * then call margo_finalize().  Otherwise, it can call
+     * margo_wait_for_finalize() on the assumption that it should block until
+     * some other entity calls margo_finalize().
+     *
+     * This example does the latter.  Margo will be finalized by a special
+     * RPC from the client.
+     *
+     * This approach will allow the server to idle gracefully even when
+     * executed in "single" mode, in which the main thread of the server
+     * daemon and the progress thread for Mercury are executing in the same
+     * ABT pool.
+     */
+    margo_wait_for_finalize(mid);
 
     if(!single_pool_mode)
     {

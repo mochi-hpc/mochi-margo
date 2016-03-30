@@ -18,8 +18,6 @@
  * close.
  */
 
-extern ABT_eventual* shutdown_eventual;
-
 static void my_rpc_ult(void *_arg)
 {
     hg_handle_t *handle = _arg;
@@ -106,9 +104,11 @@ static void my_rpc_shutdown_ult(void *_arg)
     
     HG_Destroy(*handle);
 
+    /* NOTE: we assume that the server daemon is using
+     * margo_wait_for_finalize() to suspend until this RPC executes, so there
+     * is no need to send any extra signal to notify it.
+     */
     margo_finalize(mid);
-
-    ABT_eventual_set(*shutdown_eventual, NULL, 0);
 
     return;
 }

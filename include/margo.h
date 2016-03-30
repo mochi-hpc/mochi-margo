@@ -41,6 +41,18 @@ margo_instance_id margo_init(ABT_pool progress_pool, ABT_pool handler_pool,
 void margo_finalize(margo_instance_id mid);
 
 /**
+ * Suspends the caller until some other entity (e.g. an RPC, thread, or
+ * signal handler) invokes margo_finalize().
+ *
+ * NOTE: This informs Margo that the calling thread no longer needs to be 
+ * scheduled for execution if it is sharing an Argobots pool with the
+ * progress engine.
+ *
+ * @param [in] mid Margo instance
+ */
+void margo_wait_for_finalize(margo_instance_id mid);
+
+/**
  * Retrieve the abt_handler pool that was associated with the instance at 
  *    initialization time
  * @param [in] mid Margo instance

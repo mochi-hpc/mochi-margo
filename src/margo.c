@@ -24,6 +24,13 @@ struct margo_instance
     /* internal to margo for this particular instance */
     ABT_thread hg_progress_tid;
     int hg_progress_shutdown_flag;
+
+    /* control logic for callers waiting on margo to be finalized */
+    int finalize_flag;
+    int finalize_waiters_in_progress_pool;
+    ABT_mutex finalize_mutex;
+    ABT_cond finalize_cond;
+
     int table_index;
 };
 
@@ -60,6 +67,9 @@ margo_instance_id margo_init(ABT_pool progress_pool, ABT_pool handler_pool,
     if(!mid)
         return(MARGO_INSTANCE_NULL);
     memset(mid, 0, sizeof(*mid));
+
+    ABT_mutex_create(&mid->finalize_mutex);
+    ABT_cond_create(&mid->finalize_cond);
 
     mid->progress_pool = progress_pool;
     mid->handler_pool = handler_pool;
@@ -100,6 +110,56 @@ void margo_finalize(margo_instance_id mid)
     }
     handler_mapping_table_size--;
 
+    ABT_mutex_lock(mid->finalize_mutex);
+    mid->finalize_flag = 1;
+    ABT_cond_broadcast(mid->finalize_cond);
+    ABT_mutex_unlock(mid->finalize_mutex);
+
+    /* TODO: yuck, there is a race here if someone was really waiting for
+     * finalize; we can't destroy the data structures out from under them.
+     * We could fix this by reference counting so that the last caller
+     * (whether a finalize() caller or wait_for_finalize() caller) knows it
+     * is safe to turn off the lights on their way out.  For now we just leak 
+     * a small amount of memory.
+     */
+#if 0
+    ABT_mutex_free(&mid->finalize_mutex);
+    ABT_cond_free(&mid->finalize_cond);
+    free(mid);
+#endif
+
+    return;
+}
+
+void margo_wait_for_finalize(margo_instance_id mid)
+{
+    ABT_xstream xstream;
+    ABT_pool pool;
+    int ret;
+    int in_pool = 0;
+
+    ret = ABT_xstream_self(&xstream);
+    if(ret != 0)
+        return;
+    ret = ABT_xstream_get_main_pools(xstream, 1, &pool);
+    if(ret != 0)
+        return;
+
+    /* Is this waiter in the same pool as the pool running the progress
+     * thread?
+     */
+    if(pool == mid->progress_pool)
+        in_pool = 1;
+
+    ABT_mutex_lock(mid->finalize_mutex);
+
+        mid->finalize_waiters_in_progress_pool += in_pool;
+            
+        while(!mid->finalize_flag)
+            ABT_cond_wait(mid->finalize_cond, mid->finalize_mutex);
+
+    ABT_mutex_unlock(mid->finalize_mutex);
+    
     return;
 }
 
@@ -120,7 +180,12 @@ static void hg_progress_fn(void* foo)
         if(!mid->hg_progress_shutdown_flag)
         {
             ABT_pool_get_total_size(mid->progress_pool, &size);
-            if(size > 0)
+            /* Are there any other threads executing in this pool that are *not*
+             * blocked on margo_wait_for_finalize()?  If so then, we can't
+             * sleep here or else those threads will not get a chance to
+             * execute.
+             */
+            if(size > mid->finalize_waiters_in_progress_pool)
             {
                 HG_Progress(mid->hg_context, 0);
                 ABT_thread_yield();
