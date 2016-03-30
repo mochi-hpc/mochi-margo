@@ -30,8 +30,10 @@ static void my_rpc_ult(void *_arg)
     void *buffer;
     hg_bulk_t bulk_handle;
     struct hg_info *hgi;
+#if 0
     int fd;
     char filename[256];
+#endif
     margo_instance_id mid;
 
     ret = HG_Get_input(*handle, &in);
@@ -60,17 +62,16 @@ static void my_rpc_ult(void *_arg)
         bulk_handle, 0, size);
     assert(ret == 0);
 
+    /* write to a file; would be done with abt-io if we enabled it */
 #if 0
-
-    /* write to a file */
     sprintf(filename, "/tmp/hg-fiber-%d.txt", in.input_val);
-    fd = fbr_eio_open(fctx, filename, O_WRONLY|O_CREAT, S_IWUSR|S_IRUSR, 0);
+    fd = abt_io_open(aid, filename, O_WRONLY|O_CREAT, S_IWUSR|S_IRUSR);
     assert(fd > -1);
 
-    ret = fbr_eio_write(fctx, fd, buffer, 512, 0, 0);
+    ret = abt_io_pwrite(aid, fd, buffer, 512, 0);
     assert(ret == 512);
 
-    fbr_eio_close(fctx, fd, 0);
+    abt_io_close(aid, fd);
 #endif
 
     hret = HG_Respond(*handle, NULL, NULL, &out);
