@@ -239,8 +239,8 @@ static void hg_progress_fn(void* foo)
             DL_DELETE(mid->timer_head, cur);
             cur->next = NULL;
             cur->prev = NULL;
-            /* TODO: actually cancel here, of course */
-            printf("FOO: I would like to cancel operation with tv_sec %ld, tv_nsec %ld\n", (long)cur->expiration.tv_sec, cur->expiration.tv_nsec);
+            //printf("FOO: I would like to cancel operation with tv_sec %ld, tv_nsec %ld\n", (long)cur->expiration.tv_sec, cur->expiration.tv_nsec);
+            HG_Core_cancel(cur->handle);
         }
         ABT_mutex_unlock(mid->timer_mutex);
 
