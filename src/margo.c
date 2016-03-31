@@ -11,6 +11,7 @@
 #include <abt.h>
 #include <abt-snoozer.h>
 #include <time.h>
+#include <math.h>
 
 #include "margo.h"
 #include "utlist.h"
@@ -260,7 +261,7 @@ hg_return_t margo_forward_timed(
     el.handle = handle;
     clock_gettime(clk_id, &el.expiration);
     el.expiration.tv_sec += timeout_ms/1000;
-    el.expiration.tv_nsec += (timeout_ms - (timeout_ms/1000))*1000.0*1000.0;
+    el.expiration.tv_nsec += fmod(timeout_ms, 1000)*1000.0*1000.0;
     if(el.expiration.tv_nsec > 1000000000)
     {
         el.expiration.tv_nsec -= 1000000000;
