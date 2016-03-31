@@ -261,9 +261,12 @@ hg_return_t margo_forward_timed(
     int ret;
     hg_return_t* waited_hret;
     struct timed_element el;
+    struct timed_element *cur;
 
     /* calculate expiration time */
     el.handle = handle;
+    el.prev = NULL;
+    el.next = NULL;
     clock_gettime(clk_id, &el.expiration);
     el.expiration.tv_sec += timeout_ms/1000;
     el.expiration.tv_nsec += fmod(timeout_ms, 1000)*1000.0*1000.0;
@@ -279,14 +282,41 @@ hg_return_t margo_forward_timed(
         return(HG_NOMEM_ERROR);        
     }
 
+    /* TODO: split this out into a subroutine */
     /* track timer */
-    /* TODO: sort properly */
-    /* TODO: timer_head->prev points to last element appended if we want to
-     * walk from the back and check the front for timeouts.  Or we can do it
-     * the other way around.
-     */
     ABT_mutex_lock(mid->timer_mutex);
-    DL_APPEND(mid->timer_head, &el);
+
+    /* if queue of expiring ops is empty, put ourselves on it */
+    if(!mid->timer_head)
+        DL_APPEND(mid->timer_head, &el);
+    else
+    {
+        /* something else already in queue, keep it sorted in ascending order
+         * of expiration time
+         */
+        cur = mid->timer_head;
+        do
+        {
+            /* walk backwards through queue */
+            cur = cur->prev;
+            /* as soon as we find an element that expires before this one, 
+             * then we add ours after it
+             */
+            if(cur->expiration.tv_sec < el.expiration.tv_sec ||
+                (cur->expiration.tv_sec == el.expiration.tv_sec &&
+                 cur->expiration.tv_nsec < el.expiration.tv_nsec))
+            {
+                DL_APPEND_ELEM(mid->timer_head, cur, &el);
+                break;
+            }
+        }while(cur != mid->timer_head);
+
+        /* if we never found one with an expiration before this one, then
+         * this one is the new head
+         */
+        if(el.prev == NULL && el.next == NULL)
+            DL_PREPEND(mid->timer_head, &el);
+    }
     ABT_mutex_unlock(mid->timer_mutex);
 
     hret = HG_Forward(handle, margo_cb, &eventual, in_struct);
