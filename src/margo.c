@@ -199,6 +199,8 @@ static void hg_progress_fn(void* foo)
     unsigned int actual_count;
     struct margo_instance *mid = (struct margo_instance *)foo;
     size_t size;
+    struct timespec now;
+    struct timed_element *cur;
 
     while(!mid->hg_progress_shutdown_flag)
     {
@@ -224,6 +226,23 @@ static void hg_progress_fn(void* foo)
                 HG_Progress(mid->hg_context, 100);
             }
         }
+
+        clock_gettime(clk_id, &now);
+
+        ABT_mutex_lock(mid->timer_mutex);
+        while(mid->timer_head && 
+            (mid->timer_head->expiration.tv_sec < now.tv_sec ||
+             (mid->timer_head->expiration.tv_sec == now.tv_sec &&
+              mid->timer_head->expiration.tv_nsec < now.tv_nsec)))
+        {
+            cur = mid->timer_head;
+            DL_DELETE(mid->timer_head, cur);
+            cur->next = NULL;
+            cur->prev = NULL;
+            /* TODO: actually cancel here, of course */
+            printf("FOO: I would like to cancel operation with tv_sec %ld, tv_nsec %ld\n", (long)cur->expiration.tv_sec, cur->expiration.tv_nsec);
+        }
+        ABT_mutex_unlock(mid->timer_mutex);
 
         /* TODO: check for timeouts here.  If timer_head not null, then check
          * current time and compare against first element.  Keep walking list
@@ -326,9 +345,10 @@ hg_return_t margo_forward_timed(
         hret = *waited_hret;
     }
 
-    /* remove timer */
+    /* remove timer if it is still in place */
     ABT_mutex_lock(mid->timer_mutex);
-    DL_DELETE(mid->timer_head, &el);
+    if(el.prev || el.next)
+        DL_DELETE(mid->timer_head, &el);
     ABT_mutex_unlock(mid->timer_mutex);
 
     ABT_eventual_free(&eventual);
