@@ -10,9 +10,29 @@
 #include <errno.h>
 #include <abt.h>
 #include <abt-snoozer.h>
+#include <time.h>
 
 #include "margo.h"
 #include "utlist.h"
+
+/* TODO: including core.h for cancel definition, presumably this will be 
+ * available in top level later?
+ */
+#include <mercury_core.h>
+
+struct timed_element
+{
+    struct timespec expiration;
+    hg_handle_t handle;
+    struct timed_element *next;
+    struct timed_element *prev;
+};
+
+#ifdef CLOCK_REALTIME_COARSE
+clockid_t clk_id = CLOCK_REALTIME_COARSE;
+#else
+clockid_t clk_id = CLOCK_REALTIME;
+#endif
 
 struct margo_instance
 {
@@ -31,6 +51,10 @@ struct margo_instance
     int finalize_waiters_in_progress_pool;
     ABT_mutex finalize_mutex;
     ABT_cond finalize_cond;
+
+    /* pending operations with timeouts */
+    ABT_mutex timer_mutex;
+    struct timed_element *timer_head;
 
     int table_index;
 };
@@ -71,6 +95,8 @@ margo_instance_id margo_init(ABT_pool progress_pool, ABT_pool handler_pool,
 
     ABT_mutex_create(&mid->finalize_mutex);
     ABT_cond_create(&mid->finalize_cond);
+
+    ABT_mutex_create(&mid->timer_mutex);
 
     mid->progress_pool = progress_pool;
     mid->handler_pool = handler_pool;
@@ -126,6 +152,7 @@ void margo_finalize(margo_instance_id mid)
 #if 0
     ABT_mutex_free(&mid->finalize_mutex);
     ABT_cond_free(&mid->finalize_cond);
+    ABT_mutex_free(&mid->timer_mutex);
     free(mid);
 #endif
 
@@ -223,9 +250,51 @@ hg_return_t margo_forward_timed(
     void *in_struct,
     double timeout_ms)
 {
-    /* TODO: implement; for now just wraps regular forward with no timeout */
+    hg_return_t hret = HG_TIMEOUT;
+    ABT_eventual eventual;
+    int ret;
+    hg_return_t* waited_hret;
+    struct timed_element el;
 
-    return(margo_forward(mid, handle, in_struct));
+    /* calculate expiration time */
+    el.handle = handle;
+    clock_gettime(clk_id, &el.expiration);
+    el.expiration.tv_sec += timeout_ms/1000;
+    el.expiration.tv_nsec += (timeout_ms - (timeout_ms/1000))*1000.0*1000.0;
+    if(el.expiration.tv_nsec > 1000000000)
+    {
+        el.expiration.tv_nsec -= 1000000000;
+        el.expiration.tv_sec++;
+    }
+
+    ret = ABT_eventual_create(sizeof(hret), &eventual);
+    if(ret != 0)
+    {
+        return(HG_NOMEM_ERROR);        
+    }
+
+    /* track timer */
+    /* TODO: sort properly */
+    ABT_mutex_lock(mid->timer_mutex);
+    DL_APPEND(mid->timer_head, &el);
+    ABT_mutex_unlock(mid->timer_mutex);
+
+    hret = HG_Forward(handle, margo_cb, &eventual, in_struct);
+    if(hret == 0)
+    {
+        ABT_eventual_wait(eventual, (void**)&waited_hret);
+        hret = *waited_hret;
+    }
+
+    /* remove timer */
+    ABT_mutex_lock(mid->timer_mutex);
+    DL_DELETE(mid->timer_head, &el);
+    ABT_mutex_unlock(mid->timer_mutex);
+
+    ABT_eventual_free(&eventual);
+
+    return(hret);
+
 }
 
 
