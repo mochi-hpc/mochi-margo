@@ -12,6 +12,7 @@
 #include <abt-snoozer.h>
 
 #include "margo.h"
+#include "utlist.h"
 
 struct margo_instance
 {
