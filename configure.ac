@@ -53,6 +53,9 @@ LIBS="$ABT_SNOOZER_LIBS $LIBS"
 CPPFLAGS="$ABT_SNOOZER_CFLAGS $CPPFLAGS"
 CFLAGS="$ABT_SNOOZER_CFLAGS $CFLAGS"
 
+# turn off a warning that is tripping up our use of utlist at the moment
+CFLAGS="-Wno-address $CFLAGS"
+
 # TODO: the mercury tests should probably be in their own .m4
 # make sure that mercury has boost preprocessors enabled
 AC_MSG_CHECKING(if Boost preprocessing is enabled in Mercury)
