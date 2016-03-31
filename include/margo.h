@@ -72,6 +72,20 @@ hg_return_t margo_forward(
     void *in_struct);
 
 /**
+ * Forward an RPC request to a remote host with a user-defined timeout
+ * @param [in] mid Margo instance
+ * @param [in] handle identifier for the RPC to be sent
+ * @param [in] in_struct input argument struct for RPC
+ * @param [in] timeout_ms timeout in milliseconds
+ * @returns 0 on success, hg_return_t values on error
+ */
+hg_return_t margo_forward_timed(
+    margo_instance_id mid,
+    hg_handle_t handle,
+    void *in_struct,
+    double timeout_ms);
+
+/**
  * Send an RPC response, waiting for completion before returning
  * control to the calling ULT.
  * Note: this call is typically not needed as RPC listeners need not concern

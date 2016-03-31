@@ -31,6 +31,8 @@ AM_CXXFLAGS = $(AM_CFLAGS)
 lib_LIBRARIES += src/libmargo.a
 src_libmargo_a_SOURCES =
 
+LDADD = src/libmargo.a
+
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = maint/margo.pc
 

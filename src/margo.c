@@ -217,6 +217,18 @@ static hg_return_t margo_cb(const struct hg_cb_info *info)
     return(HG_SUCCESS);
 }
 
+hg_return_t margo_forward_timed(
+    margo_instance_id mid,
+    hg_handle_t handle,
+    void *in_struct,
+    double timeout_ms)
+{
+    /* TODO: implement; for now just wraps regular forward with no timeout */
+
+    return(margo_forward(mid, handle, in_struct));
+}
+
+
 hg_return_t margo_forward(
     margo_instance_id mid,
     hg_handle_t handle,

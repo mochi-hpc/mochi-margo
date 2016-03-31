@@ -1,10 +1,9 @@
-bin_PROGRAMS += examples/client examples/server
-
-examples_client_SOURCES = \
- examples/client.c 
-examples_client_LDADD = src/libmargo.a
+bin_PROGRAMS += examples/client examples/server examples/server-hang examples/client-timeout
 
 examples_server_SOURCES = \
  examples/server.c \
  examples/my-rpc.c
-examples_server_LDADD = src/libmargo.a
+
+examples_server_hang_SOURCES = \
+ examples/server-hang.c \
+ examples/my-rpc.c
