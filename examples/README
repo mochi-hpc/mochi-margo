@@ -1,0 +1,41 @@
+This directory contains a collection of examples that can be run by hand.
+They assume you are using a Mercury transport such as CCI or BMI that
+understands the tcp:// address type.  If you are using CCI then you probably
+also want to run this fork of Mercury to allow the Mercury daemon to set its
+own port at runtime:
+
+https://github.com/carns/mercury
+
+Assuming that you have met those requirements, then you can run the following
+3 example scenarios with a server in one terminal and a client in another,
+communicating via tcp over the localhost address.
+
+----
+
+A client issuing 4 concurrent RPCS, then a serial shutdown RPC, to a single
+server that is using a dedicated execution stream to drive Mercury progress:
+
+./server
+./client
+
+----
+
+A client issuing 4 concurrent RPCS, then a serial shutdown RPC, to a single
+server that is *not* using a dedicated execution stream to drive Mercury 
+progress.  The server is purely single-threaded in this case:
+
+./server single
+./client
+
+----
+
+A client attempting to issue 4 concurrent RPCS, each with a 2 second timeout,
+to a server that is deliberately hung in order to exercise Margo timeout
+functionality:
+
+./server-hang
+./client-timeout
+
+(this last test depends on Mercury functionality that is incomplete as of
+this writing; it is not expected to complete)
+

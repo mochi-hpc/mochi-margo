@@ -21,3 +21,7 @@ Example configuration:
     ../configure --prefix=/home/pcarns/working/install \
         PKG_CONFIG_PATH=/home/pcarns/working/install/lib/pkgconfig \
         CFLAGS="-g -Wall"
+
+## Running examples
+
+See README file in the examples subdirectory.
