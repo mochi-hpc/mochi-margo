@@ -224,6 +224,11 @@ static void hg_progress_fn(void* foo)
                 HG_Progress(mid->hg_context, 100);
             }
         }
+
+        /* TODO: check for timeouts here.  If timer_head not null, then check
+         * current time and compare against first element.  Keep walking list
+         * cancelling operations until we find non-expired element.
+         */
     }
 
     return;
@@ -276,6 +281,10 @@ hg_return_t margo_forward_timed(
 
     /* track timer */
     /* TODO: sort properly */
+    /* TODO: timer_head->prev points to last element appended if we want to
+     * walk from the back and check the front for timeouts.  Or we can do it
+     * the other way around.
+     */
     ABT_mutex_lock(mid->timer_mutex);
     DL_APPEND(mid->timer_head, &el);
     ABT_mutex_unlock(mid->timer_mutex);
