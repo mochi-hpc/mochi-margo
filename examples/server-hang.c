@@ -27,8 +27,6 @@ int main(int argc, char **argv)
     margo_instance_id mid;
     ABT_xstream handler_xstream;
     ABT_pool handler_pool;
-    na_class_t *network_class;
-    na_context_t *na_context;
     hg_context_t *hg_context;
     hg_class_t *hg_class;
     
@@ -40,25 +38,10 @@ int main(int argc, char **argv)
 
     /* boilerplate HG initialization steps */
     /***************************************/
-    network_class = NA_Initialize("tcp://localhost:1234", NA_TRUE);
-    if(!network_class)
-    {
-        fprintf(stderr, "Error: NA_Initialize()\n");
-        return(-1);
-    }
-    na_context = NA_Context_create(network_class);
-    if(!na_context)
-    {
-        fprintf(stderr, "Error: NA_Context_create()\n");
-        NA_Finalize(network_class);
-        return(-1);
-    }
-    hg_class = HG_Init(network_class, na_context);
+    hg_class = HG_Init("tcp://localhost:1234", HG_TRUE);
     if(!hg_class)
     {
         fprintf(stderr, "Error: HG_Init()\n");
-        NA_Context_destroy(network_class, na_context);
-        NA_Finalize(network_class);
         return(-1);
     }
     hg_context = HG_Context_create(hg_class);
@@ -66,8 +49,6 @@ int main(int argc, char **argv)
     {
         fprintf(stderr, "Error: HG_Context_create()\n");
         HG_Finalize(hg_class);
-        NA_Context_destroy(network_class, na_context);
-        NA_Finalize(network_class);
         return(-1);
     }
 
@@ -143,8 +124,6 @@ int main(int argc, char **argv)
 
     HG_Context_destroy(hg_context);
     HG_Finalize(hg_class);
-    NA_Context_destroy(network_class, na_context);
-    NA_Finalize(network_class);
 
     return(0);
 }

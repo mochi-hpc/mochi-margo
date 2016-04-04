@@ -24,8 +24,6 @@ struct run_my_rpc_args
 {
     int val;
     margo_instance_id mid;
-    na_class_t *network_class;
-    na_context_t *na_context;
     hg_context_t *hg_context;
     hg_class_t *hg_class;
 };
@@ -46,34 +44,17 @@ int main(int argc, char **argv)
     margo_instance_id mid;
     ABT_xstream progress_xstream;
     ABT_pool progress_pool;
-    na_class_t *network_class;
-    na_context_t *na_context;
     hg_context_t *hg_context;
     hg_class_t *hg_class;
-    na_addr_t svr_addr = NA_ADDR_NULL;
+    hg_addr_t svr_addr = HG_ADDR_NULL;
     hg_handle_t handle;
         
     /* boilerplate HG initialization steps */
     /***************************************/
-    network_class = NA_Initialize("tcp://localhost:1234", NA_FALSE);
-    if(!network_class)
-    {
-        fprintf(stderr, "Error: NA_Initialize()\n");
-        return(-1);
-    }
-    na_context = NA_Context_create(network_class);
-    if(!na_context)
-    {
-        fprintf(stderr, "Error: NA_Context_create()\n");
-        NA_Finalize(network_class);
-        return(-1);
-    }
-    hg_class = HG_Init(network_class, na_context);
+    hg_class = HG_Init("tcp://localhost:1234", HG_FALSE);
     if(!hg_class)
     {
         fprintf(stderr, "Error: HG_Init()\n");
-        NA_Context_destroy(network_class, na_context);
-        NA_Finalize(network_class);
         return(-1);
     }
     hg_context = HG_Context_create(hg_class);
@@ -81,8 +62,6 @@ int main(int argc, char **argv)
     {
         fprintf(stderr, "Error: HG_Context_create()\n");
         HG_Finalize(hg_class);
-        NA_Context_destroy(network_class, na_context);
-        NA_Finalize(network_class);
         return(-1);
     }
 
@@ -146,8 +125,6 @@ int main(int argc, char **argv)
         args[i].mid = mid;
         args[i].hg_class = hg_class;
         args[i].hg_context = hg_context;
-        args[i].na_context = na_context;
-        args[i].network_class = network_class;
 
         /* Each fiber gets a pointer to an element of the array to use
          * as input for the run_my_rpc() function.
@@ -183,7 +160,7 @@ int main(int argc, char **argv)
 
     /* send one rpc to server to shut it down */
     /* find addr for server */
-    ret = margo_na_addr_lookup(mid, network_class, na_context, "tcp://localhost:1234", &svr_addr);
+    ret = margo_addr_lookup(mid, hg_context, "tcp://localhost:1234", &svr_addr);
     assert(ret == 0);
 
     /* create handle */
@@ -202,8 +179,6 @@ int main(int argc, char **argv)
 
     HG_Context_destroy(hg_context);
     HG_Finalize(hg_class);
-    NA_Context_destroy(network_class, na_context);
-    NA_Finalize(network_class);
 
     return(0);
 }
@@ -211,7 +186,7 @@ int main(int argc, char **argv)
 static void run_my_rpc(void *_arg)
 {
     struct run_my_rpc_args *arg = _arg;
-    na_addr_t svr_addr = NA_ADDR_NULL;
+    hg_addr_t svr_addr = HG_ADDR_NULL;
     hg_handle_t handle;
     my_rpc_in_t in;
     my_rpc_out_t out;
@@ -229,7 +204,7 @@ static void run_my_rpc(void *_arg)
     sprintf((char*)buffer, "Hello world!\n");
 
     /* find addr for server */
-    ret = margo_na_addr_lookup(arg->mid, arg->network_class, arg->na_context, "tcp://localhost:1234", &svr_addr);
+    ret = margo_addr_lookup(arg->mid, arg->hg_context, "tcp://localhost:1234", &svr_addr);
     assert(ret == 0);
 
     /* create handle */
