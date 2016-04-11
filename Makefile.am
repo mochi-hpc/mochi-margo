@@ -15,7 +15,7 @@ CLEANFILES = $(bin_SCRIPTS)
 MAINTAINERCLEANFILES =
 EXTRA_DIST =
 BUILT_SOURCES =
-include_HEADERS = include/margo.h
+include_HEADERS = include/margo.h include/margo-timer.h
 
 EXTRA_DIST += \
  prepare.sh 

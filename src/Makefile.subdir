@@ -1,2 +1,3 @@
 src_libmargo_a_SOURCES += \
- src/margo.c
+ src/margo.c \
+ src/margo-timer.c

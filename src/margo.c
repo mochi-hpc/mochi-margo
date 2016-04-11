@@ -21,20 +21,6 @@
  */
 #include <mercury_core.h>
 
-struct timed_element
-{
-    struct timespec expiration;
-    hg_handle_t handle;
-    struct timed_element *next;
-    struct timed_element *prev;
-};
-
-#ifdef CLOCK_REALTIME_COARSE
-clockid_t clk_id = CLOCK_REALTIME_COARSE;
-#else
-clockid_t clk_id = CLOCK_REALTIME;
-#endif
-
 struct margo_instance
 {
     /* provided by caller */
@@ -52,10 +38,6 @@ struct margo_instance
     int finalize_waiters_in_progress_pool;
     ABT_mutex finalize_mutex;
     ABT_cond finalize_cond;
-
-    /* pending operations with timeouts */
-    ABT_mutex timer_mutex;
-    struct timed_element *timer_head;
 
     int table_index;
 };
@@ -97,7 +79,7 @@ margo_instance_id margo_init(ABT_pool progress_pool, ABT_pool handler_pool,
     ABT_mutex_create(&mid->finalize_mutex);
     ABT_cond_create(&mid->finalize_cond);
 
-    ABT_mutex_create(&mid->timer_mutex);
+    margo_timer_init();
 
     mid->progress_pool = progress_pool;
     mid->handler_pool = handler_pool;
@@ -143,6 +125,8 @@ void margo_finalize(margo_instance_id mid)
     ABT_cond_broadcast(mid->finalize_cond);
     ABT_mutex_unlock(mid->finalize_mutex);
 
+    margo_timer_cleanup();
+
     /* TODO: yuck, there is a race here if someone was really waiting for
      * finalize; we can't destroy the data structures out from under them.
      * We could fix this by reference counting so that the last caller
@@ -153,7 +137,6 @@ void margo_finalize(margo_instance_id mid)
 #if 0
     ABT_mutex_free(&mid->finalize_mutex);
     ABT_cond_free(&mid->finalize_cond);
-    ABT_mutex_free(&mid->timer_mutex);
     free(mid);
 #endif
 
@@ -199,8 +182,6 @@ static void hg_progress_fn(void* foo)
     unsigned int actual_count;
     struct margo_instance *mid = (struct margo_instance *)foo;
     size_t size;
-    struct timespec now;
-    struct timed_element *cur;
 
     while(!mid->hg_progress_shutdown_flag)
     {
@@ -227,27 +208,8 @@ static void hg_progress_fn(void* foo)
             }
         }
 
-        clock_gettime(clk_id, &now);
-
-        ABT_mutex_lock(mid->timer_mutex);
-        while(mid->timer_head && 
-            (mid->timer_head->expiration.tv_sec < now.tv_sec ||
-             (mid->timer_head->expiration.tv_sec == now.tv_sec &&
-              mid->timer_head->expiration.tv_nsec < now.tv_nsec)))
-        {
-            cur = mid->timer_head;
-            DL_DELETE(mid->timer_head, cur);
-            cur->next = NULL;
-            cur->prev = NULL;
-            //printf("FOO: I would like to cancel operation with tv_sec %ld, tv_nsec %ld\n", (long)cur->expiration.tv_sec, cur->expiration.tv_nsec);
-            HG_Core_cancel(cur->handle);
-        }
-        ABT_mutex_unlock(mid->timer_mutex);
-
-        /* TODO: check for timeouts here.  If timer_head not null, then check
-         * current time and compare against first element.  Keep walking list
-         * cancelling operations until we find non-expired element.
-         */
+        /* check for any expired timers */
+        margo_check_timers();
     }
 
     return;
@@ -279,21 +241,6 @@ hg_return_t margo_forward_timed(
     ABT_eventual eventual;
     int ret;
     hg_return_t* waited_hret;
-    struct timed_element el;
-    struct timed_element *cur;
-
-    /* calculate expiration time */
-    el.handle = handle;
-    el.prev = NULL;
-    el.next = NULL;
-    clock_gettime(clk_id, &el.expiration);
-    el.expiration.tv_sec += timeout_ms/1000;
-    el.expiration.tv_nsec += fmod(timeout_ms, 1000)*1000.0*1000.0;
-    if(el.expiration.tv_nsec > 1000000000)
-    {
-        el.expiration.tv_nsec -= 1000000000;
-        el.expiration.tv_sec++;
-    }
 
     ret = ABT_eventual_create(sizeof(hret), &eventual);
     if(ret != 0)
@@ -301,42 +248,7 @@ hg_return_t margo_forward_timed(
         return(HG_NOMEM_ERROR);        
     }
 
-    /* TODO: split this out into a subroutine */
-    /* track timer */
-    ABT_mutex_lock(mid->timer_mutex);
-
-    /* if queue of expiring ops is empty, put ourselves on it */
-    if(!mid->timer_head)
-        DL_APPEND(mid->timer_head, &el);
-    else
-    {
-        /* something else already in queue, keep it sorted in ascending order
-         * of expiration time
-         */
-        cur = mid->timer_head;
-        do
-        {
-            /* walk backwards through queue */
-            cur = cur->prev;
-            /* as soon as we find an element that expires before this one, 
-             * then we add ours after it
-             */
-            if(cur->expiration.tv_sec < el.expiration.tv_sec ||
-                (cur->expiration.tv_sec == el.expiration.tv_sec &&
-                 cur->expiration.tv_nsec < el.expiration.tv_nsec))
-            {
-                DL_APPEND_ELEM(mid->timer_head, cur, &el);
-                break;
-            }
-        }while(cur != mid->timer_head);
-
-        /* if we never found one with an expiration before this one, then
-         * this one is the new head
-         */
-        if(el.prev == NULL && el.next == NULL)
-            DL_PREPEND(mid->timer_head, &el);
-    }
-    ABT_mutex_unlock(mid->timer_mutex);
+    /* TODO: timer interface: add element */
 
     hret = HG_Forward(handle, margo_cb, &eventual, in_struct);
     if(hret == 0)
@@ -345,11 +257,7 @@ hg_return_t margo_forward_timed(
         hret = *waited_hret;
     }
 
-    /* remove timer if it is still in place */
-    ABT_mutex_lock(mid->timer_mutex);
-    if(el.prev || el.next)
-        DL_DELETE(mid->timer_head, &el);
-    ABT_mutex_unlock(mid->timer_mutex);
+    /* TODO: remove timer if it is still in place */
 
     ABT_eventual_free(&eventual);
 

@@ -17,6 +17,7 @@ extern "C" {
 #include <abt.h>
 #include <ev.h>
 
+#include "margo-timer.h"
 
 struct margo_instance;
 typedef struct margo_instance* margo_instance_id;
