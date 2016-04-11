@@ -68,7 +68,8 @@ static void margo_thread_sleep_cb(void *arg)
     return;
 }
 
-void margo_thread_sleep(double timeout_ms)
+void margo_thread_sleep(
+    double timeout_ms)
 {
     margo_thread_sleep_cb_dat *cb_dat;
 
@@ -80,7 +81,7 @@ void margo_thread_sleep(double timeout_ms)
     ABT_cond_create(&(cb_dat->sleep_cond));
 
     /* create timer */
-    margo_create_timer(margo_thread_sleep_cb, cb_dat, timeout_ms);
+    margo_timer_create(margo_thread_sleep_cb, cb_dat, timeout_ms, NULL);
 
     /* yield thread for specified timeout */
     ABT_mutex_lock(cb_dat->sleep_mutex);
@@ -90,18 +91,48 @@ void margo_thread_sleep(double timeout_ms)
     return;
 }
  
-void margo_create_timer(margo_timer_cb_fn cb_fn, void *cb_dat, double timeout_ms)
+void margo_timer_create(
+    margo_timer_cb_fn cb_fn,
+    void *cb_dat,
+    double timeout_ms,
+    margo_timer_handle *handle)
 {
     margo_timed_element *el;
 
     el = malloc(sizeof(margo_timed_element));
     assert(el);
+    memset(el, 0, sizeof(*el));
     el->cb_fn = cb_fn;
     el->cb_dat = cb_dat;
     el->expiration = ABT_get_wtime() + (timeout_ms/1000);
     el->prev = el->next = NULL;
 
     margo_queue_timer(el);
+
+    if(handle)
+        *handle = (margo_timer_handle)el;
+
+    return;
+}
+
+void margo_timer_free(
+    margo_timer_handle handle)
+{
+    assert(handle);
+    assert(timer_mutex != ABT_MUTEX_NULL);
+
+    margo_timed_element *el;
+    el = (margo_timed_element *)handle;
+
+    ABT_mutex_lock(timer_mutex);
+    if(el->prev || el->next)
+    {
+        DL_DELETE(timer_head, el);
+        if(el->cb_dat)
+            free(el->cb_dat);
+        free(el);
+    }
+    ABT_mutex_unlock(timer_mutex);
 
     return;
 }
@@ -122,7 +153,6 @@ void margo_check_timers()
     {
         cur = timer_head;
         DL_DELETE(timer_head, cur);
-        cur->next = cur->prev = NULL;
 
         /* execute callback */
         cur->cb_fn(cur->cb_dat);

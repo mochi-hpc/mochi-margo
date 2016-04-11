@@ -125,8 +125,6 @@ void margo_finalize(margo_instance_id mid)
     ABT_cond_broadcast(mid->finalize_cond);
     ABT_mutex_unlock(mid->finalize_mutex);
 
-    margo_timer_cleanup();
-
     /* TODO: yuck, there is a race here if someone was really waiting for
      * finalize; we can't destroy the data structures out from under them.
      * We could fix this by reference counting so that the last caller
@@ -135,6 +133,8 @@ void margo_finalize(margo_instance_id mid)
      * a small amount of memory.
      */
 #if 0
+    margo_timer_cleanup();
+
     ABT_mutex_free(&mid->finalize_mutex);
     ABT_cond_free(&mid->finalize_cond);
     free(mid);
@@ -231,6 +231,21 @@ static hg_return_t margo_cb(const struct hg_cb_info *info)
     return(HG_SUCCESS);
 }
 
+typedef struct
+{
+    hg_handle_t handle;
+} margo_hg_cancel_cb_dat;
+
+static void margo_forward_timeout_cb(void *arg)
+{
+    margo_hg_cancel_cb_dat *cb_dat =
+        (margo_hg_cancel_cb_dat *)arg;
+
+    /* cancel the Mercury op if the forward timed out */
+    HG_Core_cancel(cb_dat->handle);
+    return;
+}
+
 hg_return_t margo_forward_timed(
     margo_instance_id mid,
     hg_handle_t handle,
@@ -241,6 +256,8 @@ hg_return_t margo_forward_timed(
     ABT_eventual eventual;
     int ret;
     hg_return_t* waited_hret;
+    margo_hg_cancel_cb_dat *cb_dat;
+    margo_timer_handle timer_handle;
 
     ret = ABT_eventual_create(sizeof(hret), &eventual);
     if(ret != 0)
@@ -248,7 +265,13 @@ hg_return_t margo_forward_timed(
         return(HG_NOMEM_ERROR);        
     }
 
-    /* TODO: timer interface: add element */
+    /* create a timer that expires when this request has timed out */
+    cb_dat = malloc(sizeof(margo_hg_cancel_cb_dat));
+    assert(cb_dat);
+    memset(cb_dat, 0, sizeof(*cb_dat));
+    cb_dat->handle = handle;
+    margo_timer_create(margo_forward_timeout_cb, cb_dat,
+        timeout_ms, &timer_handle);
 
     hret = HG_Forward(handle, margo_cb, &eventual, in_struct);
     if(hret == 0)
@@ -257,7 +280,9 @@ hg_return_t margo_forward_timed(
         hret = *waited_hret;
     }
 
-    /* TODO: remove timer if it is still in place */
+    /* remove timer if it is still in place (i.e., not timed out) */
+    if(hret != HG_TIMEOUT)
+        margo_timer_free(timer_handle);
 
     ABT_eventual_free(&eventual);
 
