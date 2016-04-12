@@ -1,4 +1,4 @@
-bin_PROGRAMS += examples/client examples/server examples/server-hang examples/client-timeout examples/sleep
+noinst_PROGRAMS += examples/client examples/server examples/server-hang examples/client-timeout examples/sleep
 
 examples_server_SOURCES = \
  examples/server.c \
