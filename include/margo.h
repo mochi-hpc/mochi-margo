@@ -61,6 +61,22 @@ void margo_wait_for_finalize(margo_instance_id mid);
 ABT_pool* margo_get_handler_pool(margo_instance_id mid);
 
 /**
+ * Retrieve the Mercury context that was associated with this instance at
+ *    initialization time
+ * @param [in] mid Margo instance
+ * @return the Mercury context used in margo_init
+ */
+hg_context_t* margo_get_context(margo_instance_id mid);
+
+/**
+ * Retrieve the Mercury class that was associated with this instance at
+ *    initialization time
+ * @param [in] mid Margo instance
+ * @return the Mercury class used in margo_init
+ */
+hg_class_t* margo_get_class(margo_instance_id mid);
+
+/**
  * Forward an RPC request to a remote host
  * @param [in] mid Margo instance
  * @param [in] handle identifier for the RPC to be sent

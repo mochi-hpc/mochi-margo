@@ -220,6 +220,17 @@ ABT_pool* margo_get_handler_pool(margo_instance_id mid)
     return(&mid->handler_pool);
 }
 
+hg_context_t* margo_get_context(margo_instance_id mid)
+{
+    return(mid->hg_context);
+}
+
+hg_class_t* margo_get_class(margo_instance_id mid)
+{
+    return(mid->hg_class);
+}
+
+
 static hg_return_t margo_cb(const struct hg_cb_info *info)
 {
     hg_return_t hret = info->ret;
