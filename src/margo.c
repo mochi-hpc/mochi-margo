@@ -79,7 +79,7 @@ margo_instance_id margo_init(ABT_pool progress_pool, ABT_pool handler_pool,
     ABT_mutex_create(&mid->finalize_mutex);
     ABT_cond_create(&mid->finalize_cond);
 
-    margo_timer_init();
+    margo_timer_sys_init();
 
     mid->progress_pool = progress_pool;
     mid->handler_pool = handler_pool;
@@ -133,7 +133,7 @@ void margo_finalize(margo_instance_id mid)
      * a small amount of memory.
      */
 #if 0
-    margo_timer_cleanup();
+    margo_timer_sys_shutdown();
 
     ABT_mutex_free(&mid->finalize_mutex);
     ABT_cond_free(&mid->finalize_cond);
@@ -245,15 +245,15 @@ static hg_return_t margo_cb(const struct hg_cb_info *info)
 typedef struct
 {
     hg_handle_t handle;
-} margo_hg_cancel_cb_dat;
+} margo_forward_timeout_cb_dat;
 
 static void margo_forward_timeout_cb(void *arg)
 {
-    margo_hg_cancel_cb_dat *cb_dat =
-        (margo_hg_cancel_cb_dat *)arg;
+    margo_forward_timeout_cb_dat *timeout_cb_dat =
+        (margo_forward_timeout_cb_dat *)arg;
 
     /* cancel the Mercury op if the forward timed out */
-    HG_Core_cancel(cb_dat->handle);
+    HG_Core_cancel(timeout_cb_dat->handle);
     return;
 }
 
@@ -263,12 +263,12 @@ hg_return_t margo_forward_timed(
     void *in_struct,
     double timeout_ms)
 {
+    int ret;
     hg_return_t hret = HG_TIMEOUT;
     ABT_eventual eventual;
-    int ret;
     hg_return_t* waited_hret;
-    margo_hg_cancel_cb_dat *cb_dat;
-    margo_timer_handle timer_handle;
+    margo_timer_t forward_timer;
+    margo_forward_timeout_cb_dat timeout_cb_dat;
 
     ret = ABT_eventual_create(sizeof(hret), &eventual);
     if(ret != 0)
@@ -276,13 +276,10 @@ hg_return_t margo_forward_timed(
         return(HG_NOMEM_ERROR);        
     }
 
-    /* create a timer that expires when this request has timed out */
-    cb_dat = malloc(sizeof(margo_hg_cancel_cb_dat));
-    assert(cb_dat);
-    memset(cb_dat, 0, sizeof(*cb_dat));
-    cb_dat->handle = handle;
-    margo_timer_create(margo_forward_timeout_cb, cb_dat,
-        timeout_ms, &timer_handle);
+    /* set a timer object to expire when this forward times out */
+    timeout_cb_dat.handle = handle;
+    margo_timer_init(&forward_timer, margo_forward_timeout_cb,
+        &timeout_cb_dat, timeout_ms);
 
     hret = HG_Forward(handle, margo_cb, &eventual, in_struct);
     if(hret == 0)
@@ -293,7 +290,7 @@ hg_return_t margo_forward_timed(
 
     /* remove timer if it is still in place (i.e., not timed out) */
     if(hret != HG_TIMEOUT)
-        margo_timer_free(timer_handle);
+        margo_timer_destroy(&forward_timer);
 
     ABT_eventual_free(&eventual);
 

@@ -13,27 +13,25 @@ extern "C" {
 
 typedef void (*margo_timer_cb_fn)(void *);
 
-typedef void* margo_timer_handle;
-
-typedef struct margo_timed_element_s
+typedef struct margo_timed_element
 {
     margo_timer_cb_fn cb_fn;
     void *cb_dat;
     double expiration;
-    struct margo_timed_element_s *next;
-    struct margo_timed_element_s *prev;
-} margo_timed_element;
+    struct margo_timed_element *next;
+    struct margo_timed_element *prev;
+} margo_timer_t;
 
 /**
- * Initializes margo's timer interface
+ * Initializes the margo timer interface
  */
-void margo_timer_init(
+void margo_timer_sys_init(
     void);
 
 /**
- * Cleans up margo timer data structures
+ * Shuts down the margo timer interface
  */
-void margo_timer_cleanup(
+void margo_timer_sys_shutdown(
     void);
 
 /**
@@ -44,25 +42,25 @@ void margo_thread_sleep(
     double timeout_ms);
 
 /**
- * Creates a margo timer object to perform some action after a
- * specified time duration
+ * Initializes a margo timer object which will perform some action
+ * after a specified time duration
+ * @param [in] timer pointer to margo timer object to be initialized
  * @param [in] cb_fn callback function for timeout action
  * @param [in] cb_dat callback data passed to the callback function
  * @param [in] timeout_ms timeout duration in milliseconds
- * @param [out] handle handle used to reference the created timer object
  */
-void margo_timer_create(
+void margo_timer_init(
+    margo_timer_t *timer,
     margo_timer_cb_fn cb_fn,
     void *cb_dat,
-    double timeout_ms,
-    margo_timer_handle *handle);
+    double timeout_ms);
 
 /**
- * Frees resources used by the referenced timer object
- * @param [in] handle handle of timer object to free
+ * Destroys a margo timer object which was previously initialized
+ * @param [in] timer pointer to margo timer object to be destroyed
  */
-void margo_timer_free(
-    margo_timer_handle handle);
+void margo_timer_destroy(
+    margo_timer_t *timer);
 
 /**
  * Checks for expired timers and performs specified timeout action

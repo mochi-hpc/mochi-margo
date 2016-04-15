@@ -16,54 +16,54 @@
 #include "utlist.h"
 
 
-static void margo_queue_timer(margo_timed_element *el);
+static void margo_timer_queue(margo_timer_t *timer);
 
 
 static ABT_mutex timer_mutex = ABT_MUTEX_NULL;
-static margo_timed_element *timer_head = NULL;
+static margo_timer_t *timer_head = NULL;
 
-void margo_timer_init()
+void margo_timer_sys_init()
 {
     ABT_mutex_create(&timer_mutex);
     return;
 }
 
-void margo_timer_cleanup()
+void margo_timer_sys_shutdown()
 {
-    margo_timed_element *cur;
+    margo_timer_t *cur;
 
     if(timer_mutex == ABT_MUTEX_NULL)
         return;
 
     ABT_mutex_lock(timer_mutex);
-    /* free any remaining timers */
+    /* delete any remaining timers from the queue */
     while(timer_head)
     {
         cur = timer_head;
         DL_DELETE(timer_head, cur);
-        free(cur);
     }
     ABT_mutex_unlock(timer_mutex);
     ABT_mutex_free(&timer_mutex);
     timer_mutex = ABT_MUTEX_NULL;
+
     return;
 }
 
 typedef struct
 {
-    ABT_mutex sleep_mutex;
-    ABT_cond sleep_cond;
+    ABT_mutex mutex;
+    ABT_cond cond;
 } margo_thread_sleep_cb_dat;
 
 static void margo_thread_sleep_cb(void *arg)
 {
-    margo_thread_sleep_cb_dat *cb_dat =
+    margo_thread_sleep_cb_dat *sleep_cb_dat =
         (margo_thread_sleep_cb_dat *)arg;
 
     /* wake up the sleeping thread */
-    ABT_mutex_lock(cb_dat->sleep_mutex);
-    ABT_cond_signal(cb_dat->sleep_cond);
-    ABT_mutex_unlock(cb_dat->sleep_mutex);
+    ABT_mutex_lock(sleep_cb_dat->mutex);
+    ABT_cond_signal(sleep_cb_dat->cond);
+    ABT_mutex_unlock(sleep_cb_dat->mutex);
 
     return;
 }
@@ -71,67 +71,54 @@ static void margo_thread_sleep_cb(void *arg)
 void margo_thread_sleep(
     double timeout_ms)
 {
-    margo_thread_sleep_cb_dat *cb_dat;
+    margo_timer_t sleep_timer;
+    margo_thread_sleep_cb_dat sleep_cb_dat;
 
-    /* set data needed for callback */
-    cb_dat = malloc(sizeof(margo_thread_sleep_cb_dat));
-    assert(cb_dat);
-    memset(cb_dat, 0 , sizeof(*cb_dat));
-    ABT_mutex_create(&(cb_dat->sleep_mutex));
-    ABT_cond_create(&(cb_dat->sleep_cond));
+    /* set data needed for sleep callback */
+    ABT_mutex_create(&(sleep_cb_dat.mutex));
+    ABT_cond_create(&(sleep_cb_dat.cond));
 
-    /* create timer */
-    margo_timer_create(margo_thread_sleep_cb, cb_dat, timeout_ms, NULL);
+    /* initialize the sleep timer */
+    margo_timer_init(&sleep_timer, margo_thread_sleep_cb,
+        &sleep_cb_dat, timeout_ms);
 
     /* yield thread for specified timeout */
-    ABT_mutex_lock(cb_dat->sleep_mutex);
-    ABT_cond_wait(cb_dat->sleep_cond, cb_dat->sleep_mutex);
-    ABT_mutex_unlock(cb_dat->sleep_mutex);
+    ABT_mutex_lock(sleep_cb_dat.mutex);
+    ABT_cond_wait(sleep_cb_dat.cond, sleep_cb_dat.mutex);
+    ABT_mutex_unlock(sleep_cb_dat.mutex);
 
     return;
 }
  
-void margo_timer_create(
+void margo_timer_init(
+    margo_timer_t *timer,
     margo_timer_cb_fn cb_fn,
     void *cb_dat,
-    double timeout_ms,
-    margo_timer_handle *handle)
+    double timeout_ms)
 {
-    margo_timed_element *el;
+    assert(timer_mutex != ABT_MUTEX_NULL);
+    assert(timer);
 
-    el = malloc(sizeof(margo_timed_element));
-    assert(el);
-    memset(el, 0, sizeof(*el));
-    el->cb_fn = cb_fn;
-    el->cb_dat = cb_dat;
-    el->expiration = ABT_get_wtime() + (timeout_ms/1000);
-    el->prev = el->next = NULL;
+    memset(timer, 0, sizeof(*timer));
+    timer->cb_fn = cb_fn;
+    timer->cb_dat = cb_dat;
+    timer->expiration = ABT_get_wtime() + (timeout_ms/1000);
+    timer->prev = timer->next = NULL;
 
-    margo_queue_timer(el);
-
-    if(handle)
-        *handle = (margo_timer_handle)el;
+    margo_timer_queue(timer);
 
     return;
 }
 
-void margo_timer_free(
-    margo_timer_handle handle)
+void margo_timer_destroy(
+    margo_timer_t *timer)
 {
-    assert(handle);
     assert(timer_mutex != ABT_MUTEX_NULL);
-
-    margo_timed_element *el;
-    el = (margo_timed_element *)handle;
+    assert(timer);
 
     ABT_mutex_lock(timer_mutex);
-    if(el->prev || el->next)
-    {
-        DL_DELETE(timer_head, el);
-        if(el->cb_dat)
-            free(el->cb_dat);
-        free(el);
-    }
+    if(timer->prev || timer->next)
+        DL_DELETE(timer_head, timer);
     ABT_mutex_unlock(timer_mutex);
 
     return;
@@ -139,7 +126,7 @@ void margo_timer_free(
 
 void margo_check_timers()
 {
-    margo_timed_element *cur;
+    margo_timer_t *cur;
     double now = ABT_get_wtime();
 
     assert(timer_mutex != ABT_MUTEX_NULL);
@@ -153,29 +140,26 @@ void margo_check_timers()
     {
         cur = timer_head;
         DL_DELETE(timer_head, cur);
+        cur->prev = cur->next = NULL;
 
         /* execute callback */
         cur->cb_fn(cur->cb_dat);
-
-        free(cur);
     }
     ABT_mutex_unlock(timer_mutex);
 
     return;
 }
 
-static void margo_queue_timer(margo_timed_element *el)
+static void margo_timer_queue(margo_timer_t *timer)
 {
-    margo_timed_element *cur;
-
-    assert(timer_mutex != ABT_MUTEX_NULL);
+    margo_timer_t *cur;
 
     ABT_mutex_lock(timer_mutex);
 
     /* if list of timers is empty, put ourselves on it */
     if(!timer_head)
     {
-        DL_APPEND(timer_head, el);
+        DL_APPEND(timer_head, timer);
     }
     else
     {
@@ -190,9 +174,9 @@ static void margo_queue_timer(margo_timed_element *el)
             /* as soon as we find an element that expires before this one, 
              * then we add ours after it
              */
-            if(cur->expiration < el->expiration)
+            if(cur->expiration < timer->expiration)
             {
-                DL_APPEND_ELEM(timer_head, cur, el);
+                DL_APPEND_ELEM(timer_head, cur, timer);
                 break;
             }
         }while(cur != timer_head);
@@ -200,8 +184,8 @@ static void margo_queue_timer(margo_timed_element *el)
         /* if we never found one with an expiration before this one, then
          * this one is the new head
          */
-        if(el->prev == NULL && el->next == NULL)
-            DL_PREPEND(timer_head, el);
+        if(timer->prev == NULL && timer->next == NULL)
+            DL_PREPEND(timer_head, timer);
     }
     ABT_mutex_unlock(timer_mutex);
 
