@@ -15,6 +15,7 @@
 
 static int use_abt_sleep = 0;
 static int sleep_seconds = 2;
+static margo_instance_id mid;
 
 static void sleep_fn(void *arg);
 
@@ -26,7 +27,6 @@ int main(int argc, char **argv)
     int ret;
     ABT_xstream xstream;
     ABT_pool pool;
-    margo_instance_id mid;
     hg_context_t *hg_context;
     hg_class_t *hg_class;
 
@@ -154,7 +154,7 @@ static void sleep_fn(void *arg)
     int my_tid = *(int *)arg;
 
     if(use_abt_sleep)
-        margo_thread_sleep(sleep_seconds*1000.0);
+        margo_thread_sleep(mid, sleep_seconds*1000.0);
     else
         sleep(sleep_seconds);
 

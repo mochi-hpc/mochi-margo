@@ -80,12 +80,18 @@ margo_instance_id margo_init(ABT_pool progress_pool, ABT_pool handler_pool,
     ABT_mutex_create(&mid->finalize_mutex);
     ABT_cond_create(&mid->finalize_cond);
 
-    margo_timer_sys_init();
-
     mid->progress_pool = progress_pool;
     mid->handler_pool = handler_pool;
     mid->hg_class = hg_class;
     mid->hg_context = hg_context;
+
+    ret = margo_timer_instance_init(mid);
+    if(ret != 0)
+    {
+        fprintf(stderr, "Error: margo_timer_instance_init()\n");
+        free(mid);
+        return(MARGO_INSTANCE_NULL);
+    }
 
     ret = ABT_thread_create(mid->progress_pool, hg_progress_fn, mid, 
         ABT_THREAD_ATTR_NULL, &mid->hg_progress_tid);
@@ -134,7 +140,7 @@ void margo_finalize(margo_instance_id mid)
      * a small amount of memory.
      */
 #if 0
-    margo_timer_sys_shutdown();
+    margo_timer_instance_finalize(mid);
 
     ABT_mutex_free(&mid->finalize_mutex);
     ABT_cond_free(&mid->finalize_cond);
@@ -210,7 +216,7 @@ static void hg_progress_fn(void* foo)
         }
 
         /* check for any expired timers */
-        margo_check_timers();
+        margo_check_timers(mid);
     }
 
     return;
@@ -279,7 +285,7 @@ hg_return_t margo_forward_timed(
 
     /* set a timer object to expire when this forward times out */
     timeout_cb_dat.handle = handle;
-    margo_timer_init(&forward_timer, margo_forward_timeout_cb,
+    margo_timer_init(mid, &forward_timer, margo_forward_timeout_cb,
         &timeout_cb_dat, timeout_ms);
 
     hret = HG_Forward(handle, margo_cb, &eventual, in_struct);
@@ -291,7 +297,7 @@ hg_return_t margo_forward_timed(
 
     /* remove timer if it is still in place (i.e., not timed out) */
     if(hret != HG_TIMEOUT)
-        margo_timer_destroy(&forward_timer);
+        margo_timer_destroy(mid, &forward_timer);
 
     ABT_eventual_free(&eventual);
 
@@ -476,6 +482,7 @@ static void margo_thread_sleep_cb(void *arg)
 }
 
 void margo_thread_sleep(
+    margo_instance_id mid,
     double timeout_ms)
 {
     margo_timer_t sleep_timer;
@@ -486,7 +493,7 @@ void margo_thread_sleep(
     ABT_cond_create(&(sleep_cb_dat.cond));
 
     /* initialize the sleep timer */
-    margo_timer_init(&sleep_timer, margo_thread_sleep_cb,
+    margo_timer_init(mid, &sleep_timer, margo_thread_sleep_cb,
         &sleep_cb_dat, timeout_ms);
 
     /* yield thread for specified timeout */

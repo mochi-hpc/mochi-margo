@@ -156,9 +156,11 @@ hg_return_t margo_addr_lookup(
 
 /**
  * Suspends the calling ULT for a specified time duration
+ * @param [in] mid Margo instance
  * @param [in] timeout_ms timeout duration in milliseconds
  */
 void margo_thread_sleep(
+    margo_instance_id mid,
     double timeout_ms);
 
 /**
