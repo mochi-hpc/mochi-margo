@@ -17,8 +17,6 @@ extern "C" {
 #include <abt.h>
 #include <ev.h>
 
-#include "margo-timer.h"
-
 struct margo_instance;
 typedef struct margo_instance* margo_instance_id;
 
@@ -155,6 +153,13 @@ hg_return_t margo_addr_lookup(
     hg_context_t *context,
     const char   *name,
     hg_addr_t    *addr);
+
+/**
+ * Suspends the calling ULT for a specified time duration
+ * @param [in] timeout_ms timeout duration in milliseconds
+ */
+void margo_thread_sleep(
+    double timeout_ms);
 
 /**
  * Retrive the Margo instance that has been associated with a Mercury class

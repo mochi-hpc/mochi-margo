@@ -1,3 +1,4 @@
 src_libmargo_a_SOURCES += \
  src/margo.c \
+ src/margo-timer.h \
  src/margo-timer.c

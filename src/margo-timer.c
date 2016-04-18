@@ -49,47 +49,6 @@ void margo_timer_sys_shutdown()
     return;
 }
 
-typedef struct
-{
-    ABT_mutex mutex;
-    ABT_cond cond;
-} margo_thread_sleep_cb_dat;
-
-static void margo_thread_sleep_cb(void *arg)
-{
-    margo_thread_sleep_cb_dat *sleep_cb_dat =
-        (margo_thread_sleep_cb_dat *)arg;
-
-    /* wake up the sleeping thread */
-    ABT_mutex_lock(sleep_cb_dat->mutex);
-    ABT_cond_signal(sleep_cb_dat->cond);
-    ABT_mutex_unlock(sleep_cb_dat->mutex);
-
-    return;
-}
-
-void margo_thread_sleep(
-    double timeout_ms)
-{
-    margo_timer_t sleep_timer;
-    margo_thread_sleep_cb_dat sleep_cb_dat;
-
-    /* set data needed for sleep callback */
-    ABT_mutex_create(&(sleep_cb_dat.mutex));
-    ABT_cond_create(&(sleep_cb_dat.cond));
-
-    /* initialize the sleep timer */
-    margo_timer_init(&sleep_timer, margo_thread_sleep_cb,
-        &sleep_cb_dat, timeout_ms);
-
-    /* yield thread for specified timeout */
-    ABT_mutex_lock(sleep_cb_dat.mutex);
-    ABT_cond_wait(sleep_cb_dat.cond, sleep_cb_dat.mutex);
-    ABT_mutex_unlock(sleep_cb_dat.mutex);
-
-    return;
-}
- 
 void margo_timer_init(
     margo_timer_t *timer,
     margo_timer_cb_fn cb_fn,

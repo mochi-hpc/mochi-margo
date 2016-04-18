@@ -35,13 +35,6 @@ void margo_timer_sys_shutdown(
     void);
 
 /**
- * Suspends the calling ULT for a specified time duration
- * @param [in] timeout_ms timeout duration in milliseconds
- */
-void margo_thread_sleep(
-    double timeout_ms);
-
-/**
  * Initializes a margo timer object which will perform some action
  * after a specified time duration
  * @param [in] timer pointer to margo timer object to be initialized
