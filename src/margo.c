@@ -211,6 +211,7 @@ static void hg_progress_fn(void* foo)
             }
             else
             {
+                printf("sleep\n");
                 HG_Progress(mid->hg_context, 100);
             }
         }
@@ -466,6 +467,7 @@ typedef struct
 {
     ABT_mutex mutex;
     ABT_cond cond;
+    int is_asleep;
 } margo_thread_sleep_cb_dat;
 
 static void margo_thread_sleep_cb(void *arg)
@@ -475,6 +477,7 @@ static void margo_thread_sleep_cb(void *arg)
 
     /* wake up the sleeping thread */
     ABT_mutex_lock(sleep_cb_dat->mutex);
+    sleep_cb_dat->is_asleep = 0;
     ABT_cond_signal(sleep_cb_dat->cond);
     ABT_mutex_unlock(sleep_cb_dat->mutex);
 
@@ -491,6 +494,7 @@ void margo_thread_sleep(
     /* set data needed for sleep callback */
     ABT_mutex_create(&(sleep_cb_dat.mutex));
     ABT_cond_create(&(sleep_cb_dat.cond));
+    sleep_cb_dat.is_asleep = 1;
 
     /* initialize the sleep timer */
     margo_timer_init(mid, &sleep_timer, margo_thread_sleep_cb,
@@ -498,7 +502,8 @@ void margo_thread_sleep(
 
     /* yield thread for specified timeout */
     ABT_mutex_lock(sleep_cb_dat.mutex);
-    ABT_cond_wait(sleep_cb_dat.cond, sleep_cb_dat.mutex);
+    while(sleep_cb_dat.is_asleep)
+        ABT_cond_wait(sleep_cb_dat.cond, sleep_cb_dat.mutex);
     ABT_mutex_unlock(sleep_cb_dat.mutex);
 
     return;
