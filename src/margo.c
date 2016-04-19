@@ -198,6 +198,8 @@ static void hg_progress_fn(void* foo)
 
         if(!mid->hg_progress_shutdown_flag)
         {
+            ABT_mutex_lock(mid->finalize_mutex);
+
             ABT_pool_get_total_size(mid->progress_pool, &size);
             /* Are there any other threads executing in this pool that are *not*
              * blocked on margo_wait_for_finalize()?  If so then, we can't
@@ -206,12 +208,13 @@ static void hg_progress_fn(void* foo)
              */
             if(size > mid->finalize_waiters_in_progress_pool)
             {
+                ABT_mutex_unlock(mid->finalize_mutex);
                 HG_Progress(mid->hg_context, 0);
                 ABT_thread_yield();
             }
             else
             {
-                printf("sleep\n");
+                ABT_mutex_unlock(mid->finalize_mutex);
                 HG_Progress(mid->hg_context, 100);
             }
         }
@@ -465,6 +468,7 @@ hg_return_t margo_bulk_transfer(
 
 typedef struct
 {
+    margo_instance_id mid;
     ABT_mutex mutex;
     ABT_cond cond;
     int is_asleep;
@@ -474,6 +478,11 @@ static void margo_thread_sleep_cb(void *arg)
 {
     margo_thread_sleep_cb_dat *sleep_cb_dat =
         (margo_thread_sleep_cb_dat *)arg;
+
+    /* decrement number of waiting threads */
+    ABT_mutex_lock(sleep_cb_dat->mid->finalize_mutex);
+    sleep_cb_dat->mid->finalize_waiters_in_progress_pool--;
+    ABT_mutex_unlock(sleep_cb_dat->mid->finalize_mutex);
 
     /* wake up the sleeping thread */
     ABT_mutex_lock(sleep_cb_dat->mutex);
@@ -492,6 +501,7 @@ void margo_thread_sleep(
     margo_thread_sleep_cb_dat sleep_cb_dat;
 
     /* set data needed for sleep callback */
+    sleep_cb_dat.mid = mid;
     ABT_mutex_create(&(sleep_cb_dat.mutex));
     ABT_cond_create(&(sleep_cb_dat.cond));
     sleep_cb_dat.is_asleep = 1;
@@ -499,6 +509,11 @@ void margo_thread_sleep(
     /* initialize the sleep timer */
     margo_timer_init(mid, &sleep_timer, margo_thread_sleep_cb,
         &sleep_cb_dat, timeout_ms);
+
+    /* increment number of waiting threads */
+    ABT_mutex_lock(mid->finalize_mutex);
+    mid->finalize_waiters_in_progress_pool++;
+    ABT_mutex_unlock(mid->finalize_mutex);
 
     /* yield thread for specified timeout */
     ABT_mutex_lock(sleep_cb_dat.mutex);
