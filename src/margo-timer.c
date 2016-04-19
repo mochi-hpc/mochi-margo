@@ -161,9 +161,16 @@ void margo_check_timers(
 
         /* schedule callback on the handler pool */
         handler_pool = margo_get_handler_pool(mid);
-        ret = ABT_thread_create(*handler_pool, cur->cb_fn, cur->cb_dat,
-            ABT_THREAD_ATTR_NULL, NULL);
-        assert(ret == ABT_SUCCESS);
+        if(*handler_pool != ABT_POOL_NULL)
+        {
+            ret = ABT_thread_create(*handler_pool, cur->cb_fn, cur->cb_dat,
+                ABT_THREAD_ATTR_NULL, NULL);
+            assert(ret == ABT_SUCCESS);
+        }
+        else
+        {
+            cur->cb_fn(cur->cb_dat);
+        }
     }
     ABT_mutex_unlock(timer_inst->mutex);
 
