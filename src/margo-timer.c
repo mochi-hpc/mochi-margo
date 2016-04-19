@@ -177,6 +177,35 @@ void margo_check_timers(
     return;
 }
 
+/* returns 0 and sets 'next_timer_exp' if the timer instance
+ * has timers queued up, -1 otherwise
+ */
+int margo_timer_get_next_expiration(
+    margo_instance_id mid,
+    double *next_timer_exp)
+{
+    struct margo_timer_instance *timer_inst;
+    double now = ABT_get_wtime();
+    int ret;
+
+    timer_inst = margo_get_timer_instance(mid);
+    assert(timer_inst);
+
+    ABT_mutex_lock(timer_inst->mutex);
+    if(timer_inst->queue_head)
+    {
+        *next_timer_exp = timer_inst->queue_head->expiration - now;
+        ret = 0;
+    }
+    else
+    {
+        ret = -1;
+    }
+    ABT_mutex_unlock(timer_inst->mutex);
+
+    return(ret);
+}
+
 static struct margo_timer_instance *margo_get_timer_instance(
     margo_instance_id mid)
 {

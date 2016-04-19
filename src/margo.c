@@ -22,6 +22,8 @@
  */
 #include <mercury_core.h>
 
+#define MERCURY_PROGRESS_TIMEOUT_UB 100 /* 100 milliseconds */
+
 struct margo_instance
 {
     /* provided by caller */
@@ -189,6 +191,8 @@ static void hg_progress_fn(void* foo)
     unsigned int actual_count;
     struct margo_instance *mid = (struct margo_instance *)foo;
     size_t size;
+    unsigned int hg_progress_timeout = MERCURY_PROGRESS_TIMEOUT_UB;
+    double next_timer_exp;
 
     while(!mid->hg_progress_shutdown_flag)
     {
@@ -215,7 +219,25 @@ static void hg_progress_fn(void* foo)
             else
             {
                 ABT_mutex_unlock(mid->finalize_mutex);
-                HG_Progress(mid->hg_context, 100);
+
+                ret = margo_timer_get_next_expiration(mid, &next_timer_exp);
+                if(ret == 0)
+                {
+                    /* there is a queued timer, don't block long enough
+                     * to keep this timer waiting
+                     */
+                    if(next_timer_exp >= 0.0)
+                    {
+                        next_timer_exp *= 1000; /* convert to milliseconds */
+                        if(next_timer_exp < MERCURY_PROGRESS_TIMEOUT_UB)
+                            hg_progress_timeout = (unsigned int)next_timer_exp;
+                    }
+                    else
+                    {
+                        hg_progress_timeout = 0;
+                    }
+                }
+                HG_Progress(mid->hg_context, hg_progress_timeout);
             }
         }
 

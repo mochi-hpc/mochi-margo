@@ -69,6 +69,17 @@ void margo_timer_destroy(
 void margo_check_timers(
     margo_instance_id mid);
 
+/**
+ * Determines the amount of time (in seconds) until the next timer
+ * is set to expire
+ * @param [in] mid Margo instance
+ * @param [out] time until next timer expiration
+ * @returns 0 when there is a queued timer which will expire, -1 otherwise
+ */
+int margo_timer_get_next_expiration(
+    margo_instance_id mid,
+    double *next_timer_exp);
+
 #ifdef __cplusplus
 }
 #endif
