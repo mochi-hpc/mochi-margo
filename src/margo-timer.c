@@ -139,8 +139,10 @@ void margo_timer_destroy(
 void margo_check_timers(
     margo_instance_id mid)
 {
+    int ret;
     margo_timer_t *cur;
     struct margo_timer_instance *timer_inst;
+    ABT_pool *handler_pool;
     double now = ABT_get_wtime();
 
     timer_inst = margo_get_timer_instance(mid);
@@ -157,8 +159,11 @@ void margo_check_timers(
         DL_DELETE(timer_inst->queue_head, cur);
         cur->prev = cur->next = NULL;
 
-        /* execute callback */
-        cur->cb_fn(cur->cb_dat);
+        /* schedule callback on the handler pool */
+        handler_pool = margo_get_handler_pool(mid);
+        ret = ABT_thread_create(*handler_pool, cur->cb_fn, cur->cb_dat,
+            ABT_THREAD_ATTR_NULL, NULL);
+        assert(ret == ABT_SUCCESS);
     }
     ABT_mutex_unlock(timer_inst->mutex);
 

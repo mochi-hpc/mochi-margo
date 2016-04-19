@@ -100,10 +100,9 @@ int main(int argc, char **argv)
     }
 
     /* actually start margo */
-    /* use a single pool for progress and sleeper threads */
-    /* NOTE: no rpc handler threads are needed */
+    /* use a single pool for progress, sleeper, and handler threads */
     /***************************************/
-    mid = margo_init(pool, ABT_POOL_NULL, hg_context, hg_class);
+    mid = margo_init(pool, pool, hg_context, hg_class);
     for(i=0; i<4; i++)
     {
         t_ids[i] = i;
