@@ -56,7 +56,7 @@ static int handler_mapping_table_size = 0;
 static struct margo_handler_mapping handler_mapping_table[MAX_HANDLER_MAPPING] = {0};
 
 static void hg_progress_fn(void* foo);
-
+static int margo_xstream_is_in_progress_pool(margo_instance_id mid);
 
 struct handler_entry
 {
@@ -154,22 +154,12 @@ void margo_finalize(margo_instance_id mid)
 
 void margo_wait_for_finalize(margo_instance_id mid)
 {
-    ABT_xstream xstream;
-    ABT_pool pool;
-    int ret;
     int in_pool = 0;
-
-    ret = ABT_xstream_self(&xstream);
-    if(ret != 0)
-        return;
-    ret = ABT_xstream_get_main_pools(xstream, 1, &pool);
-    if(ret != 0)
-        return;
 
     /* Is this waiter in the same pool as the pool running the progress
      * thread?
      */
-    if(pool == mid->progress_pool)
+    if(margo_xstream_is_in_progress_pool(mid))
         in_pool = 1;
 
     ABT_mutex_lock(mid->finalize_mutex);
@@ -519,6 +509,7 @@ void margo_thread_sleep(
     margo_instance_id mid,
     double timeout_ms)
 {
+    int in_pool = 0;
     margo_timer_t sleep_timer;
     margo_thread_sleep_cb_dat sleep_cb_dat;
 
@@ -532,9 +523,12 @@ void margo_thread_sleep(
     margo_timer_init(mid, &sleep_timer, margo_thread_sleep_cb,
         &sleep_cb_dat, timeout_ms);
 
+    if(margo_xstream_is_in_progress_pool(mid))
+        in_pool = 1;
+
     /* increment number of waiting threads */
     ABT_mutex_lock(mid->finalize_mutex);
-    mid->finalize_waiters_in_progress_pool++;
+    mid->finalize_waiters_in_progress_pool += in_pool;
     ABT_mutex_unlock(mid->finalize_mutex);
 
     /* yield thread for specified timeout */
@@ -546,7 +540,6 @@ void margo_thread_sleep(
     return;
 }
 
-
 margo_instance_id margo_hg_class_to_instance(hg_class_t *cl)
 {
     int i;
@@ -557,4 +550,22 @@ margo_instance_id margo_hg_class_to_instance(hg_class_t *cl)
             return(handler_mapping_table[i].mid);
     }
     return(NULL);
+}
+
+/* returns 1 if current xstream is in the progress pool, 0 if not */
+static int margo_xstream_is_in_progress_pool(margo_instance_id mid)
+{
+    int ret;
+    ABT_xstream xstream;
+    ABT_pool pool;
+
+    ret = ABT_xstream_self(&xstream);
+    assert(ret == ABT_SUCCESS);
+    ret = ABT_xstream_get_main_pools(xstream, 1, &pool);
+    assert(ret == ABT_SUCCESS);
+
+    if(pool == mid->progress_pool)
+        return(1);
+    else
+        return(0);
 }
