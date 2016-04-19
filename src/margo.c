@@ -483,7 +483,8 @@ typedef struct
     margo_instance_id mid;
     ABT_mutex mutex;
     ABT_cond cond;
-    int is_asleep;
+    char is_asleep;
+    char in_pool;
 } margo_thread_sleep_cb_dat;
 
 static void margo_thread_sleep_cb(void *arg)
@@ -493,7 +494,8 @@ static void margo_thread_sleep_cb(void *arg)
 
     /* decrement number of waiting threads */
     ABT_mutex_lock(sleep_cb_dat->mid->finalize_mutex);
-    sleep_cb_dat->mid->finalize_waiters_in_progress_pool--;
+    sleep_cb_dat->mid->finalize_waiters_in_progress_pool -=
+        sleep_cb_dat->in_pool;
     ABT_mutex_unlock(sleep_cb_dat->mid->finalize_mutex);
 
     /* wake up the sleeping thread */
@@ -513,18 +515,19 @@ void margo_thread_sleep(
     margo_timer_t sleep_timer;
     margo_thread_sleep_cb_dat sleep_cb_dat;
 
+    if(margo_xstream_is_in_progress_pool(mid))
+        in_pool = 1;
+
     /* set data needed for sleep callback */
     sleep_cb_dat.mid = mid;
     ABT_mutex_create(&(sleep_cb_dat.mutex));
     ABT_cond_create(&(sleep_cb_dat.cond));
     sleep_cb_dat.is_asleep = 1;
+    sleep_cb_dat.in_pool = in_pool;
 
     /* initialize the sleep timer */
     margo_timer_init(mid, &sleep_timer, margo_thread_sleep_cb,
         &sleep_cb_dat, timeout_ms);
-
-    if(margo_xstream_is_in_progress_pool(mid))
-        in_pool = 1;
 
     /* increment number of waiting threads */
     ABT_mutex_lock(mid->finalize_mutex);
