@@ -29,20 +29,20 @@ int main(int argc, char **argv)
     hg_class_t *hg_class;
     int single_pool_mode = 0;
     
-    if(argc > 2)
+    if(argc > 3 || argc < 2)
     {
-        fprintf(stderr, "Usage: ./server <single>\n");
+        fprintf(stderr, "Usage: ./server <listen_addr> <single>\n");
         fprintf(stderr, "   Note: the optional \"single\" argument makes the server use a single ABT pool for both HG progress and RPC handlers.\n");
         return(-1);
     }
 
-    if(argc == 2)
+    if(argc == 3)
     {
-        if(strcmp(argv[1], "single") == 0)
+        if(strcmp(argv[2], "single") == 0)
             single_pool_mode = 1;
         else
         {
-            fprintf(stderr, "Usage: ./server <single>\n");
+            fprintf(stderr, "Usage: ./server <listen_addr> <single>\n");
             fprintf(stderr, "   Note: the optional \"single\" argument makes the server use a single ABT pool for both HG progress and RPC handlers.\n");
             return(-1);
         }
@@ -50,7 +50,7 @@ int main(int argc, char **argv)
 
     /* boilerplate HG initialization steps */
     /***************************************/
-    hg_class = HG_Init("tcp://localhost:1234", HG_TRUE);
+    hg_class = HG_Init(argv[1], HG_TRUE);
     if(!hg_class)
     {
         fprintf(stderr, "Error: HG_Init()\n");
