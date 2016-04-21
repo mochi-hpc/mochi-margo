@@ -1,0 +1,8 @@
+check_PROGRAMS += \
+ examples/sleep
+
+TESTS += \
+ tests/sleep.sh
+
+EXTRA_DIST += \
+ tests/sleep.sh
