@@ -1,12 +1,18 @@
 check_PROGRAMS += \
  examples/sleep \
  examples/server \
- examples/client 
+ examples/client \
+ examples/server-hang \
+ examples/client-timeout
 
 TESTS += \
  tests/sleep.sh \
- tests/basic.sh
+ tests/basic.sh \
+ tests/timeout.sh
 
 EXTRA_DIST += \
  tests/sleep.sh \
- tests/basic.sh
+ tests/basic.sh \
+ tests/timeout.sh \
+ tests/test-util.sh \
+ tests/test-util-hang.sh
