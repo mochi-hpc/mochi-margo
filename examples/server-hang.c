@@ -30,15 +30,15 @@ int main(int argc, char **argv)
     hg_context_t *hg_context;
     hg_class_t *hg_class;
     
-    if(argc != 1)
+    if(argc != 2)
     {
-        fprintf(stderr, "Usage: ./server-hang\n");
+        fprintf(stderr, "Usage: ./server-hang <listen_addr>\n");
         return(-1);
     }
 
     /* boilerplate HG initialization steps */
     /***************************************/
-    hg_class = HG_Init("tcp://localhost:1234", HG_TRUE);
+    hg_class = HG_Init(argv[1], HG_TRUE);
     if(!hg_class)
     {
         fprintf(stderr, "Error: HG_Init()\n");

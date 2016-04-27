@@ -26,6 +26,7 @@ struct run_my_rpc_args
     margo_instance_id mid;
     hg_context_t *hg_context;
     hg_class_t *hg_class;
+    hg_addr_t svr_addr;
 };
 
 static void run_my_rpc(void *_arg);
@@ -48,10 +49,20 @@ int main(int argc, char **argv)
     hg_class_t *hg_class;
     hg_addr_t svr_addr = HG_ADDR_NULL;
     hg_handle_t handle;
-        
+      
+    if(argc != 2)
+    {
+        fprintf(stderr, "Usage: ./client-timeout <server_addr>\n");
+        return(-1);
+    }
+   
     /* boilerplate HG initialization steps */
     /***************************************/
-    hg_class = HG_Init("tcp://localhost:1234", HG_FALSE);
+    /* NOTE: the reason for passing in the server address into HG_Init() on
+     * the client is just to make sure that Mercury initializes the right
+     * transport.
+     */
+    hg_class = HG_Init(argv[1], HG_FALSE);
     if(!hg_class)
     {
         fprintf(stderr, "Error: HG_Init()\n");
@@ -119,12 +130,17 @@ int main(int argc, char **argv)
     my_rpc_shutdown_id = MERCURY_REGISTER(hg_class, "my_shutdown_rpc", void, void, 
         NULL);
 
+    /* find addr for server */
+    ret = margo_addr_lookup(mid, hg_context, argv[1], &svr_addr);
+    assert(ret == 0);
+
     for(i=0; i<4; i++)
     {
         args[i].val = i;
         args[i].mid = mid;
         args[i].hg_class = hg_class;
         args[i].hg_context = hg_context;
+        args[i].svr_addr = svr_addr;
 
         /* Each fiber gets a pointer to an element of the array to use
          * as input for the run_my_rpc() function.
@@ -158,11 +174,6 @@ int main(int argc, char **argv)
         }
     }
 
-    /* send one rpc to server to shut it down */
-    /* find addr for server */
-    ret = margo_addr_lookup(mid, hg_context, "tcp://localhost:1234", &svr_addr);
-    assert(ret == 0);
-
     /* create handle */
     ret = HG_Create(hg_context, svr_addr, my_rpc_shutdown_id, &handle);
     assert(ret == 0);
@@ -186,7 +197,6 @@ int main(int argc, char **argv)
 static void run_my_rpc(void *_arg)
 {
     struct run_my_rpc_args *arg = _arg;
-    hg_addr_t svr_addr = HG_ADDR_NULL;
     hg_handle_t handle;
     my_rpc_in_t in;
     my_rpc_out_t out;
@@ -203,12 +213,8 @@ static void run_my_rpc(void *_arg)
     assert(buffer);
     sprintf((char*)buffer, "Hello world!\n");
 
-    /* find addr for server */
-    ret = margo_addr_lookup(arg->mid, arg->hg_context, "tcp://localhost:1234", &svr_addr);
-    assert(ret == 0);
-
     /* create handle */
-    ret = HG_Create(arg->hg_context, svr_addr, my_rpc_id, &handle);
+    ret = HG_Create(arg->hg_context, arg->svr_addr, my_rpc_id, &handle);
     assert(ret == 0);
 
     /* register buffer for rdma/bulk access by server */
