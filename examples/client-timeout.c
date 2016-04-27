@@ -178,7 +178,7 @@ int main(int argc, char **argv)
     ret = HG_Create(hg_context, svr_addr, my_rpc_shutdown_id, &handle);
     assert(ret == 0);
 
-    margo_forward(mid, handle, NULL);
+    margo_forward_timed(mid, handle, NULL, 2000.0);
 
     /* shut down everything */
     margo_finalize(mid);
