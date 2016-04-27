@@ -20,7 +20,7 @@
 
 static void my_rpc_ult(void *_arg)
 {
-    hg_handle_t *handle = _arg;
+    hg_handle_t handle = _arg;
 
     hg_return_t hret;
     my_rpc_out_t out;
@@ -36,7 +36,7 @@ static void my_rpc_ult(void *_arg)
 #endif
     margo_instance_id mid;
 
-    ret = HG_Get_input(*handle, &in);
+    ret = HG_Get_input(handle, &in);
     assert(ret == HG_SUCCESS);
 
     printf("Got RPC request with input_val: %d\n", in.input_val);
@@ -48,7 +48,7 @@ static void my_rpc_ult(void *_arg)
     assert(buffer);
 
     /* register local target buffer for bulk access */
-    hgi = HG_Get_info(*handle);
+    hgi = HG_Get_info(handle);
     assert(hgi);
     ret = HG_Bulk_create(hgi->hg_class, 1, &buffer,
         &size, HG_BULK_WRITE_ONLY, &bulk_handle);
@@ -74,13 +74,12 @@ static void my_rpc_ult(void *_arg)
     abt_io_close(aid, fd);
 #endif
 
-    hret = HG_Respond(*handle, NULL, NULL, &out);
+    hret = HG_Respond(handle, NULL, NULL, &out);
     assert(hret == HG_SUCCESS);
 
     HG_Bulk_free(bulk_handle);
-    HG_Destroy(*handle);
+    HG_Destroy(handle);
     free(buffer);
-    free(handle);
 
     return;
 }
@@ -88,7 +87,7 @@ DEFINE_MARGO_RPC_HANDLER(my_rpc_ult)
 
 static void my_rpc_shutdown_ult(void *_arg)
 {
-    hg_handle_t *handle = _arg;
+    hg_handle_t handle = _arg;
 
     hg_return_t hret;
     struct hg_info *hgi;
@@ -96,14 +95,14 @@ static void my_rpc_shutdown_ult(void *_arg)
 
     printf("Got RPC request to shutdown\n");
 
-    hgi = HG_Get_info(*handle);
+    hgi = HG_Get_info(handle);
     assert(hgi);
     mid = margo_hg_class_to_instance(hgi->hg_class);
 
-    hret = margo_respond(mid, *handle, NULL);
+    hret = margo_respond(mid, handle, NULL);
     assert(hret == HG_SUCCESS);
 
-    HG_Destroy(*handle);
+    HG_Destroy(handle);
 
     /* NOTE: we assume that the server daemon is using
      * margo_wait_for_finalize() to suspend until this RPC executes, so there
