@@ -1,8 +1,12 @@
 check_PROGRAMS += \
- examples/sleep
+ examples/sleep \
+ examples/server \
+ examples/client 
 
 TESTS += \
- tests/sleep.sh
+ tests/sleep.sh \
+ tests/basic.sh
 
 EXTRA_DIST += \
- tests/sleep.sh
+ tests/sleep.sh \
+ tests/basic.sh
