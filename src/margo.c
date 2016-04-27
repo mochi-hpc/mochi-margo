@@ -17,11 +17,6 @@
 #include "margo-timer.h"
 #include "utlist.h"
 
-/* TODO: including core.h for cancel definition, presumably this will be 
- * available in top level later?
- */
-#include <mercury_core.h>
-
 #define MERCURY_PROGRESS_TIMEOUT_UB 100 /* 100 milliseconds */
 
 struct margo_instance
@@ -276,7 +271,7 @@ static void margo_forward_timeout_cb(void *arg)
         (margo_forward_timeout_cb_dat *)arg;
 
     /* cancel the Mercury op if the forward timed out */
-    HG_Core_cancel(timeout_cb_dat->handle);
+    HG_Cancel(timeout_cb_dat->handle);
     return;
 }
 
