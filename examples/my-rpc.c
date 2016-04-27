@@ -18,10 +18,8 @@
  * close.
  */
 
-static void my_rpc_ult(void *_arg)
+static void my_rpc_ult(hg_handle_t handle)
 {
-    hg_handle_t handle = _arg;
-
     hg_return_t hret;
     my_rpc_out_t out;
     my_rpc_in_t in;
@@ -85,10 +83,8 @@ static void my_rpc_ult(void *_arg)
 }
 DEFINE_MARGO_RPC_HANDLER(my_rpc_ult)
 
-static void my_rpc_shutdown_ult(void *_arg)
+static void my_rpc_shutdown_ult(hg_handle_t handle)
 {
-    hg_handle_t handle = _arg;
-
     hg_return_t hret;
     struct hg_info *hgi;
     margo_instance_id mid;
