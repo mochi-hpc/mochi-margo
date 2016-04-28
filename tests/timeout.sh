@@ -19,13 +19,15 @@ sleep 1
 run_to 10 examples/client-timeout $svr1 &> $TMPOUT 
 if [ $? -ne 0 ]; then
     wait
+    rm -rf $TMPOUT
     exit 1
 fi
 
-# check output; look for four "returned 9" to indicate HG_CANCELED in the four
+# check output; look for four "returned 2" to indicate HG_TIMEOUT in the four
 # concurrent RPCs
-LINECOUNT=$(grep "returned 9" $TMPOUT | wc -l) 
-if [$LINECOUNT -ne 4]; then
+LINECOUNT=$(grep "returned 2" $TMPOUT | wc -l) 
+if [ $LINECOUNT -ne 4 ]; then
+    rm -rf $TMPOUT
     exit 1
 fi
 
@@ -36,7 +38,5 @@ fi
 
 wait
 
-echo cleaning up $TMPBASE
-rm -rf $TMPBASE
-
+rm -rf $TMPOUT
 exit 0

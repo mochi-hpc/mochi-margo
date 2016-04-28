@@ -25,7 +25,4 @@ fi
 
 wait
 
-echo cleaning up $TMPBASE
-rm -rf $TMPBASE
-
 exit 0
