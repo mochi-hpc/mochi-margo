@@ -282,7 +282,7 @@ hg_return_t margo_forward_timed(
     double timeout_ms)
 {
     int ret;
-    hg_return_t hret = HG_TIMEOUT;
+    hg_return_t hret;
     ABT_eventual eventual;
     hg_return_t* waited_hret;
     margo_timer_t forward_timer;
@@ -306,6 +306,10 @@ hg_return_t margo_forward_timed(
         hret = *waited_hret;
     }
 
+    /* convert HG_CANCELED to HG_TIMEOUT to indicate op timed out */
+    if(hret == HG_CANCELED)
+        hret = HG_TIMEOUT;
+
     /* remove timer if it is still in place (i.e., not timed out) */
     if(hret != HG_TIMEOUT)
         margo_timer_destroy(mid, &forward_timer);
@@ -313,7 +317,6 @@ hg_return_t margo_forward_timed(
     ABT_eventual_free(&eventual);
 
     return(hret);
-
 }
 
 
