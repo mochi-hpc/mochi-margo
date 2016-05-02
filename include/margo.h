@@ -27,8 +27,7 @@ typedef struct margo_instance* margo_instance_id;
  * @param [in] progress_pool Argobots pool to drive communication
  * @param [in] handler_pool Argobots pool to service RPC handlers
  * @param [in] hg_context Mercury context
- * @param [in] hg_class Mercury class
- * @returns margo instance id on success, NULL upon error
+ * @returns margo instance id on success, MARGO_INSTANCE_NULL upon error
  */
 margo_instance_id margo_init(ABT_pool progress_pool, ABT_pool handler_pool,
     hg_context_t *hg_context);
@@ -121,7 +120,6 @@ hg_return_t margo_respond(
 /** 
  * Perform a bulk transfer
  * @param [in] mid Margo instance
- * @param [in] context Mercury context
  * @param [in] op type of operation to perform
  * @param [in] origin_addr remote Mercury address
  * @param [in] origin_handle remote Mercury bulk memory handle
@@ -143,9 +141,9 @@ hg_return_t margo_bulk_transfer(
 
 /**
  * address lookup
- * @param [in] context          pointer to context of execution
  * @param [in] name             lookup name
- * @returns NA_SUCCESS on on success
+ * @param [out] addr            return address
+ * @returns HG_SUCCESS on success
  */
 hg_return_t margo_addr_lookup(
     margo_instance_id mid,
