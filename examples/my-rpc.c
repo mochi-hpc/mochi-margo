@@ -55,7 +55,7 @@ static void my_rpc_ult(hg_handle_t handle)
     mid = margo_hg_class_to_instance(hgi->hg_class);
 
     /* do bulk transfer from client to server */
-    ret = margo_bulk_transfer(mid, hgi->context, HG_BULK_PULL, 
+    ret = margo_bulk_transfer(mid, HG_BULK_PULL,
         hgi->addr, in.bulk_handle, 0,
         bulk_handle, 0, size);
     assert(ret == 0);

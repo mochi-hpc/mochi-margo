@@ -61,7 +61,7 @@ struct handler_entry
 };
 
 margo_instance_id margo_init(ABT_pool progress_pool, ABT_pool handler_pool,
-    hg_context_t *hg_context, hg_class_t *hg_class)
+    hg_context_t *hg_context)
 {
     int ret;
     struct margo_instance *mid;
@@ -79,7 +79,7 @@ margo_instance_id margo_init(ABT_pool progress_pool, ABT_pool handler_pool,
 
     mid->progress_pool = progress_pool;
     mid->handler_pool = handler_pool;
-    mid->hg_class = hg_class;
+    mid->hg_class = HG_Context_get_class(hg_context);
     mid->hg_context = hg_context;
 
     ret = margo_timer_instance_init(mid);
@@ -411,7 +411,6 @@ static hg_return_t margo_addr_lookup_cb(const struct hg_cb_info *info)
 
 hg_return_t margo_addr_lookup(
     margo_instance_id mid,
-    hg_context_t *context,
     const char   *name,
     hg_addr_t    *addr)
 {
@@ -426,7 +425,7 @@ hg_return_t margo_addr_lookup(
         return(HG_NOMEM_ERROR);        
     }
 
-    nret = HG_Addr_lookup(context, margo_addr_lookup_cb,
+    nret = HG_Addr_lookup(mid->hg_context, margo_addr_lookup_cb,
         &eventual, name, HG_OP_ID_IGNORE);
     if(nret == 0)
     {
@@ -442,7 +441,6 @@ hg_return_t margo_addr_lookup(
 
 hg_return_t margo_bulk_transfer(
     margo_instance_id mid,
-    hg_context_t *context,
     hg_bulk_op_t op,
     hg_addr_t origin_addr,
     hg_bulk_t origin_handle,
@@ -462,9 +460,9 @@ hg_return_t margo_bulk_transfer(
         return(HG_NOMEM_ERROR);        
     }
 
-    hret = HG_Bulk_transfer(context, margo_bulk_transfer_cb, &eventual, op, 
-        origin_addr, origin_handle, origin_offset, local_handle, local_offset,
-        size, HG_OP_ID_IGNORE);
+    hret = HG_Bulk_transfer(mid->hg_context, margo_bulk_transfer_cb,
+        &eventual, op, origin_addr, origin_handle, origin_offset, local_handle,
+        local_offset, size, HG_OP_ID_IGNORE);
     if(hret == 0)
     {
         ABT_eventual_wait(eventual, (void**)&waited_hret);

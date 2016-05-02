@@ -31,7 +31,7 @@ typedef struct margo_instance* margo_instance_id;
  * @returns margo instance id on success, NULL upon error
  */
 margo_instance_id margo_init(ABT_pool progress_pool, ABT_pool handler_pool,
-    hg_context_t *hg_context, hg_class_t *hg_class);
+    hg_context_t *hg_context);
 
 /**
  * Shuts down margo library and its underlying evfibers and mercury resources
@@ -133,7 +133,6 @@ hg_return_t margo_respond(
  */
 hg_return_t margo_bulk_transfer(
     margo_instance_id mid,
-    hg_context_t *context,
     hg_bulk_op_t op,
     hg_addr_t origin_addr,
     hg_bulk_t origin_handle,
@@ -150,7 +149,6 @@ hg_return_t margo_bulk_transfer(
  */
 hg_return_t margo_addr_lookup(
     margo_instance_id mid,
-    hg_context_t *context,
     const char   *name,
     hg_addr_t    *addr);
 

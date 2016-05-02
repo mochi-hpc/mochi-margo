@@ -89,7 +89,7 @@ int main(int argc, char **argv)
      * communication.
      */
     /***************************************/
-    mid = margo_init(handler_pool, handler_pool, hg_context, hg_class);
+    mid = margo_init(handler_pool, handler_pool, hg_context);
     assert(mid);
 
     /* register RPC */
