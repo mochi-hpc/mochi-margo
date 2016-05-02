@@ -122,7 +122,7 @@ int main(int argc, char **argv)
      * because this is a pure client that will not be servicing rpc requests.
      */
     /***************************************/
-    mid = margo_init(progress_pool, ABT_POOL_NULL, hg_context);
+    mid = margo_init_pool(progress_pool, ABT_POOL_NULL, hg_context);
 
     /* register RPC */
     my_rpc_id = MERCURY_REGISTER(hg_class, "my_rpc", my_rpc_in_t, my_rpc_out_t, 

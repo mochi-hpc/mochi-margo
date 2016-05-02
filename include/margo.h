@@ -22,6 +22,31 @@ typedef struct margo_instance* margo_instance_id;
 
 #define MARGO_INSTANCE_NULL ((margo_instance_id)NULL)
 
+
+/**
+ * Initializes margo library.
+ * @param [in] use_progress_thread Boolean flag to use a dedicated thread for
+ *                                 running Mercury's progress loop. If false,
+ *                                 will run in the caller's thread context -
+ *                                 the caller is then expected to call
+ *                                 margo_wait_for_finalize in order to
+ *                                 relinquish control to the progress loop
+ * @param [in] rpc_thread_count    Number of threads to use for running RPC
+ *                                 calls. A value of 0 directs Margo to execute
+ *                                 RPCs in the caller's thread context - the
+ *                                 caller is then expected to call
+ *                                 margo_wait_for_finalize in order to
+ *                                 relinquish control to the RPC runner.
+ *                                 Non-RPC users should use a value of 0. A
+ *                                 value of -1 directs Margo to use the same
+ *                                 execution context as that used for Mercury
+ *                                 progress.
+ * @param [in] hg_context
+ * @returns margo instance id on success, MARGO_INSTANCE_NULL upon error
+ */
+margo_instance_id margo_init(int use_progress_thread, int rpc_thread_count,
+    hg_context_t *hg_context);
+
 /**
  * Initializes margo library from given argobots and Mercury instances.
  * @param [in] progress_pool Argobots pool to drive communication
@@ -29,7 +54,7 @@ typedef struct margo_instance* margo_instance_id;
  * @param [in] hg_context Mercury context
  * @returns margo instance id on success, MARGO_INSTANCE_NULL upon error
  */
-margo_instance_id margo_init(ABT_pool progress_pool, ABT_pool handler_pool,
+margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
     hg_context_t *hg_context);
 
 /**

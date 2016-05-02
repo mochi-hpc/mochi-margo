@@ -30,6 +30,9 @@ struct margo_instance
     /* internal to margo for this particular instance */
     ABT_thread hg_progress_tid;
     int hg_progress_shutdown_flag;
+    int owns_progress_pool;
+    ABT_xstream *rpc_xstreams;
+    int num_handler_pool_threads;
 
     /* control logic for callers waiting on margo to be finalized */
     int finalize_flag;
@@ -60,7 +63,78 @@ struct handler_entry
     struct handler_entry *next; 
 };
 
-margo_instance_id margo_init(ABT_pool progress_pool, ABT_pool handler_pool,
+margo_instance_id margo_init(int use_progress_thread, int rpc_thread_count,
+    hg_context_t *hg_context)
+{
+    struct margo_instance *mid = MARGO_INSTANCE_NULL;
+    ABT_xstream progress_xstream = ABT_XSTREAM_NULL;
+    ABT_pool progress_pool = ABT_POOL_NULL;
+    ABT_xstream *rpc_xstreams = NULL;
+    ABT_xstream rpc_xstream = ABT_XSTREAM_NULL;
+    ABT_pool rpc_pool = ABT_POOL_NULL;
+    int ret;
+    int i;
+
+    if (use_progress_thread)
+    {
+        ret = ABT_snoozer_xstream_create(1, &progress_pool, &progress_xstream);
+        if (ret != ABT_SUCCESS) goto err;
+    }
+    else
+    {
+        ret = ABT_xstream_self(&progress_xstream);
+        if (ret != ABT_SUCCESS) goto err;
+        ret = ABT_xstream_get_main_pools(progress_xstream, 1, &progress_pool);
+        if (ret != ABT_SUCCESS) goto err;
+    }
+
+    if (rpc_thread_count > 0)
+    {
+        rpc_xstreams = malloc(rpc_thread_count * sizeof(*rpc_xstreams));
+        if (rpc_xstreams == NULL) goto err;
+        ret = ABT_snoozer_xstream_create(rpc_thread_count, &rpc_pool,
+                rpc_xstreams);
+        if (ret != ABT_SUCCESS) goto err;
+    }
+    else if (rpc_thread_count == 0)
+    {
+        ret = ABT_xstream_self(&rpc_xstream);
+        if (ret != ABT_SUCCESS) goto err;
+        ret = ABT_xstream_get_main_pools(rpc_xstream, 1, &rpc_pool);
+        if (ret != ABT_SUCCESS) goto err;
+    }
+    else
+    {
+        rpc_pool = progress_pool;
+    }
+
+    mid = margo_init_pool(progress_pool, rpc_pool, hg_context);
+    if (mid == MARGO_INSTANCE_NULL) goto err;
+
+    mid->owns_progress_pool = !use_progress_thread;
+    mid->num_handler_pool_threads = rpc_thread_count;
+    mid->rpc_xstreams = rpc_xstreams;
+    return mid;
+
+err:
+    if (use_progress_thread && progress_xstream != ABT_XSTREAM_NULL)
+    {
+        ABT_xstream_join(progress_xstream);
+        ABT_xstream_free(&progress_xstream);
+    }
+    if (rpc_thread_count > 0 && rpc_xstreams != NULL)
+    {
+        for (i = 0; i < rpc_thread_count; i++)
+        {
+            ABT_xstream_join(rpc_xstreams[i]);
+            ABT_xstream_free(&rpc_xstreams[i]);
+        }
+        free(rpc_xstreams);
+    }
+    return MARGO_INSTANCE_NULL;
+}
+
+margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
     hg_context_t *hg_context)
 {
     int ret;

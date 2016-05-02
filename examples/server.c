@@ -113,9 +113,9 @@ int main(int argc, char **argv)
      */
     /***************************************/
     if(single_pool_mode)
-        mid = margo_init(handler_pool, handler_pool, hg_context);
+        mid = margo_init_pool(handler_pool, handler_pool, hg_context);
     else
-        mid = margo_init(progress_pool, handler_pool, hg_context);
+        mid = margo_init_pool(progress_pool, handler_pool, hg_context);
     assert(mid);
 
     /* register RPC */
