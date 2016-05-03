@@ -44,7 +44,7 @@ int margo_timer_instance_init(
     if(timer_inst_table_size >= MAX_TIMER_INSTANCES)
         return(-1);
 
-    timer_inst = malloc(sizeof(timer_inst));
+    timer_inst = malloc(sizeof(*timer_inst));
     if(!timer_inst)
         return(-1);
 
