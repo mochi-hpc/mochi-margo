@@ -43,8 +43,6 @@ int main(int argc, char **argv)
     ABT_xstream xstream;
     ABT_pool pool;
     margo_instance_id mid;
-    ABT_xstream progress_xstream;
-    ABT_pool progress_pool;
     hg_context_t *hg_context;
     hg_class_t *hg_class;
     hg_addr_t svr_addr = HG_ADDR_NULL;
@@ -99,30 +97,21 @@ int main(int argc, char **argv)
     {
         fprintf(stderr, "Error: ABT_xstream_self()\n");
         return(-1);
-    }
-    ret = ABT_xstream_get_main_pools(xstream, 1, &pool);
+    } ret = ABT_xstream_get_main_pools(xstream, 1, &pool);
     if(ret != 0)
     {
         fprintf(stderr, "Error: ABT_xstream_get_main_pools()\n");
         return(-1);
     }
 
-    /* create a dedicated ES drive Mercury progress */
-    ret = ABT_snoozer_xstream_create(1, &progress_pool, &progress_xstream);
-    if(ret != 0)
-    {
-        fprintf(stderr, "Error: ABT_snoozer_xstream_create()\n");
-        return(-1);
-    }
-
     /* actually start margo */
-    /* provide argobots pools for driving communication progress and
-     * executing rpc handlers as well as class and context for Mercury
-     * communication.  The rpc handler pool is null in this example program
-     * because this is a pure client that will not be servicing rpc requests.
+    /* Use main process to drive progress (it will relinquish control to
+     * Mercury during blocking communication calls).  The rpc handler pool 
+     * is null in this example program because this is a pure client that 
+     * will not be servicing rpc requests.
      */
     /***************************************/
-    mid = margo_init_pool(progress_pool, ABT_POOL_NULL, hg_context);
+    mid = margo_init_pool(pool, ABT_POOL_NULL, hg_context);
 
     /* register RPC */
     my_rpc_id = MERCURY_REGISTER(hg_class, "my_rpc", my_rpc_in_t, my_rpc_out_t, 
@@ -185,9 +174,6 @@ int main(int argc, char **argv)
     /* shut down everything */
     margo_finalize(mid);
     
-    ABT_xstream_join(progress_xstream);
-    ABT_xstream_free(&progress_xstream);
-
     ABT_finalize();
 
     HG_Context_destroy(hg_context);
