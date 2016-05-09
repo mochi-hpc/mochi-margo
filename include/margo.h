@@ -27,22 +27,22 @@ typedef struct margo_instance* margo_instance_id;
  * Initializes margo library.
  * @param [in] use_progress_thread Boolean flag to use a dedicated thread for
  *                                 running Mercury's progress loop. If false,
- *                                 will run in the caller's thread context -
- *                                 the caller is then expected to call
- *                                 margo_wait_for_finalize in order to
- *                                 relinquish control to the progress loop
+ *                                 it will run in the caller's thread context.
  * @param [in] rpc_thread_count    Number of threads to use for running RPC
  *                                 calls. A value of 0 directs Margo to execute
- *                                 RPCs in the caller's thread context - the
- *                                 caller is then expected to call
- *                                 margo_wait_for_finalize in order to
- *                                 relinquish control to the RPC runner.
- *                                 Non-RPC users should use a value of 0. A
- *                                 value of -1 directs Margo to use the same
- *                                 execution context as that used for Mercury
- *                                 progress.
+ *                                 RPCs in the caller's thread context.
+ *                                 Clients (i.e processes that will *not* 
+ *                                 service incoming RPCs) should use a value 
+ *                                 of 0. A value of -1 directs Margo to use 
+ *                                 the same execution context as that used 
+ *                                 for Mercury progress.
  * @param [in] hg_context
  * @returns margo instance id on success, MARGO_INSTANCE_NULL upon error
+ *
+ * NOTE: Servers (processes expecting to service incoming RPC requests) must
+ * specify non-zero values for use_progress_thread and rpc_thread_count *or*
+ * call margo_wait_for_finalize() after margo_init() to relinguish control to 
+ * Margo.
  */
 margo_instance_id margo_init(int use_progress_thread, int rpc_thread_count,
     hg_context_t *hg_context);
