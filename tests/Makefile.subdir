@@ -1,3 +1,7 @@
+TESTS_ENVIRONMENT += \
+ TIMEOUT="$(TIMEOUT)" \
+ MKTEMP="$(MKTEMP)"
+
 check_PROGRAMS += \
  examples/sleep \
  examples/server \

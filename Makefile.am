@@ -16,6 +16,7 @@ MAINTAINERCLEANFILES =
 EXTRA_DIST =
 BUILT_SOURCES =
 include_HEADERS = include/margo.h
+TESTS_ENVIRONMENT =
 
 EXTRA_DIST += \
  prepare.sh 
