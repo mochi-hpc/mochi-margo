@@ -2,12 +2,16 @@
 # General test script utilities
 #
 
+if [ -z "$TIMEOUT" ] ; then
+    echo expected TIMEOUT variable defined to its respective command
+    exit 1
+fi
 
 function run_to ()
 {
     maxtime=${1}s
     shift
-    timeout --signal=9 $maxtime "$@"
+    $TIMEOUT --signal=9 $maxtime "$@"
 }
 
 function test_start_servers ()
@@ -23,7 +27,7 @@ function test_start_servers ()
     # start daemons
     for i in `seq $startport $endport`
     do
-        timeout --signal=9 ${maxtime} examples/server tcp://localhost:$i single &
+        $TIMEOUT --signal=9 ${maxtime} examples/server tcp://localhost:$i single &
         if [ $? -ne 0 ]; then
             # TODO: this doesn't actually work; can't check return code of
             # something executing in background.  We have to rely on the
