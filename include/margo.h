@@ -15,7 +15,6 @@ extern "C" {
 #include <mercury.h>
 #include <mercury_macros.h>
 #include <abt.h>
-#include <ev.h>
 
 struct margo_instance;
 typedef struct margo_instance* margo_instance_id;
