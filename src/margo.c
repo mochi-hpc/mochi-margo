@@ -382,8 +382,10 @@ static hg_return_t margo_cb(const struct hg_cb_info *info)
     /* propagate return code out through eventual */
     ABT_eventual_set(*(arg->eventual), &hret, sizeof(hret));
     
+#if 0
     if(arg->in_pool)
         arg->mid->waiters_in_progress_pool--;
+#endif
 
     return(HG_SUCCESS);
 }
@@ -430,6 +432,7 @@ hg_return_t margo_forward_timed(
 
     arg.eventual = &eventual;
     arg.mid = mid;
+#if 0
     if(margo_xstream_is_in_progress_pool(mid))
     {
         arg.in_pool = 1;
@@ -437,6 +440,7 @@ hg_return_t margo_forward_timed(
     }
     else
         arg.in_pool = 0;
+#endif
     hret = HG_Forward(handle, margo_cb, &arg, in_struct);
     if(hret == 0)
     {
@@ -477,6 +481,7 @@ hg_return_t margo_forward(
 
     arg.eventual = &eventual;
     arg.mid = mid;
+#if 0
     if(margo_xstream_is_in_progress_pool(mid))
     {
         arg.in_pool = 1;
@@ -484,6 +489,7 @@ hg_return_t margo_forward(
     }
     else
         arg.in_pool = 0;
+#endif
     hret = HG_Forward(handle, margo_cb, &arg, in_struct);
     if(hret == 0)
     {
@@ -515,6 +521,7 @@ hg_return_t margo_respond(
 
     arg.eventual = &eventual;
     arg.mid = mid;
+#if 0
     if(margo_xstream_is_in_progress_pool(mid))
     {
         arg.in_pool = 1;
@@ -522,6 +529,7 @@ hg_return_t margo_respond(
     }
     else
         arg.in_pool = 0;
+#endif
     hret = HG_Respond(handle, margo_cb, &arg, out_struct);
     if(hret == 0)
     {
@@ -565,8 +573,10 @@ static hg_return_t margo_addr_lookup_cb(const struct hg_cb_info *info)
     /* propagate return code out through eventual */
     ABT_eventual_set(*(arg->eventual), &evt, sizeof(evt));
 
+#if 0
     if(arg->in_pool)
         arg->mid->waiters_in_progress_pool--;
+#endif
     
     return(HG_SUCCESS);
 }
@@ -591,6 +601,7 @@ hg_return_t margo_addr_lookup(
 
     arg.eventual = &eventual;
     arg.mid = mid;
+#if 0
     if(margo_xstream_is_in_progress_pool(mid))
     {
         arg.in_pool = 1;
@@ -598,6 +609,7 @@ hg_return_t margo_addr_lookup(
     }
     else
         arg.in_pool = 0;
+#endif
     nret = HG_Addr_lookup(mid->hg_context, margo_addr_lookup_cb,
         &arg, name, HG_OP_ID_IGNORE);
     if(nret == 0)
