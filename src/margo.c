@@ -326,8 +326,23 @@ static void hg_progress_fn(void* foo)
              * to make sure that this ULT is the lowest priority in that
              * scenario.
              */
-            ABT_thread_yield();
-            HG_Progress(mid->hg_context, 0);
+            ret = HG_Progress(mid->hg_context, 0);
+            if(ret == HG_SUCCESS)
+            {
+                /* Mercury completed something; loop around to trigger
+                 * callbacks 
+                 */
+                ABT_thread_yield();
+            }
+            else if(ret == HG_TIMEOUT)
+            {
+                /* No completion; yield here to allow other ULTs to run */
+            }
+            else
+            {
+                /* TODO: error handling */
+                fprintf(stderr, "WARNING: unexpected return code (%d) from HG_Progress()\n", ret);
+            }
         }
         else
         {
@@ -348,7 +363,12 @@ static void hg_progress_fn(void* foo)
                     hg_progress_timeout = 0;
                 }
             }
-            HG_Progress(mid->hg_context, hg_progress_timeout);
+            ret = HG_Progress(mid->hg_context, hg_progress_timeout);
+            if(ret != HG_SUCCESS && ret != HG_TIMEOUT)
+            {
+                /* TODO: error handling */
+                fprintf(stderr, "WARNING: unexpected return code (%d) from HG_Progress()\n", ret);
+            }
         }
 
         /* check for any expired timers */
