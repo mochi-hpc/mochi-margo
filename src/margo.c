@@ -326,8 +326,8 @@ static void hg_progress_fn(void* foo)
              * to make sure that this ULT is the lowest priority in that
              * scenario.
              */
-            HG_Progress(mid->hg_context, 0);
             ABT_thread_yield();
+            HG_Progress(mid->hg_context, 0);
         }
         else
         {
