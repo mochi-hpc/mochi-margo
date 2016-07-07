@@ -346,6 +346,7 @@ static void hg_progress_fn(void* foo)
         }
         else
         {
+            hg_progress_timeout = MERCURY_PROGRESS_TIMEOUT_UB;
             ret = margo_timer_get_next_expiration(mid, &next_timer_exp);
             if(ret == 0)
             {
