@@ -332,11 +332,11 @@ static void hg_progress_fn(void* foo)
                 /* Mercury completed something; loop around to trigger
                  * callbacks 
                  */
-                ABT_thread_yield();
             }
             else if(ret == HG_TIMEOUT)
             {
                 /* No completion; yield here to allow other ULTs to run */
+                ABT_thread_yield();
             }
             else
             {
