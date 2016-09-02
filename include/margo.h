@@ -203,7 +203,7 @@ hg_return_t __name##_handler(hg_handle_t handle) { \
     __hgi = HG_Get_info(handle); \
     __mid = margo_hg_class_to_instance(__hgi->hg_class); \
     __pool = margo_get_handler_pool(__mid); \
-    __ret = ABT_thread_create(*__pool, __name, handle, ABT_THREAD_ATTR_NULL, NULL); \
+    __ret = ABT_thread_create(*__pool, (void (*)(void *))__name, handle, ABT_THREAD_ATTR_NULL, NULL); \
     if(__ret != 0) { \
         return(HG_NOMEM_ERROR); \
     } \
