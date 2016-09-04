@@ -3,9 +3,7 @@ ACLOCAL_AMFLAGS = -I m4
 
 bin_PROGRAMS =
 bin_SCRIPTS =
-noinst_LIBRARIES =
 noinst_PROGRAMS =
-lib_LIBRARIES =
 noinst_HEADERS =
 TESTS =
 XFAIL_TESTS = 
@@ -29,10 +27,10 @@ AM_LIBS =
 
 AM_CXXFLAGS = $(AM_CFLAGS)
 
-lib_LIBRARIES += src/libmargo.a
-src_libmargo_a_SOURCES =
+lib_LTLIBRARIES = src/libmargo.la
+src_libmargo_la_SOURCES =
 
-LDADD = src/libmargo.a
+LDADD = src/libmargo.la
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = maint/margo.pc

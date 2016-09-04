@@ -57,21 +57,20 @@ dnl
 dnl Verify pkg-config
 dnl
 PKG_PROG_PKG_CONFIG
-PKG_CONFIG="pkg-config --static"
 
-PKG_CHECK_MODULES_STATIC([MERCURY],[mercury],[],
+PKG_CHECK_MODULES([MERCURY],[mercury],[],
    [AC_MSG_ERROR([Could not find working mercury installation!])])
 LIBS="$MERCURY_LIBS $LIBS"
 CPPFLAGS="$MERCURY_CFLAGS $CPPFLAGS"
 CFLAGS="$MERCURY_CFLAGS $CFLAGS"
 
-PKG_CHECK_MODULES_STATIC([ARGOBOTS],[argobots],[],
+PKG_CHECK_MODULES([ARGOBOTS],[argobots],[],
    [AC_MSG_ERROR([Could not find working argobots installation!])])
 LIBS="$ARGOBOTS_LIBS $LIBS"
 CPPFLAGS="$ARGOBOTS_CFLAGS $CPPFLAGS"
 CFLAGS="$ARGOBOTS_CFLAGS $CFLAGS"
 
-PKG_CHECK_MODULES_STATIC([ABT_SNOOZER],[abt-snoozer],[],
+PKG_CHECK_MODULES([ABT_SNOOZER],[abt-snoozer],[],
    [AC_MSG_ERROR([Could not find working abt-snoozer installation!])])
 LIBS="$ABT_SNOOZER_LIBS $LIBS"
 CPPFLAGS="$ABT_SNOOZER_CFLAGS $CPPFLAGS"
