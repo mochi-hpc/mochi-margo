@@ -57,8 +57,13 @@ int main(int argc, char **argv)
     hg_class = HG_Init("tcp://localhost:1234", HG_FALSE);
     if(!hg_class)
     {
-        fprintf(stderr, "Error: HG_Init()\n");
-        return(-1);
+        /* if tcp didn't work, try sm */
+        hg_class = HG_Init("sm://13/13", HG_FALSE);
+        if(!hg_class)
+        {
+            fprintf(stderr, "Error: HG_Init()\n");
+            return(-1);
+        }
     }
     hg_context = HG_Context_create(hg_class);
     if(!hg_context)
