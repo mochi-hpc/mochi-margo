@@ -12,14 +12,17 @@ check_PROGRAMS += \
 TESTS += \
  tests/sleep.sh \
  tests/basic.sh \
+ tests/basic-ded-pool.sh \
  tests/timeout.sh
 
 EXTRA_DIST += \
  tests/sleep.sh \
  tests/basic.sh \
+ tests/basic-ded-pool.sh \
  tests/timeout.sh \
  tests/test-util.sh \
- tests/test-util-hang.sh
+ tests/test-util-hang.sh \
+ tests/test-util-ded-pool.sh
  
 tests_server_SOURCES = \
  tests/server.c \
