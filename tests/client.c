@@ -100,8 +100,7 @@ int main(int argc, char **argv)
     {
         fprintf(stderr, "Error: ABT_xstream_self()\n");
         return(-1);
-    }
-    ret = ABT_xstream_get_main_pools(xstream, 1, &pool);
+    } ret = ABT_xstream_get_main_pools(xstream, 1, &pool);
     if(ret != 0)
     {
         fprintf(stderr, "Error: ABT_xstream_get_main_pools()\n");
@@ -109,8 +108,13 @@ int main(int argc, char **argv)
     }
 
     /* actually start margo */
+    /* Use main process to drive progress (it will relinquish control to
+     * Mercury during blocking communication calls).  The rpc handler pool 
+     * is null in this example program because this is a pure client that 
+     * will not be servicing rpc requests.
+     */
     /***************************************/
-    mid = margo_init(0, 0, hg_context);
+    mid = margo_init_pool(pool, ABT_POOL_NULL, hg_context);
 
     /* register RPC */
     my_rpc_id = MERCURY_REGISTER(hg_class, "my_rpc", my_rpc_in_t, my_rpc_out_t, 

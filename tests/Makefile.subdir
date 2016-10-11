@@ -3,11 +3,11 @@ TESTS_ENVIRONMENT += \
  MKTEMP="$(MKTEMP)"
 
 check_PROGRAMS += \
- examples/sleep \
- examples/server \
- examples/client \
- examples/server-hang \
- examples/client-timeout
+ tests/sleep \
+ tests/server \
+ tests/client \
+ tests/server-hang \
+ tests/client-timeout
 
 TESTS += \
  tests/sleep.sh \
@@ -20,3 +20,12 @@ EXTRA_DIST += \
  tests/timeout.sh \
  tests/test-util.sh \
  tests/test-util-hang.sh
+ 
+tests_server_SOURCES = \
+ tests/server.c \
+ tests/my-rpc.c
+
+tests_server_hang_SOURCES = \
+ tests/server-hang.c \
+ tests/my-rpc.c
+

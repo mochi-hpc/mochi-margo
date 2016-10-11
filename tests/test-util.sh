@@ -27,7 +27,7 @@ function test_start_servers ()
     # start daemons
     for i in `seq $startport $endport`
     do
-        $TIMEOUT --signal=9 ${maxtime} examples/server tcp://$i single &
+        $TIMEOUT --signal=9 ${maxtime} tests/server tcp://$i single &
         if [ $? -ne 0 ]; then
             # TODO: this doesn't actually work; can't check return code of
             # something executing in background.  We have to rely on the

@@ -14,7 +14,7 @@ sleep 1
 #####################
 
 # run client test, which will also shut down server when done
-run_to 10 examples/client $svr1 &> /dev/null 
+run_to 10 tests/client $svr1 &> /dev/null 
 if [ $? -ne 0 ]; then
     wait
     exit 1

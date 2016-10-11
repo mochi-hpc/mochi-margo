@@ -22,7 +22,7 @@ sleep 1
 #####################
 
 # run client test
-run_to 10 examples/client-timeout $svr1 &> $TMPOUT 
+run_to 10 tests/client-timeout $svr1 &> $TMPOUT 
 if [ $? -ne 0 ]; then
     wait
     rm -rf $TMPOUT
