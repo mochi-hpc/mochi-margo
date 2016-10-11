@@ -47,6 +47,7 @@ int main(int argc, char **argv)
     hg_class_t *hg_class;
     hg_addr_t svr_addr = HG_ADDR_NULL;
     hg_handle_t handle;
+    char proto[12] = {0};
       
     if(argc != 2)
     {
@@ -56,11 +57,13 @@ int main(int argc, char **argv)
    
     /* boilerplate HG initialization steps */
     /***************************************/
-    /* NOTE: the reason for passing in the server address into HG_Init() on
-     * the client is just to make sure that Mercury initializes the right
-     * transport.
+    
+    /* initialize Mercury using the transport portion of the destination
+     * address (i.e., the part before the first : character if present)
      */
-    hg_class = HG_Init(argv[1], HG_FALSE);
+    for(i=0; i<11 && argv[1][i] != '\0' && argv[1][i] != ':'; i++)
+        proto[i] = argv[1][i];
+    hg_class = HG_Init(proto, HG_FALSE);
     if(!hg_class)
     {
         fprintf(stderr, "Error: HG_Init()\n");

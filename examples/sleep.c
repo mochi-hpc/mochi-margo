@@ -54,11 +54,11 @@ int main(int argc, char **argv)
 
     /* boilerplate HG initialization steps */
     /***************************************/
-    hg_class = HG_Init("tcp://localhost:1234", HG_FALSE);
+    hg_class = HG_Init("tcp", HG_FALSE);
     if(!hg_class)
     {
         /* if tcp didn't work, try sm */
-        hg_class = HG_Init("sm://13/13", HG_FALSE);
+        hg_class = HG_Init("sm", HG_FALSE);
         if(!hg_class)
         {
             fprintf(stderr, "Error: HG_Init()\n");
