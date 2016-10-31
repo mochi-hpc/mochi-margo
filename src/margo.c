@@ -748,6 +748,10 @@ void margo_thread_sleep(
         ABT_cond_wait(sleep_cb_dat.cond, sleep_cb_dat.mutex);
     ABT_mutex_unlock(sleep_cb_dat.mutex);
 
+    /* clean up */
+    ABT_mutex_free(&sleep_cb_dat.mutex);
+    ABT_cond_free(&sleep_cb_dat.cond);
+
     return;
 }
 
