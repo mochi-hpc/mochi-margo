@@ -135,7 +135,7 @@ int main(int argc, char **argv)
         args[i].hg_context = hg_context;
         args[i].svr_addr = svr_addr;
 
-        /* Each fiber gets a pointer to an element of the array to use
+        /* Each ult gets a pointer to an element of the array to use
          * as input for the run_my_rpc() function.
          */
         ret = ABT_thread_create(pool, run_my_rpc, &args[i],

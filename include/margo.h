@@ -57,7 +57,7 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
     hg_context_t *hg_context);
 
 /**
- * Shuts down margo library and its underlying evfibers and mercury resources
+ * Shuts down margo library and its underlying abt and mercury resources
  * @param [in] mid Margo instance
  */
 void margo_finalize(margo_instance_id mid);
@@ -191,7 +191,7 @@ void margo_thread_sleep(
 margo_instance_id margo_hg_class_to_instance(hg_class_t *cl);
 
 /**
- * macro that defines a function to glue an RPC handler to a fiber
+ * macro that defines a function to glue an RPC handler to a ult handler
  * @param [in] __name name of handler function
  */
 #define DEFINE_MARGO_RPC_HANDLER(__name) \
@@ -212,7 +212,7 @@ hg_return_t __name##_handler(hg_handle_t handle) { \
 
 /**
  * macro that declares the prototype for a function to glue an RPC 
- * handler to a fiber
+ * handler to a ult
  * @param [in] __name name of handler function
  */
 #define DECLARE_MARGO_RPC_HANDLER(__name) hg_return_t __name##_handler(hg_handle_t handle);

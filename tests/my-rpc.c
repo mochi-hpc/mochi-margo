@@ -64,7 +64,7 @@ static void my_rpc_ult(hg_handle_t handle)
 
     /* write to a file; would be done with abt-io if we enabled it */
 #if 0
-    sprintf(filename, "/tmp/hg-fiber-%d.txt", in.input_val);
+    sprintf(filename, "/tmp/margo-%d.txt", in.input_val);
     fd = abt_io_open(aid, filename, O_WRONLY|O_CREAT, S_IWUSR|S_IRUSR);
     assert(fd > -1);
 
