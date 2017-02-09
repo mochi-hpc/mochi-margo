@@ -27,6 +27,9 @@ int main(int argc, char **argv)
     ABT_pool progress_pool;
     hg_context_t *hg_context;
     hg_class_t *hg_class;
+    hg_addr_t addr_self;
+    char addr_self_string[128];
+    hg_size_t addr_self_string_sz = 128;
     int single_pool_mode = 0;
     
     if(argc > 3 || argc < 2)
@@ -63,6 +66,27 @@ int main(int argc, char **argv)
         HG_Finalize(hg_class);
         return(-1);
     }
+
+    /* figure out what address this server is listening on */
+    ret = HG_Addr_self(hg_class, &addr_self);
+    if(ret != HG_SUCCESS)
+    {
+        fprintf(stderr, "Error: HG_Addr_self()\n");
+        HG_Context_destroy(hg_context);
+        HG_Finalize(hg_class);
+        return(-1);
+    }
+    ret = HG_Addr_to_string(hg_class, addr_self_string, &addr_self_string_sz, addr_self);
+    if(ret != HG_SUCCESS)
+    {
+        fprintf(stderr, "Error: HG_Addr_self()\n");
+        HG_Context_destroy(hg_context);
+        HG_Finalize(hg_class);
+        HG_Addr_free(hg_class, addr_self);
+        return(-1);
+    }
+    HG_Addr_free(hg_class, addr_self);
+    printf("%s\n", addr_self_string);
 
     /* set up argobots */
     /***************************************/
