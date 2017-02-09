@@ -74,7 +74,7 @@ static void my_rpc_ult(hg_handle_t handle)
     abt_io_close(aid, fd);
 #endif
 
-    hret = HG_Respond(handle, NULL, NULL, &out);
+    hret = margo_respond(mid, handle, &out);
     assert(hret == HG_SUCCESS);
 
     HG_Bulk_free(bulk_handle);
