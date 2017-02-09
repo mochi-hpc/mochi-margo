@@ -60,6 +60,8 @@ static void my_rpc_ult(hg_handle_t handle)
         bulk_handle, 0, size);
     assert(ret == 0);
 
+    HG_Free_input(handle, &in);
+
     /* write to a file; would be done with abt-io if we enabled it */
 #if 0
     sprintf(filename, "/tmp/hg-fiber-%d.txt", in.input_val);
