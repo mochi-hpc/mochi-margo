@@ -170,6 +170,8 @@ int main(int argc, char **argv)
 
     margo_forward(mid, handle, NULL);
 
+    HG_Addr_free(hg_class, svr_addr);
+
     /* shut down everything */
     margo_finalize(mid);
     

@@ -72,6 +72,8 @@ static void my_rpc_ult(hg_handle_t handle)
     abt_io_close(aid, fd);
 #endif
 
+    HG_Free_input(handle, &in);
+
     hret = HG_Respond(handle, NULL, NULL, &out);
     assert(hret == HG_SUCCESS);
 
