@@ -1,0 +1,1 @@
+Please see [http://www.mcs.anl.gov/research/projects/mochi/contributing/] for details.
