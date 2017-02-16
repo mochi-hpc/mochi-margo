@@ -6,7 +6,6 @@ check_PROGRAMS += \
  tests/sleep \
  tests/server \
  tests/client \
- tests/server-hang \
  tests/client-timeout
 
 TESTS += \
@@ -21,14 +20,9 @@ EXTRA_DIST += \
  tests/basic-ded-pool.sh \
  tests/timeout.sh \
  tests/test-util.sh \
- tests/test-util-hang.sh \
  tests/test-util-ded-pool.sh
  
 tests_server_SOURCES = \
  tests/server.c \
- tests/my-rpc.c
-
-tests_server_hang_SOURCES = \
- tests/server-hang.c \
  tests/my-rpc.c
 

@@ -31,7 +31,7 @@ struct run_my_rpc_args
 
 static void run_my_rpc(void *_arg);
 
-static hg_id_t my_rpc_id;
+static hg_id_t my_rpc_hang_id;
 static hg_id_t my_rpc_shutdown_id;
 
 int main(int argc, char **argv) 
@@ -118,7 +118,7 @@ int main(int argc, char **argv)
     mid = margo_init_pool(pool, ABT_POOL_NULL, hg_context);
 
     /* register RPC */
-    my_rpc_id = MERCURY_REGISTER(hg_class, "my_rpc", my_rpc_in_t, my_rpc_out_t, 
+    my_rpc_hang_id = MERCURY_REGISTER(hg_class, "my_rpc_hang", my_rpc_hang_in_t, my_rpc_hang_out_t, 
         NULL);
     my_rpc_shutdown_id = MERCURY_REGISTER(hg_class, "my_shutdown_rpc", void, void, 
         NULL);
@@ -188,8 +188,8 @@ static void run_my_rpc(void *_arg)
 {
     struct run_my_rpc_args *arg = _arg;
     hg_handle_t handle;
-    my_rpc_in_t in;
-    my_rpc_out_t out;
+    my_rpc_hang_in_t in;
+    my_rpc_hang_out_t out;
     int ret;
     hg_size_t size;
     void* buffer;
@@ -204,7 +204,7 @@ static void run_my_rpc(void *_arg)
     sprintf((char*)buffer, "Hello world!\n");
 
     /* create handle */
-    ret = HG_Create(arg->hg_context, arg->svr_addr, my_rpc_id, &handle);
+    ret = HG_Create(arg->hg_context, arg->svr_addr, my_rpc_hang_id, &handle);
     assert(ret == 0);
 
     /* register buffer for rdma/bulk access by server */

@@ -158,6 +158,8 @@ int main(int argc, char **argv)
     /* register RPC */
     MERCURY_REGISTER(hg_class, "my_rpc", my_rpc_in_t, my_rpc_out_t, 
         my_rpc_ult_handler);
+    MERCURY_REGISTER(hg_class, "my_rpc_hang", my_rpc_hang_in_t, my_rpc_hang_out_t, 
+        my_rpc_hang_ult_handler);
     MERCURY_REGISTER(hg_class, "my_shutdown_rpc", void, void, 
         my_rpc_shutdown_ult_handler);
 

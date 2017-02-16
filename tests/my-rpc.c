@@ -111,3 +111,59 @@ static void my_rpc_shutdown_ult(hg_handle_t handle)
     return;
 }
 DEFINE_MARGO_RPC_HANDLER(my_rpc_shutdown_ult)
+
+static void my_rpc_hang_ult(hg_handle_t handle)
+{
+    hg_return_t hret;
+    my_rpc_out_t out;
+    my_rpc_in_t in;
+    int ret;
+    hg_size_t size;
+    void *buffer;
+    hg_bulk_t bulk_handle;
+    struct hg_info *hgi;
+    margo_instance_id mid;
+
+    ret = HG_Get_input(handle, &in);
+    assert(ret == HG_SUCCESS);
+
+    printf("Got RPC request with input_val: %d, deliberately hanging.\n", in.input_val);
+    out.ret = 0;
+
+    hgi = HG_Get_info(handle);
+    assert(hgi);
+    mid = margo_hg_class_to_instance(hgi->hg_class);
+
+    /* sleep for an hour (to allow client to test timeout capability) */
+    margo_thread_sleep(mid, 1000*60*60);
+
+    /* set up target buffer for bulk transfer */
+    size = 512;
+    buffer = calloc(1, 512);
+    assert(buffer);
+
+    /* register local target buffer for bulk access */
+    ret = HG_Bulk_create(hgi->hg_class, 1, &buffer,
+        &size, HG_BULK_WRITE_ONLY, &bulk_handle);
+    assert(ret == 0);
+
+    /* do bulk transfer from client to server */
+    ret = margo_bulk_transfer(mid, HG_BULK_PULL,
+        hgi->addr, in.bulk_handle, 0,
+        bulk_handle, 0, size);
+    assert(ret == 0);
+
+    HG_Free_input(handle, &in);
+
+    hret = margo_respond(mid, handle, &out);
+    assert(hret == HG_SUCCESS);
+
+    HG_Bulk_free(bulk_handle);
+    HG_Destroy(handle);
+    free(buffer);
+
+    return;
+}
+DEFINE_MARGO_RPC_HANDLER(my_rpc_hang_ult)
+
+

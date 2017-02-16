@@ -10,7 +10,7 @@ if [ -z "$MKTEMP" ] ; then
     exit 1
 fi
 
-source $srcdir/tests/test-util-hang.sh
+source $srcdir/tests/test-util.sh
 
 TMPOUT=$($MKTEMP --tmpdir test-XXXXXX)
 
