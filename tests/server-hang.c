@@ -181,7 +181,7 @@ int main(int argc, char **argv)
 
 static void usage(int argc, char **argv)
 {
-    fprintf(stderr, "Usage: %s listen_address [-s] [-f filename]\n",
+    fprintf(stderr, "Usage: %s listen_address [-f filename]\n",
         argv[0]);
     fprintf(stderr, "   listen_address is the address or protocol for the server to use\n");
     fprintf(stderr, "   [-f filename] to write the server address to a file\n");
