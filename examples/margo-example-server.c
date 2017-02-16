@@ -32,7 +32,7 @@ int main(int argc, char **argv)
     if(argc != 2)
     {
         fprintf(stderr, "Usage: ./server <listen_addr>\n");
-        fprintf(stderr, "Example: ./server tcp://3344\n");
+        fprintf(stderr, "Example: ./server na+sm://\n");
         return(-1);
     }
 
