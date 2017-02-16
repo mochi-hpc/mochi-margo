@@ -21,6 +21,14 @@
  * test case for timeout.
  */
 
+struct options
+{
+    char *hostfile;
+    char *listen_addr;
+};
+
+static void parse_args(int argc, char **argv, struct options *opts);
+
 int main(int argc, char **argv) 
 {
     int ret;
@@ -29,16 +37,13 @@ int main(int argc, char **argv)
     ABT_pool handler_pool;
     hg_context_t *hg_context;
     hg_class_t *hg_class;
-    
-    if(argc != 2)
-    {
-        fprintf(stderr, "Usage: ./server-hang <listen_addr>\n");
-        return(-1);
-    }
+    struct options opts;
+
+    parse_args(argc, argv, &opts);
 
     /* boilerplate HG initialization steps */
     /***************************************/
-    hg_class = HG_Init(argv[1], HG_TRUE);
+    hg_class = HG_Init(opts.listen_addr, HG_TRUE);
     if(!hg_class)
     {
         fprintf(stderr, "Error: HG_Init()\n");
@@ -51,6 +56,52 @@ int main(int argc, char **argv)
         HG_Finalize(hg_class);
         return(-1);
     }
+
+    if(opts.hostfile)
+    {
+        FILE *fp;
+        char proto[12] = {0};
+        int i;
+        hg_addr_t addr_self;
+        char addr_self_string[128];
+        hg_size_t addr_self_string_sz = 128;
+
+        /* figure out what address this server is listening on */
+        ret = HG_Addr_self(hg_class, &addr_self);
+        if(ret != HG_SUCCESS)
+        {
+            fprintf(stderr, "Error: HG_Addr_self()\n");
+            HG_Context_destroy(hg_context);
+            HG_Finalize(hg_class);
+            return(-1);
+        }
+        ret = HG_Addr_to_string(hg_class, addr_self_string, &addr_self_string_sz, addr_self);
+        if(ret != HG_SUCCESS)
+        {
+            fprintf(stderr, "Error: HG_Addr_self()\n");
+            HG_Context_destroy(hg_context);
+            HG_Finalize(hg_class);
+            HG_Addr_free(hg_class, addr_self);
+            return(-1);
+        }
+        HG_Addr_free(hg_class, addr_self);
+
+        fp = fopen(opts.hostfile, "w");
+        if(!fp)
+        {
+            perror("fopen");
+            HG_Context_destroy(hg_context);
+            HG_Finalize(hg_class);
+            HG_Addr_free(hg_class, addr_self);
+            return(-1);
+        }
+
+        for(i=0; i<11 && opts.listen_addr[i] != '\0' && opts.listen_addr[i] != ':'; i++)
+            proto[i] = opts.listen_addr[i];
+        fprintf(fp, "%s://%s", proto, addr_self_string);
+        fclose(fp);
+    }
+
 
     /* set up argobots */
     /***************************************/
@@ -128,3 +179,42 @@ int main(int argc, char **argv)
     return(0);
 }
 
+static void usage(int argc, char **argv)
+{
+    fprintf(stderr, "Usage: %s listen_address [-s] [-f filename]\n",
+        argv[0]);
+    fprintf(stderr, "   listen_address is the address or protocol for the server to use\n");
+    fprintf(stderr, "   [-f filename] to write the server address to a file\n");
+    return;
+}
+
+
+static void parse_args(int argc, char **argv, struct options *opts)
+{
+    int ret, opt;
+    
+    memset(opts, 0, sizeof(*opts));
+
+    while((opt = getopt(argc, argv, "f:")) != -1)
+    {
+        switch(opt)
+        {
+            case 'f':
+                opts->hostfile = strdup(optarg);
+                break;
+            default: 
+                usage(argc, argv);
+                exit(EXIT_FAILURE);
+        }
+    }
+
+    if(optind >= argc)
+    {
+        usage(argc, argv);
+        exit(EXIT_FAILURE);
+    }
+
+    opts->listen_addr = strdup(argv[optind]);
+    
+    return;
+}

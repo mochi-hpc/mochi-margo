@@ -17,6 +17,15 @@
  * and then executes indefinitely.
  */
 
+struct options
+{
+    int single_pool_mode;
+    char *hostfile;
+    char *listen_addr;
+};
+
+static void parse_args(int argc, char **argv, struct options *opts);
+
 int main(int argc, char **argv) 
 {
     int ret;
@@ -27,33 +36,13 @@ int main(int argc, char **argv)
     ABT_pool progress_pool;
     hg_context_t *hg_context;
     hg_class_t *hg_class;
-    hg_addr_t addr_self;
-    char addr_self_string[128];
-    hg_size_t addr_self_string_sz = 128;
-    int single_pool_mode = 0;
-    
-    if(argc > 3 || argc < 2)
-    {
-        fprintf(stderr, "Usage: ./server <listen_addr> <single>\n");
-        fprintf(stderr, "   Note: the optional \"single\" argument makes the server use a single ABT pool for both HG progress and RPC handlers.\n");
-        return(-1);
-    }
+    struct options opts;
 
-    if(argc == 3)
-    {
-        if(strcmp(argv[2], "single") == 0)
-            single_pool_mode = 1;
-        else
-        {
-            fprintf(stderr, "Usage: ./server <listen_addr> <single>\n");
-            fprintf(stderr, "   Note: the optional \"single\" argument makes the server use a single ABT pool for both HG progress and RPC handlers.\n");
-            return(-1);
-        }
-    }
+    parse_args(argc, argv, &opts);
 
     /* boilerplate HG initialization steps */
     /***************************************/
-    hg_class = HG_Init(argv[1], HG_TRUE);
+    hg_class = HG_Init(opts.listen_addr, HG_TRUE);
     if(!hg_class)
     {
         fprintf(stderr, "Error: HG_Init()\n");
@@ -67,26 +56,50 @@ int main(int argc, char **argv)
         return(-1);
     }
 
-    /* figure out what address this server is listening on */
-    ret = HG_Addr_self(hg_class, &addr_self);
-    if(ret != HG_SUCCESS)
+    if(opts.hostfile)
     {
-        fprintf(stderr, "Error: HG_Addr_self()\n");
-        HG_Context_destroy(hg_context);
-        HG_Finalize(hg_class);
-        return(-1);
-    }
-    ret = HG_Addr_to_string(hg_class, addr_self_string, &addr_self_string_sz, addr_self);
-    if(ret != HG_SUCCESS)
-    {
-        fprintf(stderr, "Error: HG_Addr_self()\n");
-        HG_Context_destroy(hg_context);
-        HG_Finalize(hg_class);
+        FILE *fp;
+        char proto[12] = {0};
+        int i;
+        hg_addr_t addr_self;
+        char addr_self_string[128];
+        hg_size_t addr_self_string_sz = 128;
+
+        /* figure out what address this server is listening on */
+        ret = HG_Addr_self(hg_class, &addr_self);
+        if(ret != HG_SUCCESS)
+        {
+            fprintf(stderr, "Error: HG_Addr_self()\n");
+            HG_Context_destroy(hg_context);
+            HG_Finalize(hg_class);
+            return(-1);
+        }
+        ret = HG_Addr_to_string(hg_class, addr_self_string, &addr_self_string_sz, addr_self);
+        if(ret != HG_SUCCESS)
+        {
+            fprintf(stderr, "Error: HG_Addr_self()\n");
+            HG_Context_destroy(hg_context);
+            HG_Finalize(hg_class);
+            HG_Addr_free(hg_class, addr_self);
+            return(-1);
+        }
         HG_Addr_free(hg_class, addr_self);
-        return(-1);
+
+        fp = fopen(opts.hostfile, "w");
+        if(!fp)
+        {
+            perror("fopen");
+            HG_Context_destroy(hg_context);
+            HG_Finalize(hg_class);
+            HG_Addr_free(hg_class, addr_self);
+            return(-1);
+        }
+
+        for(i=0; i<11 && opts.listen_addr[i] != '\0' && opts.listen_addr[i] != ':'; i++)
+            proto[i] = opts.listen_addr[i];
+        fprintf(fp, "%s://%s", proto, addr_self_string);
+        fclose(fp);
     }
-    HG_Addr_free(hg_class, addr_self);
-    printf("%s\n", addr_self_string);
 
     /* set up argobots */
     /***************************************/
@@ -119,7 +132,7 @@ int main(int argc, char **argv)
         return(-1);
     }
 
-    if(!single_pool_mode)
+    if(!opts.single_pool_mode)
     {
         /* create a dedicated ES drive Mercury progress */
         ret = ABT_snoozer_xstream_create(1, &progress_pool, &progress_xstream);
@@ -136,7 +149,7 @@ int main(int argc, char **argv)
      * communication.
      */
     /***************************************/
-    if(single_pool_mode)
+    if(opts.single_pool_mode)
         mid = margo_init_pool(handler_pool, handler_pool, hg_context);
     else
         mid = margo_init_pool(progress_pool, handler_pool, hg_context);
@@ -164,7 +177,7 @@ int main(int argc, char **argv)
      */
     margo_wait_for_finalize(mid);
 
-    if(!single_pool_mode)
+    if(!opts.single_pool_mode)
     {
         ABT_xstream_join(progress_xstream);
         ABT_xstream_free(&progress_xstream);
@@ -178,3 +191,46 @@ int main(int argc, char **argv)
     return(0);
 }
 
+static void usage(int argc, char **argv)
+{
+    fprintf(stderr, "Usage: %s listen_address [-s] [-f filename]\n",
+        argv[0]);
+    fprintf(stderr, "   listen_address is the address or protocol for the server to use\n");
+    fprintf(stderr, "   [-s] for single pool mode\n");
+    fprintf(stderr, "   [-f filename] to write the server address to a file\n");
+    return;
+}
+
+
+static void parse_args(int argc, char **argv, struct options *opts)
+{
+    int ret, opt;
+    
+    memset(opts, 0, sizeof(*opts));
+
+    while((opt = getopt(argc, argv, "f:s")) != -1)
+    {
+        switch(opt)
+        {
+            case 's':
+                opts->single_pool_mode = 1;
+                break;
+            case 'f':
+                opts->hostfile = strdup(optarg);
+                break;
+            default: 
+                usage(argc, argv);
+                exit(EXIT_FAILURE);
+        }
+    }
+
+    if(optind >= argc)
+    {
+        usage(argc, argv);
+        exit(EXIT_FAILURE);
+    }
+
+    opts->listen_addr = strdup(argv[optind]);
+    
+    return;
+}

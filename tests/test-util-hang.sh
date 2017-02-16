@@ -21,13 +21,12 @@ function test_start_servers ()
     maxtime=${3:-120}s
     repfactor=${4:-0}
     pid=$$
-    startport=3344
-    endport=`expr 3344 + $nservers - 1`
 
     # start daemons
-    for i in `seq $startport $endport`
+    for i in `seq $1 $nservers`
     do
-        $TIMEOUT --signal=9 ${maxtime} tests/server-hang tcp://$i &
+        hostfile=`mktemp`
+        $TIMEOUT --signal=9 ${maxtime} tests/server-hang na+sm:// -f $hostfile &
         if [ $? -ne 0 ]; then
             # TODO: this doesn't actually work; can't check return code of
             # something executing in background.  We have to rely on the
@@ -40,5 +39,5 @@ function test_start_servers ()
     # wait for servers to start
     sleep ${startwait}
 
-    svr1="tcp://localhost:$startport"
+    svr1=`cat $hostfile`
 }
