@@ -5,13 +5,13 @@ set -x
 out1=/tmp/sleep-standard-$$.out
 out2=/tmp/sleep-abt-$$.out
 
-bash -c "time -p tests/sleep 1" >& $out1
+bash -c "time -p tests/margo-test-sleep 1" >& $out1
 if [ $? -ne 0 ]; then
     exit 1
 fi
 standardrealtime=`grep real $out1 | cut -d ' ' -f 2 |cut -d '.' -f 1`
 
-bash -c "time -p tests/sleep 1 ABT" >& $out2
+bash -c "time -p tests/margo-test-sleep 1 ABT" >& $out2
 if [ $? -ne 0 ]; then
     exit 1
 fi

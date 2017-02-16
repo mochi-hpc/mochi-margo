@@ -1,5 +1,5 @@
-noinst_PROGRAMS += examples/client examples/server
+noinst_PROGRAMS += examples/margo-example-client examples/margo-example-server
 
-examples_server_SOURCES = \
- examples/server.c \
+examples_margo_example_server_SOURCES = \
+ examples/margo-example-server.c \
  examples/my-rpc.c

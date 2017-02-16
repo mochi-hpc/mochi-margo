@@ -3,10 +3,10 @@ TESTS_ENVIRONMENT += \
  MKTEMP="$(MKTEMP)"
 
 check_PROGRAMS += \
- tests/sleep \
- tests/server \
- tests/client \
- tests/client-timeout
+ tests/margo-test-sleep \
+ tests/margo-test-server \
+ tests/margo-test-client \
+ tests/margo-test-client-timeout
 
 TESTS += \
  tests/sleep.sh \
@@ -22,7 +22,7 @@ EXTRA_DIST += \
  tests/test-util.sh \
  tests/test-util-ded-pool.sh
  
-tests_server_SOURCES = \
- tests/server.c \
+tests_margo_test_server_SOURCES = \
+ tests/margo-test-server.c \
  tests/my-rpc.c
 
