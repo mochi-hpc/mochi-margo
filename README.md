@@ -92,6 +92,8 @@ You can use either the CCI NA plugin or BMI NA plugin to use either the CCI or B
 
 ### CCI
 
+Add the -DNA_USE_CCI:BOOL=ON option to the Mercury configuration.
+
 You must set the CCI_CONFIG environment variable to point to a valid CCI
 configuration file.  You can use the following example and un-comment the
 appropriate section for the transport that you wish to use.  Note that there
@@ -129,5 +131,9 @@ Examples for clients to specify to attach to the above:
   address specified above
 
 ### BMI
+
+Add the -DNA_USE_BMI:BOOL=ON option to the Mercury configuration.  You may
+also need to specify
+-DBMI_INCLUDE_DIR:PATH=/home/pcarns/working/install/include and -DBMI_LIBRARY:FILEPATH=/home/pcarns/working/install/lib/libbmi.a (adjusting the paths as appropriate for your system).
 
 We do not recommend using any BMI methods besides TCP.  It's usage is very similar to the CCI/TCP examples above, except that "bmi+" should be substituted for "cci+".
