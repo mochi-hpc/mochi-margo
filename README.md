@@ -16,9 +16,25 @@ Note that Margo should be compatible with any Mercury transport (NA plugin).  Th
 
 ### Recommended Mercury build options
 
+* Mercury must be compiled with -DNA_USE_SM:BOOL=ON to enable the internal
+  NA SM plugin used by the test scripts in the "make check" target.  This
+  does not preclude the use of other aditional plugins.
+* Mercury must be compiled with -DMERCURY_USE_BOOST_PP:BOOL=ON to enable the
+  Boost preprocessor macros for encoding.
 * -DMERCURY_USE_CHECKSUMS:BOOL=OFF disables automatic checksumming of all
   Mercury RPC messages.  This reduces latency by removing a layer of
   integrity checking on communication.
+
+Example Mercury compilation:
+
+```
+mkdir build
+cd build
+cmake -DNA_USE_SM:BOOL=ON -DMERCURY_USE_CHECKSUMS:BOOL=OFF \
+ -DBUILD_TESTING:BOOL=ON -DMERCURY_USE_BOOST_PP:BOOL=ON \
+ -DCMAKE_INSTALL_PREFIX=/home/pcarns/working/install \
+ -DBUILD_SHARED_LIBS:BOOL=ON -DCMAKE_BUILD_TYPE:STRING=Debug ../
+```
 
 ## Building
 
