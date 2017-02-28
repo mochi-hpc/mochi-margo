@@ -21,14 +21,10 @@ MERCURY_GEN_PROC(svc2_do_thing_in_t,
     ((hg_bulk_t)(bulk_handle)))
 DECLARE_MARGO_RPC_HANDLER(svc2_do_thing_ult)
 
-DECLARE_MARGO_RPC_HANDLER(svc2_do_thing_shutdown_ult)
-
 MERCURY_GEN_PROC(svc2_do_other_thing_out_t, ((int32_t)(ret)))
 MERCURY_GEN_PROC(svc2_do_other_thing_in_t,
     ((int32_t)(input_val))\
     ((hg_bulk_t)(bulk_handle)))
 DECLARE_MARGO_RPC_HANDLER(svc2_do_other_thing_ult)
-
-DECLARE_MARGO_RPC_HANDLER(svc2_do_other_thing_shutdown_ult)
 
 #endif /* __SVC2 */
