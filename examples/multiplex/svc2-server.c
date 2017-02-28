@@ -5,7 +5,8 @@
  */
 
 #include <assert.h>
-#include "svc2.h"
+#include "svc2-proto.h"
+#include "svc2-server.h"
 
 static void svc2_do_thing_ult(hg_handle_t handle)
 {

@@ -11,8 +11,8 @@
 #include <abt-snoozer.h>
 #include <margo.h>
 
-#include "svc1.h"
-#include "svc2.h"
+#include "svc1-server.h"
+#include "svc2-server.h"
 
 /* example server program that starts a skeleton for sub-services within
  * this process to register with
