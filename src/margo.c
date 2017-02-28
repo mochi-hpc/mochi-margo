@@ -802,10 +802,38 @@ static int margo_xstream_is_in_progress_pool(margo_instance_id mid)
         return(0);
 }
 
+int margo_lookup_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT_pool *pool)
+{
+    struct mplex_key key;
+    struct mplex_element *element;
+
+    if(!mplex_id)
+    {
+        *pool = mid->handler_pool;
+        return(0);
+    }
+
+    memset(&key, 0, sizeof(key));
+    key.id = id;
+    key.mplex_id = mplex_id;
+
+    HASH_FIND(hh, mid->mplex_table, &key, sizeof(key), element);
+    if(!element)
+        return(-1);
+
+    *pool = element->pool;
+
+    return(0);
+}
+
 int margo_register_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT_pool pool)
 {
     struct mplex_key key;
     struct mplex_element *element;
+
+    /* mplex_id can't be zero; that's the default handler pool */
+    if(!mplex_id)
+        return(-1);
 
     memset(&key, 0, sizeof(key));
     key.id = id;

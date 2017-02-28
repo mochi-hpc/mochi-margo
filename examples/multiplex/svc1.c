@@ -133,15 +133,8 @@ int svc1_register(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id)
     {
         return(ret);
     }
-    
-    /* TODO: 
-     * - elsewhere:
-     *   - new variant of DEFINE_MARGO_RPC_HANDLER that:
-     *     - looks up registered margo thing
-     *     - creates thread targeting pool
-     */
-
-    return(-1);
+   
+    return(0);
 }
 
 void svc1_deregister(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id)
