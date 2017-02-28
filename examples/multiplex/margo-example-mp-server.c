@@ -12,6 +12,7 @@
 #include <margo.h>
 
 #include "svc1.h"
+#include "svc2.h"
 
 /* example server program that starts a skeleton for sub-services within
  * this process to register with
@@ -131,6 +132,9 @@ int main(int argc, char **argv)
     mid = margo_init(0, 0, hg_context);
     assert(mid);
 
+    /* register RPCs and services */
+    /***************************************/
+
     /* register a shutdown RPC as just a generic handler; not part of a
      * multiplexed service
      */
@@ -153,7 +157,15 @@ int main(int argc, char **argv)
     ret = svc1_register(mid, svc1_pool2, 2);
     assert(ret == 0);
 
-    /* TODO: register svc2 */
+    /* register svc2, with mplex_id 3, to execute on the default handler pool
+     * used by Margo
+     */
+    ret = svc2_register(mid, margo_get_handler_pool(mid), 3);
+    assert(ret == 0);
+
+
+    /* shut things down */
+    /****************************************/
 
     /* NOTE: there isn't anything else for the server to do at this point
      * except wait for itself to be shut down.  The
@@ -164,6 +176,7 @@ int main(int argc, char **argv)
 
     svc1_deregister(mid, margo_get_handler_pool(mid), 1);
     svc1_deregister(mid, margo_get_handler_pool(mid), 2);
+    svc2_deregister(mid, margo_get_handler_pool(mid), 3);
 
     ABT_xstream_join(svc1_xstream2);
     ABT_xstream_free(&svc1_xstream2);

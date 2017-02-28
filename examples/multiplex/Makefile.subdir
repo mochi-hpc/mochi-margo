@@ -2,4 +2,5 @@ noinst_PROGRAMS += examples/multiplex/margo-example-mp-server
 
 examples_multiplex_margo_example_mp_server_SOURCES = \
  examples/multiplex/margo-example-mp-server.c \
- examples/multiplex/svc1.c
+ examples/multiplex/svc1.c \
+ examples/multiplex/svc2.c
