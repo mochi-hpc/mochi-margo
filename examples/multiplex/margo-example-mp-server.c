@@ -59,6 +59,8 @@ int main(int argc, char **argv)
     hg_addr_t addr_self;
     char addr_self_string[128];
     hg_size_t addr_self_string_sz = 128;
+    ABT_xstream svc1_xstream2;
+    ABT_pool svc1_pool2;
 
     if(argc != 2)
     {
@@ -129,11 +131,29 @@ int main(int argc, char **argv)
     mid = margo_init(0, 0, hg_context);
     assert(mid);
 
+    /* register a shutdown RPC as just a generic handler; not part of a
+     * multiplexed service
+     */
+    MERCURY_REGISTER(hg_class, "my_shutdown_rpc", void, void,
+        my_rpc_shutdown_ult_handler);
+
     /* register svc1, with mplex_id 1, to execute on the default handler pool
      * used by Margo
      */
     ret = svc1_register(mid, margo_get_handler_pool(mid), 1);
     assert(ret == 0);
+
+    /* create a dedicated and pool for another instance of svc1 */
+    ret = ABT_snoozer_xstream_create(1, &svc1_pool2, &svc1_xstream2);
+    assert(ret == 0);
+    /* register svc1, with mplex_id 2, to execute on a separate pool.  This
+     * will result in svc1 being registered twice, with the client being able
+     * to dictate which instance they want to target
+     */
+    ret = svc1_register(mid, svc1_pool2, 2);
+    assert(ret == 0);
+
+    /* TODO: register svc2 */
 
     /* NOTE: there isn't anything else for the server to do at this point
      * except wait for itself to be shut down.  The
@@ -143,6 +163,10 @@ int main(int argc, char **argv)
     margo_wait_for_finalize(mid);
 
     svc1_deregister(mid, margo_get_handler_pool(mid), 1);
+    svc1_deregister(mid, margo_get_handler_pool(mid), 2);
+
+    ABT_xstream_join(svc1_xstream2);
+    ABT_xstream_free(&svc1_xstream2);
 
     ABT_finalize();
 
