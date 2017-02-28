@@ -142,6 +142,8 @@ int main(int argc, char **argv)
      */
     margo_wait_for_finalize(mid);
 
+    svc1_deregister(mid, margo_get_handler_pool(mid), 1);
+
     ABT_finalize();
 
     HG_Context_destroy(hg_context);

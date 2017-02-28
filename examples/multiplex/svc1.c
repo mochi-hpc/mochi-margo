@@ -22,6 +22,7 @@ static void svc1_do_thing_ult(hg_handle_t handle)
     ret = HG_Get_input(handle, &in);
     assert(ret == HG_SUCCESS);
 
+    /* TODO: print handler name, mplex_id, and pool */
     printf("Got RPC request with input_val: %d\n", in.input_val);
     out.ret = 0;
 
@@ -73,6 +74,7 @@ static void svc1_do_other_thing_ult(hg_handle_t handle)
     ret = HG_Get_input(handle, &in);
     assert(ret == HG_SUCCESS);
 
+    /* TODO: print handler name, mplex_id, and pool */
     printf("Got RPC request with input_val: %d\n", in.input_val);
     out.ret = 0;
 
@@ -111,28 +113,8 @@ DEFINE_MARGO_RPC_HANDLER(svc1_do_other_thing_ult)
 
 int svc1_register(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id)
 {
-    hg_return_t hret;
-    hg_id_t id;
-    hg_bool_t flag;
-    int ret;
-
-    /* TODO: the following, for each function */
-    /* TODO: this should be a macro really */
-
-    hret = HG_Registered_name(margo_get_class(mid), "svc1_do_thing", &id, &flag);
-    if(hret != HG_SUCCESS)
-    {
-        return(-1);
-    }
-    if(!flag)
-    {
-        id = MERCURY_REGISTER(margo_get_class(mid), "svc1_do_thing", svc1_do_thing_in_t, svc1_do_thing_out_t, svc1_do_thing_ult_handler);
-    }
-    ret = margo_register_mplex(mid, id, mplex_id, pool);
-    if(ret < 0)
-    {
-        return(ret);
-    }
+    MARGO_REGISTER(mid, "svc1_do_thing", svc1_do_thing_in_t, svc1_do_thing_out_t, svc1_do_thing_ult_handler, mplex_id, pool);
+    MARGO_REGISTER(mid, "svc1_do_other_thing", svc1_do_other_thing_in_t, svc1_do_other_thing_out_t, svc1_do_other_thing_ult_handler, mplex_id, pool);
    
     return(0);
 }
