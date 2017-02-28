@@ -784,3 +784,8 @@ static int margo_xstream_is_in_progress_pool(margo_instance_id mid)
     else
         return(0);
 }
+
+int margo_register_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT_pool pool)
+{
+    return(-1);
+}

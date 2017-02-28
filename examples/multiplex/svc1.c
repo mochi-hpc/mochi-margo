@@ -114,16 +114,27 @@ int svc1_register(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id)
     hg_return_t hret;
     hg_id_t id;
     hg_bool_t flag;
+    int ret;
+
+    /* TODO: the following, for each function */
+    /* TODO: this should be a macro really */
 
     hret = HG_Registered_name(margo_get_class(mid), "svc1_do_thing", &id, &flag);
     if(hret != HG_SUCCESS)
     {
         return(-1);
     }
+    if(!flag)
+    {
+        id = MERCURY_REGISTER(margo_get_class(mid), "svc1_do_thing", svc1_do_thing_in_t, svc1_do_thing_out_t, svc1_do_thing_ult_handler);
+    }
+    ret = margo_register_mplex(mid, id, mplex_id, pool);
+    if(ret < 0)
+    {
+        return(ret);
+    }
     
     /* TODO: for each function:
-     * - check if registered with mercury or not
-     *   - if not, then register
      * - register with margo
      *   - this will put into hash table in mid that can map <id,mplex_id> to
      *     <pool>, checking for duplicate first
