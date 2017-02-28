@@ -134,11 +134,7 @@ int svc1_register(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id)
         return(ret);
     }
     
-    /* TODO: for each function:
-     * - register with margo
-     *   - this will put into hash table in mid that can map <id,mplex_id> to
-     *     <pool>, checking for duplicate first
-     *
+    /* TODO: 
      * - elsewhere:
      *   - new variant of DEFINE_MARGO_RPC_HANDLER that:
      *     - looks up registered margo thing
