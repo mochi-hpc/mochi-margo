@@ -177,9 +177,12 @@ int main(int argc, char **argv)
      */
     margo_wait_for_finalize(mid);
 
+    /*  TODO: rethink this; can't touch mid after wait for finalize */
+#if 0
     svc1_deregister(mid, *handler_pool, 1);
     svc1_deregister(mid, svc1_pool2, 2);
     svc2_deregister(mid, *handler_pool, 3);
+#endif
 
     ABT_xstream_join(svc1_xstream2);
     ABT_xstream_free(&svc1_xstream2);
