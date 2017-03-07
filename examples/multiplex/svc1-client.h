@@ -9,4 +9,6 @@
 
 #include <margo.h>
 
+void svc1_do_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t mplex_id);
+
 #endif /* __SVC1_CLIENT */
