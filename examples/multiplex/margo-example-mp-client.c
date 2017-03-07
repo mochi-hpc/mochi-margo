@@ -78,6 +78,8 @@ int main(int argc, char **argv)
     /* register core RPC */
     my_rpc_shutdown_id = MERCURY_REGISTER(hg_class, "my_shutdown_rpc", void, void, 
         NULL);
+    /* register service APIs */
+    svc1_register_client(mid);
 
     /* find addr for server */
     ret = margo_addr_lookup(mid, argv[1], &svr_addr);
