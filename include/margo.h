@@ -218,7 +218,7 @@ int margo_lookup_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT
     if(!__flag) \
         __id = MERCURY_REGISTER(margo_get_class(__mid), __func_name, __in_t, __out_t, __handler); \
     __ret = margo_register_mplex(__mid, __id, __mplex_id, __pool); \
-    assert(__ret = 0); \
+    assert(__ret == 0); \
 } while(0)
 
 /**
