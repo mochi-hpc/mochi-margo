@@ -5,6 +5,7 @@
  */
 
 #include <assert.h>
+#include <pthread.h>
 #include "svc1-proto.h"
 #include "svc1-server.h"
 
@@ -19,12 +20,21 @@ static void svc1_do_thing_ult(hg_handle_t handle)
     hg_bulk_t bulk_handle;
     struct hg_info *hgi;
     margo_instance_id mid;
+    ABT_thread my_ult;
+    ABT_xstream my_xstream; 
+    pthread_t my_tid;
 
     ret = HG_Get_input(handle, &in);
     assert(ret == HG_SUCCESS);
+    hgi = HG_Get_info(handle);
+    assert(hgi);
 
-    /* TODO: print handler name, mplex_id, and pool */
-    printf("Got RPC request with input_val: %d\n", in.input_val);
+    ABT_xstream_self(&my_xstream);
+    ABT_thread_self(&my_ult);
+    my_tid = pthread_self();
+    printf("svc1: do_thing: mplex_id: %u, ult: %p, xstream %p, tid: %lu\n", 
+        hgi->mplex_id, my_ult, my_xstream, my_tid);
+
     out.ret = 0;
 
     /* set up target buffer for bulk transfer */
@@ -33,8 +43,6 @@ static void svc1_do_thing_ult(hg_handle_t handle)
     assert(buffer);
 
     /* register local target buffer for bulk access */
-    hgi = HG_Get_info(handle);
-    assert(hgi);
     ret = HG_Bulk_create(hgi->hg_class, 1, &buffer,
         &size, HG_BULK_WRITE_ONLY, &bulk_handle);
     assert(ret == 0);
@@ -71,12 +79,21 @@ static void svc1_do_other_thing_ult(hg_handle_t handle)
     hg_bulk_t bulk_handle;
     struct hg_info *hgi;
     margo_instance_id mid;
+    ABT_thread my_ult;
+    ABT_xstream my_xstream; 
+    pthread_t my_tid;
 
     ret = HG_Get_input(handle, &in);
     assert(ret == HG_SUCCESS);
+    hgi = HG_Get_info(handle);
+    assert(hgi);
 
-    /* TODO: print handler name, mplex_id, and pool */
-    printf("Got RPC request with input_val: %d\n", in.input_val);
+    ABT_xstream_self(&my_xstream);
+    ABT_thread_self(&my_ult);
+    my_tid = pthread_self();
+    printf("svc1: do_other_thing: mplex_id: %u, ult: %p, xstream %p, tid: %lu\n", 
+        hgi->mplex_id, my_ult, my_xstream, my_tid);
+
     out.ret = 0;
 
     /* set up target buffer for bulk transfer */
@@ -85,8 +102,6 @@ static void svc1_do_other_thing_ult(hg_handle_t handle)
     assert(buffer);
 
     /* register local target buffer for bulk access */
-    hgi = HG_Get_info(handle);
-    assert(hgi);
     ret = HG_Bulk_create(hgi->hg_class, 1, &buffer,
         &size, HG_BULK_WRITE_ONLY, &bulk_handle);
     assert(ret == 0);
