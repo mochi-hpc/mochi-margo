@@ -12,6 +12,7 @@
 #include <margo.h>
 
 #include "svc1-client.h"
+#include "svc2-client.h"
 
 static hg_id_t my_rpc_shutdown_id;
 
@@ -80,12 +81,18 @@ int main(int argc, char **argv)
         NULL);
     /* register service APIs */
     svc1_register_client(mid);
+    svc2_register_client(mid);
 
     /* find addr for server */
     ret = margo_addr_lookup(mid, argv[1], &svr_addr);
     assert(ret == 0);
 
     svc1_do_thing(mid, svr_addr, 1);
+    svc1_do_other_thing(mid, svr_addr, 1);
+    svc1_do_thing(mid, svr_addr, 2);
+    svc1_do_other_thing(mid, svr_addr, 2);
+    svc2_do_thing(mid, svr_addr, 3);
+    svc2_do_other_thing(mid, svr_addr, 3);
 
     /* send one rpc to server to shut it down */
     /* create handle */

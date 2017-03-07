@@ -7,4 +7,5 @@ examples_multiplex_margo_example_mp_server_SOURCES = \
 
 examples_multiplex_margo_example_mp_client_SOURCES = \
  examples/multiplex/margo-example-mp-client.c \
- examples/multiplex/svc1-client.c
+ examples/multiplex/svc1-client.c \
+ examples/multiplex/svc2-client.c
