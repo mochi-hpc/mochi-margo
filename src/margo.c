@@ -821,6 +821,8 @@ int margo_lookup_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT
     if(!element)
         return(-1);
 
+    assert(element->key.id == id && element->key.mplex_id == mplex_id);
+
     *pool = element->pool;
 
     return(0);
