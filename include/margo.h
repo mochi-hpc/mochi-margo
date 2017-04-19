@@ -199,7 +199,7 @@ hg_return_t __name##_handler(hg_handle_t handle) { \
     int __ret; \
     ABT_pool* __pool; \
     margo_instance_id __mid; \
-    struct hg_info *__hgi; \
+    const struct hg_info *__hgi; \
     __hgi = HG_Get_info(handle); \
     __mid = margo_hg_class_to_instance(__hgi->hg_class); \
     __pool = margo_get_handler_pool(__mid); \

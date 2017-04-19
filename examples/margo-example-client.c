@@ -192,7 +192,7 @@ static void run_my_rpc(void *_arg)
     int ret;
     hg_size_t size;
     void* buffer;
-    struct hg_info *hgi;
+    const struct hg_info *hgi;
 
     printf("ULT [%d] running.\n", arg->val);
 

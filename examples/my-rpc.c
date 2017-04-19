@@ -27,7 +27,7 @@ static void my_rpc_ult(hg_handle_t handle)
     hg_size_t size;
     void *buffer;
     hg_bulk_t bulk_handle;
-    struct hg_info *hgi;
+    const struct hg_info *hgi;
 #if 0
     int fd;
     char filename[256];
@@ -88,7 +88,7 @@ DEFINE_MARGO_RPC_HANDLER(my_rpc_ult)
 static void my_rpc_shutdown_ult(hg_handle_t handle)
 {
     hg_return_t hret;
-    struct hg_info *hgi;
+    const struct hg_info *hgi;
     margo_instance_id mid;
 
     printf("Got RPC request to shutdown\n");
