@@ -233,7 +233,7 @@ hg_return_t __name##_handler(hg_handle_t handle) { \
     const struct hg_info *__hgi; \
     __hgi = HG_Get_info(handle); \
     __mid = margo_hg_class_to_instance(__hgi->hg_class); \
-    __ret = margo_lookup_mplex(__mid, __hgi->id, __hgi->mplex_id, (&__pool)); \
+    __ret = margo_lookup_mplex(__mid, __hgi->id, __hgi->target_id, (&__pool)); \
     if(__ret != 0) { \
         return(HG_INVALID_PARAM); \
     }\
