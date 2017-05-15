@@ -38,7 +38,7 @@ void svc1_do_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t mplex_id)
     int ret;
     hg_size_t size;
     void* buffer;
-    struct hg_info *hgi;
+    const struct hg_info *hgi;
 
     /* allocate buffer for bulk transfer */
     size = 512;
@@ -57,7 +57,7 @@ void svc1_do_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t mplex_id)
         HG_BULK_READ_ONLY, &in.bulk_handle);
     assert(ret == 0);
 
-    hgi->target_id = mplex_id;
+    HG_Set_target_id(handle, mplex_id);
 
     /* Send rpc. Note that we are also transmitting the bulk handle in the
      * input struct.  It was set above. 
@@ -86,7 +86,7 @@ void svc1_do_other_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t mpl
     int ret;
     hg_size_t size;
     void* buffer;
-    struct hg_info *hgi;
+    const struct hg_info *hgi;
 
     /* allocate buffer for bulk transfer */
     size = 512;
@@ -105,7 +105,7 @@ void svc1_do_other_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t mpl
         HG_BULK_READ_ONLY, &in.bulk_handle);
     assert(ret == 0);
 
-    hgi->target_id = mplex_id;
+    HG_Set_target_id(handle, mplex_id);
 
     /* Send rpc. Note that we are also transmitting the bulk handle in the
      * input struct.  It was set above. 

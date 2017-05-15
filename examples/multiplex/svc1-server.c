@@ -18,7 +18,7 @@ static void svc1_do_thing_ult(hg_handle_t handle)
     hg_size_t size;
     void *buffer;
     hg_bulk_t bulk_handle;
-    struct hg_info *hgi;
+    const struct hg_info *hgi;
     margo_instance_id mid;
     ABT_thread my_ult;
     ABT_xstream my_xstream; 
@@ -77,7 +77,7 @@ static void svc1_do_other_thing_ult(hg_handle_t handle)
     hg_size_t size;
     void *buffer;
     hg_bulk_t bulk_handle;
-    struct hg_info *hgi;
+    const struct hg_info *hgi;
     margo_instance_id mid;
     ABT_thread my_ult;
     ABT_xstream my_xstream; 

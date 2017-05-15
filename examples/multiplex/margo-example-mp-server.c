@@ -24,7 +24,7 @@
 static void my_rpc_shutdown_ult(hg_handle_t handle)
 {
     hg_return_t hret;
-    struct hg_info *hgi;
+    const struct hg_info *hgi;
     margo_instance_id mid;
 
     //printf("Got RPC request to shutdown\n");
