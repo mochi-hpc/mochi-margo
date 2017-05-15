@@ -1,0 +1,11 @@
+noinst_PROGRAMS += examples/multiplex/margo-example-mp-server examples/multiplex/margo-example-mp-client
+
+examples_multiplex_margo_example_mp_server_SOURCES = \
+ examples/multiplex/margo-example-mp-server.c \
+ examples/multiplex/svc1-server.c \
+ examples/multiplex/svc2-server.c
+
+examples_multiplex_margo_example_mp_client_SOURCES = \
+ examples/multiplex/margo-example-mp-client.c \
+ examples/multiplex/svc1-client.c \
+ examples/multiplex/svc2-client.c

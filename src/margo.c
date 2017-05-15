@@ -16,8 +16,22 @@
 #include "margo.h"
 #include "margo-timer.h"
 #include "utlist.h"
+#include "uthash.h"
 
 #define MERCURY_PROGRESS_TIMEOUT_UB 100 /* 100 milliseconds */
+
+struct mplex_key
+{
+    hg_id_t id;
+    uint32_t mplex_id;
+};
+
+struct mplex_element
+{
+    struct mplex_key key;
+    ABT_pool pool;
+    UT_hash_handle hh;
+};
 
 struct margo_instance
 {
@@ -43,6 +57,9 @@ struct margo_instance
     ABT_cond finalize_cond;
 
     int table_index;
+
+    /* hash table to track multiplexed rpcs registered with margo */
+    struct mplex_element *mplex_table;
 };
 
 struct margo_handler_mapping
@@ -783,4 +800,58 @@ static int margo_xstream_is_in_progress_pool(margo_instance_id mid)
         return(1);
     else
         return(0);
+}
+
+int margo_lookup_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT_pool *pool)
+{
+    struct mplex_key key;
+    struct mplex_element *element;
+
+    if(!mplex_id)
+    {
+        *pool = mid->handler_pool;
+        return(0);
+    }
+
+    memset(&key, 0, sizeof(key));
+    key.id = id;
+    key.mplex_id = mplex_id;
+
+    HASH_FIND(hh, mid->mplex_table, &key, sizeof(key), element);
+    if(!element)
+        return(-1);
+
+    assert(element->key.id == id && element->key.mplex_id == mplex_id);
+
+    *pool = element->pool;
+
+    return(0);
+}
+
+int margo_register_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT_pool pool)
+{
+    struct mplex_key key;
+    struct mplex_element *element;
+
+    /* mplex_id can't be zero; that's the default handler pool */
+    if(!mplex_id)
+        return(-1);
+
+    memset(&key, 0, sizeof(key));
+    key.id = id;
+    key.mplex_id = mplex_id;
+
+    HASH_FIND(hh, mid->mplex_table, &key, sizeof(key), element);
+    if(element)
+        return(0);
+
+    element = malloc(sizeof(*element));
+    if(!element)
+        return(-1);
+    element->key = key;
+    element->pool = pool;
+
+    HASH_ADD(hh, mid->mplex_table, key, sizeof(key), element);
+
+    return(0);
 }

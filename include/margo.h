@@ -190,6 +190,37 @@ void margo_thread_sleep(
  */
 margo_instance_id margo_hg_class_to_instance(hg_class_t *cl);
 
+/** 
+ * Registers an RPC with margo that is associated with a multiplexed service
+ * @param [in] mid Margo instance
+ * @param [in] id Mercury RPC identifier
+ * @param [in] mplex_id multiplexing identifier
+ * @param [in] pool Argobots pool the handler will execute in
+ */
+int margo_register_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT_pool pool);
+
+/**
+ * Maps an RPC id and mplex id to the pool that it should execute on
+ * @param [in] mid Margo instance
+ * @param [in] id Mercury RPC identifier
+ * @param [in] mplex_id multiplexing identifier
+ * @param [out] pool Argobots pool the handler will execute in
+ */
+int margo_lookup_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT_pool *pool);
+
+#define MARGO_REGISTER(__mid, __func_name, __in_t, __out_t, __handler, __mplex_id, __pool) do { \
+    hg_return_t __hret; \
+    hg_id_t __id; \
+    hg_bool_t __flag; \
+    int __ret; \
+    __hret = HG_Registered_name(margo_get_class(__mid), __func_name, &__id, &__flag); \
+    assert(__hret == HG_SUCCESS); \
+    if(!__flag) \
+        __id = MERCURY_REGISTER(margo_get_class(__mid), __func_name, __in_t, __out_t, __handler); \
+    __ret = margo_register_mplex(__mid, __id, __mplex_id, __pool); \
+    assert(__ret == 0); \
+} while(0)
+
 /**
  * macro that defines a function to glue an RPC handler to a ult handler
  * @param [in] __name name of handler function
@@ -197,13 +228,16 @@ margo_instance_id margo_hg_class_to_instance(hg_class_t *cl);
 #define DEFINE_MARGO_RPC_HANDLER(__name) \
 hg_return_t __name##_handler(hg_handle_t handle) { \
     int __ret; \
-    ABT_pool* __pool; \
+    ABT_pool __pool; \
     margo_instance_id __mid; \
     const struct hg_info *__hgi; \
     __hgi = HG_Get_info(handle); \
     __mid = margo_hg_class_to_instance(__hgi->hg_class); \
-    __pool = margo_get_handler_pool(__mid); \
-    __ret = ABT_thread_create(*__pool, (void (*)(void *))__name, handle, ABT_THREAD_ATTR_NULL, NULL); \
+    __ret = margo_lookup_mplex(__mid, __hgi->id, __hgi->mplex_id, (&__pool)); \
+    if(__ret != 0) { \
+        return(HG_INVALID_PARAM); \
+    }\
+    __ret = ABT_thread_create(__pool, (void (*)(void *))__name, handle, ABT_THREAD_ATTR_NULL, NULL); \
     if(__ret != 0) { \
         return(HG_NOMEM_ERROR); \
     } \
