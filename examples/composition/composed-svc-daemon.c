@@ -166,7 +166,7 @@ int main(int argc, char **argv)
                 ret = margo_addr_lookup(mid, relay_addr_string, &relay_addr); 
             else
                 ret = HG_Addr_self(margo_get_class(mid), &relay_addr);
-            assert(ret);
+            assert(ret == 0);
             delegator_service_register(mid, *handler_pool, 0, relay_addr);
         }
         else
