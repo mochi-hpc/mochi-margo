@@ -63,7 +63,6 @@ int main(int argc, char **argv)
     hg_addr_t addr_self;
     char addr_self_string[128];
     hg_size_t addr_self_string_sz = 128;
-    ABT_xstream svc1_xstream2;
     ABT_pool *handler_pool;
     char* svc_list;
     char* svc;
@@ -193,9 +192,6 @@ int main(int argc, char **argv)
     if(relay_addr != HG_ADDR_NULL)
         HG_Addr_free(margo_get_class(mid, relay_addr);
 #endif
-
-    ABT_xstream_join(svc1_xstream2);
-    ABT_xstream_free(&svc1_xstream2);
 
     ABT_finalize();
 
