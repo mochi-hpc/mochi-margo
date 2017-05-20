@@ -171,6 +171,8 @@ int main(int argc, char **argv)
         }
         else
             assert(0);
+
+        svc = strtok(NULL, ",");
     }
 
     /* shut things down */
