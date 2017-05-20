@@ -20,6 +20,7 @@ struct margo_instance;
 typedef struct margo_instance* margo_instance_id;
 
 #define MARGO_INSTANCE_NULL ((margo_instance_id)NULL)
+#define MARGO_DEFAULT_MPLEX_ID 0
 
 
 /**

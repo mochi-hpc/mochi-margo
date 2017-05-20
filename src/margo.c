@@ -833,9 +833,9 @@ int margo_register_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, A
     struct mplex_key key;
     struct mplex_element *element;
 
-    /* mplex_id can't be zero; that's the default handler pool */
-    if(!mplex_id)
-        return(-1);
+    /* nothing to do, we'll let the handler pool take this directly */
+    if(mplex_id == MARGO_DEFAULT_MPLEX_ID)
+        return(0);
 
     memset(&key, 0, sizeof(key));
     key.id = id;
