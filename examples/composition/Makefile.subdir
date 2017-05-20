@@ -1,7 +1,11 @@
-noinst_PROGRAMS += examples/composition/svc-daemon
+noinst_PROGRAMS += examples/composition/composed-svc-daemon examples/composition/composed-benchmark
 
-examples_composition_svc_daemon_SOURCES = \
- examples/composition/svc-daemon.c \
+examples_composition_composed_svc_daemon_SOURCES = \
+ examples/composition/composed-svc-daemon.c \
  examples/composition/data-xfer-service.c \
  examples/composition/delegator-service.c
+
+examples_composition_composed_benchmark_SOURCES = \
+ examples/composition/composed-benchmark.c \
+ examples/composition/composed-client-lib.c
 
