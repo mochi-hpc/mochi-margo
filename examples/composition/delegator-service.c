@@ -24,6 +24,8 @@ static void delegator_read_ult(hg_handle_t handle)
     const struct hg_info *hgi;
     margo_instance_id mid;
     hg_handle_t handle_relay;
+    char relay_addr_string[64];
+    hg_size_t relay_addr_string_sz = 64;
 #if 0
     ABT_thread my_ult;
     ABT_xstream my_xstream; 
@@ -52,6 +54,9 @@ static void delegator_read_ult(hg_handle_t handle)
     assert(hret == HG_SUCCESS);
     /* pass through bulk handle */
     in_relay.bulk_handle = in.bulk_handle; 
+    hret = HG_Addr_to_string(margo_get_class(mid), relay_addr_string, &relay_addr_string_sz, hgi->addr);
+    assert(hret == HG_SUCCESS);
+    in_relay.bulk_relay_addr = relay_addr_string;
     margo_forward(mid, handle_relay, &in_relay);
 
     hret = HG_Get_output(handle_relay, &out_relay);

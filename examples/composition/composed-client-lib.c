@@ -95,6 +95,7 @@ void data_xfer_read(margo_instance_id mid, hg_addr_t svr_addr, void *buffer, hg_
     ret = HG_Bulk_create(hgi->hg_class, 1, &buffer, &buffer_sz, 
         HG_BULK_WRITE_ONLY, &in.bulk_handle);
     assert(ret == 0);
+    in.bulk_relay_addr = NULL;
 
 #if 0
     HG_Set_target_id(handle, mplex_id);
