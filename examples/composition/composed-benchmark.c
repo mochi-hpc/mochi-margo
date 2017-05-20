@@ -91,8 +91,13 @@ int main(int argc, char **argv)
     buffer = calloc(1, buffer_sz);
     assert(buffer);
 
+    printf("DBG: calling data_xfer_read.\n");
     data_xfer_read(mid, svr_addr, buffer, buffer_sz);
+    printf("DBG:    ... DONE.\n");
+    
+    printf("DBG: calling composed_read.\n");
     composed_read(mid, svr_addr, buffer, buffer_sz);
+    printf("DBG:    ... DONE.\n");
 
     /* send one rpc to server to shut it down */
     /* create handle */

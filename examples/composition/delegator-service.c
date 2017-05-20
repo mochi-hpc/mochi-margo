@@ -72,12 +72,28 @@ DEFINE_MARGO_RPC_HANDLER(delegator_read_ult)
 
 int delegator_service_register(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id, hg_addr_t data_xfer_svc_addr)
 {
+    int hret;
+    hg_id_t id;
+    hg_bool_t flag;
+
     /* save addr to relay to */
     g_data_xfer_svc_addr = data_xfer_svc_addr;
 
     /* register client-side of function to relay */
-    g_data_xfer_read_id = MERCURY_REGISTER(margo_get_class(mid), "data_xfer_read",
-        data_xfer_read_in_t, data_xfer_read_out_t, NULL);
+    /* TODO: make this safe; right now if we register again as a client we lose the RPC
+     * handler ptr
+     */
+    hret = HG_Registered_name(margo_get_class(mid), "data_xfer_read", &id, &flag);
+    assert(hret == HG_SUCCESS);
+    if(!flag)
+    {
+        g_data_xfer_read_id = MERCURY_REGISTER(margo_get_class(mid), "data_xfer_read",
+            data_xfer_read_in_t, data_xfer_read_out_t, NULL);
+    }
+    else
+    {
+        g_data_xfer_read_id = id;
+    }
 
     /* register RPC handler */
     MARGO_REGISTER(mid, "delegator_read", delegator_read_in_t, delegator_read_out_t, delegator_read_ult_handler, mplex_id, pool);
