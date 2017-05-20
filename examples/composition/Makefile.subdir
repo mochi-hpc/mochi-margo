@@ -1,0 +1,6 @@
+noinst_PROGRAMS += examples/composition/svc-daemon
+
+examples_composition_svc_daemon_SOURCES = \
+ examples/composition/svc-daemon.c \
+ examples/composition/data-xfer-service.c
+
