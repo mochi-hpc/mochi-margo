@@ -82,6 +82,7 @@ int main(int argc, char **argv)
         NULL);
     /* register service APIs */
     data_xfer_register_client(mid);
+    composed_register_client(mid);
 
     /* find addr for server */
     ret = margo_addr_lookup(mid, argv[1], &svr_addr);
@@ -91,6 +92,7 @@ int main(int argc, char **argv)
     assert(buffer);
 
     data_xfer_read(mid, svr_addr, buffer, buffer_sz);
+    composed_read(mid, svr_addr, buffer, buffer_sz);
 
     /* send one rpc to server to shut it down */
     /* create handle */
