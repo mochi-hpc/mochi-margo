@@ -59,6 +59,9 @@ static void data_xfer_read_ult(hg_handle_t handle)
         g_buffer_bulk_handle, 0, g_buffer_size);
     assert(ret == 0);
 
+    if(in.bulk_relay_addr)
+        HG_Addr_free(margo_get_class(mid), bulk_addr);
+
     HG_Free_input(handle, &in);
 
     hret = HG_Respond(handle, NULL, NULL, &out);
