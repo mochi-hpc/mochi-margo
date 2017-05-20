@@ -87,11 +87,13 @@ int delegator_service_register(margo_instance_id mid, ABT_pool pool, uint32_t mp
     assert(hret == HG_SUCCESS);
     if(!flag)
     {
+        printf("DBG: registering client side data_xfer_read.\n");
         g_data_xfer_read_id = MERCURY_REGISTER(margo_get_class(mid), "data_xfer_read",
             data_xfer_read_in_t, data_xfer_read_out_t, NULL);
     }
     else
     {
+        printf("DBG: NOT registering client side data_xfer_read.\n");
         g_data_xfer_read_id = id;
     }
 

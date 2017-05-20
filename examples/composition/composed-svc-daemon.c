@@ -155,11 +155,11 @@ int main(int argc, char **argv)
     svc = strtok(svc_list, ",");
     while(svc)
     {
-        if(strcmp(svc, "data-xfer"))
+        if(!strcmp(svc, "data-xfer"))
         {
             data_xfer_service_register(mid, *handler_pool, 0);
         }
-        else if(strcmp(svc, "delegator"))
+        else if(!strcmp(svc, "delegator"))
         {
             relay_addr_string = getenv("RELAY_ADDR");
             if(relay_addr_string)
