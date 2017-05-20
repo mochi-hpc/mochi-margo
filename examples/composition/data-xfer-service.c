@@ -45,7 +45,7 @@ static void data_xfer_read_ult(hg_handle_t handle)
     mid = margo_hg_class_to_instance(hgi->hg_class);
 
     /* do bulk transfer from client to server */
-    ret = margo_bulk_transfer(mid, HG_BULK_PULL,
+    ret = margo_bulk_transfer(mid, HG_BULK_PUSH,
         hgi->addr, in.bulk_handle, 0,
         g_buffer_bulk_handle, 0, g_buffer_size);
     assert(ret == 0);
