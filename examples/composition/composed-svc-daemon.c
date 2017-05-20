@@ -7,11 +7,15 @@
 #include <stdio.h>
 #include <assert.h>
 #include <unistd.h>
+#include <string.h>
+#include <stdlib.h>
+
 #include <abt.h>
 #include <abt-snoozer.h>
 #include <margo.h>
 
 #include "data-xfer-service.h"
+#include "delegator-service.h"
 
 /* server program that starts a skeleton for sub-services within
  * this process to register with
@@ -60,15 +64,21 @@ int main(int argc, char **argv)
     char addr_self_string[128];
     hg_size_t addr_self_string_sz = 128;
     ABT_xstream svc1_xstream2;
-    ABT_pool svc1_pool2;
     ABT_pool *handler_pool;
+    char* svc_list;
+    char* svc;
+    hg_addr_t relay_addr = HG_ADDR_NULL;
+    char* relay_addr_string;
 
-    if(argc != 2)
+    if(argc != 3)
     {
-        fprintf(stderr, "Usage: ./server <comma_separated_service_list> <listen_addr>\n");
-        fprintf(stderr, "Example: ./server delegator,data-xfer na+sm://\n");
+        fprintf(stderr, "Usage: ./server <listen_addr> <comma_separated_service_list>\n");
+        fprintf(stderr, "Example: ./server na+sm:// delegator,data-xfer\n");
         return(-1);
     }
+
+    svc_list = strdup(argv[2]);
+    assert(svc_list);
 
     /* boilerplate HG initialization steps */
     /***************************************/
@@ -141,31 +151,27 @@ int main(int argc, char **argv)
     MERCURY_REGISTER(hg_class, "my_shutdown_rpc", void, void,
         my_rpc_shutdown_ult_handler);
 
-#if 0
-    /* register svc1, with mplex_id 1, to execute on the default handler pool
-     * used by Margo
-     */
     handler_pool = margo_get_handler_pool(mid);
-    ret = svc1_register(mid, *handler_pool, 1);
-    assert(ret == 0);
-
-    /* create a dedicated and pool for another instance of svc1 */
-    ret = ABT_snoozer_xstream_create(1, &svc1_pool2, &svc1_xstream2);
-    assert(ret == 0);
-    /* register svc1, with mplex_id 2, to execute on a separate pool.  This
-     * will result in svc1 being registered twice, with the client being able
-     * to dictate which instance they want to target
-     */
-    ret = svc1_register(mid, svc1_pool2, 2);
-    assert(ret == 0);
-
-    /* register svc2, with mplex_id 3, to execute on the default handler pool
-     * used by Margo
-     */
-    handler_pool = margo_get_handler_pool(mid);
-    ret = svc2_register(mid, *handler_pool, 3);
-    assert(ret == 0);
-#endif
+    svc = strtok(svc_list, ",");
+    while(svc)
+    {
+        if(strcmp(svc, "data-xfer"))
+        {
+            data_xfer_service_register(mid, *handler_pool, 0);
+        }
+        else if(strcmp(svc, "delegator"))
+        {
+            relay_addr_string = getenv("RELAY_ADDR");
+            if(relay_addr_string)
+                ret = margo_addr_lookup(mid, relay_addr_string, &relay_addr); 
+            else
+                ret = HG_Addr_self(margo_get_class(mid), &relay_addr);
+            assert(ret);
+            delegator_service_register(mid, *handler_pool, 0, relay_addr);
+        }
+        else
+            assert(0);
+    }
 
     /* shut things down */
     /****************************************/
@@ -182,6 +188,8 @@ int main(int argc, char **argv)
     svc1_deregister(mid, *handler_pool, 1);
     svc1_deregister(mid, svc1_pool2, 2);
     svc2_deregister(mid, *handler_pool, 3);
+    if(relay_addr != HG_ADDR_NULL)
+        HG_Addr_free(margo_get_class(mid, relay_addr);
 #endif
 
     ABT_xstream_join(svc1_xstream2);

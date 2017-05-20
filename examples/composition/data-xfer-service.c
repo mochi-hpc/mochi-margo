@@ -61,7 +61,7 @@ static void data_xfer_read_ult(hg_handle_t handle)
 }
 DEFINE_MARGO_RPC_HANDLER(data_xfer_read_ult)
 
-int data_xfer_register(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id)
+int data_xfer_service_register(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id)
 {
     hg_return_t hret;
 

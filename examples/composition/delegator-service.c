@@ -70,7 +70,7 @@ static void delegator_read_ult(hg_handle_t handle)
 }
 DEFINE_MARGO_RPC_HANDLER(delegator_read_ult)
 
-int delegator_register(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id, hg_addr_t data_xfer_svc_addr)
+int delegator_service_register(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id, hg_addr_t data_xfer_svc_addr)
 {
     /* save addr to relay to */
     g_data_xfer_svc_addr = data_xfer_svc_addr;
