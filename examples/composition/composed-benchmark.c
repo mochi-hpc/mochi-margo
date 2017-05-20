@@ -42,7 +42,10 @@ int main(int argc, char **argv)
      */
     for(i=0; i<11 && argv[1][i] != '\0' && argv[1][i] != ':'; i++)
         proto[i] = argv[1][i];
-    hg_class = HG_Init(proto, HG_FALSE);
+    /* TODO: this is a hack for now; I don't really want this to operate in server mode,
+     * but it seems like it needs to for now for sub-service to be able to get back to it
+     */
+    hg_class = HG_Init(proto, HG_TRUE);
     if(!hg_class)
     {
         fprintf(stderr, "Error: HG_Init()\n");
