@@ -28,12 +28,17 @@ int main(int argc, char **argv)
     hg_addr_t data_xfer_svr_addr = HG_ADDR_NULL;
     hg_handle_t handle;
     char proto[12] = {0};
+    int iterations;
+    double start, end, t1, t2, avg, min=0, max=0;
   
-    if(argc != 3)
+    if(argc != 4)
     {
-        fprintf(stderr, "Usage: ./client <delegator_svr_addr> <data_xfer_svr_addr>\n");
+        fprintf(stderr, "Usage: ./client <delegator_svr_addr> <data_xfer_svr_addr> <iterations>\n");
         return(-1);
     }
+
+    ret = sscanf(argv[3], "%d", &iterations);
+    assert(ret == 1);
        
     /* boilerplate HG initialization steps */
     /***************************************/
@@ -97,15 +102,50 @@ int main(int argc, char **argv)
     buffer = calloc(1, buffer_sz);
     assert(buffer);
 
-    printf("DBG: calling data_xfer_read.\n");
-    data_xfer_read(mid, data_xfer_svr_addr, buffer, buffer_sz);
-    printf("DBG:    ... DONE.\n");
+    /* TODO: this is where benchmark timing would go, probably with iterations */
+    /***************************************************************************/
+
+    sleep(3);
+    printf("# DBG: starting data_xfer_read() benchmark.\n");
+    start = ABT_get_wtime();
+    for(i=0; i<iterations; i++)
+    {
+        t1 = ABT_get_wtime();
+        data_xfer_read(mid, data_xfer_svr_addr, buffer, buffer_sz);
+        t2 = ABT_get_wtime();
+        if(min == 0 || t2-t1<min)
+            min = t2-t1;
+        if(max == 0 || t2-t1>max)
+            max = t2-t1;
+    }
+    end = ABT_get_wtime();
+    avg = (end-start)/((double)iterations);
+    printf("# DBG:    ... DONE.\n");
+    printf("# <op> <min> <avg> <max>\n");
+    printf("direct\t%f\t%f\t%f\n", min, avg, max);
     
     sleep(3);
 
-    printf("DBG: calling composed_read.\n");
-    composed_read(mid, delegator_svr_addr, buffer, buffer_sz, argv[2]);
-    printf("DBG:    ... DONE.\n");
+    printf("# DBG: starting composed_read() benchmark.\n");
+    start = ABT_get_wtime();
+    for(i=0; i<iterations; i++)
+    {
+        t1 = ABT_get_wtime();
+        composed_read(mid, delegator_svr_addr, buffer, buffer_sz, argv[2]);
+        t2 = ABT_get_wtime();
+        if(min == 0 || t2-t1<min)
+            min = t2-t1;
+        if(max == 0 || t2-t1>max)
+            max = t2-t1;
+    }
+    end = ABT_get_wtime();
+    avg = (end-start)/((double)iterations);
+    printf("# DBG:    ... DONE.\n");
+    printf("# <op> <min> <avg> <max>\n");
+    printf("composed\t%f\t%f\t%f\n", min, avg, max);
+    printf("# DBG:    ... DONE.\n");
+    
+    /***************************************************************************/
 
     /* send rpc(s) to shut down server(s) */
     sleep(3);
