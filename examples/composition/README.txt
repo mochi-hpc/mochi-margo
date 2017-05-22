@@ -34,6 +34,9 @@ Shutting down data_xfer server.
 Alternatively, you can run the two services in the same executable, in which case the relay
 will bypass the network layer of Mercury entirely.
 
+<NOTE: if one daemon is used to run both services, then data-xfer must be listed first in
+ the comma-separated list>
+
 ==========================
 
 $ ./composed-svc-daemon na+sm:// data-xfer,delegator
