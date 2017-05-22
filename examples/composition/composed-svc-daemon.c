@@ -189,9 +189,9 @@ int main(int argc, char **argv)
     svc1_deregister(mid, *handler_pool, 1);
     svc1_deregister(mid, svc1_pool2, 2);
     svc2_deregister(mid, *handler_pool, 3);
-    if(relay_addr != HG_ADDR_NULL)
-        HG_Addr_free(margo_get_class(mid, relay_addr);
 #endif
+    if(relay_addr != HG_ADDR_NULL)
+        HG_Addr_free(hg_class, relay_addr);
 
     ABT_finalize();
 
