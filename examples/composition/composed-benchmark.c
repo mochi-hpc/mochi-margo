@@ -101,17 +101,23 @@ int main(int argc, char **argv)
     data_xfer_read(mid, data_xfer_svr_addr, buffer, buffer_sz);
     printf("DBG:    ... DONE.\n");
     
+    sleep(3);
+
     printf("DBG: calling composed_read.\n");
     composed_read(mid, delegator_svr_addr, buffer, buffer_sz, argv[2]);
     printf("DBG:    ... DONE.\n");
 
     /* send rpc(s) to shut down server(s) */
+    sleep(3);
+    printf("Shutting down delegator server.\n");
     ret = HG_Create(hg_context, delegator_svr_addr, my_rpc_shutdown_id, &handle);
     assert(ret == 0);
     margo_forward(mid, handle, NULL);
     HG_Destroy(handle);
     if(strcmp(argv[1], argv[2]))
     {
+        sleep(3);
+        printf("Shutting down data_xfer server.\n");
         ret = HG_Create(hg_context, data_xfer_svr_addr, my_rpc_shutdown_id, &handle);
         assert(ret == 0);
         margo_forward(mid, handle, NULL);
