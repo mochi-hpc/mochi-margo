@@ -10,7 +10,6 @@
 #include "delegator-proto.h"
 #include "delegator-service.h"
 
-static hg_addr_t g_data_xfer_svc_addr = HG_ADDR_NULL;
 static hg_id_t g_data_xfer_read_id = -1;
 
 static void delegator_read_ult(hg_handle_t handle)
@@ -23,9 +22,11 @@ static void delegator_read_ult(hg_handle_t handle)
     int ret;
     const struct hg_info *hgi;
     margo_instance_id mid;
+    hg_addr_t data_xfer_svc_addr;
+
     hg_handle_t handle_relay;
-    char relay_addr_string[64];
-    hg_size_t relay_addr_string_sz = 64;
+    char client_addr_string[64];
+    hg_size_t client_addr_string_sz = 64;
 #if 0
     ABT_thread my_ult;
     ABT_xstream my_xstream; 
@@ -48,15 +49,19 @@ static void delegator_read_ult(hg_handle_t handle)
     out.ret = 0;
 
     mid = margo_hg_class_to_instance(hgi->hg_class);
+
+    hret = margo_addr_lookup(mid, in.data_xfer_svc_addr, &data_xfer_svc_addr);
+    assert(hret == HG_SUCCESS);
     
     /* relay to microservice */
-    hret = HG_Create(margo_get_context(mid), g_data_xfer_svc_addr, g_data_xfer_read_id, &handle_relay);
+    hret = HG_Create(margo_get_context(mid), data_xfer_svc_addr, g_data_xfer_read_id, &handle_relay);
     assert(hret == HG_SUCCESS);
     /* pass through bulk handle */
     in_relay.bulk_handle = in.bulk_handle; 
-    hret = HG_Addr_to_string(margo_get_class(mid), relay_addr_string, &relay_addr_string_sz, hgi->addr);
+    /* get addr of client to relay to data_xfer service */
+    hret = HG_Addr_to_string(margo_get_class(mid), client_addr_string, &client_addr_string_sz, hgi->addr);
     assert(hret == HG_SUCCESS);
-    in_relay.client_addr = relay_addr_string;
+    in_relay.client_addr = client_addr_string;
     margo_forward(mid, handle_relay, &in_relay);
 
     hret = HG_Get_output(handle_relay, &out_relay);
@@ -68,6 +73,7 @@ static void delegator_read_ult(hg_handle_t handle)
     hret = HG_Respond(handle, NULL, NULL, &out);
     assert(hret == HG_SUCCESS);
 
+    HG_Addr_free(margo_get_class(mid), data_xfer_svc_addr);
     HG_Destroy(handle);
     HG_Destroy(handle_relay);
 
@@ -75,14 +81,11 @@ static void delegator_read_ult(hg_handle_t handle)
 }
 DEFINE_MARGO_RPC_HANDLER(delegator_read_ult)
 
-int delegator_service_register(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id, hg_addr_t data_xfer_svc_addr)
+int delegator_service_register(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id)
 {
     int hret;
     hg_id_t id;
     hg_bool_t flag;
-
-    /* save addr to relay to */
-    g_data_xfer_svc_addr = data_xfer_svc_addr;
 
     /* register client-side of function to relay */
     /* TODO: make this safe; right now if we register again as a client we lose the RPC
@@ -110,8 +113,6 @@ int delegator_service_register(margo_instance_id mid, ABT_pool pool, uint32_t mp
 
 void delegator_deregister(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id)
 {
-    HG_Addr_free(margo_get_class(mid), g_data_xfer_svc_addr);
-
     /* TODO: undo what was done in delegator_register() */
     return;
 }

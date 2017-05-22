@@ -66,8 +66,6 @@ int main(int argc, char **argv)
     ABT_pool *handler_pool;
     char* svc_list;
     char* svc;
-    hg_addr_t relay_addr = HG_ADDR_NULL;
-    char* relay_addr_string;
 
     if(argc != 3)
     {
@@ -160,13 +158,7 @@ int main(int argc, char **argv)
         }
         else if(!strcmp(svc, "delegator"))
         {
-            relay_addr_string = getenv("RELAY_ADDR");
-            if(relay_addr_string)
-                ret = margo_addr_lookup(mid, relay_addr_string, &relay_addr); 
-            else
-                ret = HG_Addr_self(margo_get_class(mid), &relay_addr);
-            assert(ret == 0);
-            delegator_service_register(mid, *handler_pool, 0, relay_addr);
+            delegator_service_register(mid, *handler_pool, 0);
         }
         else
             assert(0);
@@ -190,8 +182,6 @@ int main(int argc, char **argv)
     svc1_deregister(mid, svc1_pool2, 2);
     svc2_deregister(mid, *handler_pool, 3);
 #endif
-    if(relay_addr != HG_ADDR_NULL)
-        HG_Addr_free(hg_class, relay_addr);
 
     ABT_finalize();
 

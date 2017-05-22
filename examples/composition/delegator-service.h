@@ -9,7 +9,7 @@
 
 #include <margo.h>
 
-int delegator_service_register(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id, hg_addr_t data_xfer_svc_addr);
+int delegator_service_register(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id);
 void delegator_service_deregister(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id);
 
 #endif /* __DELEGATOR_SERVICE */

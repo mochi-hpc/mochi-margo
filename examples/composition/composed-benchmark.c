@@ -24,13 +24,14 @@ int main(int argc, char **argv)
     margo_instance_id mid;
     hg_context_t *hg_context;
     hg_class_t *hg_class;
-    hg_addr_t svr_addr = HG_ADDR_NULL;
+    hg_addr_t delegator_svr_addr = HG_ADDR_NULL;
+    hg_addr_t data_xfer_svr_addr = HG_ADDR_NULL;
     hg_handle_t handle;
     char proto[12] = {0};
   
-    if(argc != 2)
+    if(argc != 3)
     {
-        fprintf(stderr, "Usage: ./client <server_addr>\n");
+        fprintf(stderr, "Usage: ./client <delegator_svr_addr> <data_xfer_svr_addr>\n");
         return(-1);
     }
        
@@ -87,29 +88,38 @@ int main(int argc, char **argv)
     data_xfer_register_client(mid);
     composed_register_client(mid);
 
-    /* find addr for server */
-    ret = margo_addr_lookup(mid, argv[1], &svr_addr);
+    /* find addrs for servers */
+    ret = margo_addr_lookup(mid, argv[2], &data_xfer_svr_addr);
+    assert(ret == 0);
+    ret = margo_addr_lookup(mid, argv[1], &delegator_svr_addr);
     assert(ret == 0);
 
     buffer = calloc(1, buffer_sz);
     assert(buffer);
 
     printf("DBG: calling data_xfer_read.\n");
-    data_xfer_read(mid, svr_addr, buffer, buffer_sz);
+    data_xfer_read(mid, data_xfer_svr_addr, buffer, buffer_sz);
     printf("DBG:    ... DONE.\n");
     
     printf("DBG: calling composed_read.\n");
-    composed_read(mid, svr_addr, buffer, buffer_sz);
+    composed_read(mid, delegator_svr_addr, buffer, buffer_sz, argv[2]);
     printf("DBG:    ... DONE.\n");
 
-    /* send one rpc to server to shut it down */
-    /* create handle */
-    ret = HG_Create(hg_context, svr_addr, my_rpc_shutdown_id, &handle);
+    /* send rpc(s) to shut down server(s) */
+    ret = HG_Create(hg_context, delegator_svr_addr, my_rpc_shutdown_id, &handle);
     assert(ret == 0);
-
     margo_forward(mid, handle, NULL);
+    HG_Destroy(handle);
+    if(strcmp(argv[1], argv[2]))
+    {
+        ret = HG_Create(hg_context, data_xfer_svr_addr, my_rpc_shutdown_id, &handle);
+        assert(ret == 0);
+        margo_forward(mid, handle, NULL);
+        HG_Destroy(handle);
+    }
 
-    HG_Addr_free(hg_class, svr_addr);
+    HG_Addr_free(hg_class, delegator_svr_addr);
+    HG_Addr_free(hg_class, data_xfer_svr_addr);
 
     /* shut down everything */
     margo_finalize(mid);
