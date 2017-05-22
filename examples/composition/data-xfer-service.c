@@ -21,7 +21,7 @@ static void data_xfer_read_ult(hg_handle_t handle)
     int ret;
     const struct hg_info *hgi;
     margo_instance_id mid;
-    hg_addr_t bulk_addr;
+    hg_addr_t client_addr;
 #if 0
     ABT_thread my_ult;
     ABT_xstream my_xstream; 
@@ -45,22 +45,22 @@ static void data_xfer_read_ult(hg_handle_t handle)
 
     mid = margo_hg_class_to_instance(hgi->hg_class);
 
-    if(!in.bulk_relay_addr)
-        bulk_addr = hgi->addr;
+    if(!in.client_addr)
+        client_addr = hgi->addr;
     else
     {
-        hret = margo_addr_lookup(mid, in.bulk_relay_addr, &bulk_addr);
+        hret = margo_addr_lookup(mid, in.client_addr, &client_addr);
         assert(hret == HG_SUCCESS);
     }
 
     /* do bulk transfer from client to server */
     ret = margo_bulk_transfer(mid, HG_BULK_PUSH,
-        bulk_addr, in.bulk_handle, 0,
+        client_addr, in.bulk_handle, 0,
         g_buffer_bulk_handle, 0, g_buffer_size);
     assert(ret == 0);
 
-    if(in.bulk_relay_addr)
-        HG_Addr_free(margo_get_class(mid), bulk_addr);
+    if(in.client_addr)
+        HG_Addr_free(margo_get_class(mid), client_addr);
 
     HG_Free_input(handle, &in);
 
