@@ -55,8 +55,6 @@ int main(int argc, char **argv)
     margo_instance_id mid;
     hg_context_t *hg_context;
     hg_class_t *hg_class;
-    char proto[12] = {0};
-    int i;
     hg_addr_t addr_self;
     char addr_self_string[128];
     hg_size_t addr_self_string_sz = 128;
@@ -107,9 +105,7 @@ int main(int argc, char **argv)
     }
     HG_Addr_free(hg_class, addr_self);
 
-    for(i=0; i<11 && argv[1][i] != '\0' && argv[1][i] != ':'; i++)
-        proto[i] = argv[1][i];
-    printf("# accepting RPCs on address \"%s://%s\"\n", proto, addr_self_string);
+    printf("# accepting RPCs on address \"%s\"\n", addr_self_string);
 
     /* set up argobots */
     /***************************************/

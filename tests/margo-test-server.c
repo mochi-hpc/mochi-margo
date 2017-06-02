@@ -59,8 +59,6 @@ int main(int argc, char **argv)
     if(opts.hostfile)
     {
         FILE *fp;
-        char proto[12] = {0};
-        int i;
         hg_addr_t addr_self;
         char addr_self_string[128];
         hg_size_t addr_self_string_sz = 128;
@@ -95,9 +93,7 @@ int main(int argc, char **argv)
             return(-1);
         }
 
-        for(i=0; i<11 && opts.listen_addr[i] != '\0' && opts.listen_addr[i] != ':'; i++)
-            proto[i] = opts.listen_addr[i];
-        fprintf(fp, "%s://%s", proto, addr_self_string);
+        fprintf(fp, "%s", addr_self_string);
         fclose(fp);
     }
 
