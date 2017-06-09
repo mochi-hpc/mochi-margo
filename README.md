@@ -1,9 +1,19 @@
 # Margo
-Margo is a library that provides Argobots bindings to the Mercury RPC
-implementation.  See the following for more details about each project:
 
-* https://collab.mcs.anl.gov/display/ARGOBOTS/Argobots+Home
+Margo is a utility library built atop Mercury that simplifies RPC service
+development by providing bindings that can issue concurrent operations
+without using callback functions and without manual invocation of progress
+or trigger function loops.
+
+Margo does this by leveraging the Argobots user-level threading system
+to transparently context switch between blocking operations and progress
+loops while still retaining the performance advantages of Mercury's
+native event-driven progress model.
+
+See the following for more details about Mercury and Argobots: 
+
 * https://mercury-hpc.github.io/
+* https://collab.mcs.anl.gov/display/ARGOBOTS/Argobots+Home
 
 Note that Margo should be compatible with any Mercury transport (NA plugin).  The documentation assumes the use of the NA SM (shared memory) plugin that is built into Mercury for simplicity.  This plugin is only valid for communication between processes on a single node.  See [Using Margo with other Mercury NA plugins](##using-margo-with-other-mercury-na-plugins) for information on other configuration options.
 
