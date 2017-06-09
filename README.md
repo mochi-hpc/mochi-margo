@@ -1,14 +1,16 @@
 # Margo
 
 Margo is a utility library built atop Mercury that simplifies RPC service
-development by providing bindings that can issue concurrent operations
-without using callback functions and without manual invocation of progress
-or trigger function loops.
+development by providing bindings that can issue concurrent operations while
+hiding the complexity of callback functions and progress loops.
 
-Margo does this by leveraging the Argobots user-level threading system
-to transparently context switch between blocking operations and progress
-loops while still retaining the performance advantages of Mercury's
-native event-driven progress model.
+Margo does this by leveraging the Argobots user-level threading system to
+transparently and efficiently context switch when functions are waiting
+on the completion of Margo operations.  Other user-level threads can
+therefore continue to make progress while one or more user-level threads
+are blocked on network resources.  This approach combines the performance
+advantages of Mercury's native event-driven execution model with the
+progamming simplicity of a multi-threaded execution model.
 
 See the following for more details about Mercury and Argobots: 
 
