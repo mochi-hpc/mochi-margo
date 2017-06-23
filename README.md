@@ -1,21 +1,25 @@
 # Margo
 
-Margo is a utility library built atop Mercury that simplifies RPC service
-development by providing bindings that can service concurrent operations while
-hiding the complexity of callback functions and progress loops.
+Margo provides Argobots-aware wrappers to common Mercury library functions.
+It simplifies service development by expressing Mercury operations as
+conventional blocking functions so that the caller does not need to manage
+progress loops or callback functions.
 
-Margo does this by leveraging the Argobots user-level threading system to
-transparently and efficiently context switch when functions are waiting
-on the completion of Margo operations.  Other user-level threads can
-therefore continue to make progress while one or more user-level threads
-are blocked on network resources.  This approach combines the performance
-advantages of Mercury's native event-driven execution model with the
-progamming simplicity of a multi-threaded execution model.
+Internally, Margo suspends callers after issuing a Mercury operation, and
+automatically resumes them when the operation completes.  This allows
+other concurrent user-level threads to make progress while Mercury
+operations are in flight without consuming operating system threads.
+The goal of this design is to combine the performance advantages of
+Mercury's native event-driven execution model with the progamming
+simplicity of a multi-threaded execution model.
 
 See the following for more details about Mercury and Argobots: 
 
 * https://mercury-hpc.github.io/
 * https://collab.mcs.anl.gov/display/ARGOBOTS/Argobots+Home
+
+A companion library called abt-io provides similar wrappers for POSIX I/O
+functions: https://xgitlab.cels.anl.gov/sds/abt-io
 
 Note that Margo should be compatible with any Mercury transport (NA plugin).  The documentation assumes the use of the NA SM (shared memory) plugin that is built into Mercury for simplicity.  This plugin is only valid for communication between processes on a single node.  See [Using Margo with other Mercury NA plugins](##using-margo-with-other-mercury-na-plugins) for information on other configuration options.
 
@@ -149,3 +153,32 @@ also need to specify
 -DBMI_INCLUDE_DIR:PATH=/home/pcarns/working/install/include and -DBMI_LIBRARY:FILEPATH=/home/pcarns/working/install/lib/libbmi.a (adjusting the paths as appropriate for your system).
 
 We do not recommend using any BMI methods besides TCP.  It's usage is very similar to the CCI/TCP examples above, except that "bmi+" should be substituted for "cci+".
+
+## Design details
+
+![Margo architecture](doc/fig/margo-diagram.png)
+
+Margo provides Argobots-aware wrappers to common Mercury library functions
+like HG_Forward(), HG_Addr_lookup(), and HG_Bulk_transfer().  The wrappers
+have the same arguments as their native Mercury counterparts except that no
+callback function is specified.  Each function blocks until the operation 
+is complete.  The above diagram illustrates a typical control flow.
+
+Margo launches a long-running user-level thread internally to drive
+progress on Mercury and execute Mercury callback functions (labeled
+```__margo_progress()``` above).  This thread can be assigned to a
+dedicated Argobots execution stream (i.e., an operating system thread)
+to drive network progress with a dedicated core.  Otherwise it will be
+automatically scheduled when the caller's execution stream is blocked
+waiting for network events as shown in the above diagram.
+
+Argobots eventual constructs are used to suspend and resume user-level
+threads while Mercury operations are in flight.
+
+Margo allows several different threading/multicore configurations:
+* The progress loop can run on a dedicated operating system thread or not
+* Multiple Margo instances (and thus progress loops) can be 
+  executed on different operating system threads
+* (for servers) a single Margo instance can launch RPC handlers
+  on different operating system threads
+
