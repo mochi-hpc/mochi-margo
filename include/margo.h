@@ -11,17 +11,26 @@
 extern "C" {
 #endif
 
+/* This is to prevent the user from usin HG_Register_data
+ * and HG_Registered_data, which are replaced with
+ * margo_register_data and margo_registered_data
+ * respecively.
+ */
+
 #include <mercury_bulk.h>
 #include <mercury.h>
 #include <mercury_macros.h>
 #include <abt.h>
 
+#undef MERCURY_REGISTER
+
 struct margo_instance;
 typedef struct margo_instance* margo_instance_id;
+typedef struct margo_data* margo_data_ptr;
 
 #define MARGO_INSTANCE_NULL ((margo_instance_id)NULL)
 #define MARGO_DEFAULT_MPLEX_ID 0
-
+#define MARGO_RPC_ID_IGNORE ((hg_id_t*)NULL)
 
 /**
  * Initializes margo library.
@@ -97,6 +106,44 @@ hg_context_t* margo_get_context(margo_instance_id mid);
  * @return the Mercury class used in margo_init
  */
 hg_class_t* margo_get_class(margo_instance_id mid);
+
+/**
+ * Register and associate user data to registered function.
+ * When HG_Finalize() is called free_callback (if defined) is called 
+ * to free the registered data.
+ *
+ * \param [in] mid            Margo instance
+ * \param [in] id             registered function ID
+ * \param [in] data           pointer to data
+ * \param [in] free_callback  pointer to free function
+ *
+ * \return HG_SUCCESS or corresponding HG error code
+ */
+hg_return_t margo_register_data(
+    margo_instance_id mid,
+    hg_id_t id,
+    void *data,
+    void (*free_callback)(void *));
+
+/**
+ * Indicate whether margo_register_data() has been called and return associated
+ * data.
+ *
+ * \param [in] mid        Margo instance 
+ * \param [in] id         registered function ID
+ *
+ * \return Pointer to data or NULL
+ */
+void* margo_registered_data(margo_instance_id mid, hg_id_t id);
+
+/**
+ * Get the margo_instance_id from a received RPC handle.
+ *
+ * \param [in] h          RPC handle
+ * 
+ * \return Margo instance
+ */
+margo_instance_id margo_hg_handle_get_instance(hg_handle_t h);
 
 /**
  * Forward an RPC request to a remote host
@@ -184,12 +231,12 @@ void margo_thread_sleep(
     margo_instance_id mid,
     double timeout_ms);
 
-/**
- * Retrive the Margo instance that has been associated with a Mercury class
- * @param [in] cl Mercury class
- * @returns Margo instance on success, NULL on error
+/** 
+ * Registers an RPC with margo
+ * @param [in] mid Margo instance
+ * @param [in] id Mercury RPC identifier
  */
-margo_instance_id margo_hg_class_to_instance(hg_class_t *cl);
+int margo_register(margo_instance_id mid, hg_id_t id);
 
 /** 
  * Registers an RPC with margo that is associated with a multiplexed service
@@ -209,7 +256,11 @@ int margo_register_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, A
  */
 int margo_lookup_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT_pool *pool);
 
-#define MARGO_REGISTER(__mid, __func_name, __in_t, __out_t, __handler, __mplex_id, __pool) do { \
+
+/**
+ * macro that registers a function as an RPC.
+ */
+#define MARGO_REGISTER(__mid, __func_name, __in_t, __out_t, __handler, __rpc_id_ptr) do { \
     hg_return_t __hret; \
     hg_id_t __id; \
     hg_bool_t __flag; \
@@ -217,10 +268,37 @@ int margo_lookup_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT
     __hret = HG_Registered_name(margo_get_class(__mid), __func_name, &__id, &__flag); \
     assert(__hret == HG_SUCCESS); \
     if(!__flag) \
-        __id = MERCURY_REGISTER(margo_get_class(__mid), __func_name, __in_t, __out_t, __handler); \
+        __id = HG_Register_name(margo_get_class(__mid), __func_name,\
+                   BOOST_PP_CAT(hg_proc_, __in_t),\
+                   BOOST_PP_CAT(hg_proc_, __out_t),\
+                   __handler##_handler); \
+    __ret = margo_register(__mid, __id); \
+    assert(__ret == 0); \
+    if(__rpc_id_ptr != MARGO_RPC_ID_IGNORE) { \
+        *(__rpc_id_ptr) = __id; \
+    } \
+} while(0)
+
+#define MARGO_REGISTER_MPLEX(__mid, __func_name, __in_t, __out_t, __handler, __mplex_id, __pool, __rpc_id_ptr) do { \
+    hg_return_t __hret; \
+    hg_id_t __id; \
+    hg_bool_t __flag; \
+    int __ret; \
+    __hret = HG_Registered_name(margo_get_class(__mid), __func_name, &__id, &__flag); \
+    assert(__hret == HG_SUCCESS); \
+    if(!__flag) \
+        __id = HG_Register_name(margo_get_class(__mid), __func_name,\
+                   BOOST_PP_CAT(hg_proc_, __in_t),\
+                   BOOST_PP_CAT(hg_proc_, __out_t),\
+                   __handler##_handler); \
     __ret = margo_register_mplex(__mid, __id, __mplex_id, __pool); \
     assert(__ret == 0); \
+    if(__rpc_id_ptr != MARGO_RPC_ID_IGNORE) { \
+        *(__rpc_id_ptr) = __id; \
+    } \
 } while(0)
+
+#define NULL_handler NULL
 
 /**
  * macro that defines a function to glue an RPC handler to a ult handler
@@ -233,7 +311,10 @@ hg_return_t __name##_handler(hg_handle_t handle) { \
     margo_instance_id __mid; \
     const struct hg_info *__hgi; \
     __hgi = HG_Get_info(handle); \
-    __mid = margo_hg_class_to_instance(__hgi->hg_class); \
+	__mid = margo_hg_handle_get_instance(handle); \
+    if(__mid == MARGO_INSTANCE_NULL) { \
+        return(HG_OTHER_ERROR); \
+    } \
     __ret = margo_lookup_mplex(__mid, __hgi->id, __hgi->target_id, (&__pool)); \
     if(__ret != 0) { \
         return(HG_INVALID_PARAM); \

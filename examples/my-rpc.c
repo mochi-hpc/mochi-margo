@@ -52,7 +52,7 @@ static void my_rpc_ult(hg_handle_t handle)
         &size, HG_BULK_WRITE_ONLY, &bulk_handle);
     assert(ret == 0);
 
-    mid = margo_hg_class_to_instance(hgi->hg_class);
+    mid = margo_hg_handle_get_instance(handle);
 
     /* do bulk transfer from client to server */
     ret = margo_bulk_transfer(mid, HG_BULK_PULL,
@@ -95,7 +95,7 @@ static void my_rpc_shutdown_ult(hg_handle_t handle)
 
     hgi = HG_Get_info(handle);
     assert(hgi);
-    mid = margo_hg_class_to_instance(hgi->hg_class);
+    mid = margo_hg_handle_get_instance(handle);
 
     hret = margo_respond(mid, handle, NULL);
     assert(hret == HG_SUCCESS);

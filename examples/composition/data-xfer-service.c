@@ -43,7 +43,7 @@ static void data_xfer_read_ult(hg_handle_t handle)
 
     out.ret = 0;
 
-    mid = margo_hg_class_to_instance(hgi->hg_class);
+    mid = margo_hg_handle_get_instance(handle);
 
     if(!in.client_addr)
         client_addr = hgi->addr;
@@ -87,7 +87,9 @@ int data_xfer_service_register(margo_instance_id mid, ABT_pool pool, uint32_t mp
     assert(hret == HG_SUCCESS);
 
     /* register RPC handler */
-    MARGO_REGISTER(mid, "data_xfer_read", data_xfer_read_in_t, data_xfer_read_out_t, data_xfer_read_ult_handler, mplex_id, pool);
+    MARGO_REGISTER_MPLEX(mid, "data_xfer_read", 
+        data_xfer_read_in_t, data_xfer_read_out_t, 
+        data_xfer_read_ult, mplex_id, pool, MARGO_RPC_ID_IGNORE);
 
     return(0);
 }

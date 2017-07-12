@@ -95,10 +95,8 @@ int main(int argc, char **argv)
     assert(mid);
 
     /* register RPC */
-    MERCURY_REGISTER(hg_class, "my_rpc", my_rpc_in_t, my_rpc_out_t, 
-        my_rpc_ult_handler);
-    MERCURY_REGISTER(hg_class, "my_shutdown_rpc", void, void, 
-        my_rpc_shutdown_ult_handler);
+    MARGO_REGISTER(mid, "my_rpc", my_rpc_in_t, my_rpc_out_t, my_rpc_ult, MARGO_RPC_ID_IGNORE);
+	MARGO_REGISTER(mid, "my_shutdown_rpc", void, void, my_rpc_shutdown_ult, MARGO_RPC_ID_IGNORE);
 
     /* NOTE: there isn't anything else for the server to do at this point
      * except wait for itself to be shut down.  The

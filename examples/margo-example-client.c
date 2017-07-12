@@ -113,10 +113,8 @@ int main(int argc, char **argv)
     mid = margo_init(0, 0, hg_context);
 
     /* register RPC */
-    my_rpc_id = MERCURY_REGISTER(hg_class, "my_rpc", my_rpc_in_t, my_rpc_out_t, 
-        NULL);
-    my_rpc_shutdown_id = MERCURY_REGISTER(hg_class, "my_shutdown_rpc", void, void, 
-        NULL);
+	MARGO_REGISTER(mid, "my_rpc", my_rpc_in_t, my_rpc_out_t, NULL, &my_rpc_id);
+	MARGO_REGISTER(mid, "my_shutdown_rpc", void, void, NULL, &my_rpc_shutdown_id);
 
     /* find addr for server */
     ret = margo_addr_lookup(mid, argv[1], &svr_addr);
@@ -169,6 +167,8 @@ int main(int argc, char **argv)
     assert(ret == 0);
 
     margo_forward(mid, handle, NULL);
+
+	HG_Destroy(handle);
 
     HG_Addr_free(hg_class, svr_addr);
 

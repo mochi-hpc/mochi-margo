@@ -21,11 +21,11 @@ static hg_id_t svc1_do_other_thing_id = -1;
 int svc1_register_client(margo_instance_id mid)
 {
 
-    svc1_do_thing_id = MERCURY_REGISTER(margo_get_class(mid), "svc1_do_thing", 
-        svc1_do_thing_in_t, svc1_do_thing_out_t, NULL);
+    MARGO_REGISTER(mid, "svc1_do_thing", 
+        svc1_do_thing_in_t, svc1_do_thing_out_t, NULL, &svc1_do_thing_id);
 
-    svc1_do_other_thing_id = MERCURY_REGISTER(margo_get_class(mid), "svc1_do_other_thing", 
-        svc1_do_other_thing_in_t, svc1_do_other_thing_out_t, NULL);
+    MARGO_REGISTER(mid, "svc1_do_other_thing", 
+        svc1_do_other_thing_in_t, svc1_do_other_thing_out_t, NULL, &svc1_do_other_thing_id);
 
     return(0);
 }

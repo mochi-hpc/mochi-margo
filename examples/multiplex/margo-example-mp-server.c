@@ -31,7 +31,7 @@ static void my_rpc_shutdown_ult(hg_handle_t handle)
 
     hgi = HG_Get_info(handle);
     assert(hgi);
-    mid = margo_hg_class_to_instance(hgi->hg_class);
+    mid = margo_hg_handle_get_instance(handle);
 
     hret = margo_respond(mid, handle, NULL);
     assert(hret == HG_SUCCESS);
@@ -135,8 +135,7 @@ int main(int argc, char **argv)
     /* register a shutdown RPC as just a generic handler; not part of a
      * multiplexed service
      */
-    MERCURY_REGISTER(hg_class, "my_shutdown_rpc", void, void,
-        my_rpc_shutdown_ult_handler);
+    MARGO_REGISTER(hg_class, "my_shutdown_rpc", void, void, my_rpc_shutdown_ult, MARGO_RPC_ID_IGNORE);
 
     /* register svc1, with mplex_id 1, to execute on the default handler pool
      * used by Margo

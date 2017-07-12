@@ -77,8 +77,7 @@ int main(int argc, char **argv)
     mid = margo_init(0, 0, hg_context);
 
     /* register core RPC */
-    my_rpc_shutdown_id = MERCURY_REGISTER(hg_class, "my_shutdown_rpc", void, void, 
-        NULL);
+    MARGO_REGISTER(mid, "my_shutdown_rpc", void, void, NULL, &my_rpc_shutdown_id);
     /* register service APIs */
     svc1_register_client(mid);
     svc2_register_client(mid);

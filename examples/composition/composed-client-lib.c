@@ -22,8 +22,8 @@ static hg_id_t data_xfer_read_id = -1;
 int composed_register_client(margo_instance_id mid)
 {
 
-    delegator_read_id = MERCURY_REGISTER(margo_get_class(mid), "delegator_read", 
-        delegator_read_in_t, delegator_read_out_t, NULL);
+	MARGO_REGISTER(mid, "delegator_read", 
+        delegator_read_in_t, delegator_read_out_t, NULL, &delegator_read_id);
 
     return(0);
 }
@@ -31,8 +31,8 @@ int composed_register_client(margo_instance_id mid)
 int data_xfer_register_client(margo_instance_id mid)
 {
 
-    data_xfer_read_id = MERCURY_REGISTER(margo_get_class(mid), "data_xfer_read", 
-        data_xfer_read_in_t, data_xfer_read_out_t, NULL);
+	MARGO_REGISTER(mid, "data_xfer_read", 
+        data_xfer_read_in_t, data_xfer_read_out_t, NULL, &data_xfer_read_id);
 
     return(0);
 }

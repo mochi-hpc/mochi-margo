@@ -56,16 +56,8 @@ struct margo_instance
     ABT_mutex finalize_mutex;
     ABT_cond finalize_cond;
 
-    int table_index;
-
     /* hash table to track multiplexed rpcs registered with margo */
     struct mplex_element *mplex_table;
-};
-
-struct margo_handler_mapping
-{
-    hg_class_t *class;
-    margo_instance_id mid;
 };
 
 struct margo_cb_arg
@@ -75,12 +67,16 @@ struct margo_cb_arg
     char in_pool;
 };
 
-#define MAX_HANDLER_MAPPING 8
-static int handler_mapping_table_size = 0;
-static struct margo_handler_mapping handler_mapping_table[MAX_HANDLER_MAPPING] = {0};
+struct margo_rpc_data
+{
+	margo_instance_id mid;
+	void* user_data;
+	void (*user_free_callback)(void *);
+};
 
 static void hg_progress_fn(void* foo);
 static int margo_xstream_is_in_progress_pool(margo_instance_id mid);
+static void margo_rpc_data_free(void* ptr);
 
 struct handler_entry
 {
@@ -167,9 +163,6 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
     int ret;
     struct margo_instance *mid;
 
-    if(handler_mapping_table_size >= MAX_HANDLER_MAPPING)
-        return(MARGO_INSTANCE_NULL);
-
     mid = malloc(sizeof(*mid));
     if(!mid)
         return(MARGO_INSTANCE_NULL);
@@ -200,11 +193,6 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
         free(mid);
         return(MARGO_INSTANCE_NULL);
     }
-
-    handler_mapping_table[handler_mapping_table_size].mid = mid;
-    handler_mapping_table[handler_mapping_table_size].class = mid->hg_class;
-    mid->table_index = handler_mapping_table_size;
-    handler_mapping_table_size++;
 
     return mid;
 }
@@ -248,12 +236,6 @@ void margo_finalize(margo_instance_id mid)
     /* wait for it to shutdown cleanly */
     ABT_thread_join(mid->hg_progress_tid);
     ABT_thread_free(&mid->hg_progress_tid);
-
-    for(i=mid->table_index; i<(handler_mapping_table_size-1); i++)
-    {
-        handler_mapping_table[i] = handler_mapping_table[i+1];
-    }
-    handler_mapping_table_size--;
 
     ABT_mutex_lock(mid->finalize_mutex);
     mid->finalize_flag = 1;
@@ -411,6 +393,37 @@ hg_class_t* margo_get_class(margo_instance_id mid)
     return(mid->hg_class);
 }
 
+hg_return_t margo_register_data(
+    margo_instance_id mid,
+    hg_id_t id,
+    void *data,
+    void (*free_callback)(void *)) 
+{
+	struct margo_rpc_data* margo_data 
+		= (struct margo_rpc_data*) HG_Registered_data(margo_get_class(mid), id);
+	if(!margo_data) return HG_OTHER_ERROR;
+	margo_data->user_data = data;
+	margo_data->user_free_callback = free_callback;
+	return HG_SUCCESS;
+}
+
+void* margo_registered_data(margo_instance_id mid, hg_id_t id)
+{
+	struct margo_rpc_data* data
+		= (struct margo_rpc_data*) HG_Registered_data(margo_get_class(mid), id);
+	if(!data) return NULL;
+	else return data->user_data;
+}
+
+margo_instance_id margo_hg_handle_get_instance(hg_handle_t h)
+{
+	const struct hg_info* info = HG_Get_info(h);
+	if(!info) return MARGO_INSTANCE_NULL;
+	struct margo_rpc_data* data = 
+		(struct margo_rpc_data*) HG_Registered_data(info->hg_class, info->id);
+	if(!data) return MARGO_INSTANCE_NULL;
+	return data->mid;
+}
 
 static hg_return_t margo_cb(const struct hg_cb_info *info)
 {
@@ -772,18 +785,6 @@ void margo_thread_sleep(
     return;
 }
 
-margo_instance_id margo_hg_class_to_instance(hg_class_t *cl)
-{
-    int i;
-
-    for(i=0; i<handler_mapping_table_size; i++)
-    {
-        if(handler_mapping_table[i].class == cl)
-            return(handler_mapping_table[i].mid);
-    }
-    return(NULL);
-}
-
 /* returns 1 if current xstream is in the progress pool, 0 if not */
 static int margo_xstream_is_in_progress_pool(margo_instance_id mid)
 {
@@ -800,6 +801,15 @@ static int margo_xstream_is_in_progress_pool(margo_instance_id mid)
         return(1);
     else
         return(0);
+}
+
+static void margo_rpc_data_free(void* ptr)
+{
+	struct margo_rpc_data* data = (struct margo_rpc_data*) ptr;
+	if(data->user_data && data->user_free_callback) {
+		data->user_free_callback(data->user_data);
+	}
+	free(ptr);
 }
 
 int margo_lookup_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT_pool *pool)
@@ -828,10 +838,30 @@ int margo_lookup_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT
     return(0);
 }
 
+int margo_register(margo_instance_id mid, hg_id_t id)
+{
+	/* register the margo data with the RPC */
+	struct margo_rpc_data* margo_data = (struct margo_rpc_data*)malloc(sizeof(struct margo_rpc_data));
+	margo_data->mid = mid;
+	margo_data->user_data = NULL;
+	margo_data->user_free_callback = NULL;
+	hg_return_t ret = HG_Register_data(margo_get_class(mid), id, margo_data, margo_rpc_data_free);
+	return ret;
+}
+
 int margo_register_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT_pool pool)
 {
     struct mplex_key key;
     struct mplex_element *element;
+
+	/* register the margo data with the RPC */
+	struct margo_rpc_data* margo_data = (struct margo_rpc_data*)malloc(sizeof(struct margo_rpc_data));
+	margo_data->mid = mid;
+	margo_data->user_data = NULL;
+	margo_data->user_free_callback = NULL;
+	hg_return_t ret = HG_Register_data(margo_get_class(mid), id, margo_data, margo_rpc_data_free);
+	if(ret != HG_SUCCESS) 
+		return ret;
 
     /* nothing to do, we'll let the handler pool take this directly */
     if(mplex_id == MARGO_DEFAULT_MPLEX_ID)

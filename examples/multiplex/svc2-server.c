@@ -47,7 +47,7 @@ static void svc2_do_thing_ult(hg_handle_t handle)
         &size, HG_BULK_WRITE_ONLY, &bulk_handle);
     assert(ret == 0);
 
-    mid = margo_hg_class_to_instance(hgi->hg_class);
+    mid = margo_hg_handle_get_instance(handle);
 
     /* do bulk transfer from client to server */
     ret = margo_bulk_transfer(mid, HG_BULK_PULL,
@@ -106,7 +106,7 @@ static void svc2_do_other_thing_ult(hg_handle_t handle)
         &size, HG_BULK_WRITE_ONLY, &bulk_handle);
     assert(ret == 0);
 
-    mid = margo_hg_class_to_instance(hgi->hg_class);
+    mid = margo_hg_handle_get_instance(handle);
 
     /* do bulk transfer from client to server */
     ret = margo_bulk_transfer(mid, HG_BULK_PULL,
@@ -129,8 +129,12 @@ DEFINE_MARGO_RPC_HANDLER(svc2_do_other_thing_ult)
 
 int svc2_register(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id)
 {
-    MARGO_REGISTER(mid, "svc2_do_thing", svc2_do_thing_in_t, svc2_do_thing_out_t, svc2_do_thing_ult_handler, mplex_id, pool);
-    MARGO_REGISTER(mid, "svc2_do_other_thing", svc2_do_other_thing_in_t, svc2_do_other_thing_out_t, svc2_do_other_thing_ult_handler, mplex_id, pool);
+    MARGO_REGISTER_MPLEX(mid, "svc2_do_thing", 
+        svc2_do_thing_in_t, svc2_do_thing_out_t, 
+        svc2_do_thing_ult, mplex_id, pool, MARGO_RPC_ID_IGNORE);
+    MARGO_REGISTER_MPLEX(mid, "svc2_do_other_thing", 
+        svc2_do_other_thing_in_t, svc2_do_other_thing_out_t, 
+        svc2_do_other_thing_ult, mplex_id, pool, MARGO_RPC_ID_IGNORE);
    
     return(0);
 }

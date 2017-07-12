@@ -48,7 +48,7 @@ static void delegator_read_ult(hg_handle_t handle)
 
     out.ret = 0;
 
-    mid = margo_hg_class_to_instance(hgi->hg_class);
+    mid = margo_hg_handle_get_instance(handle);
 
     hret = margo_addr_lookup(mid, in.data_xfer_svc_addr, &data_xfer_svc_addr);
     assert(hret == HG_SUCCESS);
@@ -87,11 +87,13 @@ int delegator_service_register(margo_instance_id mid, ABT_pool pool, uint32_t mp
     /* NOTE: this RPC may already be registered if this process has already registered a
      * data-xfer service
      */
-    g_data_xfer_read_id = MERCURY_REGISTER(margo_get_class(mid), "data_xfer_read",
-        data_xfer_read_in_t, data_xfer_read_out_t, NULL);
+	MARGO_REGISTER(mid, "data_xfer_read",
+        data_xfer_read_in_t, data_xfer_read_out_t, NULL, &g_data_xfer_read_id);
 
     /* register RPC handler */
-    MARGO_REGISTER(mid, "delegator_read", delegator_read_in_t, delegator_read_out_t, delegator_read_ult_handler, mplex_id, pool);
+    MARGO_REGISTER_MPLEX(mid, "delegator_read", 
+        delegator_read_in_t, delegator_read_out_t, 
+        delegator_read_ult, mplex_id, pool, MARGO_RPC_ID_IGNORE);
 
     return(0);
 }
