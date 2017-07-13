@@ -209,6 +209,24 @@ int margo_register_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, A
  */
 int margo_lookup_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT_pool *pool);
 
+/**
+ * Enables diagnostic collection on specified Margo instance
+ *
+ * @param [in] mid Margo instance
+ * @returns void
+ */
+void margo_diag_start(margo_instance_id mid);
+
+/**
+ * Appends diagnostic statistics (enabled via margo_diag_start()) to specified 
+ * output file.
+ *
+ * @param [in] mid Margo instance
+ * @param [in] file output file ("-" for stdout)
+ * @returns void
+ */
+void margo_diag_dump(margo_instance_id mid, const char* file);
+
 #define MARGO_REGISTER(__mid, __func_name, __in_t, __out_t, __handler, __mplex_id, __pool) do { \
     hg_return_t __hret; \
     hg_id_t __id; \

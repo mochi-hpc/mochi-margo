@@ -102,6 +102,8 @@ static void my_rpc_shutdown_ult(hg_handle_t handle)
 
     HG_Destroy(handle);
 
+    margo_diag_dump(mid, "-");
+
     /* NOTE: we assume that the server daemon is using
      * margo_wait_for_finalize() to suspend until this RPC executes, so there
      * is no need to send any extra signal to notify it.
