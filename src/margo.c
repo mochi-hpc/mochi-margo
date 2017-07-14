@@ -385,7 +385,14 @@ static void hg_progress_fn(void* foo)
              * to make sure that this ULT is the lowest priority in that
              * scenario.
              */
+            if(diag_enabled) tm1 = ABT_get_wtime();
             ret = HG_Progress(mid->hg_context, 0);
+            if(diag_enabled)
+            {
+                tm2 = ABT_get_wtime();
+                __DIAG_UPDATE(mid->diag_progress_elapsed_zero_timeout, (tm2-tm1));
+                __DIAG_UPDATE(mid->diag_progress_timeout_value, 0);
+            }
             if(ret == HG_SUCCESS)
             {
                 /* Mercury completed something; loop around to trigger
@@ -423,7 +430,18 @@ static void hg_progress_fn(void* foo)
                     hg_progress_timeout = 0;
                 }
             }
+            if(diag_enabled) tm1 = ABT_get_wtime();
             ret = HG_Progress(mid->hg_context, hg_progress_timeout);
+            if(diag_enabled)
+            {
+                tm2 = ABT_get_wtime();
+                if(hg_progress_timeout == 0)
+                    __DIAG_UPDATE(mid->diag_progress_elapsed_zero_timeout, (tm2-tm1));
+                else
+                    __DIAG_UPDATE(mid->diag_progress_elapsed_nonzero_timeout, (tm2-tm1));
+                    
+                __DIAG_UPDATE(mid->diag_progress_timeout_value, hg_progress_timeout);
+            }
             if(ret != HG_SUCCESS && ret != HG_TIMEOUT)
             {
                 /* TODO: error handling */
@@ -904,9 +922,16 @@ void margo_diag_start(margo_instance_id mid)
     mid->diag_enabled = 1;
 }
 
-static void print_diag_data(FILE *file, const char* name, struct diag_data *data)
+static void print_diag_data(FILE *file, const char* name, const char *description, struct diag_data *data)
 {
-    fprintf(file, "%s\t%.9f\t%.9f\t%.9f\t%d\n", name, data->cumulative/data->count, data->min, data->max, data->count);
+    double avg;
+
+    fprintf(file, "# %s\n", description);
+    if(data->count != 0)
+        avg = data->cumulative/data->count;
+    else
+        avg = 0;
+    fprintf(file, "%s\t%.9f\t%.9f\t%.9f\t%d\n", name, avg, data->min, data->max, data->count);
     return;
 }
 
@@ -940,7 +965,18 @@ void margo_diag_dump(margo_instance_id mid, const char* file)
     fprintf(outfile, "# Margo diagnostics\n");
     fprintf(outfile, "# %s\n", ctime(&ltime));
     fprintf(outfile, "# <stat>\t<avg>\t<min>\t<max>\t<count>\n");
-    print_diag_data(outfile, "trigger_elapsed", &mid->diag_trigger_elapsed);
+    print_diag_data(outfile, "trigger_elapsed", 
+        "Time consumed by HG_Trigger()", 
+        &mid->diag_trigger_elapsed);
+    print_diag_data(outfile, "progress_elapsed_zero_timeout", 
+        "Time consumed by HG_Progress() when called with timeout==0", 
+        &mid->diag_progress_elapsed_zero_timeout);
+    print_diag_data(outfile, "progress_elapsed_nonzero_timeout", 
+        "Time consumed by HG_Progress() when called with timeout!=0", 
+        &mid->diag_progress_elapsed_nonzero_timeout);
+    print_diag_data(outfile, "progress_timeout_value", 
+        "Timeout values passed to HG_Progress()", 
+        &mid->diag_progress_timeout_value);
 
     if(outfile != stdout)
         fclose(outfile);
