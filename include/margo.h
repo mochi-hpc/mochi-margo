@@ -223,9 +223,11 @@ void margo_diag_start(margo_instance_id mid);
  *
  * @param [in] mid Margo instance
  * @param [in] file output file ("-" for stdout)
+ * @param [in] uniquify flag indicating if file name should have additional
+ *   information added to it to make output from different processes unique
  * @returns void
  */
-void margo_diag_dump(margo_instance_id mid, const char* file);
+void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify);
 
 #define MARGO_REGISTER(__mid, __func_name, __in_t, __out_t, __handler, __mplex_id, __pool) do { \
     hg_return_t __hret; \

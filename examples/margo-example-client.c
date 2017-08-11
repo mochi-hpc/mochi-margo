@@ -176,7 +176,7 @@ int main(int argc, char **argv)
     HG_Addr_free(hg_class, svr_addr);
 
     /* shut down everything */
-    margo_diag_dump(mid, "-");
+    margo_diag_dump(mid, "-", 0);
     margo_finalize(mid);
     
     ABT_finalize();

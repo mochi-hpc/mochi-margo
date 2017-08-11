@@ -935,12 +935,28 @@ static void print_diag_data(FILE *file, const char* name, const char *descriptio
     return;
 }
 
-void margo_diag_dump(margo_instance_id mid, const char* file)
+void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
 {
     FILE *outfile;
     time_t ltime;
+    char revised_file_name[256] = {0};
 
     assert(mid->diag_enabled);
+
+    if(uniquify)
+    {
+        char hostname[128] = {0};
+        int pid;
+
+        gethostname(hostname, 128);
+        pid = getpid();
+
+        sprintf(revised_file_name, "%s-%s-%d", file, hostname, pid);
+    }
+    else
+    {
+        sprintf(revised_file_name, "%s", file);
+    }
 
     if(strcmp("-", file) == 0)
     {
@@ -948,7 +964,7 @@ void margo_diag_dump(margo_instance_id mid, const char* file)
     }
     else
     {
-        outfile = fopen(file, "a");
+        outfile = fopen(revised_file_name, "a");
         if(!outfile)
         {
             perror("fopen");

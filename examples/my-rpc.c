@@ -102,7 +102,7 @@ static void my_rpc_shutdown_ult(hg_handle_t handle)
 
     HG_Destroy(handle);
 
-    margo_diag_dump(mid, "-");
+    margo_diag_dump(mid, "-", 0);
 
     /* NOTE: we assume that the server daemon is using
      * margo_wait_for_finalize() to suspend until this RPC executes, so there
