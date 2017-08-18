@@ -34,6 +34,8 @@ typedef struct margo_data* margo_data_ptr;
 
 /**
  * Initializes margo library.
+ * @param [in] addr_str            Mercury host address with port number
+ * @param [in] listen_flag         Boolean flag to listen for incoming connections
  * @param [in] use_progress_thread Boolean flag to use a dedicated thread for
  *                                 running Mercury's progress loop. If false,
  *                                 it will run in the caller's thread context.
@@ -45,7 +47,6 @@ typedef struct margo_data* margo_data_ptr;
  *                                 of 0. A value of -1 directs Margo to use 
  *                                 the same execution context as that used 
  *                                 for Mercury progress.
- * @param [in] hg_context
  * @returns margo instance id on success, MARGO_INSTANCE_NULL upon error
  *
  * NOTE: Servers (processes expecting to service incoming RPC requests) must
@@ -53,8 +54,11 @@ typedef struct margo_data* margo_data_ptr;
  * call margo_wait_for_finalize() after margo_init() to relinguish control to 
  * Margo.
  */
-margo_instance_id margo_init(int use_progress_thread, int rpc_thread_count,
-    hg_context_t *hg_context);
+margo_instance_id margo_init(
+    const char *addr_str,
+    int listen_flag,
+    int use_progress_thread,
+    int rpc_thread_count);
 
 /**
  * Initializes margo library from given argobots and Mercury instances.
@@ -63,7 +67,9 @@ margo_instance_id margo_init(int use_progress_thread, int rpc_thread_count,
  * @param [in] hg_context Mercury context
  * @returns margo instance id on success, MARGO_INSTANCE_NULL upon error
  */
-margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
+margo_instance_id margo_init_pool(
+    ABT_pool progress_pool,
+    ABT_pool handler_pool,
     hg_context_t *hg_context);
 
 /**
