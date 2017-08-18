@@ -90,28 +90,42 @@ void margo_finalize(margo_instance_id mid);
  */
 void margo_wait_for_finalize(margo_instance_id mid);
 
-/**
- * Retrieve the abt_handler pool that was associated with the instance at 
- *    initialization time
+/** 
+ * Registers an RPC with margo
  * @param [in] mid Margo instance
+ * @param [in] id Mercury RPC identifier
  */
-ABT_pool* margo_get_handler_pool(margo_instance_id mid);
+int margo_register(margo_instance_id mid, hg_id_t id);
 
-/**
- * Retrieve the Mercury context that was associated with this instance at
- *    initialization time
+/** 
+ * Registers an RPC with margo that is associated with a multiplexed service
  * @param [in] mid Margo instance
- * @return the Mercury context used in margo_init
+ * @param [in] id Mercury RPC identifier
+ * @param [in] mplex_id multiplexing identifier
+ * @param [in] pool Argobots pool the handler will execute in
  */
-hg_context_t* margo_get_context(margo_instance_id mid);
+int margo_register_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT_pool pool);
 
-/**
- * Retrieve the Mercury class that was associated with this instance at
- *    initialization time
- * @param [in] mid Margo instance
- * @return the Mercury class used in margo_init
+/*
+ * Indicate whether HG_Register_name() has been called for the RPC specified by
+ * func_name.
+ *
+ * \param hg_class [IN]         pointer to HG class
+ * \param func_name [IN]        function name
+ * \param id [OUT]              registered RPC ID
+ * \param flag [OUT]            pointer to boolean
+ *
+ * \return HG_SUCCESS or corresponding HG error code
  */
-hg_class_t* margo_get_class(margo_instance_id mid);
+/* XXX
+HG_EXPORT hg_return_t
+HG_Registered_name(
+        hg_class_t *hg_class,
+        const char *func_name,
+        hg_id_t *id,
+        hg_bool_t *flag
+        );
+*/
 
 /**
  * Register and associate user data to registered function.
@@ -143,13 +157,261 @@ hg_return_t margo_register_data(
 void* margo_registered_data(margo_instance_id mid, hg_id_t id);
 
 /**
- * Get the margo_instance_id from a received RPC handle.
+ * Disable response for a given RPC ID. This allows an origin process to send an
+ * RPC to a target without waiting for a response. The RPC completes locally and
+ * the callback on the origin is therefore pushed to the completion queue once
+ * the RPC send is completed. By default, all RPCs expect a response to
+ * be sent back.
  *
- * \param [in] h          RPC handle
- * 
- * \return Margo instance
+ * \param hg_class [IN]         pointer to HG class
+ * \param id [IN]               registered function ID
+ * \param disable [IN]          boolean (HG_TRUE to disable
+ *                                       HG_FALSE to re-enable)
+ *
+ * \return HG_SUCCESS or corresponding HG error code
  */
-margo_instance_id margo_hg_handle_get_instance(hg_handle_t h);
+/* XXX
+HG_EXPORT hg_return_t
+HG_Registered_disable_response(
+        hg_class_t *hg_class,
+        hg_id_t id,
+        hg_bool_t disable
+        );
+*/
+
+/**
+ * Lookup an addr from a peer address/name.
+ * @param [in] name             lookup name
+ * @param [out] addr            return address
+ * @returns HG_SUCCESS on success
+ */
+hg_return_t margo_addr_lookup(
+    margo_instance_id mid,
+    const char   *name,
+    hg_addr_t    *addr);
+
+/**
+ * Free the addr from the list of peers.
+ *
+ * \param hg_class [IN]         pointer to HG class
+ * \param addr [IN]             abstract address
+ *
+ * \return HG_SUCCESS or corresponding HG error code
+ */
+/* XXX
+HG_EXPORT hg_return_t
+HG_Addr_free(
+        hg_class_t *hg_class,
+        hg_addr_t   addr
+        );
+*/
+
+/**
+ * Access self address. Address must be freed with HG_Addr_free().
+ *
+ * \param hg_class [IN]         pointer to HG class
+ * \param addr [OUT]            pointer to abstract address
+ *
+ * \return HG_SUCCESS or corresponding HG error code
+ */
+/* XXX 
+HG_EXPORT hg_return_t
+HG_Addr_self(
+        hg_class_t *hg_class,
+        hg_addr_t  *addr
+        );
+*/
+
+/**
+ * Duplicate an existing HG abstract address. The duplicated address can be
+ * stored for later use and the origin address be freed safely. The duplicated
+ * address must be freed with HG_Addr_free().
+ *
+ * \param hg_class [IN]         pointer to HG class
+ * \param addr [IN]             abstract address
+ * \param new_addr [OUT]        pointer to abstract address
+ *
+ * \return HG_SUCCESS or corresponding HG error code
+ */
+/* XXX
+HG_EXPORT hg_return_t
+HG_Addr_dup(
+        hg_class_t *hg_class,
+        hg_addr_t   addr,
+        hg_addr_t  *new_addr
+        );
+*/
+
+/**
+ * Convert an addr to a string (returned string includes the terminating
+ * null byte '\0'). If buf is NULL, the address is not converted and only
+ * the required size of the buffer is returned. If the input value passed
+ * through buf_size is too small, HG_SIZE_ERROR is returned and the buf_size
+ * output is set to the minimum size required.
+ *
+ * \param hg_class [IN]         pointer to HG class
+ * \param buf [IN/OUT]          pointer to destination buffer
+ * \param buf_size [IN/OUT]     pointer to buffer size
+ * \param addr [IN]             abstract address
+ *
+ * \return HG_SUCCESS or corresponding HG error code
+ */
+/* XXX
+HG_EXPORT hg_return_t
+HG_Addr_to_string(
+        hg_class_t *hg_class,
+        char       *buf,
+        hg_size_t  *buf_size,
+        hg_addr_t   addr
+        );
+*/
+
+/**
+ * Initiate a new HG RPC using the specified function ID and the local/remote
+ * target defined by addr. The HG handle created can be used to query input
+ * and output, as well as issuing the RPC by calling HG_Forward().
+ * After completion the handle must be freed using HG_Destroy().
+ *
+ * \param context [IN]          pointer to HG context
+ * \param addr [IN]             abstract network address of destination
+ * \param id [IN]               registered function ID
+ * \param handle [OUT]          pointer to HG handle
+ *
+ * \return HG_SUCCESS or corresponding HG error code
+ */
+/* XXX
+HG_EXPORT hg_return_t
+HG_Create(
+        hg_context_t *context,
+        hg_addr_t addr,
+        hg_id_t id,
+        hg_handle_t *handle
+        );
+*/
+
+/**
+ * Destroy HG handle. Decrement reference count, resources associated to the
+ * handle are freed when the reference count is null.
+ *
+ * \param handle [IN]           HG handle
+ *
+ * \return HG_SUCCESS or corresponding HG error code
+ */
+/* XXX
+HG_EXPORT hg_return_t
+HG_Destroy(
+        hg_handle_t handle
+        );
+*/
+
+/**
+ * Increment ref count on handle.
+ *
+ * \param handle [IN]           HG handle
+ *
+ * \return HG_SUCCESS or corresponding HG error code
+ */
+/* XXX
+HG_EXPORT hg_return_t
+HG_Ref_incr(
+        hg_handle_t hg_handle
+        );
+*/
+
+/**
+ * Get info from handle.
+ *
+ * \remark Users must call HG_Addr_dup() to safely re-use the addr field.
+ *
+ * \param handle [IN]           HG handle
+ *
+ * \return Pointer to info or NULL in case of failure
+ */
+/* XXX
+HG_EXPORT const struct hg_info *
+HG_Get_info(
+        hg_handle_t handle
+        );
+*/
+
+/**
+ * Get input from handle (requires registration of input proc to deserialize
+ * parameters). Input must be freed using HG_Free_input().
+ *
+ * \remark This is equivalent to:
+ *   - HG_Core_get_input()
+ *   - Call hg_proc to deserialize parameters
+ *
+ * \param handle [IN]           HG handle
+ * \param in_struct [IN/OUT]    pointer to input structure
+ *
+ * \return HG_SUCCESS or corresponding HG error code
+ */
+/* XXX
+HG_EXPORT hg_return_t
+HG_Get_input(
+        hg_handle_t handle,
+        void *in_struct
+        );
+*/
+
+/**
+ * Free resources allocated when deserializing the input.
+ * User may copy parameters contained in the input structure before calling
+ * HG_Free_input().
+ *
+ * \param handle [IN]           HG handle
+ * \param in_struct [IN/OUT]    pointer to input structure
+ *
+ * \return HG_SUCCESS or corresponding HG error code
+ */
+/* XXX
+HG_EXPORT hg_return_t
+HG_Free_input(
+        hg_handle_t handle,
+        void *in_struct
+        );
+*/
+
+/**
+ * Get output from handle (requires registration of output proc to deserialize
+ * parameters). Output must be freed using HG_Free_output().
+ *
+ * \remark This is equivalent to:
+ *   - HG_Core_get_output()
+ *   - Call hg_proc to deserialize parameters
+ *
+ *
+ * \param handle [IN]           HG handle
+ * \param out_struct [IN/OUT]   pointer to output structure
+ *
+ * \return HG_SUCCESS or corresponding HG error code
+ */
+/* XXX
+HG_EXPORT hg_return_t
+HG_Get_output(
+        hg_handle_t handle,
+        void *out_struct
+        );
+*/
+
+/**
+ * Free resources allocated when deserializing the output.
+ * User may copy parameters contained in the output structure before calling
+ * HG_Free_output().
+ *
+ * \param handle [IN]           HG handle
+ * \param out_struct [IN/OUT]   pointer to input structure
+ *
+ * \return HG_SUCCESS or corresponding HG error code
+ */
+/* XXX
+HG_EXPORT hg_return_t
+HG_Free_output(
+        hg_handle_t handle,
+        void *out_struct
+        );
+*/
 
 /**
  * Forward an RPC request to a remote host
@@ -195,6 +457,20 @@ hg_return_t margo_respond(
     hg_handle_t handle,
     void *out_struct);
 
+/**
+ * Cancel an ongoing operation.
+ *
+ * \param handle [IN]           HG handle
+ *
+ * \return HG_SUCCESS or corresponding HG error code
+ */
+/* XXX
+HG_EXPORT hg_return_t
+HG_Cancel(
+        hg_handle_t handle
+        );
+*/
+
 /** 
  * Perform a bulk transfer
  * @param [in] mid Margo instance
@@ -217,16 +493,39 @@ hg_return_t margo_bulk_transfer(
     size_t local_offset,
     size_t size);
 
+/* XXX BULK */
+
 /**
- * address lookup
- * @param [in] name             lookup name
- * @param [out] addr            return address
- * @returns HG_SUCCESS on success
+ * Retrieve the abt_handler pool that was associated with the instance at 
+ *    initialization time
+ * @param [in] mid Margo instance
  */
-hg_return_t margo_addr_lookup(
-    margo_instance_id mid,
-    const char   *name,
-    hg_addr_t    *addr);
+ABT_pool* margo_get_handler_pool(margo_instance_id mid);
+
+/**
+ * Retrieve the Mercury context that was associated with this instance at
+ *    initialization time
+ * @param [in] mid Margo instance
+ * @return the Mercury context used in margo_init
+ */
+hg_context_t* margo_get_context(margo_instance_id mid);
+
+/**
+ * Retrieve the Mercury class that was associated with this instance at
+ *    initialization time
+ * @param [in] mid Margo instance
+ * @return the Mercury class used in margo_init
+ */
+hg_class_t* margo_get_class(margo_instance_id mid);
+
+/**
+ * Get the margo_instance_id from a received RPC handle.
+ *
+ * \param [in] h          RPC handle
+ * 
+ * \return Margo instance
+ */
+margo_instance_id margo_hg_handle_get_instance(hg_handle_t h);
 
 /**
  * Suspends the calling ULT for a specified time duration
@@ -236,22 +535,6 @@ hg_return_t margo_addr_lookup(
 void margo_thread_sleep(
     margo_instance_id mid,
     double timeout_ms);
-
-/** 
- * Registers an RPC with margo
- * @param [in] mid Margo instance
- * @param [in] id Mercury RPC identifier
- */
-int margo_register(margo_instance_id mid, hg_id_t id);
-
-/** 
- * Registers an RPC with margo that is associated with a multiplexed service
- * @param [in] mid Margo instance
- * @param [in] id Mercury RPC identifier
- * @param [in] mplex_id multiplexing identifier
- * @param [in] pool Argobots pool the handler will execute in
- */
-int margo_register_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT_pool pool);
 
 /**
  * Maps an RPC id and mplex id to the pool that it should execute on
