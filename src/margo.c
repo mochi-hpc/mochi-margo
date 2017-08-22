@@ -99,8 +99,7 @@ margo_instance_id margo_init(const char *addr_str, int mode,
     ret = ABT_init(0, NULL); /* XXX: argc/argv not currently used by ABT ... */
     if(ret != 0) goto err;
 
-    /* set primary ES to idle without polling */
-    /* XXX: is this right? always set snoozer scheduler on the calling xstream? */
+    /* set caller (self) ES to idle without polling */
     ret = ABT_snoozer_xstream_self_set();
     if(ret != 0) goto err;
 
