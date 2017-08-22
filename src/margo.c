@@ -317,6 +317,723 @@ void margo_wait_for_finalize(margo_instance_id mid)
     return;
 }
 
+hg_id_t margo_register_name(margo_instance_id mid, const char *func_name,
+    hg_proc_cb_t in_proc_cb, hg_proc_cb_t out_proc_cb, hg_rpc_cb_t rpc_cb)
+{
+	struct margo_rpc_data* margo_data;
+    hg_return_t hret;
+    hg_id_t id;
+
+    id = HG_Register_name(mid->hg_class, func_name, in_proc_cb, out_proc_cb, rpc_cb);
+    if(id <= 0)
+        return(0);
+
+	/* register the margo data with the RPC */
+    margo_data = (struct margo_rpc_data*)HG_Registered_data(mid->hg_class, id);
+    if(!margo_data)
+    {
+        margo_data = (struct margo_rpc_data*)malloc(sizeof(struct margo_rpc_data));
+        if(!margo_data)
+            return(0);
+        margo_data->mid = mid;
+        margo_data->user_data = NULL;
+        margo_data->user_free_callback = NULL;
+        hret = HG_Register_data(mid->hg_class, id, margo_data, margo_rpc_data_free);
+        if(hret != HG_SUCCESS)
+        {
+            free(margo_data);
+            return(0);
+        }
+    }
+
+	return(id);
+}
+
+hg_id_t margo_register_name_mplex(margo_instance_id mid, const char *func_name,
+    hg_proc_cb_t in_proc_cb, hg_proc_cb_t out_proc_cb, hg_rpc_cb_t rpc_cb,
+    uint32_t mplex_id, ABT_pool pool)
+{
+    struct mplex_key key;
+    struct mplex_element *element;
+    hg_id_t id;
+
+    id = margo_register_name(mid, func_name, in_proc_cb, out_proc_cb, rpc_cb);
+    if(id <= 0)
+        return(0);
+
+    /* nothing to do, we'll let the handler pool take this directly */
+    if(mplex_id == MARGO_DEFAULT_MPLEX_ID)
+        return(id);
+
+    memset(&key, 0, sizeof(key));
+    key.id = id;
+    key.mplex_id = mplex_id;
+
+    HASH_FIND(hh, mid->mplex_table, &key, sizeof(key), element);
+    if(element)
+        return(id);
+
+    element = malloc(sizeof(*element));
+    if(!element)
+        return(0);
+    element->key = key;
+    element->pool = pool;
+
+    HASH_ADD(hh, mid->mplex_table, key, sizeof(key), element);
+
+    return(id);
+}
+
+hg_return_t margo_registered_name(margo_instance_id mid, const char *func_name,
+    hg_id_t *id, hg_bool_t *flag)
+{
+    return(HG_Registered_name(mid->hg_class, func_name, id, flag));
+}
+
+hg_return_t margo_register_data(
+    margo_instance_id mid,
+    hg_id_t id,
+    void *data,
+    void (*free_callback)(void *)) 
+{
+	struct margo_rpc_data* margo_data 
+		= (struct margo_rpc_data*) HG_Registered_data(mid->hg_class, id);
+	if(!margo_data) return HG_OTHER_ERROR;
+	margo_data->user_data = data;
+	margo_data->user_free_callback = free_callback;
+	return HG_SUCCESS;
+}
+
+void* margo_registered_data(margo_instance_id mid, hg_id_t id)
+{
+	struct margo_rpc_data* data
+		= (struct margo_rpc_data*) HG_Registered_data(margo_get_class(mid), id);
+	if(!data) return NULL;
+	else return data->user_data;
+}
+
+hg_return_t margo_registered_disable_response(
+    margo_instance_id mid,
+    hg_id_t id,
+    int disable_flag)
+{
+    return(HG_Registered_disable_response(mid->hg_class, id, disable_flag));
+}
+
+struct lookup_cb_evt
+{
+    hg_return_t nret;
+    hg_addr_t addr;
+};
+
+static hg_return_t margo_addr_lookup_cb(const struct hg_cb_info *info)
+{
+    struct lookup_cb_evt evt;
+    evt.nret = info->ret;
+    evt.addr = info->info.lookup.addr;
+    struct margo_cb_arg* arg = info->arg;
+
+    /* propagate return code out through eventual */
+    ABT_eventual_set(*(arg->eventual), &evt, sizeof(evt));
+
+#if 0
+    if(arg->in_pool)
+        arg->mid->waiters_in_progress_pool--;
+#endif
+    
+    return(HG_SUCCESS);
+}
+
+hg_return_t margo_addr_lookup(
+    margo_instance_id mid,
+    const char   *name,
+    hg_addr_t    *addr)
+{
+    hg_return_t nret;
+    struct lookup_cb_evt *evt;
+    ABT_eventual eventual;
+    int ret;
+    struct margo_cb_arg arg;
+
+    ret = ABT_eventual_create(sizeof(*evt), &eventual);
+    if(ret != 0)
+    {
+        return(HG_NOMEM_ERROR);        
+    }
+
+    arg.eventual = &eventual;
+    arg.mid = mid;
+#if 0
+    if(margo_xstream_is_in_progress_pool(mid))
+    {
+        arg.in_pool = 1;
+        mid->waiters_in_progress_pool++;
+    }
+    else
+        arg.in_pool = 0;
+#endif
+    nret = HG_Addr_lookup(mid->hg_context, margo_addr_lookup_cb,
+        &arg, name, HG_OP_ID_IGNORE);
+    if(nret == 0)
+    {
+        ABT_eventual_wait(eventual, (void**)&evt);
+        *addr = evt->addr;
+        nret = evt->nret;
+    }
+
+    ABT_eventual_free(&eventual);
+
+    return(nret);
+}
+
+hg_return_t margo_addr_free(
+    margo_instance_id mid,
+    hg_addr_t addr)
+{
+    return(HG_Addr_free(mid->hg_class, addr));
+}
+
+hg_return_t margo_addr_self(
+    margo_instance_id mid,
+    hg_addr_t *addr)
+{
+    return(HG_Addr_self(mid->hg_class, addr));
+}
+
+hg_return_t margo_addr_dup(
+    margo_instance_id mid,
+    hg_addr_t addr,
+    hg_addr_t *new_addr)
+{
+    return(HG_Addr_dup(mid->hg_class, addr, new_addr));
+}
+
+hg_return_t margo_addr_to_string(
+    margo_instance_id mid,
+    char *buf,
+    hg_size_t *buf_size,
+    hg_addr_t addr)
+{
+    return(HG_Addr_to_string(mid->hg_class, buf, buf_size, addr));
+}
+
+hg_return_t margo_create(margo_instance_id mid, hg_addr_t addr,
+    hg_id_t id, hg_handle_t *handle)
+{
+    /* TODO: handle caching logic? */
+
+    return(HG_Create(mid->hg_context, addr, id, handle));
+}
+
+hg_return_t margo_destroy(hg_handle_t handle)
+{
+    /* TODO handle caching logic? */
+
+    return(HG_Destroy(handle));
+}
+
+hg_return_t margo_ref_incr(
+    hg_handle_t handle)
+{
+    return(HG_Ref_incr(handle));
+}
+
+const struct hg_info *margo_get_info(
+    hg_handle_t handle)
+{
+    return(HG_Get_info(handle));
+}
+
+hg_return_t margo_get_input(
+    hg_handle_t handle,
+    void *in_struct)
+{
+    return(HG_Get_input(handle, in_struct));
+}
+
+hg_return_t margo_free_input(
+        hg_handle_t handle,
+        void *in_struct)
+{
+    return(HG_Free_input(handle, in_struct));
+}
+
+hg_return_t margo_get_output(
+    hg_handle_t handle,
+    void *out_struct)
+{
+    return(HG_Get_output(handle, out_struct));
+}
+
+hg_return_t margo_free_output(
+    hg_handle_t handle,
+    void *out_struct)
+{
+    return(HG_Free_output(handle, out_struct));
+}
+
+
+static hg_return_t margo_cb(const struct hg_cb_info *info)
+{
+    hg_return_t hret = info->ret;
+    struct margo_cb_arg* arg = info->arg;
+
+    /* propagate return code out through eventual */
+    ABT_eventual_set(*(arg->eventual), &hret, sizeof(hret));
+    
+#if 0
+    if(arg->in_pool)
+        arg->mid->waiters_in_progress_pool--;
+#endif
+
+    return(HG_SUCCESS);
+}
+
+hg_return_t margo_forward(
+    margo_instance_id mid,
+    hg_handle_t handle,
+    void *in_struct)
+{
+    hg_return_t hret = HG_TIMEOUT;
+    ABT_eventual eventual;
+    int ret;
+    hg_return_t* waited_hret;
+    struct margo_cb_arg arg;
+
+    ret = ABT_eventual_create(sizeof(hret), &eventual);
+    if(ret != 0)
+    {
+        return(HG_NOMEM_ERROR);        
+    }
+
+    arg.eventual = &eventual;
+    arg.mid = mid;
+#if 0
+    if(margo_xstream_is_in_progress_pool(mid))
+    {
+        arg.in_pool = 1;
+        mid->waiters_in_progress_pool++;
+    }
+    else
+        arg.in_pool = 0;
+#endif
+    hret = HG_Forward(handle, margo_cb, &arg, in_struct);
+    if(hret == 0)
+    {
+        ABT_eventual_wait(eventual, (void**)&waited_hret);
+        hret = *waited_hret;
+    }
+
+    ABT_eventual_free(&eventual);
+
+    return(hret);
+}
+
+typedef struct
+{
+    hg_handle_t handle;
+} margo_forward_timeout_cb_dat;
+
+static void margo_forward_timeout_cb(void *arg)
+{
+    margo_forward_timeout_cb_dat *timeout_cb_dat =
+        (margo_forward_timeout_cb_dat *)arg;
+
+    /* cancel the Mercury op if the forward timed out */
+    HG_Cancel(timeout_cb_dat->handle);
+    return;
+}
+
+hg_return_t margo_forward_timed(
+    margo_instance_id mid,
+    hg_handle_t handle,
+    void *in_struct,
+    double timeout_ms)
+{
+    int ret;
+    hg_return_t hret;
+    ABT_eventual eventual;
+    hg_return_t* waited_hret;
+    margo_timer_t forward_timer;
+    margo_forward_timeout_cb_dat timeout_cb_dat;
+    struct margo_cb_arg arg;
+
+    ret = ABT_eventual_create(sizeof(hret), &eventual);
+    if(ret != 0)
+    {
+        return(HG_NOMEM_ERROR);        
+    }
+
+    /* set a timer object to expire when this forward times out */
+    timeout_cb_dat.handle = handle;
+    margo_timer_init(mid, &forward_timer, margo_forward_timeout_cb,
+        &timeout_cb_dat, timeout_ms);
+
+    arg.eventual = &eventual;
+    arg.mid = mid;
+#if 0
+    if(margo_xstream_is_in_progress_pool(mid))
+    {
+        arg.in_pool = 1;
+        mid->waiters_in_progress_pool++;
+    }
+    else
+        arg.in_pool = 0;
+#endif
+    hret = HG_Forward(handle, margo_cb, &arg, in_struct);
+    if(hret == 0)
+    {
+        ABT_eventual_wait(eventual, (void**)&waited_hret);
+        hret = *waited_hret;
+    }
+
+    /* convert HG_CANCELED to HG_TIMEOUT to indicate op timed out */
+    if(hret == HG_CANCELED)
+        hret = HG_TIMEOUT;
+
+    /* remove timer if it is still in place (i.e., not timed out) */
+    if(hret != HG_TIMEOUT)
+        margo_timer_destroy(mid, &forward_timer);
+
+    ABT_eventual_free(&eventual);
+
+    return(hret);
+}
+
+hg_return_t margo_respond(
+    margo_instance_id mid,
+    hg_handle_t handle,
+    void *out_struct)
+{
+    hg_return_t hret = HG_TIMEOUT;
+    ABT_eventual eventual;
+    int ret;
+    hg_return_t* waited_hret;
+    struct margo_cb_arg arg;
+
+    ret = ABT_eventual_create(sizeof(hret), &eventual);
+    if(ret != 0)
+    {
+        return(HG_NOMEM_ERROR);
+    }
+
+    arg.eventual = &eventual;
+    arg.mid = mid;
+#if 0
+    if(margo_xstream_is_in_progress_pool(mid))
+    {
+        arg.in_pool = 1;
+        mid->waiters_in_progress_pool++;
+    }
+    else
+        arg.in_pool = 0;
+#endif
+    hret = HG_Respond(handle, margo_cb, &arg, out_struct);
+    if(hret == 0)
+    {
+        ABT_eventual_wait(eventual, (void**)&waited_hret);
+        hret = *waited_hret;
+    }
+
+    ABT_eventual_free(&eventual);
+
+    return(hret);
+}
+
+hg_return_t margo_cancel(
+    hg_handle_t handle)
+{
+    return(HG_Cancel(handle));
+}
+
+hg_return_t margo_bulk_create(
+    margo_instance_id mid,
+    hg_uint32_t count,
+    void **buf_ptrs,
+    const hg_size_t *buf_sizes,
+    hg_uint8_t flags,
+    hg_bulk_t *handle)
+{
+    /* XXX: handle caching logic? */
+
+    return(HG_Bulk_create(mid->hg_class, count,
+        buf_ptrs, buf_sizes, flags, handle));
+}
+
+hg_return_t margo_bulk_free(
+    hg_bulk_t handle)
+{
+    /* XXX: handle caching logic? */
+
+    return(HG_Bulk_free(handle));
+}
+
+hg_return_t margo_bulk_ref_incr(
+    hg_bulk_t handle)
+{
+    return(HG_Bulk_ref_incr(handle));
+}
+
+hg_return_t margo_bulk_access(
+    hg_bulk_t handle,
+    hg_size_t offset,
+    hg_size_t size,
+    hg_uint8_t flags,
+    hg_uint32_t max_count,
+    void **buf_ptrs,
+    hg_size_t *buf_sizes,
+    hg_uint32_t *actual_count)
+{
+    return(HG_Bulk_access(handle, offset, size, flags, max_count,
+        buf_ptrs, buf_sizes, actual_count));
+}
+
+hg_size_t margo_bulk_get_size(
+    hg_bulk_t handle)
+{
+    return(HG_Bulk_get_size(handle));
+}
+
+hg_uint32_t margo_bulk_get_segment_count(
+    hg_bulk_t handle)
+{
+    return(HG_Bulk_get_segment_count(handle));
+}
+
+hg_size_t margo_bulk_get_serialize_size(
+    hg_bulk_t handle,
+    hg_bool_t request_eager)
+{
+    return(HG_Bulk_get_serialize_size(handle, request_eager));
+}
+
+hg_return_t margo_bulk_serialize(
+    void *buf,
+    hg_size_t buf_size,
+    hg_bool_t request_eager,
+    hg_bulk_t handle)
+{
+    return(HG_Bulk_serialize(buf, buf_size, request_eager, handle));
+}
+
+hg_return_t margo_bulk_deserialize(
+    margo_instance_id mid,
+    hg_bulk_t *handle,
+    const void *buf,
+    hg_size_t buf_size)
+{
+    return(HG_Bulk_deserialize(mid->hg_class, handle, buf, buf_size));
+}
+
+static hg_return_t margo_bulk_transfer_cb(const struct hg_cb_info *info)
+{
+    hg_return_t hret = info->ret;
+    struct margo_cb_arg* arg = info->arg;
+
+    /* propagate return code out through eventual */
+    ABT_eventual_set(*(arg->eventual), &hret, sizeof(hret));
+    
+    if(arg->in_pool)
+        arg->mid->waiters_in_progress_pool--;
+
+    return(HG_SUCCESS);
+}
+
+hg_return_t margo_bulk_transfer(
+    margo_instance_id mid,
+    hg_bulk_op_t op,
+    hg_addr_t origin_addr,
+    hg_bulk_t origin_handle,
+    size_t origin_offset,
+    hg_bulk_t local_handle,
+    size_t local_offset,
+    size_t size,
+    hg_op_id_t *op_id)
+{
+    hg_return_t hret = HG_TIMEOUT;
+    hg_return_t *waited_hret;
+    ABT_eventual eventual;
+    int ret;
+    struct margo_cb_arg arg;
+
+    ret = ABT_eventual_create(sizeof(hret), &eventual);
+    if(ret != 0)
+    {
+        return(HG_NOMEM_ERROR);        
+    }
+
+    arg.eventual = &eventual;
+    arg.mid = mid;
+    if(margo_xstream_is_in_progress_pool(mid))
+    {
+        arg.in_pool = 1;
+        mid->waiters_in_progress_pool++;
+    }
+    else
+        arg.in_pool = 0;
+    hret = HG_Bulk_transfer(mid->hg_context, margo_bulk_transfer_cb,
+        &arg, op, origin_addr, origin_handle, origin_offset, local_handle,
+        local_offset, size, op_id);
+    if(hret == 0)
+    {
+        ABT_eventual_wait(eventual, (void**)&waited_hret);
+        hret = *waited_hret;
+    }
+
+    ABT_eventual_free(&eventual);
+
+    return(hret);
+}
+
+hg_return_t margo_bulk_cancel(
+    hg_op_id_t op_id)
+{
+    return(HG_Bulk_cancel(op_id));
+}
+
+/* returns 1 if current xstream is in the progress pool, 0 if not */
+typedef struct
+{
+    margo_instance_id mid;
+    ABT_mutex mutex;
+    ABT_cond cond;
+    char is_asleep;
+    char in_pool;
+} margo_thread_sleep_cb_dat;
+
+static void margo_thread_sleep_cb(void *arg)
+{
+    margo_thread_sleep_cb_dat *sleep_cb_dat =
+        (margo_thread_sleep_cb_dat *)arg;
+
+    /* decrement number of waiting threads */
+    sleep_cb_dat->mid->waiters_in_progress_pool -=
+        sleep_cb_dat->in_pool;
+
+    /* wake up the sleeping thread */
+    ABT_mutex_lock(sleep_cb_dat->mutex);
+    sleep_cb_dat->is_asleep = 0;
+    ABT_cond_signal(sleep_cb_dat->cond);
+    ABT_mutex_unlock(sleep_cb_dat->mutex);
+
+    return;
+}
+
+void margo_thread_sleep(
+    margo_instance_id mid,
+    double timeout_ms)
+{
+    int in_pool = 0;
+    margo_timer_t sleep_timer;
+    margo_thread_sleep_cb_dat sleep_cb_dat;
+
+    if(margo_xstream_is_in_progress_pool(mid))
+        in_pool = 1;
+
+    /* set data needed for sleep callback */
+    sleep_cb_dat.mid = mid;
+    ABT_mutex_create(&(sleep_cb_dat.mutex));
+    ABT_cond_create(&(sleep_cb_dat.cond));
+    sleep_cb_dat.is_asleep = 1;
+    sleep_cb_dat.in_pool = in_pool;
+
+    /* initialize the sleep timer */
+    margo_timer_init(mid, &sleep_timer, margo_thread_sleep_cb,
+        &sleep_cb_dat, timeout_ms);
+
+    /* increment number of waiting threads */
+    mid->waiters_in_progress_pool += in_pool;
+
+    /* yield thread for specified timeout */
+    ABT_mutex_lock(sleep_cb_dat.mutex);
+    while(sleep_cb_dat.is_asleep)
+        ABT_cond_wait(sleep_cb_dat.cond, sleep_cb_dat.mutex);
+    ABT_mutex_unlock(sleep_cb_dat.mutex);
+
+    /* clean up */
+    ABT_mutex_free(&sleep_cb_dat.mutex);
+    ABT_cond_free(&sleep_cb_dat.cond);
+
+    return;
+}
+
+ABT_pool* margo_get_handler_pool(margo_instance_id mid)
+{
+    return(&mid->handler_pool);
+}
+
+hg_context_t* margo_get_context(margo_instance_id mid)
+{
+    return(mid->hg_context);
+}
+
+hg_class_t* margo_get_class(margo_instance_id mid)
+{
+    return(mid->hg_class);
+}
+
+margo_instance_id margo_hg_handle_get_instance(hg_handle_t h)
+{
+	const struct hg_info* info = HG_Get_info(h);
+	if(!info) return MARGO_INSTANCE_NULL;
+	struct margo_rpc_data* data = 
+		(struct margo_rpc_data*) HG_Registered_data(info->hg_class, info->id);
+	if(!data) return MARGO_INSTANCE_NULL;
+	return data->mid;
+}
+
+int margo_lookup_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT_pool *pool)
+{
+    struct mplex_key key;
+    struct mplex_element *element;
+
+    if(!mplex_id)
+    {
+        *pool = mid->handler_pool;
+        return(0);
+    }
+
+    memset(&key, 0, sizeof(key));
+    key.id = id;
+    key.mplex_id = mplex_id;
+
+    HASH_FIND(hh, mid->mplex_table, &key, sizeof(key), element);
+    if(!element)
+        return(-1);
+
+    assert(element->key.id == id && element->key.mplex_id == mplex_id);
+
+    *pool = element->pool;
+
+    return(0);
+}
+
+static int margo_xstream_is_in_progress_pool(margo_instance_id mid)
+{
+    int ret;
+    ABT_xstream xstream;
+    ABT_pool pool;
+
+    ret = ABT_xstream_self(&xstream);
+    assert(ret == ABT_SUCCESS);
+    ret = ABT_xstream_get_main_pools(xstream, 1, &pool);
+    assert(ret == ABT_SUCCESS);
+
+    if(pool == mid->progress_pool)
+        return(1);
+    else
+        return(0);
+}
+
+static void margo_rpc_data_free(void* ptr)
+{
+	struct margo_rpc_data* data = (struct margo_rpc_data*) ptr;
+	if(data->user_data && data->user_free_callback) {
+		data->user_free_callback(data->user_data);
+	}
+	free(ptr);
+}
+
 /* dedicated thread function to drive Mercury progress */
 static void hg_progress_fn(void* foo)
 {
@@ -408,512 +1125,4 @@ static void hg_progress_fn(void* foo)
     }
 
     return;
-}
-
-ABT_pool* margo_get_handler_pool(margo_instance_id mid)
-{
-    return(&mid->handler_pool);
-}
-
-hg_context_t* margo_get_context(margo_instance_id mid)
-{
-    return(mid->hg_context);
-}
-
-hg_class_t* margo_get_class(margo_instance_id mid)
-{
-    return(mid->hg_class);
-}
-
-hg_return_t margo_register_data(
-    margo_instance_id mid,
-    hg_id_t id,
-    void *data,
-    void (*free_callback)(void *)) 
-{
-	struct margo_rpc_data* margo_data 
-		= (struct margo_rpc_data*) HG_Registered_data(margo_get_class(mid), id);
-	if(!margo_data) return HG_OTHER_ERROR;
-	margo_data->user_data = data;
-	margo_data->user_free_callback = free_callback;
-	return HG_SUCCESS;
-}
-
-void* margo_registered_data(margo_instance_id mid, hg_id_t id)
-{
-	struct margo_rpc_data* data
-		= (struct margo_rpc_data*) HG_Registered_data(margo_get_class(mid), id);
-	if(!data) return NULL;
-	else return data->user_data;
-}
-
-margo_instance_id margo_hg_handle_get_instance(hg_handle_t h)
-{
-	const struct hg_info* info = HG_Get_info(h);
-	if(!info) return MARGO_INSTANCE_NULL;
-	struct margo_rpc_data* data = 
-		(struct margo_rpc_data*) HG_Registered_data(info->hg_class, info->id);
-	if(!data) return MARGO_INSTANCE_NULL;
-	return data->mid;
-}
-
-static hg_return_t margo_cb(const struct hg_cb_info *info)
-{
-    hg_return_t hret = info->ret;
-    struct margo_cb_arg* arg = info->arg;
-
-    /* propagate return code out through eventual */
-    ABT_eventual_set(*(arg->eventual), &hret, sizeof(hret));
-    
-#if 0
-    if(arg->in_pool)
-        arg->mid->waiters_in_progress_pool--;
-#endif
-
-    return(HG_SUCCESS);
-}
-
-typedef struct
-{
-    hg_handle_t handle;
-} margo_forward_timeout_cb_dat;
-
-static void margo_forward_timeout_cb(void *arg)
-{
-    margo_forward_timeout_cb_dat *timeout_cb_dat =
-        (margo_forward_timeout_cb_dat *)arg;
-
-    /* cancel the Mercury op if the forward timed out */
-    HG_Cancel(timeout_cb_dat->handle);
-    return;
-}
-
-hg_return_t margo_forward_timed(
-    margo_instance_id mid,
-    hg_handle_t handle,
-    void *in_struct,
-    double timeout_ms)
-{
-    int ret;
-    hg_return_t hret;
-    ABT_eventual eventual;
-    hg_return_t* waited_hret;
-    margo_timer_t forward_timer;
-    margo_forward_timeout_cb_dat timeout_cb_dat;
-    struct margo_cb_arg arg;
-
-    ret = ABT_eventual_create(sizeof(hret), &eventual);
-    if(ret != 0)
-    {
-        return(HG_NOMEM_ERROR);        
-    }
-
-    /* set a timer object to expire when this forward times out */
-    timeout_cb_dat.handle = handle;
-    margo_timer_init(mid, &forward_timer, margo_forward_timeout_cb,
-        &timeout_cb_dat, timeout_ms);
-
-    arg.eventual = &eventual;
-    arg.mid = mid;
-#if 0
-    if(margo_xstream_is_in_progress_pool(mid))
-    {
-        arg.in_pool = 1;
-        mid->waiters_in_progress_pool++;
-    }
-    else
-        arg.in_pool = 0;
-#endif
-    hret = HG_Forward(handle, margo_cb, &arg, in_struct);
-    if(hret == 0)
-    {
-        ABT_eventual_wait(eventual, (void**)&waited_hret);
-        hret = *waited_hret;
-    }
-
-    /* convert HG_CANCELED to HG_TIMEOUT to indicate op timed out */
-    if(hret == HG_CANCELED)
-        hret = HG_TIMEOUT;
-
-    /* remove timer if it is still in place (i.e., not timed out) */
-    if(hret != HG_TIMEOUT)
-        margo_timer_destroy(mid, &forward_timer);
-
-    ABT_eventual_free(&eventual);
-
-    return(hret);
-}
-
-
-hg_return_t margo_forward(
-    margo_instance_id mid,
-    hg_handle_t handle,
-    void *in_struct)
-{
-    hg_return_t hret = HG_TIMEOUT;
-    ABT_eventual eventual;
-    int ret;
-    hg_return_t* waited_hret;
-    struct margo_cb_arg arg;
-
-    ret = ABT_eventual_create(sizeof(hret), &eventual);
-    if(ret != 0)
-    {
-        return(HG_NOMEM_ERROR);        
-    }
-
-    arg.eventual = &eventual;
-    arg.mid = mid;
-#if 0
-    if(margo_xstream_is_in_progress_pool(mid))
-    {
-        arg.in_pool = 1;
-        mid->waiters_in_progress_pool++;
-    }
-    else
-        arg.in_pool = 0;
-#endif
-    hret = HG_Forward(handle, margo_cb, &arg, in_struct);
-    if(hret == 0)
-    {
-        ABT_eventual_wait(eventual, (void**)&waited_hret);
-        hret = *waited_hret;
-    }
-
-    ABT_eventual_free(&eventual);
-
-    return(hret);
-}
-
-hg_return_t margo_respond(
-    margo_instance_id mid,
-    hg_handle_t handle,
-    void *out_struct)
-{
-    hg_return_t hret = HG_TIMEOUT;
-    ABT_eventual eventual;
-    int ret;
-    hg_return_t* waited_hret;
-    struct margo_cb_arg arg;
-
-    ret = ABT_eventual_create(sizeof(hret), &eventual);
-    if(ret != 0)
-    {
-        return(HG_NOMEM_ERROR);
-    }
-
-    arg.eventual = &eventual;
-    arg.mid = mid;
-#if 0
-    if(margo_xstream_is_in_progress_pool(mid))
-    {
-        arg.in_pool = 1;
-        mid->waiters_in_progress_pool++;
-    }
-    else
-        arg.in_pool = 0;
-#endif
-    hret = HG_Respond(handle, margo_cb, &arg, out_struct);
-    if(hret == 0)
-    {
-        ABT_eventual_wait(eventual, (void**)&waited_hret);
-        hret = *waited_hret;
-    }
-
-    ABT_eventual_free(&eventual);
-
-    return(hret);
-}
-
-
-static hg_return_t margo_bulk_transfer_cb(const struct hg_cb_info *info)
-{
-    hg_return_t hret = info->ret;
-    struct margo_cb_arg* arg = info->arg;
-
-    /* propagate return code out through eventual */
-    ABT_eventual_set(*(arg->eventual), &hret, sizeof(hret));
-    
-    if(arg->in_pool)
-        arg->mid->waiters_in_progress_pool--;
-
-    return(HG_SUCCESS);
-}
-
-struct lookup_cb_evt
-{
-    hg_return_t nret;
-    hg_addr_t addr;
-};
-
-static hg_return_t margo_addr_lookup_cb(const struct hg_cb_info *info)
-{
-    struct lookup_cb_evt evt;
-    evt.nret = info->ret;
-    evt.addr = info->info.lookup.addr;
-    struct margo_cb_arg* arg = info->arg;
-
-    /* propagate return code out through eventual */
-    ABT_eventual_set(*(arg->eventual), &evt, sizeof(evt));
-
-#if 0
-    if(arg->in_pool)
-        arg->mid->waiters_in_progress_pool--;
-#endif
-    
-    return(HG_SUCCESS);
-}
-
-
-hg_return_t margo_addr_lookup(
-    margo_instance_id mid,
-    const char   *name,
-    hg_addr_t    *addr)
-{
-    hg_return_t nret;
-    struct lookup_cb_evt *evt;
-    ABT_eventual eventual;
-    int ret;
-    struct margo_cb_arg arg;
-
-    ret = ABT_eventual_create(sizeof(*evt), &eventual);
-    if(ret != 0)
-    {
-        return(HG_NOMEM_ERROR);        
-    }
-
-    arg.eventual = &eventual;
-    arg.mid = mid;
-#if 0
-    if(margo_xstream_is_in_progress_pool(mid))
-    {
-        arg.in_pool = 1;
-        mid->waiters_in_progress_pool++;
-    }
-    else
-        arg.in_pool = 0;
-#endif
-    nret = HG_Addr_lookup(mid->hg_context, margo_addr_lookup_cb,
-        &arg, name, HG_OP_ID_IGNORE);
-    if(nret == 0)
-    {
-        ABT_eventual_wait(eventual, (void**)&evt);
-        *addr = evt->addr;
-        nret = evt->nret;
-    }
-
-    ABT_eventual_free(&eventual);
-
-    return(nret);
-}
-
-hg_return_t margo_bulk_transfer(
-    margo_instance_id mid,
-    hg_bulk_op_t op,
-    hg_addr_t origin_addr,
-    hg_bulk_t origin_handle,
-    size_t origin_offset,
-    hg_bulk_t local_handle,
-    size_t local_offset,
-    size_t size)
-{
-    hg_return_t hret = HG_TIMEOUT;
-    hg_return_t *waited_hret;
-    ABT_eventual eventual;
-    int ret;
-    struct margo_cb_arg arg;
-
-    ret = ABT_eventual_create(sizeof(hret), &eventual);
-    if(ret != 0)
-    {
-        return(HG_NOMEM_ERROR);        
-    }
-
-    arg.eventual = &eventual;
-    arg.mid = mid;
-    if(margo_xstream_is_in_progress_pool(mid))
-    {
-        arg.in_pool = 1;
-        mid->waiters_in_progress_pool++;
-    }
-    else
-        arg.in_pool = 0;
-    hret = HG_Bulk_transfer(mid->hg_context, margo_bulk_transfer_cb,
-        &arg, op, origin_addr, origin_handle, origin_offset, local_handle,
-        local_offset, size, HG_OP_ID_IGNORE);
-    if(hret == 0)
-    {
-        ABT_eventual_wait(eventual, (void**)&waited_hret);
-        hret = *waited_hret;
-    }
-
-    ABT_eventual_free(&eventual);
-
-    return(hret);
-}
-
-typedef struct
-{
-    margo_instance_id mid;
-    ABT_mutex mutex;
-    ABT_cond cond;
-    char is_asleep;
-    char in_pool;
-} margo_thread_sleep_cb_dat;
-
-static void margo_thread_sleep_cb(void *arg)
-{
-    margo_thread_sleep_cb_dat *sleep_cb_dat =
-        (margo_thread_sleep_cb_dat *)arg;
-
-    /* decrement number of waiting threads */
-    sleep_cb_dat->mid->waiters_in_progress_pool -=
-        sleep_cb_dat->in_pool;
-
-    /* wake up the sleeping thread */
-    ABT_mutex_lock(sleep_cb_dat->mutex);
-    sleep_cb_dat->is_asleep = 0;
-    ABT_cond_signal(sleep_cb_dat->cond);
-    ABT_mutex_unlock(sleep_cb_dat->mutex);
-
-    return;
-}
-
-void margo_thread_sleep(
-    margo_instance_id mid,
-    double timeout_ms)
-{
-    int in_pool = 0;
-    margo_timer_t sleep_timer;
-    margo_thread_sleep_cb_dat sleep_cb_dat;
-
-    if(margo_xstream_is_in_progress_pool(mid))
-        in_pool = 1;
-
-    /* set data needed for sleep callback */
-    sleep_cb_dat.mid = mid;
-    ABT_mutex_create(&(sleep_cb_dat.mutex));
-    ABT_cond_create(&(sleep_cb_dat.cond));
-    sleep_cb_dat.is_asleep = 1;
-    sleep_cb_dat.in_pool = in_pool;
-
-    /* initialize the sleep timer */
-    margo_timer_init(mid, &sleep_timer, margo_thread_sleep_cb,
-        &sleep_cb_dat, timeout_ms);
-
-    /* increment number of waiting threads */
-    mid->waiters_in_progress_pool += in_pool;
-
-    /* yield thread for specified timeout */
-    ABT_mutex_lock(sleep_cb_dat.mutex);
-    while(sleep_cb_dat.is_asleep)
-        ABT_cond_wait(sleep_cb_dat.cond, sleep_cb_dat.mutex);
-    ABT_mutex_unlock(sleep_cb_dat.mutex);
-
-    /* clean up */
-    ABT_mutex_free(&sleep_cb_dat.mutex);
-    ABT_cond_free(&sleep_cb_dat.cond);
-
-    return;
-}
-
-/* returns 1 if current xstream is in the progress pool, 0 if not */
-static int margo_xstream_is_in_progress_pool(margo_instance_id mid)
-{
-    int ret;
-    ABT_xstream xstream;
-    ABT_pool pool;
-
-    ret = ABT_xstream_self(&xstream);
-    assert(ret == ABT_SUCCESS);
-    ret = ABT_xstream_get_main_pools(xstream, 1, &pool);
-    assert(ret == ABT_SUCCESS);
-
-    if(pool == mid->progress_pool)
-        return(1);
-    else
-        return(0);
-}
-
-static void margo_rpc_data_free(void* ptr)
-{
-	struct margo_rpc_data* data = (struct margo_rpc_data*) ptr;
-	if(data->user_data && data->user_free_callback) {
-		data->user_free_callback(data->user_data);
-	}
-	free(ptr);
-}
-
-int margo_lookup_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT_pool *pool)
-{
-    struct mplex_key key;
-    struct mplex_element *element;
-
-    if(!mplex_id)
-    {
-        *pool = mid->handler_pool;
-        return(0);
-    }
-
-    memset(&key, 0, sizeof(key));
-    key.id = id;
-    key.mplex_id = mplex_id;
-
-    HASH_FIND(hh, mid->mplex_table, &key, sizeof(key), element);
-    if(!element)
-        return(-1);
-
-    assert(element->key.id == id && element->key.mplex_id == mplex_id);
-
-    *pool = element->pool;
-
-    return(0);
-}
-
-int margo_register(margo_instance_id mid, hg_id_t id)
-{
-	/* register the margo data with the RPC */
-	struct margo_rpc_data* margo_data = (struct margo_rpc_data*)malloc(sizeof(struct margo_rpc_data));
-	margo_data->mid = mid;
-	margo_data->user_data = NULL;
-	margo_data->user_free_callback = NULL;
-	hg_return_t ret = HG_Register_data(margo_get_class(mid), id, margo_data, margo_rpc_data_free);
-	return ret;
-}
-
-int margo_register_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT_pool pool)
-{
-    struct mplex_key key;
-    struct mplex_element *element;
-
-	/* register the margo data with the RPC */
-	struct margo_rpc_data* margo_data = (struct margo_rpc_data*)malloc(sizeof(struct margo_rpc_data));
-	margo_data->mid = mid;
-	margo_data->user_data = NULL;
-	margo_data->user_free_callback = NULL;
-	hg_return_t ret = HG_Register_data(margo_get_class(mid), id, margo_data, margo_rpc_data_free);
-	if(ret != HG_SUCCESS) 
-		return ret;
-
-    /* nothing to do, we'll let the handler pool take this directly */
-    if(mplex_id == MARGO_DEFAULT_MPLEX_ID)
-        return(0);
-
-    memset(&key, 0, sizeof(key));
-    key.id = id;
-    key.mplex_id = mplex_id;
-
-    HASH_FIND(hh, mid->mplex_table, &key, sizeof(key), element);
-    if(element)
-        return(0);
-
-    element = malloc(sizeof(*element));
-    if(!element)
-        return(-1);
-    element->key = key;
-    element->pool = pool;
-
-    HASH_ADD(hh, mid->mplex_table, key, sizeof(key), element);
-
-    return(0);
 }
