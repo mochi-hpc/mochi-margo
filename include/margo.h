@@ -256,6 +256,25 @@ int margo_register_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, A
  */
 int margo_lookup_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT_pool *pool);
 
+/**
+ * Enables diagnostic collection on specified Margo instance
+ *
+ * @param [in] mid Margo instance
+ * @returns void
+ */
+void margo_diag_start(margo_instance_id mid);
+
+/**
+ * Appends diagnostic statistics (enabled via margo_diag_start()) to specified 
+ * output file.
+ *
+ * @param [in] mid Margo instance
+ * @param [in] file output file ("-" for stdout)
+ * @param [in] uniquify flag indicating if file name should have additional
+ *   information added to it to make output from different processes unique
+ * @returns void
+ */
+void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify);
 
 /**
  * macro that registers a function as an RPC.
