@@ -79,8 +79,7 @@ static void hg_progress_fn(void* foo);
 static int margo_xstream_is_in_progress_pool(margo_instance_id mid);
 static void margo_rpc_data_free(void* ptr);
 
-/* XXX: maybe instead of listen_flag, we can specify either CLIENT or SERVER mode? */
-margo_instance_id margo_init(const char *addr_str, int listen_flag,
+margo_instance_id margo_init(const char *addr_str, int mode,
     int use_progress_thread, int rpc_thread_count)
 {
     ABT_xstream progress_xstream = ABT_XSTREAM_NULL;
@@ -90,9 +89,12 @@ margo_instance_id margo_init(const char *addr_str, int listen_flag,
     ABT_pool rpc_pool = ABT_POOL_NULL;
     hg_class_t *hg_class = NULL;
     hg_context_t *hg_context = NULL;
+    int listen_flag = (mode == MARGO_CLIENT_MODE) ? HG_FALSE : HG_TRUE;
     int i;
     int ret;
     struct margo_instance *mid = MARGO_INSTANCE_NULL;
+
+    if(mode != MARGO_CLIENT_MODE || mode != MARGO_SERVER_MODE) goto err;
 
     ret = ABT_init(0, NULL); /* XXX: argc/argv not currently used by ABT ... */
     if(ret != 0) goto err;
@@ -115,7 +117,7 @@ margo_instance_id margo_init(const char *addr_str, int listen_flag,
         if (ret != ABT_SUCCESS) goto err;
     }
 
-    if (listen_flag)
+    if (mode == MARGO_SERVER_MODE)
     {
         if (rpc_thread_count > 0)
         {

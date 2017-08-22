@@ -29,13 +29,17 @@ typedef struct margo_instance* margo_instance_id;
 typedef struct margo_data* margo_data_ptr;
 
 #define MARGO_INSTANCE_NULL ((margo_instance_id)NULL)
+#define MARGO_CLIENT_MODE 0
+#define MARGO_SERVER_MODE 1
 #define MARGO_DEFAULT_MPLEX_ID 0
 #define MARGO_RPC_ID_IGNORE ((hg_id_t*)NULL)
 
 /**
  * Initializes margo library.
  * @param [in] addr_str            Mercury host address with port number
- * @param [in] listen_flag         Boolean flag to listen for incoming connections
+ * @param [in] mode                Mode to run Margo in:
+ *                                     - MARGO_CLIENT_MODE
+ *                                     - MARGO_SERVER_MODE
  * @param [in] use_progress_thread Boolean flag to use a dedicated thread for
  *                                 running Mercury's progress loop. If false,
  *                                 it will run in the caller's thread context.
@@ -56,7 +60,7 @@ typedef struct margo_data* margo_data_ptr;
  */
 margo_instance_id margo_init(
     const char *addr_str,
-    int listen_flag,
+    int mode,
     int use_progress_thread,
     int rpc_thread_count);
 
