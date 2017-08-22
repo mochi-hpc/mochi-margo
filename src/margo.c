@@ -94,7 +94,7 @@ margo_instance_id margo_init(const char *addr_str, int mode,
     int ret;
     struct margo_instance *mid = MARGO_INSTANCE_NULL;
 
-    if(mode != MARGO_CLIENT_MODE || mode != MARGO_SERVER_MODE) goto err;
+    if(mode != MARGO_CLIENT_MODE && mode != MARGO_SERVER_MODE) goto err;
 
     ret = ABT_init(0, NULL); /* XXX: argc/argv not currently used by ABT ... */
     if(ret != 0) goto err;
