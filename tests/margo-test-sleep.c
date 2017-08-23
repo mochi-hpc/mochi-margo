@@ -10,7 +10,6 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <abt.h>
-#include <abt-snoozer.h>
 #include <margo.h>
 
 static int use_abt_sleep = 0;
@@ -27,8 +26,6 @@ int main(int argc, char **argv)
     int ret;
     ABT_xstream xstream;
     ABT_pool pool;
-    hg_context_t *hg_context;
-    hg_class_t *hg_class;
 
     int arg_ndx = 1;
     if(argc > 1)
@@ -52,42 +49,21 @@ int main(int argc, char **argv)
         }
     }
 
-    /* boilerplate HG initialization steps */
+    /* actually start margo -- this step encapsulates the Mercury and
+     * Argobots initialization and must precede their use */
+    /* use a single pool for progress and sleeper threads */
+    /* NOTE: we don't use RPC handlers, so no need for an RPC pool */
     /***************************************/
-    hg_class = HG_Init("tcp", HG_FALSE);
-    if(!hg_class)
+    mid = margo_init("tcp", MARGO_CLIENT_MODE, 0, 0);
+    if(mid == MARGO_INSTANCE_NULL)
     {
         /* if tcp didn't work, try sm */
-        hg_class = HG_Init("sm", HG_FALSE);
-        if(!hg_class)
+        mid = margo_init("sm", MARGO_CLIENT_MODE, 0, 0);
+        if(mid == MARGO_INSTANCE_NULL)
         {
-            fprintf(stderr, "Error: HG_Init()\n");
+            fprintf(stderr, "Error: margo_init()\n");
             return(-1);
         }
-    }
-    hg_context = HG_Context_create(hg_class);
-    if(!hg_context)
-    {
-        fprintf(stderr, "Error: HG_Context_create()\n");
-        HG_Finalize(hg_class);
-        return(-1);
-    }
-
-    /* set up argobots */
-    /***************************************/
-    ret = ABT_init(argc, argv);
-    if(ret != 0)
-    {
-        fprintf(stderr, "Error: ABT_init()\n");
-        return(-1);
-    }
-
-    /* set primary ES to idle without polling */
-    ret = ABT_snoozer_xstream_self_set();
-    if(ret != 0)
-    {
-        fprintf(stderr, "Error: ABT_snoozer_xstream_self_set()\n");
-        return(-1);
     }
 
     /* retrieve current pool to use for ULT creation */
@@ -104,11 +80,6 @@ int main(int argc, char **argv)
         return(-1);
     }
 
-    /* actually start margo */
-    /* use a single pool for progress and sleeper threads */
-    /* NOTE: we don't use RPC handlers, so no need for an RPC pool */
-    /***************************************/
-    mid = margo_init_pool(pool, ABT_POOL_NULL, hg_context);
     for(i=0; i<4; i++)
     {
         t_ids[i] = i;
@@ -146,11 +117,6 @@ int main(int argc, char **argv)
     /* shut down everything */
     margo_finalize(mid);
     
-    ABT_finalize();
-
-    HG_Context_destroy(hg_context);
-    HG_Finalize(hg_class);
-
     return(0);
 }
 
