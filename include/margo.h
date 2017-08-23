@@ -17,8 +17,9 @@ extern "C" {
  * respecively.
  */
 
-#include <mercury_bulk.h>
 #include <mercury.h>
+#include <mercury_types.h>
+#include <mercury_bulk.h>
 #include <mercury_macros.h>
 #include <abt.h>
 
@@ -32,7 +33,6 @@ typedef struct margo_data* margo_data_ptr;
 #define MARGO_CLIENT_MODE 0
 #define MARGO_SERVER_MODE 1
 #define MARGO_DEFAULT_MPLEX_ID 0
-#define MARGO_RPC_ID_IGNORE ((hg_id_t*)NULL)
 
 /**
  * Initializes margo library.
@@ -651,28 +651,18 @@ int margo_lookup_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT
 /**
  * macro that registers a function as an RPC.
  */
-#define MARGO_REGISTER(__mid, __func_name, __in_t, __out_t, __handler, __rpc_id_ptr) do { \
-    hg_id_t __id = margo_register_name( \
-                       __mid, __func_name, \
-                       BOOST_PP_CAT(hg_proc_, __in_t), \
-                       BOOST_PP_CAT(hg_proc_, __out_t), \
-                       __handler##_handler); \
-    if(__rpc_id_ptr != MARGO_RPC_ID_IGNORE) { \
-        *(__rpc_id_ptr) = __id; \
-    } \
-} while(0)
+#define MARGO_REGISTER(__mid, __func_name, __in_t, __out_t, __handler) \
+    margo_register_name(__mid, __func_name, \
+        BOOST_PP_CAT(hg_proc_, __in_t), \
+        BOOST_PP_CAT(hg_proc_, __out_t), \
+        __handler##_handler);
 
-#define MARGO_REGISTER_MPLEX(__mid, __func_name, __in_t, __out_t, __handler, __mplex_id, __pool, __rpc_id_ptr) do { \
-    hg_id_t __id = margo_register_name_mplex( \
-                       __mid, __func_name, \
-                       BOOST_PP_CAT(hg_proc_, __in_t), \
-                       BOOST_PP_CAT(hg_proc_, __out_t), \
-                       __handler##_handler, \
-                       __mplex_id, __pool); \
-    if(__rpc_id_ptr != MARGO_RPC_ID_IGNORE) { \
-        *(__rpc_id_ptr) = __id; \
-    } \
-} while(0)
+#define MARGO_REGISTER_MPLEX(__mid, __func_name, __in_t, __out_t, __handler, __mplex_id, __pool) \
+    margo_register_name_mplex(__mid, __func_name, \
+        BOOST_PP_CAT(hg_proc_, __in_t), \
+        BOOST_PP_CAT(hg_proc_, __out_t), \
+        __handler##_handler, \
+        __mplex_id, __pool);
 
 #define NULL_handler NULL
 
