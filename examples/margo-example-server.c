@@ -93,6 +93,7 @@ int main(int argc, char **argv)
     /* actually start margo */
     mid = margo_init(0, 0, hg_context);
     assert(mid);
+    margo_diag_start(mid);
 
     /* register RPC */
     MARGO_REGISTER(mid, "my_rpc", my_rpc_in_t, my_rpc_out_t, my_rpc_ult, MARGO_RPC_ID_IGNORE);
