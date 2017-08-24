@@ -34,6 +34,8 @@ typedef struct margo_data* margo_data_ptr;
 #define MARGO_SERVER_MODE 1
 #define MARGO_DEFAULT_MPLEX_ID 0
 
+#define MARGO_INFO_PROGRESS_TIMEOUT_UB 1
+
 /**
  * Initializes margo library.
  * @param [in] addr_str            Mercury host address with port number
@@ -687,6 +689,27 @@ void margo_diag_start(margo_instance_id mid);
  * @returns void
  */
 void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify);
+
+/**
+ * Sets configurable parameters/hints
+ *
+ * @param [in] mid Margo instance
+ * @param [in] option numerical option number
+ * @param [out] inout_param used to pass in values
+ * @returns void
+ */
+void margo_set_param(margo_instance_id mid, int option, const void *param);
+
+/**
+ * Retrieves configurable parameters/hints
+ *
+ * @param [in] mid Margo instance
+ * @param [in] option numerical option number
+ * @param [out] param used to pass out values
+ * @returns void
+ */
+void margo_get_param(margo_instance_id mid, int option, void *param);
+
 
 /**
  * macro that registers a function as an RPC.

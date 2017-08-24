@@ -18,7 +18,7 @@
 #include "utlist.h"
 #include "uthash.h"
 
-#define MERCURY_PROGRESS_TIMEOUT_UB 100 /* 100 milliseconds */
+#define DEFAULT_MERCURY_PROGRESS_TIMEOUT_UB 100 /* 100 milliseconds */
 
 struct mplex_key
 {
@@ -65,6 +65,7 @@ struct margo_instance
     int owns_progress_pool;
     ABT_xstream *rpc_xstreams;
     int num_handler_pool_threads;
+    unsigned int hg_progress_timeout_ub;
 
     /* control logic for callers waiting on margo to be finalized */
     int finalize_flag;
@@ -178,6 +179,7 @@ margo_instance_id margo_init(const char *addr_str, int mode,
     mid->progress_xstream = progress_xstream;
     mid->num_handler_pool_threads = rpc_thread_count < 0 ? 0 : rpc_thread_count;
     mid->rpc_xstreams = rpc_xstreams;
+
     return mid;
 
 err:
@@ -227,6 +229,7 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
     mid->handler_pool = handler_pool;
     mid->hg_class = HG_Context_get_class(hg_context);
     mid->hg_context = hg_context;
+    mid->hg_progress_timeout_ub = DEFAULT_MERCURY_PROGRESS_TIMEOUT_UB;
     mid->refcount = 1;
 
     ret = margo_timer_instance_init(mid);
@@ -988,7 +991,7 @@ static void hg_progress_fn(void* foo)
     unsigned int actual_count;
     struct margo_instance *mid = (struct margo_instance *)foo;
     size_t size;
-    unsigned int hg_progress_timeout = MERCURY_PROGRESS_TIMEOUT_UB;
+    unsigned int hg_progress_timeout = mid->hg_progress_timeout_ub;
     double next_timer_exp;
     int trigger_happened;
     double tm1, tm2;
@@ -1061,7 +1064,7 @@ static void hg_progress_fn(void* foo)
         }
         else
         {
-            hg_progress_timeout = MERCURY_PROGRESS_TIMEOUT_UB;
+            hg_progress_timeout = mid->hg_progress_timeout_ub;
             ret = margo_timer_get_next_expiration(mid, &next_timer_exp);
             if(ret == 0)
             {
@@ -1071,7 +1074,7 @@ static void hg_progress_fn(void* foo)
                 if(next_timer_exp >= 0.0)
                 {
                     next_timer_exp *= 1000; /* convert to milliseconds */
-                    if(next_timer_exp < MERCURY_PROGRESS_TIMEOUT_UB)
+                    if(next_timer_exp < mid->hg_progress_timeout_ub)
                         hg_progress_timeout = (unsigned int)next_timer_exp;
                 }
                 else
@@ -1186,5 +1189,30 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
     if(outfile != stdout)
         fclose(outfile);
     
+    return;
+}
+
+void margo_set_param(margo_instance_id mid, int option, const void *param)
+{
+    switch(option)
+    {
+        case MARGO_INFO_PROGRESS_TIMEOUT_UB:
+            mid->hg_progress_timeout_ub = (*((const unsigned int*)param));
+            break;
+    }
+
+    return;
+}
+
+void margo_get_param(margo_instance_id mid, int option, void *param)
+{
+
+    switch(option)
+    {
+        case MARGO_INFO_PROGRESS_TIMEOUT_UB:
+            (*((unsigned int*)param)) = mid->hg_progress_timeout_ub;
+            break;
+    }
+
     return;
 }
