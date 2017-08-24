@@ -40,7 +40,6 @@ int main(int argc, char **argv)
      * execute handlers. If not, use a dedicated progress xstream and
      * run handlers directly on the calling xstream
      */
-    /***************************************/
     if(opts.single_pool_mode)
         mid = margo_init(opts.listen_addr, MARGO_SERVER_MODE, 0, -1);
     else

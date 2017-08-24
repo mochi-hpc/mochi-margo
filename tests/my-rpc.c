@@ -62,8 +62,6 @@ static void my_rpc_ult(hg_handle_t handle)
         bulk_handle, 0, size, HG_OP_ID_IGNORE);
     assert(hret == HG_SUCCESS);
 
-    margo_free_input(handle, &in);
-
     /* write to a file; would be done with abt-io if we enabled it */
 #if 0
     sprintf(filename, "/tmp/margo-%d.txt", in.input_val);
@@ -75,6 +73,8 @@ static void my_rpc_ult(hg_handle_t handle)
 
     abt_io_close(aid, fd);
 #endif
+
+    margo_free_input(handle, &in);
 
     hret = margo_respond(mid, handle, &out);
     assert(hret == HG_SUCCESS);
@@ -104,7 +104,7 @@ static void my_rpc_shutdown_ult(hg_handle_t handle)
     hret = margo_respond(mid, handle, NULL);
     assert(hret == HG_SUCCESS);
 
-    HG_Destroy(handle);
+    margo_destroy(handle);
 
     /* NOTE: we assume that the server daemon is using
      * margo_wait_for_finalize() to suspend until this RPC executes, so there
@@ -170,5 +170,3 @@ static void my_rpc_hang_ult(hg_handle_t handle)
     return;
 }
 DEFINE_MARGO_RPC_HANDLER(my_rpc_hang_ult)
-
-

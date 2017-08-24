@@ -23,19 +23,19 @@ static void my_rpc_ult(hg_handle_t handle)
     hg_return_t hret;
     my_rpc_out_t out;
     my_rpc_in_t in;
-    int ret;
     hg_size_t size;
     void *buffer;
     hg_bulk_t bulk_handle;
     const struct hg_info *hgi;
 #if 0
+    int ret;
     int fd;
     char filename[256];
 #endif
     margo_instance_id mid;
 
-    ret = HG_Get_input(handle, &in);
-    assert(ret == HG_SUCCESS);
+    hret = margo_get_input(handle, &in);
+    assert(hret == HG_SUCCESS);
 
     printf("Got RPC request with input_val: %d\n", in.input_val);
     out.ret = 0;
@@ -45,20 +45,22 @@ static void my_rpc_ult(hg_handle_t handle)
     buffer = calloc(1, 512);
     assert(buffer);
 
-    /* register local target buffer for bulk access */
-    hgi = HG_Get_info(handle);
+    /* get handle info and margo instance */
+    hgi = margo_get_info(handle);
     assert(hgi);
-    ret = HG_Bulk_create(hgi->hg_class, 1, &buffer,
-        &size, HG_BULK_WRITE_ONLY, &bulk_handle);
-    assert(ret == 0);
+    mid = margo_hg_info_get_instance(hgi);
+    assert(mid != MARGO_INSTANCE_NULL);
 
-    mid = margo_hg_handle_get_instance(handle);
+    /* register local target buffer for bulk access */
+    hret = margo_bulk_create(mid, 1, &buffer,
+        &size, HG_BULK_WRITE_ONLY, &bulk_handle);
+    assert(hret == HG_SUCCESS);
 
     /* do bulk transfer from client to server */
-    ret = margo_bulk_transfer(mid, HG_BULK_PULL,
+    hret = margo_bulk_transfer(mid, HG_BULK_PULL,
         hgi->addr, in.bulk_handle, 0,
-        bulk_handle, 0, size);
-    assert(ret == 0);
+        bulk_handle, 0, size, HG_OP_ID_IGNORE);
+    assert(hret == HG_SUCCESS);
 
     /* write to a file; would be done with abt-io if we enabled it */
 #if 0
@@ -72,13 +74,13 @@ static void my_rpc_ult(hg_handle_t handle)
     abt_io_close(aid, fd);
 #endif
 
-    HG_Free_input(handle, &in);
+    margo_free_input(handle, &in);
 
-    hret = HG_Respond(handle, NULL, NULL, &out);
+    hret = margo_respond(mid, handle, &out);
     assert(hret == HG_SUCCESS);
 
-    HG_Bulk_free(bulk_handle);
-    HG_Destroy(handle);
+    margo_bulk_free(bulk_handle);
+    margo_destroy(handle);
     free(buffer);
 
     return;
@@ -93,14 +95,16 @@ static void my_rpc_shutdown_ult(hg_handle_t handle)
 
     printf("Got RPC request to shutdown\n");
 
-    hgi = HG_Get_info(handle);
+    /* get handle info and margo instance */
+    hgi = margo_get_info(handle);
     assert(hgi);
-    mid = margo_hg_handle_get_instance(handle);
+    mid = margo_hg_info_get_instance(hgi);
+    assert(mid != MARGO_INSTANCE_NULL);
 
     hret = margo_respond(mid, handle, NULL);
     assert(hret == HG_SUCCESS);
 
-    HG_Destroy(handle);
+    margo_destroy(handle);
 
     margo_diag_dump(mid, "-", 0);
 

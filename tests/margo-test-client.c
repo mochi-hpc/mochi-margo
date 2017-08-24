@@ -65,7 +65,6 @@ int main(int argc, char **argv)
      * is null in this example program because this is a pure client that 
      * will not be servicing rpc requests.
      */
-    /***************************************/
     mid = margo_init(proto, MARGO_CLIENT_MODE, 0, 0);
     if(mid == MARGO_INSTANCE_NULL)
     {

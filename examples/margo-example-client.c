@@ -7,8 +7,8 @@
 #include <stdio.h>
 #include <assert.h>
 #include <unistd.h>
+#include <mercury.h>
 #include <abt.h>
-#include <abt-snoozer.h>
 #include <margo.h>
 
 #include "my-rpc.h"
@@ -24,8 +24,6 @@ struct run_my_rpc_args
 {
     int val;
     margo_instance_id mid;
-    hg_context_t *hg_context;
-    hg_class_t *hg_class;
     hg_addr_t svr_addr;
 };
 
@@ -40,11 +38,10 @@ int main(int argc, char **argv)
     ABT_thread threads[4];
     int i;
     int ret;
+    hg_return_t hret;
     ABT_xstream xstream;
     ABT_pool pool;
     margo_instance_id mid;
-    hg_context_t *hg_context;
-    hg_class_t *hg_class;
     hg_addr_t svr_addr = HG_ADDR_NULL;
     hg_handle_t handle;
     char proto[12] = {0};
@@ -55,44 +52,26 @@ int main(int argc, char **argv)
         return(-1);
     }
        
-    /* boilerplate HG initialization steps */
-    /***************************************/
-
     /* initialize Mercury using the transport portion of the destination
      * address (i.e., the part before the first : character if present)
      */
     for(i=0; i<11 && argv[1][i] != '\0' && argv[1][i] != ':'; i++)
         proto[i] = argv[1][i];
-    hg_class = HG_Init(proto, HG_FALSE);
-    if(!hg_class)
-    {
-        fprintf(stderr, "Error: HG_Init()\n");
-        return(-1);
-    }
-    hg_context = HG_Context_create(hg_class);
-    if(!hg_context)
-    {
-        fprintf(stderr, "Error: HG_Context_create()\n");
-        HG_Finalize(hg_class);
-        return(-1);
-    }
 
-    /* set up argobots */
-    /***************************************/
-    ret = ABT_init(argc, argv);
-    if(ret != 0)
+    /* actually start margo -- margo_init() encapsulates the Mercury &
+     * Argobots initialization, so this step must precede their use. */
+    /* Use main process to drive progress (it will relinquish control to
+     * Mercury during blocking communication calls).  The rpc handler pool 
+     * is null in this example program because this is a pure client that 
+     * will not be servicing rpc requests.
+     */
+    mid = margo_init(proto, MARGO_CLIENT_MODE, 0, 0);
+    if(mid == MARGO_INSTANCE_NULL)
     {
-        fprintf(stderr, "Error: ABT_init()\n");
+        fprintf(stderr, "Error: margo_init()\n");
         return(-1);
     }
-
-    /* set primary ES to idle without polling */
-    ret = ABT_snoozer_xstream_self_set();
-    if(ret != 0)
-    {
-        fprintf(stderr, "Error: ABT_snoozer_xstream_self_set()\n");
-        return(-1);
-    }
+    margo_diag_start(mid);
 
     /* retrieve current pool to use for ULT creation */
     ret = ABT_xstream_self(&xstream);
@@ -108,26 +87,18 @@ int main(int argc, char **argv)
         return(-1);
     }
 
-    /* actually start margo */
-    /***************************************/
-    mid = margo_init(0, 0, hg_context);
-    assert(mid);
-    margo_diag_start(mid);
-
     /* register RPC */
-	MARGO_REGISTER(mid, "my_rpc", my_rpc_in_t, my_rpc_out_t, NULL, &my_rpc_id);
-	MARGO_REGISTER(mid, "my_shutdown_rpc", void, void, NULL, &my_rpc_shutdown_id);
+	my_rpc_id = MARGO_REGISTER(mid, "my_rpc", my_rpc_in_t, my_rpc_out_t, NULL);
+	my_rpc_shutdown_id = MARGO_REGISTER(mid, "my_shutdown_rpc", void, void, NULL);
 
     /* find addr for server */
-    ret = margo_addr_lookup(mid, argv[1], &svr_addr);
-    assert(ret == 0);
+    hret = margo_addr_lookup(mid, argv[1], &svr_addr);
+    assert(hret == HG_SUCCESS);
 
     for(i=0; i<4; i++)
     {
         args[i].val = i;
         args[i].mid = mid;
-        args[i].hg_class = hg_class;
-        args[i].hg_context = hg_context;
         args[i].svr_addr = svr_addr;
 
         /* Each ult gets a pointer to an element of the array to use
@@ -165,22 +136,18 @@ int main(int argc, char **argv)
     /* send one rpc to server to shut it down */
 
     /* create handle */
-    ret = HG_Create(hg_context, svr_addr, my_rpc_shutdown_id, &handle);
-    assert(ret == 0);
+    hret = margo_create(mid, svr_addr, my_rpc_shutdown_id, &handle);
+    assert(hret == HG_SUCCESS);
 
-    margo_forward(mid, handle, NULL);
+    hret = margo_forward(mid, handle, NULL);
+    assert(hret == HG_SUCCESS);
 
-    HG_Destroy(handle);
-    HG_Addr_free(hg_class, svr_addr);
+    margo_destroy(handle);
+    margo_addr_free(mid, svr_addr);
 
     /* shut down everything */
     margo_diag_dump(mid, "-", 0);
     margo_finalize(mid);
-    
-    ABT_finalize();
-
-    HG_Context_destroy(hg_context);
-    HG_Finalize(hg_class);
 
     return(0);
 }
@@ -191,10 +158,9 @@ static void run_my_rpc(void *_arg)
     hg_handle_t handle;
     my_rpc_in_t in;
     my_rpc_out_t out;
-    int ret;
+    hg_return_t hret;
     hg_size_t size;
     void* buffer;
-    const struct hg_info *hgi;
 
     printf("ULT [%d] running.\n", arg->val);
 
@@ -205,32 +171,31 @@ static void run_my_rpc(void *_arg)
     sprintf((char*)buffer, "Hello world!\n");
 
     /* create handle */
-    ret = HG_Create(arg->hg_context, arg->svr_addr, my_rpc_id, &handle);
-    assert(ret == 0);
+    hret = margo_create(arg->mid, arg->svr_addr, my_rpc_id, &handle);
+    assert(hret == HG_SUCCESS);
 
     /* register buffer for rdma/bulk access by server */
-    hgi = HG_Get_info(handle);
-    assert(hgi);
-    ret = HG_Bulk_create(hgi->hg_class, 1, &buffer, &size, 
+    hret = margo_bulk_create(arg->mid, 1, &buffer, &size, 
         HG_BULK_READ_ONLY, &in.bulk_handle);
-    assert(ret == 0);
+    assert(hret == HG_SUCCESS);
 
     /* Send rpc. Note that we are also transmitting the bulk handle in the
      * input struct.  It was set above. 
      */ 
     in.input_val = arg->val;
-    margo_forward(arg->mid, handle, &in);
+    hret = margo_forward(arg->mid, handle, &in);
+    assert(hret == HG_SUCCESS);
 
     /* decode response */
-    ret = HG_Get_output(handle, &out);
-    assert(ret == 0);
+    hret = margo_get_output(handle, &out);
+    assert(hret == HG_SUCCESS);
 
     printf("Got response ret: %d\n", out.ret);
 
     /* clean up resources consumed by this rpc */
-    HG_Bulk_free(in.bulk_handle);
-    HG_Free_output(handle, &out);
-    HG_Destroy(handle);
+    margo_bulk_free(in.bulk_handle);
+    margo_free_output(handle, &out);
+    margo_destroy(handle);
     free(buffer);
 
     printf("ULT [%d] done.\n", arg->val);
