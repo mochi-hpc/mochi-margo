@@ -579,6 +579,13 @@ hg_return_t margo_free_output(
     return(HG_Free_output(handle, out_struct));
 }
 
+hg_return_t margo_set_target_id(
+    hg_handle_t handle,
+    hg_uint8_t target_id)
+{
+    return(HG_Set_target_id(handle, target_id));
+}
+
 static hg_return_t margo_cb(const struct hg_cb_info *info)
 {
     hg_return_t hret = info->ret;

@@ -368,6 +368,18 @@ hg_return_t margo_free_output(
     void *out_struct);
 
 /**
+ * Set target ID that will receive and process RPC request.
+ *
+ * \param [in] handle       Mercury handle
+ * \param [in] target_id    user-defined target ID
+ *
+ * \return HG_SUCCESS or corresponding HG error code
+ */
+hg_return_t margo_set_target_id(
+    hg_handle_t handle,
+    hg_uint8_t target_id);
+
+/**
  * Forward an RPC request to a remote host
  * @param [in] mid Margo instance
  * @param [in] handle identifier for the RPC to be sent

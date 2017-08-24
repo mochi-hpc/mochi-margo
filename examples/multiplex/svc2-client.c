@@ -53,8 +53,7 @@ void svc2_do_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t mplex_id)
         HG_BULK_READ_ONLY, &in.bulk_handle);
     assert(hret == HG_SUCCESS);
 
-    /* XXX */
-    HG_Set_target_id(handle, mplex_id);
+    margo_set_target_id(handle, mplex_id);
 
     /* Send rpc. Note that we are also transmitting the bulk handle in the
      * input struct.  It was set above. 
@@ -100,8 +99,7 @@ void svc2_do_other_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t mpl
         HG_BULK_READ_ONLY, &in.bulk_handle);
     assert(hret == HG_SUCCESS);
 
-    /* XXX */
-    HG_Set_target_id(handle, mplex_id);
+    margo_set_target_id(handle, mplex_id);
 
     /* Send rpc. Note that we are also transmitting the bulk handle in the
      * input struct.  It was set above. 
