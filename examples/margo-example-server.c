@@ -35,6 +35,7 @@ int main(int argc, char **argv)
     /* actually start margo -- this step encapsulates the Mercury and
      * Argobots initialization and must precede their use */
     /* Use the calling xstream to drive progress and execute handlers. */
+    /***************************************/
     mid = margo_init(argv[1], MARGO_SERVER_MODE, 0, -1);
     if(mid == MARGO_INSTANCE_NULL)
     {
@@ -54,7 +55,7 @@ int main(int argc, char **argv)
     hret = margo_addr_to_string(mid, addr_self_string, &addr_self_string_sz, addr_self);
     if(hret != HG_SUCCESS)
     {
-        fprintf(stderr, "Error: margo_addr_self()\n");
+        fprintf(stderr, "Error: margo_addr_to_string()\n");
         margo_addr_free(mid, addr_self);
         margo_finalize(mid);
         return(-1);

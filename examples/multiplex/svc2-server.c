@@ -14,7 +14,6 @@ static void svc2_do_thing_ult(hg_handle_t handle)
     hg_return_t hret;
     svc2_do_thing_out_t out;
     svc2_do_thing_in_t in;
-    int ret;
     hg_size_t size;
     void *buffer;
     hg_bulk_t bulk_handle;
@@ -24,10 +23,12 @@ static void svc2_do_thing_ult(hg_handle_t handle)
     ABT_xstream my_xstream; 
     pthread_t my_tid;
 
-    ret = HG_Get_input(handle, &in);
-    assert(ret == HG_SUCCESS);
-    hgi = HG_Get_info(handle);
+    hret = margo_get_input(handle, &in);
+    assert(hret == HG_SUCCESS);
+    hgi = margo_get_info(handle);
     assert(hgi);
+    mid = margo_hg_info_get_instance(hgi);
+    assert(mid != MARGO_INSTANCE_NULL);
 
     ABT_xstream_self(&my_xstream);
     ABT_thread_self(&my_ult);
@@ -43,25 +44,23 @@ static void svc2_do_thing_ult(hg_handle_t handle)
     assert(buffer);
 
     /* register local target buffer for bulk access */
-    ret = HG_Bulk_create(hgi->hg_class, 1, &buffer,
+    hret = margo_bulk_create(mid, 1, &buffer,
         &size, HG_BULK_WRITE_ONLY, &bulk_handle);
-    assert(ret == 0);
-
-    mid = margo_hg_handle_get_instance(handle);
-
-    /* do bulk transfer from client to server */
-    ret = margo_bulk_transfer(mid, HG_BULK_PULL,
-        hgi->addr, in.bulk_handle, 0,
-        bulk_handle, 0, size);
-    assert(ret == 0);
-
-    HG_Free_input(handle, &in);
-
-    hret = HG_Respond(handle, NULL, NULL, &out);
     assert(hret == HG_SUCCESS);
 
-    HG_Bulk_free(bulk_handle);
-    HG_Destroy(handle);
+    /* do bulk transfer from client to server */
+    hret = margo_bulk_transfer(mid, HG_BULK_PULL,
+        hgi->addr, in.bulk_handle, 0,
+        bulk_handle, 0, size, HG_OP_ID_IGNORE);
+    assert(hret == HG_SUCCESS);
+
+    margo_free_input(handle, &in);
+
+    hret = margo_respond(mid, handle, &out);
+    assert(hret == HG_SUCCESS);
+
+    margo_bulk_free(bulk_handle);
+    margo_destroy(handle);
     free(buffer);
 
     return;
@@ -73,7 +72,6 @@ static void svc2_do_other_thing_ult(hg_handle_t handle)
     hg_return_t hret;
     svc2_do_other_thing_out_t out;
     svc2_do_other_thing_in_t in;
-    int ret;
     hg_size_t size;
     void *buffer;
     hg_bulk_t bulk_handle;
@@ -83,10 +81,12 @@ static void svc2_do_other_thing_ult(hg_handle_t handle)
     ABT_xstream my_xstream; 
     pthread_t my_tid;
 
-    ret = HG_Get_input(handle, &in);
-    assert(ret == HG_SUCCESS);
-    hgi = HG_Get_info(handle);
+    hret = margo_get_input(handle, &in);
+    assert(hret == HG_SUCCESS);
+    hgi = margo_get_info(handle);
     assert(hgi);
+    mid = margo_hg_info_get_instance(hgi);
+    assert(mid != MARGO_INSTANCE_NULL);
 
     ABT_xstream_self(&my_xstream);
     ABT_thread_self(&my_ult);
@@ -102,25 +102,23 @@ static void svc2_do_other_thing_ult(hg_handle_t handle)
     assert(buffer);
 
     /* register local target buffer for bulk access */
-    ret = HG_Bulk_create(hgi->hg_class, 1, &buffer,
+    hret = margo_bulk_create(mid, 1, &buffer,
         &size, HG_BULK_WRITE_ONLY, &bulk_handle);
-    assert(ret == 0);
-
-    mid = margo_hg_handle_get_instance(handle);
-
-    /* do bulk transfer from client to server */
-    ret = margo_bulk_transfer(mid, HG_BULK_PULL,
-        hgi->addr, in.bulk_handle, 0,
-        bulk_handle, 0, size);
-    assert(ret == 0);
-
-    HG_Free_input(handle, &in);
-
-    hret = HG_Respond(handle, NULL, NULL, &out);
     assert(hret == HG_SUCCESS);
 
-    HG_Bulk_free(bulk_handle);
-    HG_Destroy(handle);
+    /* do bulk transfer from client to server */
+    hret = margo_bulk_transfer(mid, HG_BULK_PULL,
+        hgi->addr, in.bulk_handle, 0,
+        bulk_handle, 0, size, HG_OP_ID_IGNORE);
+    assert(hret == HG_SUCCESS);
+
+    margo_free_input(handle, &in);
+
+    hret = margo_respond(mid, handle, &out);
+    assert(hret == HG_SUCCESS);
+
+    margo_bulk_free(bulk_handle);
+    margo_destroy(handle);
     free(buffer);
 
     return;
@@ -131,10 +129,10 @@ int svc2_register(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id)
 {
     MARGO_REGISTER_MPLEX(mid, "svc2_do_thing", 
         svc2_do_thing_in_t, svc2_do_thing_out_t, 
-        svc2_do_thing_ult, mplex_id, pool, MARGO_RPC_ID_IGNORE);
+        svc2_do_thing_ult, mplex_id, pool);
     MARGO_REGISTER_MPLEX(mid, "svc2_do_other_thing", 
         svc2_do_other_thing_in_t, svc2_do_other_thing_out_t, 
-        svc2_do_other_thing_ult, mplex_id, pool, MARGO_RPC_ID_IGNORE);
+        svc2_do_other_thing_ult, mplex_id, pool);
    
     return(0);
 }
@@ -144,4 +142,3 @@ void svc2_deregister(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id)
     /* TODO: undo what was done in svc2_register() */
     return;
 }
-

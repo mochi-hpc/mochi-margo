@@ -21,11 +21,11 @@ static hg_id_t svc1_do_other_thing_id = -1;
 int svc1_register_client(margo_instance_id mid)
 {
 
-    MARGO_REGISTER(mid, "svc1_do_thing", 
-        svc1_do_thing_in_t, svc1_do_thing_out_t, NULL, &svc1_do_thing_id);
+    svc1_do_thing_id = MARGO_REGISTER(mid, "svc1_do_thing", 
+        svc1_do_thing_in_t, svc1_do_thing_out_t, NULL);
 
-    MARGO_REGISTER(mid, "svc1_do_other_thing", 
-        svc1_do_other_thing_in_t, svc1_do_other_thing_out_t, NULL, &svc1_do_other_thing_id);
+    svc1_do_other_thing_id = MARGO_REGISTER(mid, "svc1_do_other_thing", 
+        svc1_do_other_thing_in_t, svc1_do_other_thing_out_t, NULL);
 
     return(0);
 }
@@ -35,10 +35,9 @@ void svc1_do_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t mplex_id)
     hg_handle_t handle;
     svc1_do_thing_in_t in;
     svc1_do_thing_out_t out;
-    int ret;
+    hg_return_t hret;
     hg_size_t size;
     void* buffer;
-    const struct hg_info *hgi;
 
     /* allocate buffer for bulk transfer */
     size = 512;
@@ -47,32 +46,32 @@ void svc1_do_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t mplex_id)
     sprintf((char*)buffer, "Hello world!\n");
 
     /* create handle */
-    ret = HG_Create(margo_get_context(mid), svr_addr, svc1_do_thing_id, &handle);
-    assert(ret == 0);
+    hret = margo_create(mid, svr_addr, svc1_do_thing_id, &handle);
+    assert(hret == HG_SUCCESS);
 
     /* register buffer for rdma/bulk access by server */
-    hgi = HG_Get_info(handle);
-    assert(hgi);
-    ret = HG_Bulk_create(hgi->hg_class, 1, &buffer, &size, 
+    hret = margo_bulk_create(mid, 1, &buffer, &size, 
         HG_BULK_READ_ONLY, &in.bulk_handle);
-    assert(ret == 0);
+    assert(hret == HG_SUCCESS);
 
+    /* XXX */
     HG_Set_target_id(handle, mplex_id);
 
     /* Send rpc. Note that we are also transmitting the bulk handle in the
      * input struct.  It was set above. 
      */ 
     in.input_val = 0;
-    margo_forward(mid, handle, &in);
+    hret = margo_forward(mid, handle, &in);
+    assert(hret == HG_SUCCESS);
 
     /* decode response */
-    ret = HG_Get_output(handle, &out);
-    assert(ret == 0);
+    hret = margo_get_output(handle, &out);
+    assert(hret == HG_SUCCESS);
 
     /* clean up resources consumed by this rpc */
-    HG_Bulk_free(in.bulk_handle);
-    HG_Free_output(handle, &out);
-    HG_Destroy(handle);
+    margo_free_output(handle, &out);
+    margo_bulk_free(in.bulk_handle);
+    margo_destroy(handle);
     free(buffer);
 
     return;
@@ -83,10 +82,9 @@ void svc1_do_other_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t mpl
     hg_handle_t handle;
     svc1_do_other_thing_in_t in;
     svc1_do_other_thing_out_t out;
-    int ret;
+    hg_return_t hret;
     hg_size_t size;
     void* buffer;
-    const struct hg_info *hgi;
 
     /* allocate buffer for bulk transfer */
     size = 512;
@@ -95,34 +93,33 @@ void svc1_do_other_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t mpl
     sprintf((char*)buffer, "Hello world!\n");
 
     /* create handle */
-    ret = HG_Create(margo_get_context(mid), svr_addr, svc1_do_other_thing_id, &handle);
-    assert(ret == 0);
+    hret = margo_create(mid, svr_addr, svc1_do_other_thing_id, &handle);
+    assert(hret == HG_SUCCESS);
 
     /* register buffer for rdma/bulk access by server */
-    hgi = HG_Get_info(handle);
-    assert(hgi);
-    ret = HG_Bulk_create(hgi->hg_class, 1, &buffer, &size, 
+    hret = margo_bulk_create(mid, 1, &buffer, &size, 
         HG_BULK_READ_ONLY, &in.bulk_handle);
-    assert(ret == 0);
+    assert(hret == HG_SUCCESS);
 
+    /* XXX */
     HG_Set_target_id(handle, mplex_id);
 
     /* Send rpc. Note that we are also transmitting the bulk handle in the
      * input struct.  It was set above. 
      */ 
     in.input_val = 0;
-    margo_forward(mid, handle, &in);
+    hret = margo_forward(mid, handle, &in);
+    assert(hret == HG_SUCCESS);
 
     /* decode response */
-    ret = HG_Get_output(handle, &out);
-    assert(ret == 0);
+    hret = margo_get_output(handle, &out);
+    assert(hret == HG_SUCCESS);
 
     /* clean up resources consumed by this rpc */
-    HG_Bulk_free(in.bulk_handle);
-    HG_Free_output(handle, &out);
-    HG_Destroy(handle);
+    margo_free_output(handle, &out);
+    margo_bulk_free(in.bulk_handle);
+    margo_destroy(handle);
     free(buffer);
 
     return;
 }
-

@@ -40,6 +40,7 @@ int main(int argc, char **argv)
      * execute handlers. If not, use a dedicated progress xstream and
      * run handlers directly on the calling xstream
      */
+    /***************************************/
     if(opts.single_pool_mode)
         mid = margo_init(opts.listen_addr, MARGO_SERVER_MODE, 0, -1);
     else
@@ -68,7 +69,7 @@ int main(int argc, char **argv)
         hret = margo_addr_to_string(mid, addr_self_string, &addr_self_string_sz, addr_self);
         if(hret != HG_SUCCESS)
         {
-            fprintf(stderr, "Error: margo_addr_self()\n");
+            fprintf(stderr, "Error: margo_addr_to_string()\n");
             margo_addr_free(mid, addr_self);
             margo_finalize(mid);
             return(-1);

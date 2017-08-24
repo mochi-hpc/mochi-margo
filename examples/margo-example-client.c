@@ -61,10 +61,11 @@ int main(int argc, char **argv)
     /* actually start margo -- margo_init() encapsulates the Mercury &
      * Argobots initialization, so this step must precede their use. */
     /* Use main process to drive progress (it will relinquish control to
-     * Mercury during blocking communication calls).  The rpc handler pool 
-     * is null in this example program because this is a pure client that 
-     * will not be servicing rpc requests.
+     * Mercury during blocking communication calls). No RPC threads are
+     * used because this is a pure client that will not be servicing
+     * rpc requests.
      */
+    /***************************************/
     mid = margo_init(proto, MARGO_CLIENT_MODE, 0, 0);
     if(mid == MARGO_INSTANCE_NULL)
     {
