@@ -928,6 +928,11 @@ margo_instance_id margo_hg_handle_get_instance(hg_handle_t h)
 {
 	const struct hg_info* info = HG_Get_info(h);
 	if(!info) return MARGO_INSTANCE_NULL;
+    return margo_hg_info_get_instance(info);
+}
+
+margo_instance_id margo_hg_info_get_instance(const struct hg_info *info)
+{
 	struct margo_rpc_data* data = 
 		(struct margo_rpc_data*) HG_Registered_data(info->hg_class, info->id);
 	if(!data) return MARGO_INSTANCE_NULL;

@@ -639,6 +639,15 @@ hg_class_t* margo_get_class(margo_instance_id mid);
 margo_instance_id margo_hg_handle_get_instance(hg_handle_t h);
 
 /**
+ * Get the margo_instance_id from a received RPC handle.
+ *
+ * \param [in] info      RPC info structure pointer
+ * 
+ * \return Margo instance
+ */
+margo_instance_id margo_hg_info_get_instance(const struct hg_info *info);
+
+/**
  * Maps an RPC id and mplex id to the pool that it should execute on
  * @param [in] mid Margo instance
  * @param [in] id Mercury RPC identifier

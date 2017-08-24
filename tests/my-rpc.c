@@ -46,10 +46,9 @@ static void my_rpc_ult(hg_handle_t handle)
     assert(buffer);
 
     /* get handle info and margo instance */
-    /* TODO: how can we avoid calling get_info twice? */
     hgi = margo_get_info(handle);
     assert(hgi);
-    mid = margo_hg_handle_get_instance(handle);
+    mid = margo_hg_info_get_instance(hgi);
     assert(mid != MARGO_INSTANCE_NULL);
 
     /* register local target buffer for bulk access */
@@ -97,10 +96,9 @@ static void my_rpc_shutdown_ult(hg_handle_t handle)
     printf("Got RPC request to shutdown\n");
 
     /* get handle info and margo instance */
-    /* TODO: how can we avoid calling get_info twice? */
     hgi = margo_get_info(handle);
     assert(hgi);
-    mid = margo_hg_handle_get_instance(handle);
+    mid = margo_hg_info_get_instance(hgi);
     assert(mid != MARGO_INSTANCE_NULL);
 
     hret = margo_respond(mid, handle, NULL);
@@ -136,10 +134,9 @@ static void my_rpc_hang_ult(hg_handle_t handle)
     out.ret = 0;
 
     /* get handle info and margo instance */
-    /* TODO: how can we avoid calling get_info twice? */
     hgi = margo_get_info(handle);
     assert(hgi);
-    mid = margo_hg_handle_get_instance(handle);
+    mid = margo_hg_info_get_instance(hgi);
     assert(mid != MARGO_INSTANCE_NULL);
 
     /* sleep for an hour (to allow client to test timeout capability) */
