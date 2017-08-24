@@ -40,6 +40,6 @@ include Make.rules
 include $(top_srcdir)/src/Makefile.subdir
 include $(top_srcdir)/examples/Makefile.subdir
 include $(top_srcdir)/examples/multiplex/Makefile.subdir
-#include $(top_srcdir)/examples/composition/Makefile.subdir
+include $(top_srcdir)/examples/composition/Makefile.subdir
 include $(top_srcdir)/tests/Makefile.subdir
 
