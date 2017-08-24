@@ -236,6 +236,8 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
         ABT_THREAD_ATTR_NULL, &mid->hg_progress_tid);
     if(ret != 0) goto err;
 
+    return mid;
+
 err:
     if(mid)
     {
