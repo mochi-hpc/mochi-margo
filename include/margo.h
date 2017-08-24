@@ -32,6 +32,8 @@ typedef struct margo_data* margo_data_ptr;
 #define MARGO_DEFAULT_MPLEX_ID 0
 #define MARGO_RPC_ID_IGNORE ((hg_id_t*)NULL)
 
+#define MARGO_INFO_PROGRESS_TIMEOUT_UB 1
+
 /**
  * Initializes margo library.
  * @param [in] use_progress_thread Boolean flag to use a dedicated thread for
@@ -275,6 +277,27 @@ void margo_diag_start(margo_instance_id mid);
  * @returns void
  */
 void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify);
+
+/**
+ * Sets configurable parameters/hints
+ *
+ * @param [in] mid Margo instance
+ * @param [in] option numerical option number
+ * @param [out] inout_param used to pass in values
+ * @returns void
+ */
+void margo_set_info(margo_instance_id mid, int option, const void *param);
+
+/**
+ * Retrieves configurable parameters/hints
+ *
+ * @param [in] mid Margo instance
+ * @param [in] option numerical option number
+ * @param [out] param used to pass out values
+ * @returns void
+ */
+void margo_get_info(margo_instance_id mid, int option, void *param);
+
 
 /**
  * macro that registers a function as an RPC.
