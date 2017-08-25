@@ -144,7 +144,7 @@ int main(int argc, char **argv)
     hret = margo_forward_timed(mid, handle, NULL, 2000.0);
     assert(hret == HG_SUCCESS);
 
-    margo_destroy(handle);
+    margo_destroy(mid, handle);
     margo_addr_free(mid, svr_addr);
 
     /* shut down everything */
@@ -202,7 +202,7 @@ static void run_my_rpc(void *_arg)
 
     /* clean up resources consumed by this rpc */
     margo_bulk_free(in.bulk_handle);
-    margo_destroy(handle);
+    margo_destroy(arg->mid, handle);
     free(buffer);
 
     printf("ULT [%d] done.\n", arg->val);

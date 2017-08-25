@@ -70,7 +70,7 @@ void svc1_do_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t mplex_id)
     /* clean up resources consumed by this rpc */
     margo_free_output(handle, &out);
     margo_bulk_free(in.bulk_handle);
-    margo_destroy(handle);
+    margo_destroy(mid, handle);
     free(buffer);
 
     return;
@@ -116,7 +116,7 @@ void svc1_do_other_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t mpl
     /* clean up resources consumed by this rpc */
     margo_free_output(handle, &out);
     margo_bulk_free(in.bulk_handle);
-    margo_destroy(handle);
+    margo_destroy(mid, handle);
     free(buffer);
 
     return;

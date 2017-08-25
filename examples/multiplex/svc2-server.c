@@ -60,7 +60,7 @@ static void svc2_do_thing_ult(hg_handle_t handle)
     assert(hret == HG_SUCCESS);
 
     margo_bulk_free(bulk_handle);
-    margo_destroy(handle);
+    margo_destroy(mid, handle);
     free(buffer);
 
     return;
@@ -118,7 +118,7 @@ static void svc2_do_other_thing_ult(hg_handle_t handle)
     assert(hret == HG_SUCCESS);
 
     margo_bulk_free(bulk_handle);
-    margo_destroy(handle);
+    margo_destroy(mid, handle);
     free(buffer);
 
     return;

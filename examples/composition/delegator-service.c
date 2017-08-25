@@ -74,8 +74,8 @@ static void delegator_read_ult(hg_handle_t handle)
     assert(hret == HG_SUCCESS);
 
     margo_addr_free(mid, data_xfer_svc_addr);
-    margo_destroy(handle);
-    margo_destroy(handle_relay);
+    margo_destroy(mid, handle);
+    margo_destroy(mid, handle_relay);
 
     return;
 }
