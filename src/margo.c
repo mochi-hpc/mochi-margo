@@ -1196,7 +1196,7 @@ void margo_set_param(margo_instance_id mid, int option, const void *param)
 {
     switch(option)
     {
-        case MARGO_INFO_PROGRESS_TIMEOUT_UB:
+        case MARGO_PARAM_PROGRESS_TIMEOUT_UB:
             mid->hg_progress_timeout_ub = (*((const unsigned int*)param));
             break;
     }
@@ -1209,7 +1209,7 @@ void margo_get_param(margo_instance_id mid, int option, void *param)
 
     switch(option)
     {
-        case MARGO_INFO_PROGRESS_TIMEOUT_UB:
+        case MARGO_PARAM_PROGRESS_TIMEOUT_UB:
             (*((unsigned int*)param)) = mid->hg_progress_timeout_ub;
             break;
     }
