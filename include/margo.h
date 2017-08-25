@@ -548,7 +548,6 @@ hg_return_t margo_bulk_deserialize(
  * @param [in] local_handle local bulk memory handle
  * @param [in] local_offset offset into local bulk memory to access
  * @param [in] size size (in bytes) of transfer
- * @param [out] op_id pointer to returned operation ID
  * @returns 0 on success, hg_return_t values on error
  */
 hg_return_t margo_bulk_transfer(
@@ -559,8 +558,7 @@ hg_return_t margo_bulk_transfer(
     size_t origin_offset,
     hg_bulk_t local_handle,
     size_t local_offset,
-    size_t size,
-    hg_op_id_t *op_id);
+    size_t size);
 
 /**
  * Suspends the calling ULT for a specified time duration

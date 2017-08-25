@@ -730,8 +730,7 @@ hg_return_t margo_bulk_transfer(
     size_t origin_offset,
     hg_bulk_t local_handle,
     size_t local_offset,
-    size_t size,
-    hg_op_id_t *op_id)
+    size_t size)
 {
     hg_return_t hret = HG_TIMEOUT;
     hg_return_t *waited_hret;
@@ -750,7 +749,7 @@ hg_return_t margo_bulk_transfer(
 
     hret = HG_Bulk_transfer(mid->hg_context, margo_bulk_transfer_cb,
         &arg, op, origin_addr, origin_handle, origin_offset, local_handle,
-        local_offset, size, op_id);
+        local_offset, size, HG_OP_ID_IGNORE);
     if(hret == HG_SUCCESS)
     {
         ABT_eventual_wait(eventual, (void**)&waited_hret);

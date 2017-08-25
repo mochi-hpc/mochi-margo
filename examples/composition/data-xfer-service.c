@@ -55,7 +55,7 @@ static void data_xfer_read_ult(hg_handle_t handle)
     /* do bulk transfer from client to server */
     hret = margo_bulk_transfer(mid, HG_BULK_PUSH,
         client_addr, in.bulk_handle, 0,
-        g_buffer_bulk_handle, 0, g_buffer_size, HG_OP_ID_IGNORE);
+        g_buffer_bulk_handle, 0, g_buffer_size);
     assert(hret == HG_SUCCESS);
 
     if(in.client_addr)

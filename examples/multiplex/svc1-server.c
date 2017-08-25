@@ -51,7 +51,7 @@ static void svc1_do_thing_ult(hg_handle_t handle)
     /* do bulk transfer from client to server */
     hret = margo_bulk_transfer(mid, HG_BULK_PULL,
         hgi->addr, in.bulk_handle, 0,
-        bulk_handle, 0, size, HG_OP_ID_IGNORE);
+        bulk_handle, 0, size);
     assert(hret == HG_SUCCESS);
 
     margo_free_input(handle, &in);
@@ -109,7 +109,7 @@ static void svc1_do_other_thing_ult(hg_handle_t handle)
     /* do bulk transfer from client to server */
     hret = margo_bulk_transfer(mid, HG_BULK_PULL,
         hgi->addr, in.bulk_handle, 0,
-        bulk_handle, 0, size, HG_OP_ID_IGNORE);
+        bulk_handle, 0, size);
     assert(hret == HG_SUCCESS);
 
     margo_free_input(handle, &in);

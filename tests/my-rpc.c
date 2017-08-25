@@ -59,7 +59,7 @@ static void my_rpc_ult(hg_handle_t handle)
     /* do bulk transfer from client to server */
     hret = margo_bulk_transfer(mid, HG_BULK_PULL,
         hgi->addr, in.bulk_handle, 0,
-        bulk_handle, 0, size, HG_OP_ID_IGNORE);
+        bulk_handle, 0, size);
     assert(hret == HG_SUCCESS);
 
     /* write to a file; would be done with abt-io if we enabled it */
@@ -155,7 +155,7 @@ static void my_rpc_hang_ult(hg_handle_t handle)
     /* do bulk transfer from client to server */
     hret = margo_bulk_transfer(mid, HG_BULK_PULL,
         hgi->addr, in.bulk_handle, 0,
-        bulk_handle, 0, size, HG_OP_ID_IGNORE);
+        bulk_handle, 0, size);
     assert(hret == HG_SUCCESS);
 
     margo_free_input(handle, &in);
