@@ -34,7 +34,7 @@ typedef struct margo_data* margo_data_ptr;
 #define MARGO_SERVER_MODE 1
 #define MARGO_DEFAULT_MPLEX_ID 0
 
-#define MARGO_INFO_PROGRESS_TIMEOUT_UB 1
+#define MARGO_PARAM_PROGRESS_TIMEOUT_UB 1
 
 /**
  * Initializes margo library.
