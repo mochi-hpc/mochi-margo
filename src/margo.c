@@ -727,12 +727,6 @@ hg_return_t margo_respond(
     return(hret);
 }
 
-hg_return_t margo_cancel(
-    hg_handle_t handle)
-{
-    return(HG_Cancel(handle));
-}
-
 hg_return_t margo_bulk_create(
     margo_instance_id mid,
     hg_uint32_t count,
@@ -861,12 +855,6 @@ hg_return_t margo_bulk_transfer(
     ABT_eventual_free(&eventual);
 
     return(hret);
-}
-
-hg_return_t margo_bulk_cancel(
-    hg_op_id_t op_id)
-{
-    return(HG_Bulk_cancel(op_id));
 }
 
 typedef struct

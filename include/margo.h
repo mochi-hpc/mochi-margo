@@ -426,16 +426,6 @@ hg_return_t margo_respond(
     void *out_struct);
 
 /**
- * Cancel an ongoing operation.
- *
- * \param [in] handle Mercury handle
- *
- * \return HG_SUCCESS or corresponding HG error code
- */
-hg_return_t margo_cancel(
-    hg_handle_t handle);
-
-/**
  * Create an abstract bulk handle from specified memory segments.
  * Memory allocated is then freed when margo_bulk_free() is called.
  * \remark If NULL is passed to buf_ptrs, i.e.,
@@ -600,16 +590,6 @@ hg_return_t margo_bulk_transfer(
     size_t local_offset,
     size_t size,
     hg_op_id_t *op_id);
-
-/**
- * Cancel an ongoing operation.
- *
- * \param [in] op_id    operation ID
- *
- * \return HG_SUCCESS or corresponding HG error code
- */
-hg_return_t margo_bulk_cancel(
-    hg_op_id_t op_id);
 
 /**
  * Suspends the calling ULT for a specified time duration
