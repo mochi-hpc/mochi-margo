@@ -1331,6 +1331,11 @@ static hg_return_t margo_handle_cache_get(margo_instance_id mid,
         HASH_ADD(hh, mid->used_handle_hash, handle, sizeof(hg_handle_t), el);
         *handle = el->handle;
     }
+    else
+    {
+        /* reset failed, add handle back to the free list */
+        LL_APPEND(mid->free_handle_list, el);
+    }
 
     return hret;
 }
