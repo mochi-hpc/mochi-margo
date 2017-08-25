@@ -542,53 +542,6 @@ hg_return_t margo_destroy(hg_handle_t handle)
     return(HG_Destroy(handle));
 }
 
-hg_return_t margo_ref_incr(
-    hg_handle_t handle)
-{
-    return(HG_Ref_incr(handle));
-}
-
-const struct hg_info *margo_get_info(
-    hg_handle_t handle)
-{
-    return(HG_Get_info(handle));
-}
-
-hg_return_t margo_get_input(
-    hg_handle_t handle,
-    void *in_struct)
-{
-    return(HG_Get_input(handle, in_struct));
-}
-
-hg_return_t margo_free_input(
-        hg_handle_t handle,
-        void *in_struct)
-{
-    return(HG_Free_input(handle, in_struct));
-}
-
-hg_return_t margo_get_output(
-    hg_handle_t handle,
-    void *out_struct)
-{
-    return(HG_Get_output(handle, out_struct));
-}
-
-hg_return_t margo_free_output(
-    hg_handle_t handle,
-    void *out_struct)
-{
-    return(HG_Free_output(handle, out_struct));
-}
-
-hg_return_t margo_set_target_id(
-    hg_handle_t handle,
-    hg_uint8_t target_id)
-{
-    return(HG_Set_target_id(handle, target_id));
-}
-
 static hg_return_t margo_cb(const struct hg_cb_info *info)
 {
     hg_return_t hret = info->ret;
@@ -747,54 +700,6 @@ hg_return_t margo_bulk_free(
     /* XXX: handle caching logic? */
 
     return(HG_Bulk_free(handle));
-}
-
-hg_return_t margo_bulk_ref_incr(
-    hg_bulk_t handle)
-{
-    return(HG_Bulk_ref_incr(handle));
-}
-
-hg_return_t margo_bulk_access(
-    hg_bulk_t handle,
-    hg_size_t offset,
-    hg_size_t size,
-    hg_uint8_t flags,
-    hg_uint32_t max_count,
-    void **buf_ptrs,
-    hg_size_t *buf_sizes,
-    hg_uint32_t *actual_count)
-{
-    return(HG_Bulk_access(handle, offset, size, flags, max_count,
-        buf_ptrs, buf_sizes, actual_count));
-}
-
-hg_size_t margo_bulk_get_size(
-    hg_bulk_t handle)
-{
-    return(HG_Bulk_get_size(handle));
-}
-
-hg_uint32_t margo_bulk_get_segment_count(
-    hg_bulk_t handle)
-{
-    return(HG_Bulk_get_segment_count(handle));
-}
-
-hg_size_t margo_bulk_get_serialize_size(
-    hg_bulk_t handle,
-    hg_bool_t request_eager)
-{
-    return(HG_Bulk_get_serialize_size(handle, request_eager));
-}
-
-hg_return_t margo_bulk_serialize(
-    void *buf,
-    hg_size_t buf_size,
-    hg_bool_t request_eager,
-    hg_bulk_t handle)
-{
-    return(HG_Bulk_serialize(buf, buf_size, request_eager, handle));
 }
 
 hg_return_t margo_bulk_deserialize(

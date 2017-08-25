@@ -306,8 +306,7 @@ hg_return_t margo_destroy(
  *
  * \return HG_SUCCESS or corresponding HG error code
  */
-hg_return_t margo_ref_incr(
-    hg_handle_t handle);
+#define margo_ref_incr HG_Ref_incr
 
 /**
  * Get info from handle.
@@ -316,8 +315,7 @@ hg_return_t margo_ref_incr(
  *
  * \return Pointer to info or NULL in case of failure
  */
-const struct hg_info *margo_get_info(
-    hg_handle_t handle);
+#define margo_get_info HG_Get_info
 
 /**
  * Get input from handle (requires registration of input proc to deserialize
@@ -328,9 +326,7 @@ const struct hg_info *margo_get_info(
  *
  * \return HG_SUCCESS or corresponding HG error code
  */
-hg_return_t margo_get_input(
-    hg_handle_t handle,
-    void *in_struct);
+#define margo_get_input HG_Get_input
 
 /**
  * Free resources allocated when deserializing the input.
@@ -340,9 +336,7 @@ hg_return_t margo_get_input(
  *
  * \return HG_SUCCESS or corresponding HG error code
  */
-hg_return_t margo_free_input(
-        hg_handle_t handle,
-        void *in_struct);
+#define margo_free_input HG_Free_input
 
 /**
  * Get output from handle (requires registration of output proc to deserialize
@@ -353,9 +347,7 @@ hg_return_t margo_free_input(
  *
  * \return HG_SUCCESS or corresponding HG error code
  */
-hg_return_t margo_get_output(
-    hg_handle_t handle,
-    void *out_struct);
+#define margo_get_output HG_Get_output
 
 /**
  * Free resources allocated when deserializing the output.
@@ -365,9 +357,7 @@ hg_return_t margo_get_output(
  *
  * \return HG_SUCCESS or corresponding HG error code
  */
-hg_return_t margo_free_output(
-    hg_handle_t handle,
-    void *out_struct);
+#define margo_free_output HG_Free_output
 
 /**
  * Set target ID that will receive and process RPC request.
@@ -377,9 +367,7 @@ hg_return_t margo_free_output(
  *
  * \return HG_SUCCESS or corresponding HG error code
  */
-hg_return_t margo_set_target_id(
-    hg_handle_t handle,
-    hg_uint8_t target_id);
+#define margo_set_target_id HG_Set_target_id
 
 /**
  * Forward an RPC request to a remote host
@@ -469,8 +457,7 @@ hg_return_t margo_bulk_free(
  *
  * \return HG_SUCCESS or corresponding HG error code
  */
-hg_return_t margo_bulk_ref_incr(
-    hg_bulk_t handle);
+#define margo_bulk_ref_incr HG_Bulk_ref_incr
 
 /**
  * Access bulk handle to retrieve memory segments abstracted by handle.
@@ -488,15 +475,7 @@ hg_return_t margo_bulk_ref_incr(
  *
  * \return HG_SUCCESS or corresponding HG error code
  */
-hg_return_t margo_bulk_access(
-    hg_bulk_t handle,
-    hg_size_t offset,
-    hg_size_t size,
-    hg_uint8_t flags,
-    hg_uint32_t max_count,
-    void **buf_ptrs,
-    hg_size_t *buf_sizes,
-    hg_uint32_t *actual_count);
+#define margo_bulk_access HG_Bulk_access
 
 /**
  * Get total size of data abstracted by bulk handle.
@@ -505,8 +484,7 @@ hg_return_t margo_bulk_access(
  *
  * \return Non-negative value
  */
-hg_size_t margo_bulk_get_size(
-    hg_bulk_t handle);
+#define margo_bulk_get_size HG_Bulk_get_size
 
 /**
  * Get total number of segments abstracted by bulk handle.
@@ -515,8 +493,7 @@ hg_size_t margo_bulk_get_size(
  *
  * \return Non-negative value
  */
-hg_uint32_t margo_bulk_get_segment_count(
-    hg_bulk_t handle);
+#define margo_bulk_get_segment_count HG_Bulk_get_segment_count
 
 /**
  * Get size required to serialize bulk handle.
@@ -528,9 +505,7 @@ hg_uint32_t margo_bulk_get_segment_count(
  *
  * \return Non-negative value
  */
-hg_size_t margo_bulk_get_serialize_size(
-    hg_bulk_t handle,
-    hg_bool_t request_eager);
+#define margo_bulk_get_serialize_size HG_Bulk_get_serialize_size
 
 /**
  * Serialize bulk handle into a buffer.
@@ -545,11 +520,7 @@ hg_size_t margo_bulk_get_serialize_size(
  *
  * \return HG_SUCCESS or corresponding HG error code
  */
-hg_return_t margo_bulk_serialize(
-    void *buf,
-    hg_size_t buf_size,
-    hg_bool_t request_eager,
-    hg_bulk_t handle);
+#define margo_bulk_serialize HG_Bulk_serialize
 
 /**
  * Deserialize bulk handle from an existing buffer.
