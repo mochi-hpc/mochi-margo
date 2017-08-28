@@ -8,9 +8,8 @@
 #include <assert.h>
 #include <unistd.h>
 #include <abt.h>
-#include <abt-snoozer.h>
 #include <margo.h>
-
+#include <margo-config.h>
 #include "svc1-server.h"
 #include "svc2-server.h"
 
@@ -113,8 +112,15 @@ int main(int argc, char **argv)
     assert(ret == 0);
 
     /* create a dedicated xstream and pool for another instance of svc1 */
+#ifdef HAVE_ABT_SNOOZER
     ret = ABT_snoozer_xstream_create(1, &svc1_pool2, &svc1_xstream2);
-    assert(ret == 0);
+	assert(ret == 0);
+#else
+	ret = ABT_xstream_create(ABT_SCHED_NULL, &svc1_xstream2);
+	assert(ret == 0);
+	ret = ABT_xstream_get_main_pools(svc1_xstream2, 1, &svc1_pool2);
+	assert(ret == 0);
+#endif
     /* register svc1, with mplex_id 2, to execute on a separate pool.  This
      * will result in svc1 being registered twice, with the client being able
      * to dictate which instance they want to target

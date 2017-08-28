@@ -9,7 +9,11 @@
 #include <unistd.h>
 #include <errno.h>
 #include <abt.h>
+
+#include <margo-config.h>
+#ifdef HAVE_ABT_SNOOZER
 #include <abt-snoozer.h>
+#endif
 #include <time.h>
 #include <math.h>
 
@@ -126,13 +130,22 @@ margo_instance_id margo_init(const char *addr_str, int mode,
     if(ret != 0) goto err;
 
     /* set caller (self) ES to idle without polling */
+#ifdef HAVE_ABT_SNOOZER
     ret = ABT_snoozer_xstream_self_set();
     if(ret != 0) goto err;
+#endif
 
     if (use_progress_thread)
     {
+#ifdef HAVE_ABT_SNOOZER
         ret = ABT_snoozer_xstream_create(1, &progress_pool, &progress_xstream);
-        if (ret != ABT_SUCCESS) goto err;
+		if (ret != ABT_SUCCESS) goto err;
+#else
+		ret = ABT_xstream_create(ABT_SCHED_NULL, &progress_xstream);
+		if (ret != ABT_SUCCESS) goto err;
+		ret = ABT_xstream_get_main_pools(progress_xstream, 1, &progress_pool);
+		if (ret != ABT_SUCCESS) goto err;
+#endif
     }
     else
     {
@@ -146,11 +159,21 @@ margo_instance_id margo_init(const char *addr_str, int mode,
     {
         if (rpc_thread_count > 0)
         {
-            rpc_xstreams = malloc(rpc_thread_count * sizeof(*rpc_xstreams));
+            rpc_xstreams = calloc(rpc_thread_count, sizeof(*rpc_xstreams));
             if (rpc_xstreams == NULL) goto err;
+#ifdef HAVE_ABT_SNOOZER
             ret = ABT_snoozer_xstream_create(rpc_thread_count, &rpc_pool,
                     rpc_xstreams);
             if (ret != ABT_SUCCESS) goto err;
+#else
+			int j;
+			ret = ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE, &rpc_pool);
+			if (ret != ABT_SUCCESS) goto err;
+			for(j=0; j<rpc_thread_count; j++) {
+				ret = ABT_xstream_create(ABT_SCHED_NULL, rpc_xstreams+j);
+				if (ret != ABT_SUCCESS) goto err;
+			}
+#endif
         }
         else if (rpc_thread_count == 0)
         {
