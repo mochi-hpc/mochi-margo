@@ -22,8 +22,8 @@ static hg_id_t data_xfer_read_id = -1;
 int composed_register_client(margo_instance_id mid)
 {
 
-	MARGO_REGISTER(mid, "delegator_read", 
-        delegator_read_in_t, delegator_read_out_t, NULL, &delegator_read_id);
+	delegator_read_id = MARGO_REGISTER(mid, "delegator_read", 
+        delegator_read_in_t, delegator_read_out_t, NULL);
 
     return(0);
 }
@@ -31,8 +31,8 @@ int composed_register_client(margo_instance_id mid)
 int data_xfer_register_client(margo_instance_id mid)
 {
 
-	MARGO_REGISTER(mid, "data_xfer_read", 
-        data_xfer_read_in_t, data_xfer_read_out_t, NULL, &data_xfer_read_id);
+	data_xfer_read_id = MARGO_REGISTER(mid, "data_xfer_read", 
+        data_xfer_read_in_t, data_xfer_read_out_t, NULL);
 
     return(0);
 }
@@ -42,39 +42,37 @@ void composed_read(margo_instance_id mid, hg_addr_t svr_addr, void *buffer, hg_s
     hg_handle_t handle;
     delegator_read_in_t in;
     delegator_read_out_t out;
-    int ret;
-    const struct hg_info *hgi;
+    hg_return_t hret;
 
     /* create handle */
-    ret = HG_Create(margo_get_context(mid), svr_addr, delegator_read_id, &handle);
-    assert(ret == 0);
+    hret = margo_create(mid, svr_addr, delegator_read_id, &handle);
+    assert(hret == HG_SUCCESS);
 
     /* register buffer for rdma/bulk access by server */
-    hgi = HG_Get_info(handle);
-    assert(hgi);
-    ret = HG_Bulk_create(hgi->hg_class, 1, &buffer, &buffer_sz, 
+    hret = margo_bulk_create(mid, 1, &buffer, &buffer_sz, 
         HG_BULK_WRITE_ONLY, &in.bulk_handle);
-    assert(ret == 0);
+    assert(hret == HG_SUCCESS);
 
     in.data_xfer_svc_addr = data_xfer_svc_addr_string;
 
 #if 0
-    HG_Set_target_id(handle, mplex_id);
+    margo_set_target_id(handle, mplex_id);
 #endif
 
     /* Send rpc. Note that we are also transmitting the bulk handle in the
      * input struct.  It was set above. 
      */ 
-    margo_forward(mid, handle, &in);
+    hret = margo_forward(mid, handle, &in);
+    assert(hret == HG_SUCCESS);
 
     /* decode response */
-    ret = HG_Get_output(handle, &out);
-    assert(ret == 0);
+    hret = margo_get_output(handle, &out);
+    assert(hret == HG_SUCCESS);
 
     /* clean up resources consumed by this rpc */
-    HG_Bulk_free(in.bulk_handle);
-    HG_Free_output(handle, &out);
-    HG_Destroy(handle);
+    margo_free_output(handle, &out);
+    margo_bulk_free(in.bulk_handle);
+    margo_destroy(handle);
 
     return;
 }
@@ -84,51 +82,48 @@ void data_xfer_read(margo_instance_id mid, hg_addr_t svr_addr, void *buffer, hg_
     hg_handle_t handle;
     data_xfer_read_in_t in;
     data_xfer_read_out_t out;
-    int ret;
-    const struct hg_info *hgi;
+    hg_return_t hret;
     hg_addr_t addr_self;
     char addr_self_string[128];
     hg_size_t addr_self_string_sz = 128;
 
     /* create handle */
-    ret = HG_Create(margo_get_context(mid), svr_addr, data_xfer_read_id, &handle);
-    assert(ret == 0);
+    hret = margo_create(mid, svr_addr, data_xfer_read_id, &handle);
+    assert(hret == HG_SUCCESS);
 
     /* register buffer for rdma/bulk access by server */
-    hgi = HG_Get_info(handle);
-    assert(hgi);
-    ret = HG_Bulk_create(hgi->hg_class, 1, &buffer, &buffer_sz, 
+    hret = margo_bulk_create(mid, 1, &buffer, &buffer_sz, 
         HG_BULK_WRITE_ONLY, &in.bulk_handle);
-    assert(ret == 0);
+    assert(hret == HG_SUCCESS);
 
     /* figure out local address */
-    ret = HG_Addr_self(margo_get_class(mid), &addr_self);
-    assert(ret == HG_SUCCESS);
+    hret = margo_addr_self(mid, &addr_self);
+    assert(hret == HG_SUCCESS);
 
-    ret = HG_Addr_to_string(margo_get_class(mid), addr_self_string, &addr_self_string_sz, addr_self);
-    assert(ret == HG_SUCCESS);
+    hret = margo_addr_to_string(mid, addr_self_string, &addr_self_string_sz, addr_self);
+    assert(hret == HG_SUCCESS);
 
     in.client_addr = addr_self_string;
 
 #if 0
-    HG_Set_target_id(handle, mplex_id);
+    margo_set_target_id(handle, mplex_id);
 #endif
 
     /* Send rpc. Note that we are also transmitting the bulk handle in the
      * input struct.  It was set above. 
      */ 
-    margo_forward(mid, handle, &in);
+    hret = margo_forward(mid, handle, &in);
+    assert(hret == HG_SUCCESS);
 
     /* decode response */
-    ret = HG_Get_output(handle, &out);
-    assert(ret == 0);
+    hret = margo_get_output(handle, &out);
+    assert(hret == HG_SUCCESS);
 
     /* clean up resources consumed by this rpc */
-    HG_Bulk_free(in.bulk_handle);
-    HG_Free_output(handle, &out);
-    HG_Destroy(handle);
-    HG_Addr_free(margo_get_class(mid), addr_self);
+    margo_free_output(handle, &out);
+    margo_bulk_free(in.bulk_handle);
+    margo_destroy(handle);
+    margo_addr_free(mid, addr_self);
 
     return;
 }
-

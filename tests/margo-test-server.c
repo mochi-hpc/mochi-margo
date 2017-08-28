@@ -7,13 +7,13 @@
 #include <stdio.h>
 #include <assert.h>
 #include <unistd.h>
+#include <mercury.h>
 #include <abt.h>
-#include <abt-snoozer.h>
 #include <margo.h>
 
 #include "my-rpc.h"
 
-/* example server program.  Starts HG engine, registers the example RPC type,
+/* example server program.  Starts margo, registers the example RPC type,
  * and then executes indefinitely.
  */
 
@@ -28,31 +28,26 @@ static void parse_args(int argc, char **argv, struct options *opts);
 
 int main(int argc, char **argv) 
 {
-    int ret;
+    hg_return_t hret;
     margo_instance_id mid;
-    ABT_xstream handler_xstream;
-    ABT_pool handler_pool;
-    ABT_xstream progress_xstream;
-    ABT_pool progress_pool;
-    hg_context_t *hg_context;
-    hg_class_t *hg_class;
     struct options opts;
 
     parse_args(argc, argv, &opts);
 
-    /* boilerplate HG initialization steps */
+    /* actually start margo -- this step encapsulates the Mercury and
+     * Argobots initialization and must precede their use */
+    /* If single pool mode, use the calling xstream to drive progress and
+     * execute handlers. If not, use a dedicated progress xstream and
+     * run handlers directly on the calling xstream
+     */
     /***************************************/
-    hg_class = HG_Init(opts.listen_addr, HG_TRUE);
-    if(!hg_class)
+    if(opts.single_pool_mode)
+        mid = margo_init(opts.listen_addr, MARGO_SERVER_MODE, 0, -1);
+    else
+        mid = margo_init(opts.listen_addr, MARGO_SERVER_MODE, 1, 0);
+    if(mid == MARGO_INSTANCE_NULL)
     {
-        fprintf(stderr, "Error: HG_Init()\n");
-        return(-1);
-    }
-    hg_context = HG_Context_create(hg_class);
-    if(!hg_context)
-    {
-        fprintf(stderr, "Error: HG_Context_create()\n");
-        HG_Finalize(hg_class);
+        fprintf(stderr, "Error: margo_init()\n");
         return(-1);
     }
 
@@ -64,32 +59,28 @@ int main(int argc, char **argv)
         hg_size_t addr_self_string_sz = 128;
 
         /* figure out what address this server is listening on */
-        ret = HG_Addr_self(hg_class, &addr_self);
-        if(ret != HG_SUCCESS)
+        hret = margo_addr_self(mid, &addr_self);
+        if(hret != HG_SUCCESS)
         {
-            fprintf(stderr, "Error: HG_Addr_self()\n");
-            HG_Context_destroy(hg_context);
-            HG_Finalize(hg_class);
+            fprintf(stderr, "Error: margo_addr_self()\n");
+            margo_finalize(mid);
             return(-1);
         }
-        ret = HG_Addr_to_string(hg_class, addr_self_string, &addr_self_string_sz, addr_self);
-        if(ret != HG_SUCCESS)
+        hret = margo_addr_to_string(mid, addr_self_string, &addr_self_string_sz, addr_self);
+        if(hret != HG_SUCCESS)
         {
-            fprintf(stderr, "Error: HG_Addr_self()\n");
-            HG_Context_destroy(hg_context);
-            HG_Finalize(hg_class);
-            HG_Addr_free(hg_class, addr_self);
+            fprintf(stderr, "Error: margo_addr_to_string()\n");
+            margo_addr_free(mid, addr_self);
+            margo_finalize(mid);
             return(-1);
         }
-        HG_Addr_free(hg_class, addr_self);
+        margo_addr_free(mid, addr_self);
 
         fp = fopen(opts.hostfile, "w");
         if(!fp)
         {
             perror("fopen");
-            HG_Context_destroy(hg_context);
-            HG_Finalize(hg_class);
-            HG_Addr_free(hg_class, addr_self);
+            margo_finalize(mid);
             return(-1);
         }
 
@@ -97,67 +88,13 @@ int main(int argc, char **argv)
         fclose(fp);
     }
 
-    /* set up argobots */
-    /***************************************/
-    ret = ABT_init(argc, argv);
-    if(ret != 0)
-    {
-        fprintf(stderr, "Error: ABT_init()\n");
-        return(-1);
-    }
-
-    /* set primary ES to idle without polling */
-    ret = ABT_snoozer_xstream_self_set();
-    if(ret != 0)
-    {
-        fprintf(stderr, "Error: ABT_snoozer_xstream_self_set()\n");
-        return(-1);
-    }
-
-    /* Find primary pool to use for running rpc handlers */
-    ret = ABT_xstream_self(&handler_xstream);
-    if(ret != 0)
-    {
-        fprintf(stderr, "Error: ABT_xstream_self()\n");
-        return(-1);
-    }
-    ret = ABT_xstream_get_main_pools(handler_xstream, 1, &handler_pool);
-    if(ret != 0)
-    {
-        fprintf(stderr, "Error: ABT_xstream_get_main_pools()\n");
-        return(-1);
-    }
-
-    if(!opts.single_pool_mode)
-    {
-        /* create a dedicated ES drive Mercury progress */
-        ret = ABT_snoozer_xstream_create(1, &progress_pool, &progress_xstream);
-        if(ret != 0)
-        {
-            fprintf(stderr, "Error: ABT_snoozer_xstream_create()\n");
-            return(-1);
-        }
-    }
-
-    /* actually start margo */
-    /* provide argobots pools for driving communication progress and
-     * executing rpc handlers as well as class and context for Mercury
-     * communication.
-     */
-    /***************************************/
-    if(opts.single_pool_mode)
-        mid = margo_init_pool(handler_pool, handler_pool, hg_context);
-    else
-        mid = margo_init_pool(progress_pool, handler_pool, hg_context);
-    assert(mid);
-
     /* register RPC */
-    MERCURY_REGISTER(hg_class, "my_rpc", my_rpc_in_t, my_rpc_out_t, 
-        my_rpc_ult_handler);
-    MERCURY_REGISTER(hg_class, "my_rpc_hang", my_rpc_hang_in_t, my_rpc_hang_out_t, 
-        my_rpc_hang_ult_handler);
-    MERCURY_REGISTER(hg_class, "my_shutdown_rpc", void, void, 
-        my_rpc_shutdown_ult_handler);
+    MARGO_REGISTER(mid, "my_rpc", my_rpc_in_t, my_rpc_out_t, 
+        my_rpc_ult);
+    MARGO_REGISTER(mid, "my_rpc_hang", my_rpc_hang_in_t, my_rpc_hang_out_t, 
+        my_rpc_hang_ult);
+    MARGO_REGISTER(mid, "my_shutdown_rpc", void, void, 
+        my_rpc_shutdown_ult);
 
     /* NOTE: at this point this server ULT has two options.  It can wait on
      * whatever mechanism it wants to (however long the daemon should run and
@@ -174,17 +111,6 @@ int main(int argc, char **argv)
      * ABT pool.
      */
     margo_wait_for_finalize(mid);
-
-    if(!opts.single_pool_mode)
-    {
-        ABT_xstream_join(progress_xstream);
-        ABT_xstream_free(&progress_xstream);
-    }
-
-    ABT_finalize();
-
-    HG_Context_destroy(hg_context);
-    HG_Finalize(hg_class);
 
     return(0);
 }

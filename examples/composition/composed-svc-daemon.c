@@ -11,7 +11,6 @@
 #include <stdlib.h>
 
 #include <abt.h>
-#include <abt-snoozer.h>
 #include <margo.h>
 
 #include "data-xfer-service.h"
@@ -27,19 +26,17 @@
 static void my_rpc_shutdown_ult(hg_handle_t handle)
 {
     hg_return_t hret;
-    const struct hg_info *hgi;
     margo_instance_id mid;
 
     //printf("Got RPC request to shutdown\n");
 
-    hgi = HG_Get_info(handle);
-    assert(hgi);
     mid = margo_hg_handle_get_instance(handle);
+    assert(mid != MARGO_INSTANCE_NULL);
 
     hret = margo_respond(mid, handle, NULL);
     assert(hret == HG_SUCCESS);
 
-    HG_Destroy(handle);
+    margo_destroy(handle);
 
     /* NOTE: we assume that the server daemon is using
      * margo_wait_for_finalize() to suspend until this RPC executes, so there
@@ -54,10 +51,8 @@ DEFINE_MARGO_RPC_HANDLER(my_rpc_shutdown_ult)
 
 int main(int argc, char **argv) 
 {
-    int ret;
+    hg_return_t hret;
     margo_instance_id mid;
-    hg_context_t *hg_context;
-    hg_class_t *hg_class;
     hg_addr_t addr_self;
     char addr_self_string[128];
     hg_size_t addr_self_string_sz = 128;
@@ -75,65 +70,36 @@ int main(int argc, char **argv)
     svc_list = strdup(argv[2]);
     assert(svc_list);
 
-    /* boilerplate HG initialization steps */
+    /* actually start margo -- this step encapsulates the Mercury and
+     * Argobots initialization and must precede their use */
+    /* Use the calling xstream to drive progress and execute handlers. */
     /***************************************/
-    hg_class = HG_Init(argv[1], HG_TRUE);
-    if(!hg_class)
+    mid = margo_init(argv[1], MARGO_SERVER_MODE, 0, -1);
+    if(mid == MARGO_INSTANCE_NULL)
     {
-        fprintf(stderr, "Error: HG_Init()\n");
-        return(-1);
-    }
-    hg_context = HG_Context_create(hg_class);
-    if(!hg_context)
-    {
-        fprintf(stderr, "Error: HG_Context_create()\n");
-        HG_Finalize(hg_class);
+        fprintf(stderr, "Error: margo_init()\n");
         return(-1);
     }
 
     /* figure out what address this server is listening on */
-    ret = HG_Addr_self(hg_class, &addr_self);
-    if(ret != HG_SUCCESS)
+    hret = margo_addr_self(mid, &addr_self);
+    if(hret != HG_SUCCESS)
     {
-        fprintf(stderr, "Error: HG_Addr_self()\n");
-        HG_Context_destroy(hg_context);
-        HG_Finalize(hg_class);
+        fprintf(stderr, "Error: margo_addr_self()\n");
+        margo_finalize(mid);
         return(-1);
     }
-    ret = HG_Addr_to_string(hg_class, addr_self_string, &addr_self_string_sz, addr_self);
-    if(ret != HG_SUCCESS)
+    hret = margo_addr_to_string(mid, addr_self_string, &addr_self_string_sz, addr_self);
+    if(hret != HG_SUCCESS)
     {
-        fprintf(stderr, "Error: HG_Addr_self()\n");
-        HG_Context_destroy(hg_context);
-        HG_Finalize(hg_class);
-        HG_Addr_free(hg_class, addr_self);
+        fprintf(stderr, "Error: margo_addr_to_string()\n");
+        margo_addr_free(mid, addr_self);
+        margo_finalize(mid);
         return(-1);
     }
-    HG_Addr_free(hg_class, addr_self);
+    margo_addr_free(mid, addr_self);
 
     printf("# accepting RPCs on address \"%s\"\n", addr_self_string);
-
-    /* set up argobots */
-    /***************************************/
-    ret = ABT_init(argc, argv);
-    if(ret != 0)
-    {
-        fprintf(stderr, "Error: ABT_init()\n");
-        return(-1);
-    }
-
-    /* set primary ES to idle without polling */
-    ret = ABT_snoozer_xstream_self_set();
-    if(ret != 0)
-    {
-        fprintf(stderr, "Error: ABT_snoozer_xstream_self_set()\n");
-        return(-1);
-    }
-
-    /* actually start margo */
-    /***************************************/
-    mid = margo_init(0, 0, hg_context);
-    assert(mid);
 
     /* register RPCs and services */
     /***************************************/
@@ -141,7 +107,7 @@ int main(int argc, char **argv)
     /* register a shutdown RPC as just a generic handler; not part of a
      * multiplexed service
      */
-    MARGO_REGISTER(mid, "my_shutdown_rpc", void, void, my_rpc_shutdown_ult, MARGO_RPC_ID_IGNORE);
+    MARGO_REGISTER(mid, "my_shutdown_rpc", void, void, my_rpc_shutdown_ult);
 
     handler_pool = margo_get_handler_pool(mid);
     svc = strtok(svc_list, ",");
@@ -178,11 +144,5 @@ int main(int argc, char **argv)
     svc2_deregister(mid, *handler_pool, 3);
 #endif
 
-    ABT_finalize();
-
-    HG_Context_destroy(hg_context);
-    HG_Finalize(hg_class);
-
     return(0);
 }
-

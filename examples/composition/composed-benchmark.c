@@ -8,7 +8,6 @@
 #include <assert.h>
 #include <unistd.h>
 #include <abt.h>
-#include <abt-snoozer.h>
 #include <margo.h>
 
 #include "composed-client-lib.h"
@@ -22,8 +21,7 @@ int main(int argc, char **argv)
     int i;
     int ret;
     margo_instance_id mid;
-    hg_context_t *hg_context;
-    hg_class_t *hg_class;
+    hg_return_t hret;
     hg_addr_t delegator_svr_addr = HG_ADDR_NULL;
     hg_addr_t data_xfer_svr_addr = HG_ADDR_NULL;
     hg_handle_t handle;
@@ -40,64 +38,36 @@ int main(int argc, char **argv)
     ret = sscanf(argv[3], "%d", &iterations);
     assert(ret == 1);
        
-    /* boilerplate HG initialization steps */
-    /***************************************/
-
     /* initialize Mercury using the transport portion of the destination
      * address (i.e., the part before the first : character if present)
      */
     for(i=0; i<11 && argv[1][i] != '\0' && argv[1][i] != ':'; i++)
         proto[i] = argv[1][i];
+
     /* TODO: this is a hack for now; I don't really want this to operate in server mode,
      * but it seems like it needs to for now for sub-service to be able to get back to it
      */
-    hg_class = HG_Init(proto, HG_TRUE);
-    if(!hg_class)
-    {
-        fprintf(stderr, "Error: HG_Init()\n");
-        return(-1);
-    }
-    hg_context = HG_Context_create(hg_class);
-    if(!hg_context)
-    {
-        fprintf(stderr, "Error: HG_Context_create()\n");
-        HG_Finalize(hg_class);
-        return(-1);
-    }
-
-    /* set up argobots */
-    /***************************************/
-    ret = ABT_init(argc, argv);
-    if(ret != 0)
-    {
-        fprintf(stderr, "Error: ABT_init()\n");
-        return(-1);
-    }
-
-    /* set primary ES to idle without polling */
-    ret = ABT_snoozer_xstream_self_set();
-    if(ret != 0)
-    {
-        fprintf(stderr, "Error: ABT_snoozer_xstream_self_set()\n");
-        return(-1);
-    }
-
     /* actually start margo */
     /***************************************/
-    mid = margo_init(0, 0, hg_context);
+    mid = margo_init(proto, MARGO_SERVER_MODE, 0, -1);
+    if(mid == MARGO_INSTANCE_NULL)
+    {
+        fprintf(stderr, "Error: margo_init()\n");
+        return(-1);
+    }
 
     /* register core RPC */
-   MARGO_REGISTER(hg_class, "my_shutdown_rpc", void, void, 
-        NULL, &my_rpc_shutdown_id);
+    my_rpc_shutdown_id = MARGO_REGISTER(mid, "my_shutdown_rpc",
+        void, void, NULL);
     /* register service APIs */
     data_xfer_register_client(mid);
     composed_register_client(mid);
 
     /* find addrs for servers */
-    ret = margo_addr_lookup(mid, argv[2], &data_xfer_svr_addr);
-    assert(ret == 0);
-    ret = margo_addr_lookup(mid, argv[1], &delegator_svr_addr);
-    assert(ret == 0);
+    hret = margo_addr_lookup(mid, argv[2], &data_xfer_svr_addr);
+    assert(hret == HG_SUCCESS);
+    hret = margo_addr_lookup(mid, argv[1], &delegator_svr_addr);
+    assert(hret == HG_SUCCESS);
 
     buffer = calloc(1, buffer_sz);
     assert(buffer);
@@ -150,33 +120,28 @@ int main(int argc, char **argv)
     /* send rpc(s) to shut down server(s) */
     sleep(3);
     printf("Shutting down delegator server.\n");
-    ret = HG_Create(hg_context, delegator_svr_addr, my_rpc_shutdown_id, &handle);
-    assert(ret == 0);
-    margo_forward(mid, handle, NULL);
-    HG_Destroy(handle);
+    hret = margo_create(mid, delegator_svr_addr, my_rpc_shutdown_id, &handle);
+    assert(hret == HG_SUCCESS);
+    hret = margo_forward(mid, handle, NULL);
+    assert(hret == HG_SUCCESS);
+    margo_destroy(handle);
     if(strcmp(argv[1], argv[2]))
     {
         sleep(3);
         printf("Shutting down data_xfer server.\n");
-        ret = HG_Create(hg_context, data_xfer_svr_addr, my_rpc_shutdown_id, &handle);
-        assert(ret == 0);
-        margo_forward(mid, handle, NULL);
-        HG_Destroy(handle);
+        hret = margo_create(mid, data_xfer_svr_addr, my_rpc_shutdown_id, &handle);
+        assert(hret == HG_SUCCESS);
+        hret = margo_forward(mid, handle, NULL);
+        assert(hret == HG_SUCCESS);
+        margo_destroy(handle);
     }
 
-    HG_Addr_free(hg_class, delegator_svr_addr);
-    HG_Addr_free(hg_class, data_xfer_svr_addr);
+    margo_addr_free(mid, delegator_svr_addr);
+    margo_addr_free(mid, data_xfer_svr_addr);
 
     /* shut down everything */
     margo_finalize(mid);
-    
-    ABT_finalize();
-
-    HG_Context_destroy(hg_context);
-    HG_Finalize(hg_class);
     free(buffer);
 
     return(0);
 }
-
-
