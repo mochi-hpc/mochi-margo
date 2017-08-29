@@ -10,6 +10,9 @@
 #include <abt.h>
 #include <margo.h>
 #include <margo-config.h>
+#ifdef HAVE_ABT_SNOOZER
+#include <abt-snoozer.h>
+#endif
 #include "svc1-server.h"
 #include "svc2-server.h"
 
