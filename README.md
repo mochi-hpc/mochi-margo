@@ -27,8 +27,8 @@ Note that Margo should be compatible with any Mercury transport (NA plugin).  Th
 
 * mercury  (git clone --recurse-submodules https://github.com/mercury-hpc/mercury.git)
 * argobots (git clone https://github.com/pmodels/argobots.git)
-* abt-snoozer (git clone https://xgitlab.cels.anl.gov/sds/abt-snoozer)
 * libev (e.g libev-dev package on Ubuntu or Debian)
+* (optional) abt-snoozer (git clone https://xgitlab.cels.anl.gov/sds/abt-snoozer)
 
 ### Recommended Mercury build options
 
