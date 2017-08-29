@@ -72,12 +72,17 @@ LIBS="$ARGOBOTS_LIBS $LIBS"
 CPPFLAGS="$ARGOBOTS_CFLAGS $CPPFLAGS"
 CFLAGS="$ARGOBOTS_CFLAGS $CFLAGS"
 
+PC_REQUIRES="mercury argobots"
 PKG_CHECK_MODULES([ABT_SNOOZER],[abt-snoozer],
-	[AC_DEFINE([HAVE_ABT_SNOOZER], [1], [Use ABT-SNOOZER])],
+	[
+            AC_DEFINE([HAVE_ABT_SNOOZER], [1], [Use ABT-SNOOZER])
+            PC_REQUIRES="$PC_REQUIRES abt-snoozer"
+        ],
 	[printf ""])
 LIBS="$ABT_SNOOZER_LIBS $LIBS"
 CPPFLAGS="$ABT_SNOOZER_CFLAGS $CPPFLAGS"
 CFLAGS="$ABT_SNOOZER_CFLAGS $CFLAGS"
+AC_SUBST([PC_REQUIRES], ["$PC_REQUIRES"])
 
 # turn off a warning that is tripping up our use of utlist at the moment
 CFLAGS="-Wno-address $CFLAGS"

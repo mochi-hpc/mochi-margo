@@ -7,6 +7,6 @@ Name: margo
 Description: Argobots bindings for Mercury RPC library
 Version: 0.1
 URL: https://xgitlab.cels.anl.gov/sds/margo
-Requires: mercury abt-snoozer argobots
+Requires: @PC_REQUIRES@
 Libs: -L${libdir} -lmargo
 Cflags: -I${includedir}
