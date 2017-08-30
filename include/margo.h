@@ -292,11 +292,13 @@ hg_return_t margo_create(
 /**
  * Destroy Mercury handle.
  *
- * \param [in] handle Mercury handle
+ * \param [in] mid      Margo instance 
+ * \param [in] handle   Mercury handle
  *
  * \return HG_SUCCESS or corresponding HG error code
  */
 hg_return_t margo_destroy(
+    margo_instance_id mid,
     hg_handle_t handle);
 
 /**

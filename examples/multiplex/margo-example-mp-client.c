@@ -76,7 +76,7 @@ int main(int argc, char **argv)
     hret = margo_forward(mid, handle, NULL);
     assert(hret == HG_SUCCESS);
 
-    margo_destroy(handle);
+    margo_destroy(mid, handle);
     margo_addr_free(mid, svr_addr);
 
     /* shut down everything */

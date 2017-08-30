@@ -66,7 +66,7 @@ static void data_xfer_read_ult(hg_handle_t handle)
     hret = margo_respond(mid, handle, &out);
     assert(hret == HG_SUCCESS);
 
-    margo_destroy(handle);
+    margo_destroy(mid, handle);
 
     return;
 }

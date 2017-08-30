@@ -124,7 +124,7 @@ int main(int argc, char **argv)
     assert(hret == HG_SUCCESS);
     hret = margo_forward(mid, handle, NULL);
     assert(hret == HG_SUCCESS);
-    margo_destroy(handle);
+    margo_destroy(mid, handle);
     if(strcmp(argv[1], argv[2]))
     {
         sleep(3);
@@ -133,7 +133,7 @@ int main(int argc, char **argv)
         assert(hret == HG_SUCCESS);
         hret = margo_forward(mid, handle, NULL);
         assert(hret == HG_SUCCESS);
-        margo_destroy(handle);
+        margo_destroy(mid, handle);
     }
 
     margo_addr_free(mid, delegator_svr_addr);

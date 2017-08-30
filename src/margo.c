@@ -23,6 +23,7 @@
 #include "uthash.h"
 
 #define DEFAULT_MERCURY_PROGRESS_TIMEOUT_UB 100 /* 100 milliseconds */
+#define DEFAULT_MERCURY_HANDLE_CACHE_SIZE 32
 
 struct mplex_key
 {
@@ -53,9 +54,16 @@ do {\
     if((__time) < __data.min) __data.min = (__time); \
 } while(0)
 
+struct margo_handle_cache_el
+{
+    hg_handle_t handle;
+    UT_hash_handle hh; /* in-use hash link */
+    struct margo_handle_cache_el *next; /* free list link */
+};
+
 struct margo_instance
 {
-    /* provided by caller */
+    /* mercury/argobots state */
     hg_context_t *hg_context;
     hg_class_t *hg_class;
     ABT_pool handler_pool;
@@ -79,6 +87,10 @@ struct margo_instance
 
     /* hash table to track multiplexed rpcs registered with margo */
     struct mplex_element *mplex_table;
+
+    /* linked list of free hg handles and a hash of in-use handles */
+    struct margo_handle_cache_el *free_handle_list;
+    struct margo_handle_cache_el *used_handle_hash;
 
     /* optional diagnostics data tracking */
     /* NOTE: technically the following fields are subject to races if they
@@ -108,6 +120,13 @@ struct margo_rpc_data
 
 static void hg_progress_fn(void* foo);
 static void margo_rpc_data_free(void* ptr);
+
+static hg_return_t margo_handle_cache_init(margo_instance_id mid);
+static void margo_handle_cache_destroy(margo_instance_id mid);
+static hg_return_t margo_handle_cache_get(margo_instance_id mid,
+    hg_addr_t addr, hg_id_t id, hg_handle_t *handle);
+static hg_return_t margo_handle_cache_put(margo_instance_id mid,
+    hg_handle_t handle);
 
 margo_instance_id margo_init(const char *addr_str, int mode,
     int use_progress_thread, int rpc_thread_count)
@@ -239,6 +258,7 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
     hg_context_t *hg_context)
 {
     int ret;
+    hg_return_t hret;
     struct margo_instance *mid;
 
     mid = malloc(sizeof(*mid));
@@ -258,6 +278,10 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
     ret = margo_timer_instance_init(mid);
     if(ret != 0) goto err;
 
+    /* initialize the handle cache */
+    hret = margo_handle_cache_init(mid);
+    if(hret != HG_SUCCESS) goto err;
+
     ret = ABT_thread_create(mid->progress_pool, hg_progress_fn, mid, 
         ABT_THREAD_ATTR_NULL, &mid->hg_progress_tid);
     if(ret != 0) goto err;
@@ -267,6 +291,7 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
 err:
     if(mid)
     {
+        margo_handle_cache_destroy(mid);
         margo_timer_instance_finalize(mid);
         ABT_mutex_free(&mid->finalize_mutex);
         ABT_cond_free(&mid->finalize_cond);
@@ -299,6 +324,8 @@ static void margo_cleanup(margo_instance_id mid)
         }
         free(mid->rpc_xstreams);
     }
+
+    margo_handle_cache_destroy(mid);
 
     if (mid->margo_init)
     {
@@ -553,16 +580,32 @@ hg_return_t margo_addr_to_string(
 hg_return_t margo_create(margo_instance_id mid, hg_addr_t addr,
     hg_id_t id, hg_handle_t *handle)
 {
-    /* TODO: handle caching logic? */
+    hg_return_t hret;
 
-    return(HG_Create(mid->hg_context, addr, id, handle));
+    /* look for a handle to reuse */
+    hret = margo_handle_cache_get(mid, addr, id, handle);
+    if(hret != HG_SUCCESS)
+    {
+        /* else try creating a new handle */
+        hret = HG_Create(mid->hg_context, addr, id, handle);
+    }
+
+    return hret;
 }
 
-hg_return_t margo_destroy(hg_handle_t handle)
+hg_return_t margo_destroy(margo_instance_id mid, hg_handle_t handle)
 {
-    /* TODO handle caching logic? */
+    hg_return_t hret;
 
-    return(HG_Destroy(handle));
+    /* recycle this handle if it came from the handle cache */
+    hret = margo_handle_cache_put(mid, handle);
+    if(hret != HG_SUCCESS)
+    {
+        /* else destroy the handle manually */
+        hret = HG_Destroy(handle);
+    }
+
+    return hret;
 }
 
 static hg_return_t margo_cb(const struct hg_cb_info *info)
@@ -1130,4 +1173,106 @@ void margo_get_param(margo_instance_id mid, int option, void *param)
     }
 
     return;
+}
+
+static hg_return_t margo_handle_cache_init(margo_instance_id mid)
+{
+    int i;
+    struct margo_handle_cache_el *el;
+    hg_return_t hret = HG_SUCCESS;
+
+    for(i = 0; i < DEFAULT_MERCURY_HANDLE_CACHE_SIZE; i++)
+    {
+        el = malloc(sizeof(*el));
+        if(!el)
+        {
+            hret = HG_NOMEM_ERROR;
+            margo_handle_cache_destroy(mid);
+            break;
+        }
+
+        /* create handle with NULL_ADDRs, we will reset later to valid addrs */
+        hret = HG_Create(mid->hg_context, HG_ADDR_NULL, 0, &el->handle);
+        if(hret != HG_SUCCESS)
+        {
+            free(el);
+            margo_handle_cache_destroy(mid);
+            break;
+        }
+
+        /* add to the free list */
+        LL_PREPEND(mid->free_handle_list, el);
+    }
+
+    return hret;
+}
+
+static void margo_handle_cache_destroy(margo_instance_id mid)
+{
+    struct margo_handle_cache_el *el, *tmp;
+
+    /* only free handle list elements -- handles in hash are still in use */
+    LL_FOREACH_SAFE(mid->free_handle_list, el, tmp)
+    {
+        LL_DELETE(mid->free_handle_list, el);
+        HG_Destroy(el->handle);
+        free(el);
+    }
+
+    return;
+}
+
+static hg_return_t margo_handle_cache_get(margo_instance_id mid,
+    hg_addr_t addr, hg_id_t id, hg_handle_t *handle)
+{
+    struct margo_handle_cache_el *el;
+    hg_return_t hret;
+
+    if(!mid->free_handle_list)
+    {
+        /* if no available handles, just fall through */
+        return HG_OTHER_ERROR;
+    }
+
+    /* pop first element from the free handle list */
+    el = mid->free_handle_list;
+    LL_DELETE(mid->free_handle_list, el);
+
+    /* reset handle */
+    hret = HG_Reset(el->handle, addr, id);
+    if(hret == HG_SUCCESS)
+    {
+        /* put on in-use list and pass back handle */
+        HASH_ADD(hh, mid->used_handle_hash, handle, sizeof(hg_handle_t), el);
+        *handle = el->handle;
+    }
+    else
+    {
+        /* reset failed, add handle back to the free list */
+        LL_APPEND(mid->free_handle_list, el);
+    }
+
+    return hret;
+}
+
+static hg_return_t margo_handle_cache_put(margo_instance_id mid,
+    hg_handle_t handle)
+{
+    struct margo_handle_cache_el *el;
+
+    /* look for handle in the in-use hash */
+    HASH_FIND(hh, mid->used_handle_hash, &handle, sizeof(hg_handle_t), el);
+    if(!el)
+    {
+        /* this handle was manually allocated -- just fall through */
+        return HG_OTHER_ERROR;
+    }
+
+    /* remove from the in-use hash */
+    HASH_DELETE(hh, mid->used_handle_hash, el);
+
+    /* add to the tail of the free handle list */
+    LL_APPEND(mid->free_handle_list, el);
+
+    return HG_SUCCESS;
 }

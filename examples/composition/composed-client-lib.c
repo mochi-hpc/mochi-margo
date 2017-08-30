@@ -72,7 +72,7 @@ void composed_read(margo_instance_id mid, hg_addr_t svr_addr, void *buffer, hg_s
     /* clean up resources consumed by this rpc */
     margo_free_output(handle, &out);
     margo_bulk_free(in.bulk_handle);
-    margo_destroy(handle);
+    margo_destroy(mid, handle);
 
     return;
 }
@@ -122,7 +122,7 @@ void data_xfer_read(margo_instance_id mid, hg_addr_t svr_addr, void *buffer, hg_
     /* clean up resources consumed by this rpc */
     margo_free_output(handle, &out);
     margo_bulk_free(in.bulk_handle);
-    margo_destroy(handle);
+    margo_destroy(mid, handle);
     margo_addr_free(mid, addr_self);
 
     return;

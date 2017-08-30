@@ -80,7 +80,7 @@ static void my_rpc_ult(hg_handle_t handle)
     assert(hret == HG_SUCCESS);
 
     margo_bulk_free(bulk_handle);
-    margo_destroy(handle);
+    margo_destroy(mid, handle);
     free(buffer);
 
     return;
@@ -104,7 +104,7 @@ static void my_rpc_shutdown_ult(hg_handle_t handle)
     hret = margo_respond(mid, handle, NULL);
     assert(hret == HG_SUCCESS);
 
-    margo_destroy(handle);
+    margo_destroy(mid, handle);
 
     /* NOTE: we assume that the server daemon is using
      * margo_wait_for_finalize() to suspend until this RPC executes, so there
@@ -164,7 +164,7 @@ static void my_rpc_hang_ult(hg_handle_t handle)
     assert(hret == HG_SUCCESS);
 
     margo_bulk_free(bulk_handle);
-    margo_destroy(handle);
+    margo_destroy(mid, handle);
     free(buffer);
 
     return;
