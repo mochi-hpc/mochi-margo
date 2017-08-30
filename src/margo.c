@@ -754,8 +754,6 @@ hg_return_t margo_bulk_create(
     hg_uint8_t flags,
     hg_bulk_t *handle)
 {
-    /* XXX: handle caching logic? */
-
     return(HG_Bulk_create(mid->hg_class, count,
         buf_ptrs, buf_sizes, flags, handle));
 }
@@ -763,8 +761,6 @@ hg_return_t margo_bulk_create(
 hg_return_t margo_bulk_free(
     hg_bulk_t handle)
 {
-    /* XXX: handle caching logic? */
-
     return(HG_Bulk_free(handle));
 }
 
