@@ -86,7 +86,6 @@ AC_ARG_ENABLE([abt-snoozer],
 
 check_abt_snoozer_status=fail
 if test "x${check_abt_snoozer}" = xauto -o "x${check_abt_snoozer}" = xyes ; then
-    dnl AC_MSG_CHECKING([If abt-snoozer is installed])
     PKG_CHECK_MODULES([ABT_SNOOZER],[abt-snoozer],
         [AC_DEFINE([HAVE_ABT_SNOOZER], [1], [Use ABT-SNOOZER])
          PC_REQUIRES="$PC_REQUIRES abt-snoozer"
