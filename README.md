@@ -182,3 +182,43 @@ Margo allows several different threading/multicore configurations:
 * (for servers) a single Margo instance can launch RPC handlers
   on different operating system threads
 
+## V0.2 API changes
+
+The following list provides details on new changes to the Margo API starting in
+version 0.2:
+
+* margo_init is much more simplified and initializes Mercury and Argobots on behalf of
+  the user (with margo_finalize finalizing them in that case)
+    * the prototype is margo_init(addr_string, MARGO_CLIENT_MODE | MARGO_SERVER_MODE,
+      use_progress_thread, num_rpc_handler_threads)
+    * margo_init_pool is still available as an advanced initialize routine, where the
+      user must initialize Mercury/Argobots and pass in an HG_Context and ABT_pools for
+      RPC handlers and the progress loop
+* Margo now has its own RPC registration functions that should be used for registering
+  RPCs (as Margo is now attaching internal state to RPCs)
+    * MARGO_REGISTER is basically equivalent to MERCURY_REGISTER, except it takes a
+      Margo instance ID rather than a Mercury class
+    * MARGO_REGISTER_MPLEX is mostly the same as above, but allows a user to specify
+      an ABT_pool to use for a given RPC type
+* relatedly, Margo users should now use margo_register_data (rather than HG_Register_data)
+  for associating user data with an RPC type
+    * like Mercury, there is a corresponding margo_registered_data call to retrieve the user pointer
+* the following Mercury-like functions are now defined within Margo, although it is
+  still safe to just use the Mercury calls directly (most are just #defined to the
+  corresponding Mercury call, anyway):
+    * margo_registered_disable_response
+    * margo_addr_free
+    * margo_addr_self
+    * margo_addr_dup
+    * margo_addr_to_string
+    * margo_create
+    * margo_destroy
+        * Note that margo_create/margo_destroy are enhancing HG_Create/HG_Destroy with a
+          cache of reusable handles, so they may be preferable to the Mercury calls
+    * margo_bulk_create
+    * margo_bulk_free
+    * margo_bulk_deserialize
+* margo_hg_handle_get_instance and margo_hg_info_get_instance calls have been added for
+  retrieving a Margo instance ID given a received handle or the HG info struct associated
+  with the handle
+
