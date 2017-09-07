@@ -189,22 +189,21 @@ version 0.2:
 
 * `margo_init()` is much more simplified and initializes Mercury and Argobots on behalf of
   the user (with `margo_finalize()` finalizing them in that case)
-    * the prototype is `margo_init(addr_string, MARGO_CLIENT_MODE | MARGO_SERVER_MODE,
-      use_progress_thread, num_rpc_handler_threads)`
+    * the prototype is `margo_init(addr_string, MARGO_CLIENT_MODE | MARGO_SERVER_MODE, use_progress_thread, num_rpc_handler_threads)`
     * `margo_init_pool()` is still available as an advanced initialize routine, where the
       user must initialize Mercury/Argobots and pass in an `HG_Context` and `ABT_pools` for
       RPC handlers and the progress loop
 * Margo now has its own RPC registration functions that should be used for registering
   RPCs (as Margo is now attaching internal state to RPCs)
     * `MARGO_REGISTER` is basically equivalent to `MERCURY_REGISTER`, except it takes a
-      Margo instance ID rather than a Mercury class
+      `margo_instance_id` rather than a Mercury class
     * `MARGO_REGISTER_MPLEX` is mostly the same as above, but allows a user to specify
       an `ABT_pool` to use for a given RPC type
 * relatedly, Margo users should now use `margo_register_data()` (rather than `HG_Register_data()`)
   for associating user data with an RPC type
     * like Mercury, there is a corresponding `margo_registered_data()` call to retrieve the user pointer
 * the following Mercury-like functions are now defined within Margo, although it is
-  still safe to just use the Mercury calls directly (most are just #defined to the
+  still safe to just use the Mercury calls directly (most are just `#define`s to the
   corresponding Mercury call, anyway):
     * `margo_registered_disable_response()`
     * `margo_addr_free()`
@@ -219,6 +218,6 @@ version 0.2:
     * `margo_bulk_free()`
     * `margo_bulk_deserialize()`
 * `margo_hg_handle_get_instance()` and `margo_hg_info_get_instance()` calls have been added for
-  retrieving a Margo instance ID given a received handle or the HG info struct associated
+  retrieving a `margo_instance_id` given a received handle or the HG info structure associated
   with the handle
 
