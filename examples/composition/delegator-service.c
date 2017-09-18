@@ -61,7 +61,7 @@ static void delegator_read_ult(hg_handle_t handle)
     hret = margo_addr_to_string(mid, client_addr_string, &client_addr_string_sz, hgi->addr);
     assert(hret == HG_SUCCESS);
     in_relay.client_addr = client_addr_string;
-    hret = margo_forward(mid, handle_relay, &in_relay);
+    hret = margo_forward(handle_relay, &in_relay);
     assert(hret == HG_SUCCESS);
 
     hret = margo_get_output(handle_relay, &out_relay);
@@ -70,12 +70,12 @@ static void delegator_read_ult(hg_handle_t handle)
     margo_free_input(handle, &in);
     margo_free_output(handle_relay, &out);
 
-    hret = margo_respond(mid, handle, &out);
+    hret = margo_respond(handle, &out);
     assert(hret == HG_SUCCESS);
 
     margo_addr_free(mid, data_xfer_svc_addr);
-    margo_destroy(mid, handle);
-    margo_destroy(mid, handle_relay);
+    margo_destroy(handle);
+    margo_destroy(handle_relay);
 
     return;
 }

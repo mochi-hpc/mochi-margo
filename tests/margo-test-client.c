@@ -139,10 +139,10 @@ int main(int argc, char **argv)
     hret = margo_create(mid, svr_addr, my_rpc_shutdown_id, &handle);
     assert(hret == HG_SUCCESS);
 
-    hret = margo_forward(mid, handle, NULL);
+    hret = margo_forward(handle, NULL);
     assert(hret == HG_SUCCESS);
 
-    margo_destroy(mid, handle);
+    margo_destroy(handle);
     margo_addr_free(mid, svr_addr);
 
     /* shut down everything */
@@ -182,7 +182,7 @@ static void run_my_rpc(void *_arg)
      * input struct.  It was set above. 
      */ 
     in.input_val = arg->val;
-    hret = margo_forward(arg->mid, handle, &in);
+    hret = margo_forward(handle, &in);
     assert(hret == HG_SUCCESS);
 
     /* decode response */
@@ -194,7 +194,7 @@ static void run_my_rpc(void *_arg)
     /* clean up resources consumed by this rpc */
     margo_bulk_free(in.bulk_handle);
     margo_free_output(handle, &out);
-    margo_destroy(arg->mid, handle);
+    margo_destroy(handle);
     free(buffer);
 
     printf("ULT [%d] done.\n", arg->val);

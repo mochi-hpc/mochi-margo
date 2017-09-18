@@ -122,18 +122,18 @@ int main(int argc, char **argv)
     printf("Shutting down delegator server.\n");
     hret = margo_create(mid, delegator_svr_addr, my_rpc_shutdown_id, &handle);
     assert(hret == HG_SUCCESS);
-    hret = margo_forward(mid, handle, NULL);
+    hret = margo_forward(handle, NULL);
     assert(hret == HG_SUCCESS);
-    margo_destroy(mid, handle);
+    margo_destroy(handle);
     if(strcmp(argv[1], argv[2]))
     {
         sleep(3);
         printf("Shutting down data_xfer server.\n");
         hret = margo_create(mid, data_xfer_svr_addr, my_rpc_shutdown_id, &handle);
         assert(hret == HG_SUCCESS);
-        hret = margo_forward(mid, handle, NULL);
+        hret = margo_forward(handle, NULL);
         assert(hret == HG_SUCCESS);
-        margo_destroy(mid, handle);
+        margo_destroy(handle);
     }
 
     margo_addr_free(mid, delegator_svr_addr);

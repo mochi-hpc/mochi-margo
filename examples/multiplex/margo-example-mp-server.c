@@ -33,10 +33,10 @@ static void my_rpc_shutdown_ult(hg_handle_t handle)
     mid = margo_hg_handle_get_instance(handle);
     assert(mid != MARGO_INSTANCE_NULL);
 
-    hret = margo_respond(mid, handle, NULL);
+    hret = margo_respond(handle, NULL);
     assert(hret == HG_SUCCESS);
 
-    margo_destroy(mid, handle);
+    margo_destroy(handle);
 
     /* NOTE: we assume that the server daemon is using
      * margo_wait_for_finalize() to suspend until this RPC executes, so there

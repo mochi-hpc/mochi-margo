@@ -76,11 +76,11 @@ static void my_rpc_ult(hg_handle_t handle)
 
     margo_free_input(handle, &in);
 
-    hret = margo_respond(mid, handle, &out);
+    hret = margo_respond(handle, &out);
     assert(hret == HG_SUCCESS);
 
     margo_bulk_free(bulk_handle);
-    margo_destroy(mid, handle);
+    margo_destroy(handle);
     free(buffer);
 
     return;
@@ -90,21 +90,18 @@ DEFINE_MARGO_RPC_HANDLER(my_rpc_ult)
 static void my_rpc_shutdown_ult(hg_handle_t handle)
 {
     hg_return_t hret;
-    const struct hg_info *hgi;
     margo_instance_id mid;
 
     printf("Got RPC request to shutdown\n");
 
     /* get handle info and margo instance */
-    hgi = margo_get_info(handle);
-    assert(hgi);
-    mid = margo_hg_info_get_instance(hgi);
+    mid = margo_hg_handle_get_instance(handle);
     assert(mid != MARGO_INSTANCE_NULL);
 
-    hret = margo_respond(mid, handle, NULL);
+    hret = margo_respond(handle, NULL);
     assert(hret == HG_SUCCESS);
 
-    margo_destroy(mid, handle);
+    margo_destroy(handle);
 
     margo_diag_dump(mid, "-", 0);
 

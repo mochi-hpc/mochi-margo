@@ -56,11 +56,11 @@ static void svc1_do_thing_ult(hg_handle_t handle)
 
     margo_free_input(handle, &in);
 
-    hret = margo_respond(mid, handle, &out);
+    hret = margo_respond(handle, &out);
     assert(hret == HG_SUCCESS);
 
     margo_bulk_free(bulk_handle);
-    margo_destroy(mid, handle);
+    margo_destroy(handle);
     free(buffer);
 
     return;
@@ -114,11 +114,11 @@ static void svc1_do_other_thing_ult(hg_handle_t handle)
 
     margo_free_input(handle, &in);
 
-    hret = margo_respond(mid, handle, &out);
+    hret = margo_respond(handle, &out);
     assert(hret == HG_SUCCESS);
 
     margo_bulk_free(bulk_handle);
-    margo_destroy(mid, handle);
+    margo_destroy(handle);
     free(buffer);
 
     return;

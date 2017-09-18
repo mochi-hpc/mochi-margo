@@ -60,7 +60,7 @@ void svc1_do_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t mplex_id)
      * input struct.  It was set above. 
      */ 
     in.input_val = 0;
-    hret = margo_forward(mid, handle, &in);
+    hret = margo_forward(handle, &in);
     assert(hret == HG_SUCCESS);
 
     /* decode response */
@@ -70,7 +70,7 @@ void svc1_do_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t mplex_id)
     /* clean up resources consumed by this rpc */
     margo_free_output(handle, &out);
     margo_bulk_free(in.bulk_handle);
-    margo_destroy(mid, handle);
+    margo_destroy(handle);
     free(buffer);
 
     return;
@@ -106,7 +106,7 @@ void svc1_do_other_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t mpl
      * input struct.  It was set above. 
      */ 
     in.input_val = 0;
-    hret = margo_forward(mid, handle, &in);
+    hret = margo_forward(handle, &in);
     assert(hret == HG_SUCCESS);
 
     /* decode response */
@@ -116,7 +116,7 @@ void svc1_do_other_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t mpl
     /* clean up resources consumed by this rpc */
     margo_free_output(handle, &out);
     margo_bulk_free(in.bulk_handle);
-    margo_destroy(mid, handle);
+    margo_destroy(handle);
     free(buffer);
 
     return;

@@ -73,10 +73,10 @@ int main(int argc, char **argv)
     hret = margo_create(mid, svr_addr, my_rpc_shutdown_id, &handle);
     assert(hret == HG_SUCCESS);
 
-    hret = margo_forward(mid, handle, NULL);
+    hret = margo_forward(handle, NULL);
     assert(hret == HG_SUCCESS);
 
-    margo_destroy(mid, handle);
+    margo_destroy(handle);
     margo_addr_free(mid, svr_addr);
 
     /* shut down everything */
