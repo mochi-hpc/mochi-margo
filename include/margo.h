@@ -292,13 +292,11 @@ hg_return_t margo_create(
 /**
  * Destroy Mercury handle.
  *
- * \param [in] mid      Margo instance 
  * \param [in] handle   Mercury handle
  *
  * \return HG_SUCCESS or corresponding HG error code
  */
 hg_return_t margo_destroy(
-    margo_instance_id mid,
     hg_handle_t handle);
 
 /**
@@ -373,26 +371,22 @@ hg_return_t margo_destroy(
 
 /**
  * Forward an RPC request to a remote host
- * @param [in] mid Margo instance
  * @param [in] handle identifier for the RPC to be sent
  * @param [in] in_struct input argument struct for RPC
  * @returns 0 on success, hg_return_t values on error
  */
 hg_return_t margo_forward(
-    margo_instance_id mid,
     hg_handle_t handle,
     void *in_struct);
 
 /**
  * Forward an RPC request to a remote host with a user-defined timeout
- * @param [in] mid Margo instance
  * @param [in] handle identifier for the RPC to be sent
  * @param [in] in_struct input argument struct for RPC
  * @param [in] timeout_ms timeout in milliseconds
  * @returns 0 on success, hg_return_t values on error
  */
 hg_return_t margo_forward_timed(
-    margo_instance_id mid,
     hg_handle_t handle,
     void *in_struct,
     double timeout_ms);
@@ -404,14 +398,12 @@ hg_return_t margo_forward_timed(
  * themselves with what happens after an RPC finishes. However, there are cases
  * when this is useful (deferring resource cleanup, calling margo_finalize()
  * for e.g. a shutdown RPC).
- * @param [in] mid Margo instance
  * @param [in] handle identifier for the RPC for which a response is being
  * sent
  * @param [in] out_struct output argument struct for response
  * @return HG_SUCCESS on success, hg_return_t values on error. See HG_Respond.
  */
 hg_return_t margo_respond(
-    margo_instance_id mid,
     hg_handle_t handle,
     void *out_struct);
 

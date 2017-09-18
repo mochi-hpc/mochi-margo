@@ -108,7 +108,6 @@ struct margo_instance
 struct margo_cb_arg
 {
     ABT_eventual *eventual;
-    margo_instance_id mid;
 };
 
 struct margo_rpc_data
@@ -530,7 +529,6 @@ hg_return_t margo_addr_lookup(
     }
 
     arg.eventual = &eventual;
-    arg.mid = mid;
 
     hret = HG_Addr_lookup(mid->hg_context, margo_addr_lookup_cb,
         &arg, name, HG_OP_ID_IGNORE);
@@ -593,9 +591,13 @@ hg_return_t margo_create(margo_instance_id mid, hg_addr_t addr,
     return hret;
 }
 
-hg_return_t margo_destroy(margo_instance_id mid, hg_handle_t handle)
+hg_return_t margo_destroy(hg_handle_t handle)
 {
+    margo_instance_id mid;
     hg_return_t hret;
+
+    /* use the handle to get the associated mid */
+    mid = margo_hg_handle_get_instance(handle);
 
     /* recycle this handle if it came from the handle cache */
     hret = margo_handle_cache_put(mid, handle);
@@ -620,7 +622,6 @@ static hg_return_t margo_cb(const struct hg_cb_info *info)
 }
 
 hg_return_t margo_forward(
-    margo_instance_id mid,
     hg_handle_t handle,
     void *in_struct)
 {
@@ -637,7 +638,6 @@ hg_return_t margo_forward(
     }
 
     arg.eventual = &eventual;
-    arg.mid = mid;
 
     hret = HG_Forward(handle, margo_cb, &arg, in_struct);
     if(hret == HG_SUCCESS)
@@ -667,13 +667,13 @@ static void margo_forward_timeout_cb(void *arg)
 }
 
 hg_return_t margo_forward_timed(
-    margo_instance_id mid,
     hg_handle_t handle,
     void *in_struct,
     double timeout_ms)
 {
     int ret;
     hg_return_t hret;
+    margo_instance_id mid;
     ABT_eventual eventual;
     hg_return_t* waited_hret;
     margo_timer_t forward_timer;
@@ -686,13 +686,15 @@ hg_return_t margo_forward_timed(
         return(HG_NOMEM_ERROR);        
     }
 
+    /* use the handle to get the associated mid */
+    mid = margo_hg_handle_get_instance(handle);
+
     /* set a timer object to expire when this forward times out */
     timeout_cb_dat.handle = handle;
     margo_timer_init(mid, &forward_timer, margo_forward_timeout_cb,
         &timeout_cb_dat, timeout_ms);
 
     arg.eventual = &eventual;
-    arg.mid = mid;
 
     hret = HG_Forward(handle, margo_cb, &arg, in_struct);
     if(hret == HG_SUCCESS)
@@ -715,7 +717,6 @@ hg_return_t margo_forward_timed(
 }
 
 hg_return_t margo_respond(
-    margo_instance_id mid,
     hg_handle_t handle,
     void *out_struct)
 {
@@ -732,7 +733,6 @@ hg_return_t margo_respond(
     }
 
     arg.eventual = &eventual;
-    arg.mid = mid;
 
     hret = HG_Respond(handle, margo_cb, &arg, out_struct);
     if(hret == HG_SUCCESS)
@@ -773,10 +773,12 @@ hg_return_t margo_bulk_deserialize(
     return(HG_Bulk_deserialize(mid->hg_class, handle, buf, buf_size));
 }
 
+/* TODO: currently identical to a vanilla margo_cb -- consider reusing that */
 static hg_return_t margo_bulk_transfer_cb(const struct hg_cb_info *info)
 {
     hg_return_t hret = info->ret;
     struct margo_cb_arg* arg = info->arg;
+
 
     /* propagate return code out through eventual */
     ABT_eventual_set(*(arg->eventual), &hret, sizeof(hret));
@@ -807,7 +809,6 @@ hg_return_t margo_bulk_transfer(
     }
 
     arg.eventual = &eventual;
-    arg.mid = mid;
 
     hret = HG_Bulk_transfer(mid->hg_context, margo_bulk_transfer_cb,
         &arg, op, origin_addr, origin_handle, origin_offset, local_handle,
