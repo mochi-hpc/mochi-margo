@@ -28,8 +28,10 @@ extern "C" {
 struct margo_instance;
 typedef struct margo_instance* margo_instance_id;
 typedef struct margo_data* margo_data_ptr;
+typedef ABT_eventual margo_request;
 
 #define MARGO_INSTANCE_NULL ((margo_instance_id)NULL)
+#define MARGO_REQUEST_NULL ABT_EVENTUAL_NULL
 #define MARGO_CLIENT_MODE 0
 #define MARGO_SERVER_MODE 1
 #define MARGO_DEFAULT_MPLEX_ID 0
@@ -380,6 +382,27 @@ hg_return_t margo_forward(
     void *in_struct);
 
 /**
+ * Forward (without blocking) an RPC request to a remote host
+ * @param [in] handle identifier for the RPC to be sent
+ * @param [in] in_struct input argument struct for RPC
+ * @param [out] req request to wait on using margo_wait
+ * @returns 0 on success, hg_return_t values on error
+ */
+hg_return_t margo_iforward(
+    hg_handle_t handle,
+    void* in_struct,
+    margo_request* req);
+
+/**
+ * Wait for an operation initiated by a non-blocking
+ * margo function (margo_iforward, margo_irespond, etc.)
+ * @param [in] req request to wait on
+ * @returns 0 on success, hg_return_t values on error
+ */
+hg_return_t margo_wait(
+    margo_request req);
+
+/**
  * Forward an RPC request to a remote host with a user-defined timeout
  * @param [in] handle identifier for the RPC to be sent
  * @param [in] in_struct input argument struct for RPC
@@ -406,6 +429,19 @@ hg_return_t margo_forward_timed(
 hg_return_t margo_respond(
     hg_handle_t handle,
     void *out_struct);
+
+/**
+ * Send an RPC response without blocking.
+ * @param [in] handle identifier for the RPC for which a response is being
+ * sent
+ * @param [in] out_struct output argument struct for response
+ * @param [out] req request on which to wait using margo_wait
+ * @return HG_SUCCESS on success, hg_return_t values on error. See HG_Respond.
+ */
+hg_return_t margo_irespond(
+    hg_handle_t handle,
+    void *out_struct,
+    margo_request* req);
 
 /**
  * Create an abstract bulk handle from specified memory segments.
@@ -553,6 +589,30 @@ hg_return_t margo_bulk_transfer(
     hg_bulk_t local_handle,
     size_t local_offset,
     size_t size);
+
+/** 
+ * Asynchronously performs a bulk transfer
+ * @param [in] mid Margo instance
+ * @param [in] op type of operation to perform
+ * @param [in] origin_addr remote Mercury address
+ * @param [in] origin_handle remote Mercury bulk memory handle
+ * @param [in] origin_offset offset into remote bulk memory to access
+ * @param [in] local_handle local bulk memory handle
+ * @param [in] local_offset offset into local bulk memory to access
+ * @param [in] size size (in bytes) of transfer
+ * @param [out] req request to wait on using margo_wait
+ * @returns 0 on success, hg_return_t values on error
+ */
+hg_return_t margo_bulk_itransfer(
+    margo_instance_id mid,
+    hg_bulk_op_t op,
+    hg_addr_t origin_addr,
+    hg_bulk_t origin_handle,
+    size_t origin_offset,
+    hg_bulk_t local_handle,
+    size_t local_offset,
+    size_t size,
+    margo_request* req);
 
 /**
  * Suspends the calling ULT for a specified time duration

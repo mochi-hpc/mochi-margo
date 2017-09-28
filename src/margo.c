@@ -626,10 +626,22 @@ hg_return_t margo_forward(
     hg_handle_t handle,
     void *in_struct)
 {
+	hg_return_t hret;
+	margo_request req;
+	hret = margo_iforward(handle, in_struct, &req);
+	if(hret != HG_SUCCESS) 
+		return hret;
+	return margo_wait(req);
+}
+
+hg_return_t margo_iforward(
+    hg_handle_t handle,
+    void *in_struct,
+    margo_request* req)
+{
     hg_return_t hret = HG_TIMEOUT;
     ABT_eventual eventual;
     int ret;
-    hg_return_t* waited_hret;
     struct margo_cb_arg arg;
 
     ret = ABT_eventual_create(sizeof(hret), &eventual);
@@ -639,16 +651,20 @@ hg_return_t margo_forward(
     }
 
     arg.eventual = &eventual;
+    *req = eventual;
 
-    hret = HG_Forward(handle, margo_cb, &arg, in_struct);
-    if(hret == HG_SUCCESS)
-    {
-        ABT_eventual_wait(eventual, (void**)&waited_hret);
-        hret = *waited_hret;
-    }
+    return HG_Forward(handle, margo_cb, &arg, in_struct);
+}
 
-    ABT_eventual_free(&eventual);
+hg_return_t margo_wait(margo_request req)
+{
+	hg_return_t* waited_hret;
+	hg_return_t  hret;
 
+    ABT_eventual_wait(req, (void**)&waited_hret);
+	hret = *waited_hret;
+    ABT_eventual_free(&req);
+	
     return(hret);
 }
 
@@ -721,10 +737,22 @@ hg_return_t margo_respond(
     hg_handle_t handle,
     void *out_struct)
 {
+    hg_return_t hret;
+    margo_request req;
+    hret = margo_irespond(handle,out_struct,&req);
+    if(hret != HG_SUCCESS)
+        return hret;
+    return margo_wait(req);
+}
+
+hg_return_t margo_irespond(
+    hg_handle_t handle,
+    void *out_struct,
+    margo_request* req)
+{
     hg_return_t hret = HG_TIMEOUT;
     ABT_eventual eventual;
     int ret;
-    hg_return_t* waited_hret;
     struct margo_cb_arg arg;
 
     ret = ABT_eventual_create(sizeof(hret), &eventual);
@@ -734,17 +762,9 @@ hg_return_t margo_respond(
     }
 
     arg.eventual = &eventual;
+    *req = eventual;
 
-    hret = HG_Respond(handle, margo_cb, &arg, out_struct);
-    if(hret == HG_SUCCESS)
-    {
-        ABT_eventual_wait(eventual, (void**)&waited_hret);
-        hret = *waited_hret;
-    }
-
-    ABT_eventual_free(&eventual);
-
-    return(hret);
+    return HG_Respond(handle, margo_cb, &arg, out_struct);
 }
 
 hg_return_t margo_bulk_create(
@@ -796,6 +816,26 @@ hg_return_t margo_bulk_transfer(
     hg_bulk_t local_handle,
     size_t local_offset,
     size_t size)
+{  
+    margo_request req;
+    hg_return_t hret = margo_bulk_itransfer(mid,op,origin_addr,
+                          origin_handle, origin_offset, local_handle,
+                          local_offset, size, req);
+    if(hret != HG_SUCCESS)
+        return hret;
+    return margo_wait(req);
+}
+
+hg_return_t margo_bulk_itransfer(
+    margo_instance_id mid,
+    hg_bulk_op_t op,
+    hg_addr_t origin_addr,
+    hg_bulk_t origin_handle,
+    size_t origin_offset,
+    hg_bulk_t local_handle,
+    size_t local_offset,
+    size_t size,
+    margo_request* req)
 {
     hg_return_t hret = HG_TIMEOUT;
     hg_return_t *waited_hret;
@@ -810,17 +850,11 @@ hg_return_t margo_bulk_transfer(
     }
 
     arg.eventual = &eventual;
+    *req = eventual;
 
     hret = HG_Bulk_transfer(mid->hg_context, margo_bulk_transfer_cb,
         &arg, op, origin_addr, origin_handle, origin_offset, local_handle,
         local_offset, size, HG_OP_ID_IGNORE);
-    if(hret == HG_SUCCESS)
-    {
-        ABT_eventual_wait(eventual, (void**)&waited_hret);
-        hret = *waited_hret;
-    }
-
-    ABT_eventual_free(&eventual);
 
     return(hret);
 }
