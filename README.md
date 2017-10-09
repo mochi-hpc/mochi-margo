@@ -110,26 +110,6 @@ You can use either the CCI NA plugin or BMI NA plugin to use either the CCI or B
 
 Add the -DNA_USE_CCI:BOOL=ON option to the Mercury configuration.
 
-You must set the CCI_CONFIG environment variable to point to a valid CCI
-configuration file.  You can use the following example and un-comment the
-appropriate section for the transport that you wish to use.  Note that there
-is no need to specify a port; Mercury will dictate a port for CCI to use if
-needed.
-
-```
-[mercury]
-# use this example for TCP
-transport = tcp
-interface = lo  # switch this to eth0 or an external hostname for non-localhost use
-
-## use this example instead for shared memory
-# transport = sm
-
-## use this example instead for InfiniBand
-# transport = verbs
-# interface = ib0
-```
-
 You must then use addresses appropriate for your transport at run time when
 executing Margo examples.  Examples for server "listening" addresses:
 
