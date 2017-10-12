@@ -1220,7 +1220,7 @@ static void margo_handle_cache_destroy(margo_instance_id mid)
         free(el);
     }
 
-    ABT_mutex_free(mid->handle_cache_mtx);
+    ABT_mutex_free(&mid->handle_cache_mtx);
 
     return;
 }
