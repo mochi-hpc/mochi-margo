@@ -174,37 +174,34 @@ margo_instance_id margo_init(const char *addr_str, int mode,
         if (ret != ABT_SUCCESS) goto err;
     }
 
-    if (mode == MARGO_SERVER_MODE)
+    if (rpc_thread_count > 0)
     {
-        if (rpc_thread_count > 0)
-        {
-            rpc_xstreams = calloc(rpc_thread_count, sizeof(*rpc_xstreams));
-            if (rpc_xstreams == NULL) goto err;
+        rpc_xstreams = calloc(rpc_thread_count, sizeof(*rpc_xstreams));
+        if (rpc_xstreams == NULL) goto err;
 #ifdef HAVE_ABT_SNOOZER
-            ret = ABT_snoozer_xstream_create(rpc_thread_count, &rpc_pool,
-                    rpc_xstreams);
-            if (ret != ABT_SUCCESS) goto err;
+        ret = ABT_snoozer_xstream_create(rpc_thread_count, &rpc_pool,
+                rpc_xstreams);
+        if (ret != ABT_SUCCESS) goto err;
 #else
-			int j;
-			ret = ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE, &rpc_pool);
-			if (ret != ABT_SUCCESS) goto err;
-			for(j=0; j<rpc_thread_count; j++) {
-				ret = ABT_xstream_create(ABT_SCHED_NULL, rpc_xstreams+j);
-				if (ret != ABT_SUCCESS) goto err;
-			}
+        int j;
+        ret = ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE, &rpc_pool);
+        if (ret != ABT_SUCCESS) goto err;
+        for(j=0; j<rpc_thread_count; j++) {
+            ret = ABT_xstream_create(ABT_SCHED_NULL, rpc_xstreams+j);
+            if (ret != ABT_SUCCESS) goto err;
+        }
 #endif
-        }
-        else if (rpc_thread_count == 0)
-        {
-            ret = ABT_xstream_self(&rpc_xstream);
-            if (ret != ABT_SUCCESS) goto err;
-            ret = ABT_xstream_get_main_pools(rpc_xstream, 1, &rpc_pool);
-            if (ret != ABT_SUCCESS) goto err;
-        }
-        else
-        {
-            rpc_pool = progress_pool;
-        }
+    }
+    else if (rpc_thread_count == 0)
+    {
+        ret = ABT_xstream_self(&rpc_xstream);
+        if (ret != ABT_SUCCESS) goto err;
+        ret = ABT_xstream_get_main_pools(rpc_xstream, 1, &rpc_pool);
+        if (ret != ABT_SUCCESS) goto err;
+    }
+    else
+    {
+        rpc_pool = progress_pool;
     }
 
     hg_class = HG_Init(addr_str, listen_flag);
@@ -1178,9 +1175,8 @@ static hg_return_t margo_handle_cache_init(margo_instance_id mid)
     int i;
     struct margo_handle_cache_el *el;
     hg_return_t hret = HG_SUCCESS;
-    int ret;
 
-    ret = ABT_mutex_create(&(mid->handle_cache_mtx));
+    ABT_mutex_create(&(mid->handle_cache_mtx));
 
     for(i = 0; i < DEFAULT_MERCURY_HANDLE_CACHE_SIZE; i++)
     {
