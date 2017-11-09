@@ -145,8 +145,11 @@ margo_instance_id margo_init(const char *addr_str, int mode,
 
     if(mode != MARGO_CLIENT_MODE && mode != MARGO_SERVER_MODE) goto err;
 
-    ret = ABT_init(0, NULL); /* XXX: argc/argv not currently used by ABT ... */
-    if(ret != 0) goto err;
+    if (ABT_initialized() == ABT_ERR_UNINITIALIZED)
+    {
+        ret = ABT_init(0, NULL); /* XXX: argc/argv not currently used by ABT ... */
+        if(ret != 0) goto err;
+    }
 
     /* set caller (self) ES to idle without polling */
 #ifdef HAVE_ABT_SNOOZER
