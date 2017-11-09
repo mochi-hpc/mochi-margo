@@ -71,6 +71,7 @@ struct margo_instance
 
     /* internal to margo for this particular instance */
     int margo_init;
+    int abt_init;
     ABT_thread hg_progress_tid;
     int hg_progress_shutdown_flag;
     ABT_xstream progress_xstream;
@@ -139,6 +140,7 @@ margo_instance_id margo_init(const char *addr_str, int mode,
     hg_class_t *hg_class = NULL;
     hg_context_t *hg_context = NULL;
     int listen_flag = (mode == MARGO_CLIENT_MODE) ? HG_FALSE : HG_TRUE;
+    int abt_init = 0;
     int i;
     int ret;
     struct margo_instance *mid = MARGO_INSTANCE_NULL;
@@ -149,6 +151,7 @@ margo_instance_id margo_init(const char *addr_str, int mode,
     {
         ret = ABT_init(0, NULL); /* XXX: argc/argv not currently used by ABT ... */
         if(ret != 0) goto err;
+        abt_init = 1;
     }
 
     /* set caller (self) ES to idle without polling */
@@ -217,6 +220,7 @@ margo_instance_id margo_init(const char *addr_str, int mode,
     if (mid == MARGO_INSTANCE_NULL) goto err;
 
     mid->margo_init = 1;
+    mid->abt_init = abt_init;
     mid->owns_progress_pool = use_progress_thread;
     mid->progress_xstream = progress_xstream;
     mid->num_handler_pool_threads = rpc_thread_count < 0 ? 0 : rpc_thread_count;
@@ -250,7 +254,8 @@ err:
         HG_Context_destroy(hg_context);
     if(hg_class)
         HG_Finalize(hg_class);
-    ABT_finalize();
+    if(abt_init)
+        ABT_finalize();
     return MARGO_INSTANCE_NULL;
 }
 
@@ -333,7 +338,8 @@ static void margo_cleanup(margo_instance_id mid)
             HG_Context_destroy(mid->hg_context);
         if (mid->hg_class)
             HG_Finalize(mid->hg_class);
-        ABT_finalize();
+        if (mid->abt_init)
+            ABT_finalize();
     }
 
     free(mid);
