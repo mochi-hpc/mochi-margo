@@ -402,6 +402,19 @@ hg_return_t margo_iforward(
 hg_return_t margo_wait(
     margo_request req);
 
+
+/**
+ * Test if an operation initiated by a non-blocking
+ * margo function (margo_iforward, margo_irespond, etc.)
+ * has completed.
+ *
+ * @param [in] req request created by the non-blocking call
+ * @param [out] flag 1 if request is completed, 0 otherwise
+ *
+ * @return 0 on success, ABT error code otherwise
+ */
+int margo_test(margo_request req, int* flag);
+
 /**
  * Forward an RPC request to a remote host with a user-defined timeout
  * @param [in] handle identifier for the RPC to be sent
