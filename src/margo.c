@@ -35,6 +35,8 @@ struct mplex_element
 {
     struct mplex_key key;
     ABT_pool pool;
+    void* user_data;
+    void(*user_free_callback)(void*);
     UT_hash_handle hh;
 };
 
@@ -123,6 +125,8 @@ static hg_return_t margo_handle_cache_get(margo_instance_id mid,
     hg_addr_t addr, hg_id_t id, hg_handle_t *handle);
 static hg_return_t margo_handle_cache_put(margo_instance_id mid,
     hg_handle_t handle);
+static void delete_multiplexing_hash(margo_instance_id mid);
+
 
 margo_instance_id margo_init(const char *addr_str, int mode,
     int use_progress_thread, int rpc_thread_count)
@@ -273,6 +277,7 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
     mid->hg_class = HG_Context_get_class(hg_context);
     mid->hg_context = hg_context;
     mid->hg_progress_timeout_ub = DEFAULT_MERCURY_PROGRESS_TIMEOUT_UB;
+    mid->mplex_table = NULL;
     mid->refcount = 1;
 
     ret = margo_timer_instance_init(mid);
@@ -305,6 +310,9 @@ static void margo_cleanup(margo_instance_id mid)
     int i;
 
     margo_timer_instance_finalize(mid);
+
+    /* delete the hash used for multiplexing */
+    delete_multiplexing_hash(mid);
 
     ABT_mutex_free(&mid->finalize_mutex);
     ABT_cond_free(&mid->finalize_cond);
@@ -473,6 +481,9 @@ hg_return_t margo_register_data(
 	struct margo_rpc_data* margo_data 
 		= (struct margo_rpc_data*) HG_Registered_data(mid->hg_class, id);
 	if(!margo_data) return HG_OTHER_ERROR;
+    if(margo_data->user_data && margo_data->user_free_callback) {
+        (margo_data->user_free_callback)(margo_data->user_data);
+    }
 	margo_data->user_data = data;
 	margo_data->user_free_callback = free_callback;
 	return HG_SUCCESS;
@@ -945,6 +956,47 @@ int margo_lookup_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT
     return(0);
 }
 
+int margo_register_data_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, void* data, void (*free_callback)(void *))
+{
+    struct mplex_key key;
+    struct mplex_element *element;
+
+    memset(&key, 0, sizeof(key));
+    key.id = id;
+    key.mplex_id = mplex_id;
+
+    HASH_FIND(hh, mid->mplex_table, &key, sizeof(key), element);
+    if(!element)
+        return -1;
+
+    assert(element->key.id == id && element->key.mplex_id == mplex_id);
+
+    if(element->user_data && element->user_free_callback)
+        (element->user_free_callback)(element->user_data);
+
+    element->user_data = data;
+    element->user_free_callback = free_callback;
+
+    return(0);
+}
+
+void* margo_registered_data_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id)
+{
+    struct mplex_key key;
+    struct mplex_element *element;
+
+    memset(&key, 0, sizeof(key));
+    key.id = id;
+    key.mplex_id = mplex_id;
+
+    HASH_FIND(hh, mid->mplex_table, &key, sizeof(key), element);
+    if(!element)
+        return NULL;
+
+    assert(element->key.id == id && element->key.mplex_id == mplex_id);
+
+    return element->user_data;
+}
 static void margo_rpc_data_free(void* ptr)
 {
 	struct margo_rpc_data* data = (struct margo_rpc_data*) ptr;
@@ -952,6 +1004,18 @@ static void margo_rpc_data_free(void* ptr)
 		data->user_free_callback(data->user_data);
 	}
 	free(ptr);
+}
+
+static void delete_multiplexing_hash(margo_instance_id mid)
+{
+    struct mplex_element *current_element, *tmp;
+
+    HASH_ITER(hh, mid->mplex_table, current_element, tmp) {
+        if(current_element->user_data && current_element->user_free_callback)
+            (current_element->user_free_callback)(current_element->user_data);
+        HASH_DEL(mid->mplex_table, current_element);
+        free(current_element);
+    }
 }
 
 /* dedicated thread function to drive Mercury progress */

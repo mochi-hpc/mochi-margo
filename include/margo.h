@@ -189,6 +189,42 @@ void* margo_registered_data(
     hg_id_t id);
 
 /**
+ * Register and associate user data to registered function for
+ * a given multiplex id.
+ * When HG_Finalize() is called free_callback (if defined) is called 
+ * to free the registered data.
+ *
+ * \param [in] mid            Margo instance
+ * \param [in] id             registered function ID
+ * \param [in] mplex_id       Margo multiplex ID
+ * \param [in] data           pointer to data
+ * \param [in] free_callback  pointer to free function
+ *
+ * \return HG_SUCCESS or corresponding HG error code
+ */
+int margo_register_data_mplex(
+    margo_instance_id mid,
+    hg_id_t id,
+    uint32_t mplex_id,
+    void* data,
+    void (*free_callback)(void *));
+
+/**
+ * Indicate whether margo_register_data_mplex() has been called 
+ * and return associated data.
+ *
+ * \param [in] mid        Margo instance 
+ * \param [in] id         registered function ID
+ * \param [in] mplex_id   Margo multiplex ID
+ *
+ * \return Pointer to data or NULL
+ */
+void* margo_registered_data_mplex(
+    margo_instance_id mid,
+    hg_id_t id,
+    uint32_t mplex_id);
+
+/**
  * Disable response for a given RPC ID.
  *
  * \param [in] mid          Margo instance 
