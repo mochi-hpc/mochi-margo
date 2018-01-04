@@ -63,6 +63,13 @@ struct margo_handle_cache_el
     struct margo_handle_cache_el *next; /* free list link */
 };
 
+struct margo_finalize_cb
+{
+    void(*callback)(void*);
+    void* uargs;
+    struct margo_finalize_cb* next;
+};
+
 struct margo_instance
 {
     /* mercury/argobots state */
@@ -87,6 +94,7 @@ struct margo_instance
     int refcount;
     ABT_mutex finalize_mutex;
     ABT_cond finalize_cond;
+    struct margo_finalize_cb* finalize_cb;
 
     /* hash table to track multiplexed rpcs registered with margo */
     struct mplex_element *mplex_table;
@@ -279,6 +287,7 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
     mid->hg_progress_timeout_ub = DEFAULT_MERCURY_PROGRESS_TIMEOUT_UB;
     mid->mplex_table = NULL;
     mid->refcount = 1;
+    mid->finalize_cb = NULL;
 
     ret = margo_timer_instance_init(mid);
     if(ret != 0) goto err;
@@ -308,6 +317,15 @@ err:
 static void margo_cleanup(margo_instance_id mid)
 {
     int i;
+
+    /* call finalize callbacks */
+    struct margo_finalize_cb* fcb = mid->finalize_cb;
+    while(fcb) {
+        (fcb->callback)(fcb->uargs);
+        struct margo_finalize_cb* tmp = fcb;
+        fcb = fcb->next;
+        free(tmp);
+    }
 
     margo_timer_instance_finalize(mid);
 
@@ -397,6 +415,23 @@ void margo_wait_for_finalize(margo_instance_id mid)
         margo_cleanup(mid);
 
     return;
+}
+
+void margo_push_finalize_callback(
+            margo_instance_id mid,
+            void(*cb)(void*),                  
+            void* uargs)
+{
+    if(cb == NULL) return;
+
+    struct margo_finalize_cb* fcb = 
+        (struct margo_finalize_cb*)malloc(sizeof(*fcb));
+    fcb->callback = cb;
+    fcb->uargs = uargs;
+
+    struct margo_finalize_cb* next = mid->finalize_cb;
+    fcb->next = next;
+    mid->finalize_cb = fcb;
 }
 
 hg_id_t margo_register_name(margo_instance_id mid, const char *func_name,

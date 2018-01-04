@@ -100,6 +100,23 @@ void margo_finalize(
 void margo_wait_for_finalize(
     margo_instance_id mid);
 
+/**
+ * Installs a callback to be called before the margo instance is finalize.
+ * Callbacks installed will be called in reverse ordered than they have been
+ * pushed, and with the user-provider pointer as argument.
+ *
+ * Note that callbacks may not be called within margo_finalize. They are called
+ * when the margo instance is cleaned up, which may happen in margo_wait_for_finalize.
+ *
+ * @param mid The margo instance
+ * @param cb Callback to install
+ * @param uargs User-provider argument to pass to the callback when called
+ */
+void margo_push_finalize_callback(
+    margo_instance_id mid,
+    void(*cb)(void*), 
+    void* uargs);
+
 /** 
  * Registers an RPC with margo
  *
