@@ -56,7 +56,7 @@ int main(int argc, char **argv)
     hg_addr_t addr_self;
     char addr_self_string[128];
     hg_size_t addr_self_string_sz = 128;
-    ABT_pool *handler_pool;
+    ABT_pool handler_pool;
     char* svc_list;
     char* svc;
 
@@ -109,17 +109,17 @@ int main(int argc, char **argv)
      */
     MARGO_REGISTER(mid, "my_shutdown_rpc", void, void, my_rpc_shutdown_ult);
 
-    handler_pool = margo_get_handler_pool(mid);
+    margo_get_handler_pool(mid, &handler_pool);
     svc = strtok(svc_list, ",");
     while(svc)
     {
         if(!strcmp(svc, "data-xfer"))
         {
-            data_xfer_service_register(mid, *handler_pool, 0);
+            data_xfer_service_register(mid, handler_pool, 0);
         }
         else if(!strcmp(svc, "delegator"))
         {
-            delegator_service_register(mid, *handler_pool, 0);
+            delegator_service_register(mid, handler_pool, 0);
         }
         else
             assert(0);

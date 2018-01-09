@@ -59,7 +59,7 @@ int main(int argc, char **argv)
     hg_size_t addr_self_string_sz = 128;
     ABT_xstream svc1_xstream2;
     ABT_pool svc1_pool2;
-    ABT_pool *handler_pool;
+    ABT_pool handler_pool;
 
     if(argc != 2)
     {
@@ -110,8 +110,8 @@ int main(int argc, char **argv)
     /* register svc1, with mplex_id 1, to execute on the default handler pool
      * used by Margo
      */
-    handler_pool = margo_get_handler_pool(mid);
-    ret = svc1_register(mid, *handler_pool, 1);
+    margo_get_handler_pool(mid, &handler_pool);
+    ret = svc1_register(mid, handler_pool, 1);
     assert(ret == 0);
 
     /* create a dedicated xstream and pool for another instance of svc1 */
@@ -134,8 +134,8 @@ int main(int argc, char **argv)
     /* register svc2, with mplex_id 3, to execute on the default handler pool
      * used by Margo
      */
-    handler_pool = margo_get_handler_pool(mid);
-    ret = svc2_register(mid, *handler_pool, 3);
+    margo_get_handler_pool(mid, &handler_pool);
+    ret = svc2_register(mid, handler_pool, 3);
     assert(ret == 0);
 
     /* shut things down */

@@ -711,8 +711,10 @@ void margo_thread_sleep(
  * Retrieve the abt_handler pool that was associated with the instance at 
  *    initialization time
  * @param [in] mid Margo instance
+ * @param [out] pool handler pool
+ * @return 0 on success, error code on failure
  */
-ABT_pool* margo_get_handler_pool(margo_instance_id mid);
+int margo_get_handler_pool(margo_instance_id mid, ABT_pool* pool);
 
 /**
  * Retrieve the Mercury context that was associated with this instance at
@@ -836,7 +838,7 @@ hg_return_t __name##_handler(hg_handle_t handle) { \
         return(HG_INVALID_PARAM); \
     }\
     if(__pool == ABT_POOL_NULL) \
-        __pool = *margo_get_handler_pool(__mid); \
+        margo_get_handler_pool(__mid, &__pool); \
     __ret = ABT_thread_create(__pool, (void (*)(void *))__name, handle, ABT_THREAD_ATTR_NULL, NULL); \
     if(__ret != 0) { \
         return(HG_NOMEM_ERROR); \

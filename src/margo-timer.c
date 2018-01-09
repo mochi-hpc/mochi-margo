@@ -142,7 +142,7 @@ void margo_check_timers(
     int ret;
     margo_timer_t *cur;
     struct margo_timer_instance *timer_inst;
-    ABT_pool *handler_pool;
+    ABT_pool handler_pool;
     double now = ABT_get_wtime();
 
     timer_inst = margo_get_timer_instance(mid);
@@ -160,10 +160,10 @@ void margo_check_timers(
         cur->prev = cur->next = NULL;
 
         /* schedule callback on the handler pool */
-        handler_pool = margo_get_handler_pool(mid);
-        if(*handler_pool != ABT_POOL_NULL)
+        margo_get_handler_pool(mid, &handler_pool);
+        if(handler_pool != ABT_POOL_NULL)
         {
-            ret = ABT_thread_create(*handler_pool, cur->cb_fn, cur->cb_dat,
+            ret = ABT_thread_create(handler_pool, cur->cb_fn, cur->cb_dat,
                 ABT_THREAD_ATTR_NULL, NULL);
             assert(ret == ABT_SUCCESS);
         }

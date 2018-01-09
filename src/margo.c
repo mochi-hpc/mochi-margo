@@ -966,9 +966,14 @@ void margo_thread_sleep(
     return;
 }
 
-ABT_pool* margo_get_handler_pool(margo_instance_id mid)
+int margo_get_handler_pool(margo_instance_id mid, ABT_pool* pool)
 {
-    return(&mid->handler_pool);
+    if(mid) {
+        *pool = mid->handler_pool;
+        return 0;
+    } else {
+        return -1;
+    }
 }
 
 hg_context_t* margo_get_context(margo_instance_id mid)
