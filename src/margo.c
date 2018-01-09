@@ -981,8 +981,12 @@ int margo_lookup_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT
     key.mplex_id = mplex_id;
 
     HASH_FIND(hh, mid->mplex_table, &key, sizeof(key), element);
-    if(!element)
-        return(-1);
+    if(!element) {
+        if(mplex_id == 0) // element does not exist and mplex is 0, return default handler
+            *pool = mid->handler_pool;
+        else // otherwise it is an error
+            return(-1);
+    }
 
     assert(element->key.id == id && element->key.mplex_id == mplex_id);
 

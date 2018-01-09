@@ -817,6 +817,8 @@ hg_return_t __name##_handler(hg_handle_t handle) { \
     if(__ret != 0) { \
         return(HG_INVALID_PARAM); \
     }\
+    if(__pool == ABT_POOL_NULL) \
+        __pool = *margo_get_handler_pool(__mid); \
     __ret = ABT_thread_create(__pool, (void (*)(void *))__name, handle, ABT_THREAD_ATTR_NULL, NULL); \
     if(__ret != 0) { \
         return(HG_NOMEM_ERROR); \
