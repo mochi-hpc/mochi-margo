@@ -507,6 +507,37 @@ hg_return_t margo_registered_name(margo_instance_id mid, const char *func_name,
     return(HG_Registered_name(mid->hg_class, func_name, id, flag));
 }
 
+hg_return_t margo_registered_name_mplex(margo_instance_id mid, const char *func_name,
+    uint32_t mplex_id, hg_id_t *id, hg_bool_t *flag)
+{
+    hg_bool_t b;
+    hg_return_t ret = margo_registered_name(mid, func_name, id, &b);
+    if(ret != HG_SUCCESS) 
+        return ret;
+    if((!b) || (!mplex_id)) {
+        *flag = b;
+        return ret;
+    }
+
+    struct mplex_key key;
+    struct mplex_element *element;
+
+    memset(&key, 0, sizeof(key));
+    key.id = *id;
+    key.mplex_id = mplex_id;
+
+    HASH_FIND(hh, mid->mplex_table, &key, sizeof(key), element);
+    if(!element) {
+        *flag = 0;
+        return HG_SUCCESS;
+    }
+
+    assert(element->key.id == *id && element->key.mplex_id == mplex_id);
+
+    *flag = 1;
+    return HG_SUCCESS;
+}
+
 hg_return_t margo_register_data(
     margo_instance_id mid,
     hg_id_t id,
