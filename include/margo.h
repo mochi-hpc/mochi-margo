@@ -175,6 +175,24 @@ hg_return_t margo_registered_name(
     hg_bool_t *flag);
 
 /**
+ * Indicate whether the given RPC name has been registered with the given multiplex id.
+ *
+ * @param [in] mid Margo instance
+ * @param [in] func_name function name
+ * @param [in] mplex_id multiplex id
+ * @param [out] id registered RPC ID
+ * @param [out] flag pointer to boolean
+ *
+ * @return HG_SUCCESS or corresponding HG error code
+ */
+hg_return_t margo_registered_name_mplex(
+    margo_instance_id mid,
+    const char *func_name,
+    uint32_t mplex_id,
+    hg_id_t *id,
+    hg_bool_t *flag);
+
+/**
  * Register and associate user data to registered function.
  * When HG_Finalize() is called free_callback (if defined) is called 
  * to free the registered data.
