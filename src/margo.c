@@ -70,6 +70,8 @@ struct margo_finalize_cb
     struct margo_finalize_cb* next;
 };
 
+struct margo_timer_list; /* defined in margo-timer.c */
+
 struct margo_instance
 {
     /* mercury/argobots state */
@@ -95,6 +97,9 @@ struct margo_instance
     ABT_mutex finalize_mutex;
     ABT_cond finalize_cond;
     struct margo_finalize_cb* finalize_cb;
+
+    /* timer data */
+    struct margo_timer_list* timer_list;
 
     /* hash table to track multiplexed rpcs registered with margo */
     struct mplex_element *mplex_table;
@@ -238,7 +243,7 @@ margo_instance_id margo_init(const char *addr_str, int mode,
 err:
     if(mid)
     {
-        margo_timer_instance_finalize(mid);
+        margo_timer_list_free(mid->timer_list);
         ABT_mutex_free(&mid->finalize_mutex);
         ABT_cond_free(&mid->finalize_cond);
         free(mid);
@@ -289,8 +294,8 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
     mid->refcount = 1;
     mid->finalize_cb = NULL;
 
-    ret = margo_timer_instance_init(mid);
-    if(ret != 0) goto err;
+    mid->timer_list = margo_timer_list_create();
+    if(mid->timer_list == NULL) goto err;
 
     /* initialize the handle cache */
     hret = margo_handle_cache_init(mid);
@@ -306,7 +311,7 @@ err:
     if(mid)
     {
         margo_handle_cache_destroy(mid);
-        margo_timer_instance_finalize(mid);
+        margo_timer_list_free(mid->timer_list);
         ABT_mutex_free(&mid->finalize_mutex);
         ABT_cond_free(&mid->finalize_cond);
         free(mid);
@@ -327,7 +332,7 @@ static void margo_cleanup(margo_instance_id mid)
         free(tmp);
     }
 
-    margo_timer_instance_finalize(mid);
+    margo_timer_list_free(mid->timer_list);
 
     /* delete the hash used for multiplexing */
     delete_multiplexing_hash(mid);
@@ -1441,4 +1446,9 @@ static hg_return_t margo_handle_cache_put(margo_instance_id mid,
 finish:
     ABT_mutex_unlock(mid->handle_cache_mtx);
     return hret;
+}
+
+struct margo_timer_list *margo_get_timer_list(margo_instance_id mid)
+{
+        return mid->timer_list;
 }

@@ -23,19 +23,16 @@ typedef struct margo_timed_element
 } margo_timer_t;
 
 /**
- * Initializes the margo timer interface
- * @param [in] mid Margo instance
- * @returns 0 on success, -1 on failure
+ * Creates a margo_timer_list.
+ * @returns a new margo_timer_list, or NULL if failed 
  */
-int margo_timer_instance_init(
-    margo_instance_id mid);
+struct margo_timer_list* margo_timer_list_create();
 
 /**
- * Shuts down the margo timer interface
- * @param [in] mid Margo instance
+ * Frees the timer list
+ * @param [in] timer_lst timer list to free
  */
-void margo_timer_instance_finalize(
-    margo_instance_id mid);
+void margo_timer_list_free(struct margo_timer_list* timer_lst);
 
 /**
  * Initializes a margo timer object which will perform some action
@@ -79,6 +76,12 @@ void margo_check_timers(
 int margo_timer_get_next_expiration(
     margo_instance_id mid,
     double *next_timer_exp);
+
+/**
+ * Gets the margo_timer_list from the margo instance.
+ * This function is defined in margo.c.
+ */
+struct margo_timer_list *margo_get_timer_list(margo_instance_id mid);
 
 #ifdef __cplusplus
 }
