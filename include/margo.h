@@ -154,7 +154,7 @@ hg_id_t margo_register_name_mplex(
     hg_proc_cb_t in_proc_cb,
     hg_proc_cb_t out_proc_cb,
     hg_rpc_cb_t rpc_cb,
-    uint32_t mplex_id,
+    uint8_t mplex_id,
     ABT_pool pool);
 
 /*
@@ -188,7 +188,7 @@ hg_return_t margo_registered_name(
 hg_return_t margo_registered_name_mplex(
     margo_instance_id mid,
     const char *func_name,
-    uint32_t mplex_id,
+    uint8_t mplex_id,
     hg_id_t *id,
     hg_bool_t *flag);
 
@@ -240,7 +240,7 @@ void* margo_registered_data(
 int margo_register_data_mplex(
     margo_instance_id mid,
     hg_id_t id,
-    uint32_t mplex_id,
+    uint8_t mplex_id,
     void* data,
     void (*free_callback)(void *));
 
@@ -257,7 +257,7 @@ int margo_register_data_mplex(
 void* margo_registered_data_mplex(
     margo_instance_id mid,
     hg_id_t id,
-    uint32_t mplex_id);
+    uint8_t mplex_id);
 
 /**
  * Disable response for a given RPC ID.
@@ -757,7 +757,7 @@ margo_instance_id margo_hg_info_get_instance(const struct hg_info *info);
  * @param [in] mplex_id multiplexing identifier
  * @param [out] pool Argobots pool the handler will execute in
  */
-int margo_lookup_mplex(margo_instance_id mid, hg_id_t id, uint32_t mplex_id, ABT_pool *pool);
+int margo_lookup_mplex(margo_instance_id mid, hg_id_t id, uint8_t mplex_id, ABT_pool *pool);
 
 /**
  * Enables diagnostic collection on specified Margo instance
