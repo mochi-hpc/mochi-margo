@@ -117,6 +117,27 @@ void margo_push_finalize_callback(
     void(*cb)(void*), 
     void* uargs);
 
+/**
+ * Allows the passed Margo instance to be shut down remotely
+ * using margo_shutdown_remote_instance().
+ * 
+ * @param mid Margo instance
+ */
+void margo_enable_remote_shutdown(margo_instance_id mid);
+
+/**
+ * Trigger the shutdown of the Margo instance running
+ * at remote_addr.
+ *
+ * @param mid Local Margo instance
+ * @param remote_addr Address of the Margo instance to shut down.
+ *
+ * @return 0 on success, -1 on failure.
+ */
+int margo_shutdown_remote_instance(
+        margo_instance_id mid, 
+        hg_addr_t remote_addr);
+
 /** 
  * Registers an RPC with margo
  *

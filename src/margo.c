@@ -98,6 +98,10 @@ struct margo_instance
     ABT_cond finalize_cond;
     struct margo_finalize_cb* finalize_cb;
 
+    /* control logic for shutting down */
+    hg_id_t shutdown_rpc_id;
+    int enable_remote_shutdown;
+
     /* timer data */
     struct margo_timer_list* timer_list;
 
@@ -129,8 +133,12 @@ struct margo_rpc_data
 	void (*user_free_callback)(void *);
 };
 
+MERCURY_GEN_PROC(margo_shutdown_out_t, ((int32_t)(ret)))
+
 static void hg_progress_fn(void* foo);
 static void margo_rpc_data_free(void* ptr);
+static void remote_shutdown_ult(hg_handle_t handle);
+DECLARE_MARGO_RPC_HANDLER(remote_shutdown_ult);
 
 static hg_return_t margo_handle_cache_init(margo_instance_id mid);
 static void margo_handle_cache_destroy(margo_instance_id mid);
@@ -278,7 +286,7 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
     hg_return_t hret;
     struct margo_instance *mid;
 
-    mid = malloc(sizeof(*mid));
+    mid = calloc(1,sizeof(*mid));
     if(!mid) goto err;
     memset(mid, 0, sizeof(*mid));
 
@@ -293,6 +301,7 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
     mid->mplex_table = NULL;
     mid->refcount = 1;
     mid->finalize_cb = NULL;
+    mid->enable_remote_shutdown = 0;
 
     mid->timer_list = margo_timer_list_create();
     if(mid->timer_list == NULL) goto err;
@@ -304,6 +313,9 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
     ret = ABT_thread_create(mid->progress_pool, hg_progress_fn, mid, 
         ABT_THREAD_ATTR_NULL, &mid->hg_progress_tid);
     if(ret != 0) goto err;
+
+    mid->shutdown_rpc_id = MARGO_REGISTER(mid, "__shutdown__", 
+            void, margo_shutdown_out_t, remote_shutdown_ult);
 
     return mid;
 
@@ -469,6 +481,42 @@ hg_id_t margo_register_name(margo_instance_id mid, const char *func_name,
     }
 
 	return(id);
+}
+
+void margo_enable_remote_shutdown(margo_instance_id mid)
+{
+    mid->enable_remote_shutdown = 1;
+}
+
+int margo_shutdown_remote_instance(
+        margo_instance_id mid,
+        hg_addr_t remote_addr)
+{
+    hg_return_t hret;
+    hg_handle_t handle;
+
+    hret = margo_create(mid, remote_addr,
+                        mid->shutdown_rpc_id, &handle);
+    if(hret != HG_SUCCESS) return -1;
+
+    hret = margo_forward(handle, NULL);
+    if(hret != HG_SUCCESS)
+    {
+        margo_destroy(handle);
+        return -1;
+    }
+
+    margo_shutdown_out_t out;
+    hret = margo_get_output(handle, &out);
+    if(hret != HG_SUCCESS)
+    {
+        margo_destroy(handle);
+        return -1;
+    }
+
+    margo_destroy(handle);
+
+    return out.ret;
 }
 
 hg_id_t margo_register_name_mplex(margo_instance_id mid, const char *func_name,
@@ -1452,3 +1500,20 @@ struct margo_timer_list *margo_get_timer_list(margo_instance_id mid)
 {
         return mid->timer_list;
 }
+
+static void remote_shutdown_ult(hg_handle_t handle)
+{
+    margo_instance_id mid = margo_hg_handle_get_instance(handle);
+    margo_shutdown_out_t out;
+    if(!(mid->enable_remote_shutdown)) {
+        out.ret = -1;
+    } else {
+        out.ret = 0;
+    }
+    margo_respond(handle, &out);
+    margo_destroy(handle);
+    if(mid->enable_remote_shutdown) {
+        margo_finalize(mid);
+    }
+}
+DEFINE_MARGO_RPC_HANDLER(remote_shutdown_ult)
