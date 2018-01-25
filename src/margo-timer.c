@@ -46,7 +46,6 @@ struct margo_timer_list* margo_timer_list_create()
 void margo_timer_list_free(struct margo_timer_list* timer_lst)
 {
     margo_timer_t *cur;
-    int i = 0;
 
     ABT_mutex_lock(timer_lst->mutex);
     /* delete any remaining timers from the queue */

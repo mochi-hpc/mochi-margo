@@ -950,7 +950,6 @@ hg_return_t margo_bulk_itransfer(
     margo_request* req)
 {
     hg_return_t hret = HG_TIMEOUT;
-    hg_return_t *waited_hret;
     ABT_eventual eventual;
     int ret;
 
