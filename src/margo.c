@@ -514,6 +514,7 @@ int margo_shutdown_remote_instance(
         return -1;
     }
 
+    margo_free_output(handle, &out);
     margo_destroy(handle);
 
     return out.ret;
