@@ -1453,6 +1453,9 @@ static hg_return_t margo_handle_cache_get(margo_instance_id mid,
     hret = HG_Reset(el->handle, addr, id);
     if(hret == HG_SUCCESS)
     {
+        /* XXX: Mercury doesn't reset the target_id so we need to do that manually for now */
+        HG_Set_target_id(el->handle, 0);
+
         /* put on in-use list and pass back handle */
         HASH_ADD(hh, mid->used_handle_hash, handle, sizeof(hg_handle_t), el);
         *handle = el->handle;
