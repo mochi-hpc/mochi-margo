@@ -544,7 +544,7 @@ hg_id_t margo_register_name_mplex(margo_instance_id mid, const char *func_name,
     if(element)
         return(id);
 
-    element = malloc(sizeof(*element));
+    element = calloc(1,sizeof(*element));
     if(!element)
         return(0);
     element->key = key;
