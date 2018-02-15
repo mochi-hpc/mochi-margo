@@ -111,12 +111,15 @@ void margo_check_timers(
     margo_timer_t *cur;
     struct margo_timer_list *timer_lst;
     ABT_pool handler_pool;
-    double now = ABT_get_wtime();
+    double now;
 
     timer_lst = margo_get_timer_list(mid);
     assert(timer_lst);
 
     ABT_mutex_lock(timer_lst->mutex);
+
+    if(timer_lst->queue_head)
+        now = ABT_get_wtime();
 
     /* iterate through timer list, performing timeout action
      * for all elements which have passed expiration time
@@ -153,7 +156,7 @@ int margo_timer_get_next_expiration(
     double *next_timer_exp)
 {
     struct margo_timer_list *timer_lst;
-    double now = ABT_get_wtime();
+    double now;
     int ret;
 
     timer_lst = margo_get_timer_list(mid);
@@ -162,6 +165,7 @@ int margo_timer_get_next_expiration(
     ABT_mutex_lock(timer_lst->mutex);
     if(timer_lst->queue_head)
     {
+        now = ABT_get_wtime();
         *next_timer_exp = timer_lst->queue_head->expiration - now;
         ret = 0;
     }
