@@ -74,6 +74,16 @@ margo_instance_id margo_init(
  * @param [in] handler_pool Argobots pool to service RPC handlers
  * @param [in] hg_context Mercury context
  * @returns margo instance id on success, MARGO_INSTANCE_NULL upon error
+ *
+ * NOTE: if you are configuring Argobots pools yourself before
+ * passing them into this function, please consider setting
+ * ABT_MEM_MAX_NUM_STACKS to a low value (like 8) either in your
+ * environment or programmatically with putenv() in your code before
+ * creating the pools to prevent excess memory consumption under
+ * load from producer/consumer patterns across execution streams that
+ * fail to utilize per-execution stream stack caches.  See
+ * https://xgitlab.cels.anl.gov/sds/margo/issues/40 for details.
+ * The margo_init() function does this automatically.
  */
 margo_instance_id margo_init_pool(
     ABT_pool progress_pool,

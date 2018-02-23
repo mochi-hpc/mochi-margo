@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <abt.h>
+#include <stdlib.h>
 
 #include <margo-config.h>
 #ifdef HAVE_ABT_SNOOZER
@@ -166,6 +167,18 @@ margo_instance_id margo_init(const char *addr_str, int mode,
     struct margo_instance *mid = MARGO_INSTANCE_NULL;
 
     if(mode != MARGO_CLIENT_MODE && mode != MARGO_SERVER_MODE) goto err;
+
+    /* NOTE: Margo is very likely to create a single producer (the
+     * progress function), multiple consumer usage pattern that
+     * causes excess memory consumption in some versions of
+     * Argobots.  See
+     * https://xgitlab.cels.anl.gov/sds/margo/issues/40 for details.
+     * We therefore manually set the ABT_MEM_MAX_NUM_STACKS parameter 
+     * for Argobots to a low value so that RPC handler threads do not
+     * queue large numbers of stacks for reuse in per-ES data 
+     * structures.
+     */
+    putenv("ABT_MEM_MAX_NUM_STACKS=8");
 
     if (ABT_initialized() == ABT_ERR_UNINITIALIZED)
     {
