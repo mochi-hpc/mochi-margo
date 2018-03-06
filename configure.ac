@@ -91,6 +91,18 @@ AC_MSG_RESULT(no)
 AC_MSG_ERROR([Boost preprocessing not enabled in Mercury])
 )
 
+# make sure that argobots has the ABT_POOL_BLOCKING_FIFO pool type
+AC_MSG_CHECKING(for ABT_POOL_BLOCKING_FIFO in Argobots)
+AC_TRY_COMPILE([
+#include <abt.h>
+], [
+enum ABT_pool_kind kind = ABT_POOL_BLOCKING_FIFO;
+],
+AC_MSG_RESULT(yes),
+AC_MSG_RESULT(no)
+AC_MSG_ERROR([ABT_POOL_BLOCKING_FIFO not available in Argobots])
+)
+
 AC_CONFIG_FILES([Makefile maint/margo.pc])
 AC_OUTPUT
  
