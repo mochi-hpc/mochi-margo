@@ -73,6 +73,7 @@ CPPFLAGS="$ARGOBOTS_CFLAGS $CPPFLAGS"
 CFLAGS="$ARGOBOTS_CFLAGS $CFLAGS"
 
 PC_REQUIRES="mercury argobots"
+AC_SUBST([PC_REQUIRES], ["$PC_REQUIRES"])
 
 # turn off a warning that is tripping up our use of utlist at the moment
 CFLAGS="-Wno-address $CFLAGS"
