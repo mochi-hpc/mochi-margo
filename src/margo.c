@@ -152,10 +152,12 @@ margo_instance_id margo_init(const char *addr_str, int mode,
 {
     ABT_xstream progress_xstream = ABT_XSTREAM_NULL;
     ABT_pool progress_pool = ABT_POOL_NULL;
+    ABT_sched progress_sched;
     ABT_pool self_pool;
     ABT_sched self_sched;
     ABT_xstream self_xstream;
     ABT_xstream *rpc_xstreams = NULL;
+    ABT_sched *rpc_scheds = NULL;
     ABT_xstream rpc_xstream = ABT_XSTREAM_NULL;
     ABT_pool rpc_pool = ABT_POOL_NULL;
     hg_class_t *hg_class = NULL;
@@ -204,7 +206,10 @@ margo_instance_id margo_init(const char *addr_str, int mode,
         /* create an xstream with a blocking fifo pool to run progress engine */
         ret = ABT_pool_create_basic(ABT_POOL_BLOCKING_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE, &progress_pool);
         if (ret != ABT_SUCCESS) goto err;
-        ret = ABT_xstream_create(ABT_SCHED_NULL, &progress_xstream);
+        ret = ABT_sched_create_basic(ABT_SCHED_BASIC, 1, &progress_pool,
+           ABT_SCHED_CONFIG_NULL, &progress_sched);
+        if (ret != ABT_SUCCESS) goto err;
+        ret = ABT_xstream_create(progress_sched, &progress_xstream);
         if (ret != ABT_SUCCESS) goto err;
     }
     else
@@ -220,11 +225,16 @@ margo_instance_id margo_init(const char *addr_str, int mode,
         /* create a collection of xstreams with a blocking fifo pool to run RPCs */
         rpc_xstreams = calloc(rpc_thread_count, sizeof(*rpc_xstreams));
         if (rpc_xstreams == NULL) goto err;
+        rpc_scheds = calloc(rpc_thread_count, sizeof(*rpc_scheds));
+        if (rpc_scheds == NULL) goto err;
         ret = ABT_pool_create_basic(ABT_POOL_BLOCKING_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE, &rpc_pool);
         if (ret != ABT_SUCCESS) goto err;
         for(i=0; i<rpc_thread_count; i++) 
         {
-            ret = ABT_xstream_create(ABT_SCHED_NULL, rpc_xstreams+i);
+            ret = ABT_sched_create_basic(ABT_SCHED_BASIC, 1, &rpc_pool,
+               ABT_SCHED_CONFIG_NULL, &rpc_scheds[i]);
+            if (ret != ABT_SUCCESS) goto err;
+            ret = ABT_xstream_create(rpc_scheds[i], rpc_xstreams+i);
             if (ret != ABT_SUCCESS) goto err;
         }
     }
@@ -279,6 +289,7 @@ err:
             ABT_xstream_free(&rpc_xstreams[i]);
         }
         free(rpc_xstreams);
+        free(rpc_scheds);
     }
     if(hg_context)
         HG_Context_destroy(hg_context);
