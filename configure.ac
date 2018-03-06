@@ -74,33 +74,6 @@ CFLAGS="$ARGOBOTS_CFLAGS $CFLAGS"
 
 PC_REQUIRES="mercury argobots"
 
-check_abt_snoozer=auto
-AC_ARG_ENABLE([abt-snoozer],
-    [  --enable-abt-snoozer    enable abt-snoozer (default: dynamic check)],
-    [ case "${enableval}" in
-     yes) check_abt_snoozer=yes ;;
-     no)  check_abt_snoozer=no ;;
-     *) AC_MSG_ERROR([bad value ${enableval} for --enable-abt-snoozer]) ;;
-     esac],
-    [])
-
-check_abt_snoozer_status=fail
-if test "x${check_abt_snoozer}" = xauto -o "x${check_abt_snoozer}" = xyes ; then
-    PKG_CHECK_MODULES([ABT_SNOOZER],[abt-snoozer],
-        [AC_DEFINE([HAVE_ABT_SNOOZER], [1], [Use ABT-SNOOZER])
-         PC_REQUIRES="$PC_REQUIRES abt-snoozer"
-         LIBS="$ABT_SNOOZER_LIBS $LIBS"
-         CPPFLAGS="$ABT_SNOOZER_CFLAGS $CPPFLAGS"
-         CFLAGS="$ABT_SNOOZER_CFLAGS $CFLAGS"
-         AC_SUBST([PC_REQUIRES], ["$PC_REQUIRES"])
-         check_abt_snoozer_status=success],
-        [printf ""])
-fi
-
-if test "x${check_abt_snoozer_status}" = xfail -a "x${check_abt_snoozer}" = xyes; then
-    AC_MSG_ERROR([Could not find working abt-snoozer installation!])
-fi
-
 # turn off a warning that is tripping up our use of utlist at the moment
 CFLAGS="-Wno-address $CFLAGS"
 
