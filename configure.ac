@@ -73,33 +73,7 @@ CPPFLAGS="$ARGOBOTS_CFLAGS $CPPFLAGS"
 CFLAGS="$ARGOBOTS_CFLAGS $CFLAGS"
 
 PC_REQUIRES="mercury argobots"
-
-check_abt_snoozer=auto
-AC_ARG_ENABLE([abt-snoozer],
-    [  --enable-abt-snoozer    enable abt-snoozer (default: dynamic check)],
-    [ case "${enableval}" in
-     yes) check_abt_snoozer=yes ;;
-     no)  check_abt_snoozer=no ;;
-     *) AC_MSG_ERROR([bad value ${enableval} for --enable-abt-snoozer]) ;;
-     esac],
-    [])
-
-check_abt_snoozer_status=fail
-if test "x${check_abt_snoozer}" = xauto -o "x${check_abt_snoozer}" = xyes ; then
-    PKG_CHECK_MODULES([ABT_SNOOZER],[abt-snoozer],
-        [AC_DEFINE([HAVE_ABT_SNOOZER], [1], [Use ABT-SNOOZER])
-         PC_REQUIRES="$PC_REQUIRES abt-snoozer"
-         LIBS="$ABT_SNOOZER_LIBS $LIBS"
-         CPPFLAGS="$ABT_SNOOZER_CFLAGS $CPPFLAGS"
-         CFLAGS="$ABT_SNOOZER_CFLAGS $CFLAGS"
-         AC_SUBST([PC_REQUIRES], ["$PC_REQUIRES"])
-         check_abt_snoozer_status=success],
-        [printf ""])
-fi
-
-if test "x${check_abt_snoozer_status}" = xfail -a "x${check_abt_snoozer}" = xyes; then
-    AC_MSG_ERROR([Could not find working abt-snoozer installation!])
-fi
+AC_SUBST([PC_REQUIRES], ["$PC_REQUIRES"])
 
 # turn off a warning that is tripping up our use of utlist at the moment
 CFLAGS="-Wno-address $CFLAGS"
@@ -116,6 +90,18 @@ AC_TRY_COMPILE([
 AC_MSG_RESULT(yes),
 AC_MSG_RESULT(no)
 AC_MSG_ERROR([Boost preprocessing not enabled in Mercury])
+)
+
+# make sure that argobots has the ABT_SCHED_BASIC_WAIT scheduler
+AC_MSG_CHECKING(for ABT_SCHED_BASIC_WAIT in Argobots)
+AC_TRY_COMPILE([
+#include <abt.h>
+], [
+enum ABT_sched_predef sched = ABT_SCHED_BASIC_WAIT;
+],
+AC_MSG_RESULT(yes),
+AC_MSG_RESULT(no)
+AC_MSG_ERROR([ABT_SCHED_BASIC_WAIT not available in Argobots])
 )
 
 AC_CONFIG_FILES([Makefile maint/margo.pc])

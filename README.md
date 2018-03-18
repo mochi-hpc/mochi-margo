@@ -26,9 +26,7 @@ Note that Margo should be compatible with any Mercury transport (NA plugin).  Th
 ##  Dependencies
 
 * mercury  (git clone --recurse-submodules https://github.com/mercury-hpc/mercury.git)
-* argobots (git clone https://github.com/pmodels/argobots.git)
-* libev (e.g libev-dev package on Ubuntu or Debian)
-* (optional) abt-snoozer (git clone https://xgitlab.cels.anl.gov/sds/abt-snoozer)
+* argobots fork with scheduler wait support (git -b dev-fifo-wait clone https://github.com/carns/argobots.git)
 
 ### Recommended Mercury build options
 
