@@ -512,7 +512,7 @@ int margo_shutdown_remote_instance(
                         mid->shutdown_rpc_id, &handle);
     if(hret != HG_SUCCESS) return -1;
 
-    hret = margo_forward(MARGO_DEFAULT_PROVIDER_ID, handle, NULL);
+    hret = margo_forward(handle, NULL);
     if(hret != HG_SUCCESS)
     {
         margo_destroy(handle);
@@ -759,20 +759,20 @@ static hg_return_t margo_cb(const struct hg_cb_info *info)
     return(HG_SUCCESS);
 }
 
-hg_return_t margo_forward(
+hg_return_t margo_forward_provider_id(
     uint16_t provider_id,
     hg_handle_t handle,
     void *in_struct)
 {
 	hg_return_t hret;
 	margo_request req;
-	hret = margo_iforward(provider_id, handle, in_struct, &req);
+	hret = margo_iforward_provider_id(provider_id, handle, in_struct, &req);
 	if(hret != HG_SUCCESS) 
 		return hret;
 	return margo_wait(req);
 }
 
-hg_return_t margo_iforward(
+hg_return_t margo_iforward_provider_id(
     uint16_t provider_id,
     hg_handle_t handle,
     void *in_struct,
@@ -1104,6 +1104,14 @@ ABT_pool margo_hg_handle_get_handler_pool(hg_handle_t h)
     if(ret != 0) return ABT_POOL_NULL;
 
     return pool;
+}
+
+margo_instance_id margo_hg_info_get_instance(const struct hg_info *info)
+{
+    struct margo_rpc_data* data = 
+        (struct margo_rpc_data*) HG_Registered_data(info->hg_class, info->id);
+    if(!data) return MARGO_INSTANCE_NULL;
+    return data->mid;
 }
 
 margo_instance_id margo_hg_handle_get_instance(hg_handle_t h)

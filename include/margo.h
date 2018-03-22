@@ -475,10 +475,13 @@ hg_return_t margo_destroy(
  * @param [in] in_struct input argument struct for RPC
  * @returns 0 on success, hg_return_t values on error
  */
-hg_return_t margo_forward(
+hg_return_t margo_forward_provider_id(
     uint16_t provider_id,
     hg_handle_t handle,
     void *in_struct);
+
+#define margo_forward(__handle, __in_struct)\
+    margo_forward_provider_id(MARGO_DEFAULT_PROVIDER_ID, __handle, __in_struct)
 
 /**
  * Forward (without blocking) an RPC request to a remote host
@@ -488,11 +491,14 @@ hg_return_t margo_forward(
  * @param [out] req request to wait on using margo_wait
  * @returns 0 on success, hg_return_t values on error
  */
-hg_return_t margo_iforward(
+hg_return_t margo_iforward_provider_id(
     uint16_t provider_id,
     hg_handle_t handle,
     void* in_struct,
     margo_request* req);
+
+#define margo_iforward(__handle, __in_struct, __req)\
+    margo_forward_provider_id(MARGO_DEFAULT_PROVIDER_ID, __handle, __in_struct, __req)
 
 /**
  * Wait for an operation initiated by a non-blocking
@@ -747,6 +753,13 @@ void margo_thread_sleep(
 int margo_get_handler_pool(margo_instance_id mid, ABT_pool* pool);
 
 /**
+ * Retrieve the rpc handler abt pool that is associated with this handle
+ * @param [in] h handle
+ * @return pool
+ */
+ABT_pool margo_hg_handle_get_handler_pool(hg_handle_t h);
+
+/**
  * Retrieve the Mercury context that was associated with this instance at
  *    initialization time
  * @param [in] mid Margo instance
@@ -770,6 +783,15 @@ hg_class_t* margo_get_class(margo_instance_id mid);
  * \return Margo instance
  */
 margo_instance_id margo_hg_handle_get_instance(hg_handle_t h);
+
+/**
+ * Get the margo_instance_id from an hg_info struct 
+ *
+ * \param [in] info       hg_info struct 
+ * 
+ * \return Margo instance
+ */
+margo_instance_id margo_hg_info_get_instance(const struct hg_info *info);
 
 /**
  * Enables diagnostic collection on specified Margo instance
