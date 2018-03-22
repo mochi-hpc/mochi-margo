@@ -55,10 +55,6 @@ void composed_read(margo_instance_id mid, hg_addr_t svr_addr, void *buffer, hg_s
 
     in.data_xfer_svc_addr = data_xfer_svc_addr_string;
 
-#if 0
-    margo_set_target_id(handle, mplex_id);
-#endif
-
     /* Send rpc. Note that we are also transmitting the bulk handle in the
      * input struct.  It was set above. 
      */ 
@@ -104,10 +100,6 @@ void data_xfer_read(margo_instance_id mid, hg_addr_t svr_addr, void *buffer, hg_
     assert(hret == HG_SUCCESS);
 
     in.client_addr = addr_self_string;
-
-#if 0
-    margo_set_target_id(handle, mplex_id);
-#endif
 
     /* Send rpc. Note that we are also transmitting the bulk handle in the
      * input struct.  It was set above. 

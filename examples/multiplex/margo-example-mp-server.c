@@ -107,7 +107,7 @@ int main(int argc, char **argv)
      */
     MARGO_REGISTER(mid, "my_shutdown_rpc", void, void, my_rpc_shutdown_ult);
 
-    /* register svc1, with mplex_id 1, to execute on the default handler pool
+    /* register svc1, with provider_id 1, to execute on the default handler pool
      * used by Margo
      */
     margo_get_handler_pool(mid, &handler_pool);
@@ -124,14 +124,14 @@ int main(int argc, char **argv)
 	ret = ABT_xstream_get_main_pools(svc1_xstream2, 1, &svc1_pool2);
 	assert(ret == 0);
 #endif
-    /* register svc1, with mplex_id 2, to execute on a separate pool.  This
+    /* register svc1, with provider_id 2, to execute on a separate pool.  This
      * will result in svc1 being registered twice, with the client being able
      * to dictate which instance they want to target
      */
     ret = svc1_register(mid, svc1_pool2, 2);
     assert(ret == 0);
 
-    /* register svc2, with mplex_id 3, to execute on the default handler pool
+    /* register svc2, with provider_id 3, to execute on the default handler pool
      * used by Margo
      */
     margo_get_handler_pool(mid, &handler_pool);
