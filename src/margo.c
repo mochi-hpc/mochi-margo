@@ -789,10 +789,7 @@ hg_return_t margo_iforward_provider_id(
     assert(provider_id <= MARGO_MAX_PROVIDER_ID);
 
     hgi = HG_Get_info(handle);
-    /* make sure bottom bits of id are clear */
-    id = (hgi->id >> (__MARGO_PROVIDER_ID_SIZE*8)) << 
-        (__MARGO_PROVIDER_ID_SIZE*8);
-    id |= provider_id;
+    id = mux_id(hgi->id, provider_id);
 
     /* TODO: if we reset the handle here, is there any reason to do so in
      * the handle cache?
@@ -812,6 +809,11 @@ hg_return_t margo_iforward_provider_id(
 
         /* register new ID that includes provider id */
         ret = HG_Register(hgi->hg_class, id, in_cb, out_cb, NULL);
+        if(ret != HG_SUCCESS)
+            return(ret);
+
+        /* should be able to reset now */
+        ret = HG_Reset(handle, hgi->addr, id);
         if(ret != HG_SUCCESS)
             return(ret);
     }
