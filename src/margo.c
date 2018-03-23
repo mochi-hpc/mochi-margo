@@ -1106,8 +1106,10 @@ ABT_pool margo_hg_handle_get_handler_pool(hg_handle_t h)
     data = (struct margo_rpc_data*) HG_Registered_data(info->hg_class, info->id);
     if(!data) return ABT_POOL_NULL;
 
+    /* TODO: if we stored a pointer to the pool in the margo_rpc_data struct
+     * then we wouldn't have to search hash table for it here.
+     */
     demux_id(info->id, &base_id, &provider_id);
-
     ret = margo_lookup_provider(data->mid, base_id, provider_id, &pool);
     if(ret != 0) return ABT_POOL_NULL;
 
