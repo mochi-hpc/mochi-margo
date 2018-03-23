@@ -179,8 +179,8 @@ static hg_return_t margo_handle_cache_put(margo_instance_id mid,
     hg_handle_t handle);
 static void delete_provider_hash(margo_instance_id mid);
 static int margo_lookup_provider(margo_instance_id mid, hg_id_t id, uint16_t provider_id, ABT_pool *pool);
-static hg_id_t margo_register_internal(margo_instance_id mid, const char *func_name,
-    hg_proc_cb_t in_proc_cb, hg_proc_cb_t out_proc_cb, hg_rpc_cb_t rpc_cb, uint16_t provider_id);
+static hg_id_t margo_register_internal(margo_instance_id mid, hg_id_t id,
+    hg_proc_cb_t in_proc_cb, hg_proc_cb_t out_proc_cb, hg_rpc_cb_t rpc_cb);
 
 margo_instance_id margo_init(const char *addr_str, int mode,
     int use_progress_thread, int rpc_thread_count)
@@ -539,9 +539,14 @@ hg_id_t margo_register_name_provider(margo_instance_id mid, const char *func_nam
 {
     struct provider_element *element;
     hg_id_t id;
+    int ret;
 
-    id = margo_register_internal(mid, func_name, in_proc_cb, out_proc_cb, rpc_cb, provider_id);
-    if(id <= 0)
+    assert(provider_id <= MARGO_MAX_PROVIDER_ID);
+    
+    id = gen_id(func_name, provider_id);
+
+    ret = margo_register_internal(mid, id, in_proc_cb, out_proc_cb, rpc_cb);
+    if(ret == 0)
         return(0);
 
     /* nothing to do, we'll let the handler pool take this directly */
@@ -808,9 +813,10 @@ hg_return_t margo_iforward_provider_id(
             return(HG_NO_MATCH);
 
         /* register new ID that includes provider id */
-        ret = HG_Register(hgi->hg_class, id, in_cb, out_cb, NULL);
-        if(ret != HG_SUCCESS)
-            return(ret);
+        ret = margo_register_internal(margo_hg_info_get_instance(hgi), 
+            id, in_cb, out_cb, NULL);
+        if(ret == 0)
+            return(HG_OTHER_ERROR);
 
         /* should be able to reset now */
         ret = HG_Reset(handle, hgi->addr, id);
@@ -1586,17 +1592,12 @@ static int margo_lookup_provider(margo_instance_id mid, hg_id_t id, uint16_t pro
 }
 
 
-static hg_id_t margo_register_internal(margo_instance_id mid, const char *func_name,
-    hg_proc_cb_t in_proc_cb, hg_proc_cb_t out_proc_cb, hg_rpc_cb_t rpc_cb, uint16_t provider_id)
+static hg_id_t margo_register_internal(margo_instance_id mid, hg_id_t id,
+    hg_proc_cb_t in_proc_cb, hg_proc_cb_t out_proc_cb, hg_rpc_cb_t rpc_cb)
 {
     struct margo_rpc_data* margo_data;
     hg_return_t hret;
-    hg_id_t id;
     
-    assert(provider_id <= MARGO_MAX_PROVIDER_ID);
-
-    id = gen_id(func_name, provider_id);
-
     hret = HG_Register(mid->hg_class, id, in_proc_cb, out_proc_cb, rpc_cb);
     if(hret != HG_SUCCESS)
         return(hret);
