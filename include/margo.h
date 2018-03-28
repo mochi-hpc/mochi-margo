@@ -221,7 +221,7 @@ hg_return_t margo_registered_name(
  *
  * @return HG_SUCCESS or corresponding HG error code
  */
-hg_return_t margo_registered_name_provider(
+hg_return_t margo_provider_registered_name(
     margo_instance_id mid,
     const char *func_name,
     uint16_t provider_id,
@@ -290,7 +290,7 @@ int margo_provider_register_data(
  *
  * \return Pointer to data or NULL
  */
-void* margo_registered_data_provider(
+void* margo_provider_registered_data(
     margo_instance_id mid,
     hg_id_t id,
     uint16_t provider_id);

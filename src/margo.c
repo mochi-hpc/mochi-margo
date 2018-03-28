@@ -575,7 +575,7 @@ hg_return_t margo_registered_name(margo_instance_id mid, const char *func_name,
     return(HG_Registered(mid->hg_class, *id, flag));
 }
 
-hg_return_t margo_registered_name_provider(margo_instance_id mid, const char *func_name,
+hg_return_t margo_provider_registered_name(margo_instance_id mid, const char *func_name,
     uint16_t provider_id, hg_id_t *id, hg_bool_t *flag)
 {
     hg_bool_t b;
@@ -1160,7 +1160,7 @@ int margo_provider_register_data(margo_instance_id mid, hg_id_t id, uint16_t pro
     return(0);
 }
 
-void* margo_registered_data_provider(margo_instance_id mid, hg_id_t id, uint16_t provider_id)
+void* margo_provider_registered_data(margo_instance_id mid, hg_id_t id, uint16_t provider_id)
 {
     struct provider_element *element;
     hg_id_t muxed_id;
