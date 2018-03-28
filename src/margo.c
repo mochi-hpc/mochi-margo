@@ -1113,6 +1113,9 @@ ABT_pool margo_hg_handle_get_handler_pool(hg_handle_t h)
     ret = margo_lookup_provider(data->mid, base_id, provider_id, &pool);
     if(ret != 0) return ABT_POOL_NULL;
 
+    if(pool == ABT_POOL_NULL)
+        margo_get_handler_pool(data->mid, &pool);
+
     return pool;
 }
 
