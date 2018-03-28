@@ -58,7 +58,7 @@ void svc1_do_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t provider_
      * input struct.  It was set above. 
      */ 
     in.input_val = 0;
-    hret = margo_forward_provider_id(provider_id, handle, &in);
+    hret = margo_provider_forward(provider_id, handle, &in);
     assert(hret == HG_SUCCESS);
 
     /* decode response */
@@ -102,7 +102,7 @@ void svc1_do_other_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t pro
      * input struct.  It was set above. 
      */ 
     in.input_val = 0;
-    hret = margo_forward_provider_id(provider_id, handle, &in);
+    hret = margo_provider_forward(provider_id, handle, &in);
     assert(hret == HG_SUCCESS);
 
     /* decode response */

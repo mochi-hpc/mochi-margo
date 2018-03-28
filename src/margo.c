@@ -533,7 +533,7 @@ int margo_shutdown_remote_instance(
     return out.ret;
 }
 
-hg_id_t margo_register_name_provider(margo_instance_id mid, const char *func_name,
+hg_id_t margo_provider_register_name(margo_instance_id mid, const char *func_name,
     hg_proc_cb_t in_proc_cb, hg_proc_cb_t out_proc_cb, hg_rpc_cb_t rpc_cb,
     uint16_t provider_id, ABT_pool pool)
 {
@@ -764,20 +764,20 @@ static hg_return_t margo_cb(const struct hg_cb_info *info)
     return(HG_SUCCESS);
 }
 
-hg_return_t margo_forward_provider_id(
+hg_return_t margo_provider_forward(
     uint16_t provider_id,
     hg_handle_t handle,
     void *in_struct)
 {
 	hg_return_t hret;
 	margo_request req;
-	hret = margo_iforward_provider_id(provider_id, handle, in_struct, &req);
+	hret = margo_provider_iforward(provider_id, handle, in_struct, &req);
 	if(hret != HG_SUCCESS) 
 		return hret;
 	return margo_wait(req);
 }
 
-hg_return_t margo_iforward_provider_id(
+hg_return_t margo_provider_iforward(
     uint16_t provider_id,
     hg_handle_t handle,
     void *in_struct,
@@ -1138,7 +1138,7 @@ margo_instance_id margo_hg_handle_get_instance(hg_handle_t h)
     return data->mid;
 }
 
-int margo_register_data_provider(margo_instance_id mid, hg_id_t id, uint16_t provider_id, void* data, void (*free_callback)(void *))
+int margo_provider_register_data(margo_instance_id mid, hg_id_t id, uint16_t provider_id, void* data, void (*free_callback)(void *))
 {
     struct provider_element *element;
     hg_id_t muxed_id;

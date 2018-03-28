@@ -39,7 +39,7 @@ typedef ABT_eventual margo_request;
 #define MARGO_CLIENT_MODE 0
 #define MARGO_SERVER_MODE 1
 #define MARGO_DEFAULT_PROVIDER_ID 0
-#define MARGO_MAX_PROVIDER_ID (1 << (8*__MARGO_PROVIDER_ID_SIZE))
+#define MARGO_MAX_PROVIDER_ID ((1 << (8*__MARGO_PROVIDER_ID_SIZE))-1)
 
 #define MARGO_PARAM_PROGRESS_TIMEOUT_UB 1
 
@@ -184,7 +184,7 @@ hg_id_t margo_register_name(
  *
  * \return unique ID associated to the registered function
  */
-hg_id_t margo_register_name_provider(
+hg_id_t margo_provider_register_name(
     margo_instance_id mid,
     const char *func_name,
     hg_proc_cb_t in_proc_cb,
@@ -273,7 +273,7 @@ void* margo_registered_data(
  *
  * \return HG_SUCCESS or corresponding HG error code
  */
-int margo_register_data_provider(
+int margo_provider_register_data(
     margo_instance_id mid,
     hg_id_t id,
     uint16_t provider_id,
@@ -281,7 +281,7 @@ int margo_register_data_provider(
     void (*free_callback)(void *));
 
 /**
- * Indicate whether margo_register_data_provider() has been called 
+ * Indicate whether margo_provider_register_data() has been called 
  * and return associated data.
  *
  * \param [in] mid        Margo instance 
@@ -475,13 +475,13 @@ hg_return_t margo_destroy(
  * @param [in] in_struct input argument struct for RPC
  * @returns 0 on success, hg_return_t values on error
  */
-hg_return_t margo_forward_provider_id(
+hg_return_t margo_provider_forward(
     uint16_t provider_id,
     hg_handle_t handle,
     void *in_struct);
 
 #define margo_forward(__handle, __in_struct)\
-    margo_forward_provider_id(MARGO_DEFAULT_PROVIDER_ID, __handle, __in_struct)
+    margo_provider_forward(MARGO_DEFAULT_PROVIDER_ID, __handle, __in_struct)
 
 /**
  * Forward (without blocking) an RPC request to a remote host
@@ -491,14 +491,14 @@ hg_return_t margo_forward_provider_id(
  * @param [out] req request to wait on using margo_wait
  * @returns 0 on success, hg_return_t values on error
  */
-hg_return_t margo_iforward_provider_id(
+hg_return_t margo_provider_iforward(
     uint16_t provider_id,
     hg_handle_t handle,
     void* in_struct,
     margo_request* req);
 
 #define margo_iforward(__handle, __in_struct, __req)\
-    margo_forward_provider_id(MARGO_DEFAULT_PROVIDER_ID, __handle, __in_struct, __req)
+    margo_provider_iforward(MARGO_DEFAULT_PROVIDER_ID, __handle, __in_struct, __req)
 
 /**
  * Wait for an operation initiated by a non-blocking
@@ -838,14 +838,14 @@ void margo_get_param(margo_instance_id mid, int option, void *param);
  * macro that registers a function as an RPC.
  */
 #define MARGO_REGISTER(__mid, __func_name, __in_t, __out_t, __handler) \
-    margo_register_name_provider(__mid, __func_name, \
+    margo_provider_register_name(__mid, __func_name, \
         BOOST_PP_CAT(hg_proc_, __in_t), \
         BOOST_PP_CAT(hg_proc_, __out_t), \
         __handler##_handler, \
         MARGO_DEFAULT_PROVIDER_ID, ABT_POOL_NULL);
 
 #define MARGO_REGISTER_PROVIDER(__mid, __func_name, __in_t, __out_t, __handler, __provider_id, __pool) \
-    margo_register_name_provider(__mid, __func_name, \
+    margo_provider_register_name(__mid, __func_name, \
         BOOST_PP_CAT(hg_proc_, __in_t), \
         BOOST_PP_CAT(hg_proc_, __out_t), \
         __handler##_handler, \
