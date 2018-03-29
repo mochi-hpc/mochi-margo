@@ -164,12 +164,16 @@ int margo_shutdown_remote_instance(
  *
  * \return unique ID associated to the registered function
  */
-hg_id_t margo_register_name(
+inline hg_id_t margo_register_name(
     margo_instance_id mid,
     const char *func_name,
     hg_proc_cb_t in_proc_cb,
     hg_proc_cb_t out_proc_cb,
-    hg_rpc_cb_t rpc_cb);
+    hg_rpc_cb_t rpc_cb)
+{
+    return margo_provider_register_name(mid, func_name,
+            in_proc_cb, out_proc_cb, rpc_cb, 0, ABT_POOL_NULL);
+}
 
 /** 
  * Registers an RPC with margo that is associated with a provider instance
