@@ -38,7 +38,7 @@ static void data_xfer_read_ult(hg_handle_t handle)
     ABT_xstream_self(&my_xstream);
     ABT_thread_self(&my_ult);
     my_tid = pthread_self();
-    printf("svc1: do_thing: mplex_id: %u, ult: %p, xstream %p, tid: %lu\n", 
+    printf("svc1: do_thing: provider_id: %u, ult: %p, xstream %p, tid: %lu\n", 
         hgi->target_id, my_ult, my_xstream, my_tid);
 #endif
 
@@ -72,7 +72,7 @@ static void data_xfer_read_ult(hg_handle_t handle)
 }
 DEFINE_MARGO_RPC_HANDLER(data_xfer_read_ult)
 
-int data_xfer_service_register(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id)
+int data_xfer_service_register(margo_instance_id mid, ABT_pool pool, uint32_t provider_id)
 {
     hg_return_t hret;
 
@@ -86,14 +86,14 @@ int data_xfer_service_register(margo_instance_id mid, ABT_pool pool, uint32_t mp
     assert(hret == HG_SUCCESS);
 
     /* register RPC handler */
-    MARGO_REGISTER_MPLEX(mid, "data_xfer_read", 
+    MARGO_REGISTER_PROVIDER(mid, "data_xfer_read", 
         data_xfer_read_in_t, data_xfer_read_out_t, 
-        data_xfer_read_ult, mplex_id, pool);
+        data_xfer_read_ult, provider_id, pool);
 
     return(0);
 }
 
-void data_xfer_deregister(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id)
+void data_xfer_deregister(margo_instance_id mid, ABT_pool pool, uint32_t provider_id)
 {
     margo_bulk_free(g_buffer_bulk_handle);
     free(g_buffer);

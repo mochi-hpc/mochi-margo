@@ -23,6 +23,10 @@ extern "C" {
 #include <mercury_macros.h>
 #include <abt.h>
 
+/* determine how much of the Mercury ID space to use for Margo provider IDs */
+#define __MARGO_PROVIDER_ID_SIZE (sizeof(hg_id_t)/4)
+#define __MARGO_RPC_HASH_SIZE (__MARGO_PROVIDER_ID_SIZE * 3)
+
 #undef MERCURY_REGISTER
 
 struct margo_instance;
@@ -34,7 +38,8 @@ typedef ABT_eventual margo_request;
 #define MARGO_REQUEST_NULL ABT_EVENTUAL_NULL
 #define MARGO_CLIENT_MODE 0
 #define MARGO_SERVER_MODE 1
-#define MARGO_DEFAULT_MPLEX_ID 0
+#define MARGO_DEFAULT_PROVIDER_ID 0
+#define MARGO_MAX_PROVIDER_ID ((1 << (8*__MARGO_PROVIDER_ID_SIZE))-1)
 
 #define MARGO_PARAM_PROGRESS_TIMEOUT_UB 1
 
@@ -148,6 +153,29 @@ int margo_shutdown_remote_instance(
         margo_instance_id mid, 
         hg_addr_t remote_addr);
 
+
+/** 
+ * Registers an RPC with margo that is associated with a provider instance
+ *
+ * \param [in] mid Margo instance
+ * \param [in] func_name unique function name for RPC
+ * \param [in] in_proc_cb pointer to input proc callback
+ * \param [in] out_proc_cb pointer to output proc callback
+ * \param [in] rpc_cb RPC callback
+ * \param [in] provider_id provider identifier
+ * \param [in] pool Argobots pool the handler will execute in
+ *
+ * \return unique ID associated to the registered function
+ */
+hg_id_t margo_provider_register_name(
+    margo_instance_id mid,
+    const char *func_name,
+    hg_proc_cb_t in_proc_cb,
+    hg_proc_cb_t out_proc_cb,
+    hg_rpc_cb_t rpc_cb,
+    uint16_t provider_id,
+    ABT_pool pool);
+
 /** 
  * Registers an RPC with margo
  *
@@ -159,34 +187,16 @@ int margo_shutdown_remote_instance(
  *
  * \return unique ID associated to the registered function
  */
-hg_id_t margo_register_name(
+inline hg_id_t margo_register_name(
     margo_instance_id mid,
     const char *func_name,
     hg_proc_cb_t in_proc_cb,
     hg_proc_cb_t out_proc_cb,
-    hg_rpc_cb_t rpc_cb);
-
-/** 
- * Registers an RPC with margo that is associated with a multiplexed service
- *
- * \param [in] mid Margo instance
- * \param [in] func_name unique function name for RPC
- * \param [in] in_proc_cb pointer to input proc callback
- * \param [in] out_proc_cb pointer to output proc callback
- * \param [in] rpc_cb RPC callback
- * \param [in] mplex_id multiplexing identifier
- * \param [in] pool Argobots pool the handler will execute in
- *
- * \return unique ID associated to the registered function
- */
-hg_id_t margo_register_name_mplex(
-    margo_instance_id mid,
-    const char *func_name,
-    hg_proc_cb_t in_proc_cb,
-    hg_proc_cb_t out_proc_cb,
-    hg_rpc_cb_t rpc_cb,
-    uint8_t mplex_id,
-    ABT_pool pool);
+    hg_rpc_cb_t rpc_cb)
+{
+    return margo_provider_register_name(mid, func_name,
+            in_proc_cb, out_proc_cb, rpc_cb, 0, ABT_POOL_NULL);
+}
 
 /*
  * Indicate whether margo_register_name() has been called for the RPC specified by
@@ -206,20 +216,20 @@ hg_return_t margo_registered_name(
     hg_bool_t *flag);
 
 /**
- * Indicate whether the given RPC name has been registered with the given multiplex id.
+ * Indicate whether the given RPC name has been registered with the given provider id.
  *
  * @param [in] mid Margo instance
  * @param [in] func_name function name
- * @param [in] mplex_id multiplex id
+ * @param [in] provider_id provider id
  * @param [out] id registered RPC ID
  * @param [out] flag pointer to boolean
  *
  * @return HG_SUCCESS or corresponding HG error code
  */
-hg_return_t margo_registered_name_mplex(
+hg_return_t margo_provider_registered_name(
     margo_instance_id mid,
     const char *func_name,
-    uint8_t mplex_id,
+    uint16_t provider_id,
     hg_id_t *id,
     hg_bool_t *flag);
 
@@ -254,41 +264,6 @@ void* margo_registered_data(
     margo_instance_id mid,
     hg_id_t id);
 
-/**
- * Register and associate user data to registered function for
- * a given multiplex id.
- * When HG_Finalize() is called free_callback (if defined) is called 
- * to free the registered data.
- *
- * \param [in] mid            Margo instance
- * \param [in] id             registered function ID
- * \param [in] mplex_id       Margo multiplex ID
- * \param [in] data           pointer to data
- * \param [in] free_callback  pointer to free function
- *
- * \return HG_SUCCESS or corresponding HG error code
- */
-int margo_register_data_mplex(
-    margo_instance_id mid,
-    hg_id_t id,
-    uint8_t mplex_id,
-    void* data,
-    void (*free_callback)(void *));
-
-/**
- * Indicate whether margo_register_data_mplex() has been called 
- * and return associated data.
- *
- * \param [in] mid        Margo instance 
- * \param [in] id         registered function ID
- * \param [in] mplex_id   Margo multiplex ID
- *
- * \return Pointer to data or NULL
- */
-void* margo_registered_data_mplex(
-    margo_instance_id mid,
-    hg_id_t id,
-    uint8_t mplex_id);
 
 /**
  * Disable response for a given RPC ID.
@@ -464,36 +439,36 @@ hg_return_t margo_destroy(
 #define margo_free_output HG_Free_output
 
 /**
- * Set target ID that will receive and process RPC request.
- *
- * \param [in] handle       Mercury handle
- * \param [in] target_id    user-defined target ID
- *
- * \return HG_SUCCESS or corresponding HG error code
- */
-#define margo_set_target_id HG_Set_target_id
-
-/**
  * Forward an RPC request to a remote host
+ * @param [in] provider ID (may be MARGO_DEFAULT_PROVIDER_ID)
  * @param [in] handle identifier for the RPC to be sent
  * @param [in] in_struct input argument struct for RPC
  * @returns 0 on success, hg_return_t values on error
  */
-hg_return_t margo_forward(
+hg_return_t margo_provider_forward(
+    uint16_t provider_id,
     hg_handle_t handle,
     void *in_struct);
 
+#define margo_forward(__handle, __in_struct)\
+    margo_provider_forward(MARGO_DEFAULT_PROVIDER_ID, __handle, __in_struct)
+
 /**
  * Forward (without blocking) an RPC request to a remote host
+ * @param [in] provider ID (may be MARGO_DEFAULT_PROVIDER_ID)
  * @param [in] handle identifier for the RPC to be sent
  * @param [in] in_struct input argument struct for RPC
  * @param [out] req request to wait on using margo_wait
  * @returns 0 on success, hg_return_t values on error
  */
-hg_return_t margo_iforward(
+hg_return_t margo_provider_iforward(
+    uint16_t provider_id,
     hg_handle_t handle,
     void* in_struct,
     margo_request* req);
+
+#define margo_iforward(__handle, __in_struct, __req)\
+    margo_provider_iforward(MARGO_DEFAULT_PROVIDER_ID, __handle, __in_struct, __req)
 
 /**
  * Wait for an operation initiated by a non-blocking
@@ -748,6 +723,13 @@ void margo_thread_sleep(
 int margo_get_handler_pool(margo_instance_id mid, ABT_pool* pool);
 
 /**
+ * Retrieve the rpc handler abt pool that is associated with this handle
+ * @param [in] h handle
+ * @return pool
+ */
+ABT_pool margo_hg_handle_get_handler_pool(hg_handle_t h);
+
+/**
  * Retrieve the Mercury context that was associated with this instance at
  *    initialization time
  * @param [in] mid Margo instance
@@ -773,22 +755,13 @@ hg_class_t* margo_get_class(margo_instance_id mid);
 margo_instance_id margo_hg_handle_get_instance(hg_handle_t h);
 
 /**
- * Get the margo_instance_id from a received RPC handle.
+ * Get the margo_instance_id from an hg_info struct 
  *
- * \param [in] info      RPC info structure pointer
+ * \param [in] info       hg_info struct 
  * 
  * \return Margo instance
  */
 margo_instance_id margo_hg_info_get_instance(const struct hg_info *info);
-
-/**
- * Maps an RPC id and mplex id to the pool that it should execute on
- * @param [in] mid Margo instance
- * @param [in] id Mercury RPC identifier
- * @param [in] mplex_id multiplexing identifier
- * @param [out] pool Argobots pool the handler will execute in
- */
-int margo_lookup_mplex(margo_instance_id mid, hg_id_t id, uint8_t mplex_id, ABT_pool *pool);
 
 /**
  * Enables diagnostic collection on specified Margo instance
@@ -835,17 +808,18 @@ void margo_get_param(margo_instance_id mid, int option, void *param);
  * macro that registers a function as an RPC.
  */
 #define MARGO_REGISTER(__mid, __func_name, __in_t, __out_t, __handler) \
-    margo_register_name(__mid, __func_name, \
-        BOOST_PP_CAT(hg_proc_, __in_t), \
-        BOOST_PP_CAT(hg_proc_, __out_t), \
-        __handler##_handler);
-
-#define MARGO_REGISTER_MPLEX(__mid, __func_name, __in_t, __out_t, __handler, __mplex_id, __pool) \
-    margo_register_name_mplex(__mid, __func_name, \
+    margo_provider_register_name(__mid, __func_name, \
         BOOST_PP_CAT(hg_proc_, __in_t), \
         BOOST_PP_CAT(hg_proc_, __out_t), \
         __handler##_handler, \
-        __mplex_id, __pool);
+        MARGO_DEFAULT_PROVIDER_ID, ABT_POOL_NULL);
+
+#define MARGO_REGISTER_PROVIDER(__mid, __func_name, __in_t, __out_t, __handler, __provider_id, __pool) \
+    margo_provider_register_name(__mid, __func_name, \
+        BOOST_PP_CAT(hg_proc_, __in_t), \
+        BOOST_PP_CAT(hg_proc_, __out_t), \
+        __handler##_handler, \
+        __provider_id, __pool);
 
 #define NULL_handler NULL
 
@@ -858,18 +832,9 @@ hg_return_t __name##_handler(hg_handle_t handle) { \
     int __ret; \
     ABT_pool __pool; \
     margo_instance_id __mid; \
-    const struct hg_info *__hgi; \
-    __hgi = HG_Get_info(handle); \
-	__mid = margo_hg_handle_get_instance(handle); \
-    if(__mid == MARGO_INSTANCE_NULL) { \
-        return(HG_OTHER_ERROR); \
-    } \
-    __ret = margo_lookup_mplex(__mid, __hgi->id, __hgi->target_id, (&__pool)); \
-    if(__ret != 0) { \
-        return(HG_INVALID_PARAM); \
-    }\
-    if(__pool == ABT_POOL_NULL) \
-        margo_get_handler_pool(__mid, &__pool); \
+    __mid = margo_hg_handle_get_instance(handle); \
+    if(__mid == MARGO_INSTANCE_NULL) { return(HG_OTHER_ERROR); } \
+    __pool = margo_hg_handle_get_handler_pool(handle); \
     __ret = ABT_thread_create(__pool, (void (*)(void *))__name, handle, ABT_THREAD_ATTR_NULL, NULL); \
     if(__ret != 0) { \
         return(HG_NOMEM_ERROR); \

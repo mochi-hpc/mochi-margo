@@ -29,7 +29,7 @@ int svc2_register_client(margo_instance_id mid)
     return(0);
 }
 
-void svc2_do_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t mplex_id)
+void svc2_do_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t provider_id)
 {
     hg_handle_t handle;
     svc2_do_thing_in_t in;
@@ -53,13 +53,11 @@ void svc2_do_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t mplex_id)
         HG_BULK_READ_ONLY, &in.bulk_handle);
     assert(hret == HG_SUCCESS);
 
-    margo_set_target_id(handle, mplex_id);
-
     /* Send rpc. Note that we are also transmitting the bulk handle in the
      * input struct.  It was set above. 
      */ 
     in.input_val = 0;
-    hret = margo_forward(handle, &in);
+    hret = margo_provider_forward(provider_id, handle, &in);
     assert(hret == HG_SUCCESS);
 
     /* decode response */
@@ -75,7 +73,7 @@ void svc2_do_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t mplex_id)
     return;
 }
 
-void svc2_do_other_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t mplex_id)
+void svc2_do_other_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t provider_id)
 {
     hg_handle_t handle;
     svc2_do_other_thing_in_t in;
@@ -99,13 +97,11 @@ void svc2_do_other_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t mpl
         HG_BULK_READ_ONLY, &in.bulk_handle);
     assert(hret == HG_SUCCESS);
 
-    margo_set_target_id(handle, mplex_id);
-
     /* Send rpc. Note that we are also transmitting the bulk handle in the
      * input struct.  It was set above. 
      */ 
     in.input_val = 0;
-    hret = margo_forward(handle, &in);
+    hret = margo_provider_forward(provider_id, handle, &in);
     assert(hret == HG_SUCCESS);
 
     /* decode response */

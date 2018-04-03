@@ -33,8 +33,8 @@ static void svc1_do_thing_ult(hg_handle_t handle)
     ABT_xstream_self(&my_xstream);
     ABT_thread_self(&my_ult);
     my_tid = pthread_self();
-    printf("svc1: do_thing: mplex_id: %u, ult: %p, xstream %p, tid: %lu\n", 
-        hgi->target_id, my_ult, my_xstream, my_tid);
+    printf("svc1: do_thing: ult: %p, xstream %p, tid: %lu\n", 
+        my_ult, my_xstream, my_tid);
 
     out.ret = 0;
 
@@ -91,8 +91,8 @@ static void svc1_do_other_thing_ult(hg_handle_t handle)
     ABT_xstream_self(&my_xstream);
     ABT_thread_self(&my_ult);
     my_tid = pthread_self();
-    printf("svc1: do_other_thing: mplex_id: %u, ult: %p, xstream %p, tid: %lu\n", 
-        hgi->target_id, my_ult, my_xstream, my_tid);
+    printf("svc1: do_other_thing: ult: %p, xstream %p, tid: %lu\n", 
+        my_ult, my_xstream, my_tid);
 
     out.ret = 0;
 
@@ -125,19 +125,19 @@ static void svc1_do_other_thing_ult(hg_handle_t handle)
 }
 DEFINE_MARGO_RPC_HANDLER(svc1_do_other_thing_ult)
 
-int svc1_register(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id)
+int svc1_register(margo_instance_id mid, ABT_pool pool, uint32_t provider_id)
 {
-    MARGO_REGISTER_MPLEX(mid, "svc1_do_thing", 
+    MARGO_REGISTER_PROVIDER(mid, "svc1_do_thing", 
         svc1_do_thing_in_t, svc1_do_thing_out_t, 
-        svc1_do_thing_ult, mplex_id, pool);
-    MARGO_REGISTER_MPLEX(mid, "svc1_do_other_thing", 
+        svc1_do_thing_ult, provider_id, pool);
+    MARGO_REGISTER_PROVIDER(mid, "svc1_do_other_thing", 
         svc1_do_other_thing_in_t, svc1_do_other_thing_out_t, 
-        svc1_do_other_thing_ult, mplex_id, pool);
+        svc1_do_other_thing_ult, provider_id, pool);
    
     return(0);
 }
 
-void svc1_deregister(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id)
+void svc1_deregister(margo_instance_id mid, ABT_pool pool, uint32_t provider_id)
 {
     /* TODO: undo what was done in svc1_register() */
     return;
