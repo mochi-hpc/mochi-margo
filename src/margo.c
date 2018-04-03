@@ -93,6 +93,12 @@ struct margo_instance
     ABT_cond finalize_cond;
     struct margo_finalize_cb* finalize_cb;
 
+    /* control logic to prevent margo_finalize from destroying
+       the instance when some operations are pending */
+    unsigned pending_operations;
+    ABT_mutex pending_operations_mtx;
+    int finalize_requested;
+
     /* control logic for shutting down */
     hg_id_t shutdown_rpc_id;
     int enable_remote_shutdown;
@@ -348,6 +354,10 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
     mid->finalize_cb = NULL;
     mid->enable_remote_shutdown = 0;
 
+    mid->pending_operations = 0;
+    ABT_mutex_create(&mid->pending_operations_mtx);
+    mid->finalize_requested = 0;
+
     mid->timer_list = margo_timer_list_create();
     if(mid->timer_list == NULL) goto err;
 
@@ -371,6 +381,7 @@ err:
         margo_timer_list_free(mid->timer_list);
         ABT_mutex_free(&mid->finalize_mutex);
         ABT_cond_free(&mid->finalize_cond);
+        ABT_mutex_free(&mid->pending_operations_mtx);
         free(mid);
     }
     return MARGO_INSTANCE_NULL;
@@ -396,6 +407,7 @@ static void margo_cleanup(margo_instance_id mid)
 
     ABT_mutex_free(&mid->finalize_mutex);
     ABT_cond_free(&mid->finalize_cond);
+    ABT_mutex_free(&mid->pending_operations_mtx);
 
     if (mid->owns_progress_pool)
     {
@@ -431,6 +443,16 @@ static void margo_cleanup(margo_instance_id mid)
 void margo_finalize(margo_instance_id mid)
 {
     int do_cleanup;
+
+    /* check if there are pending operations */
+    int pending;
+    ABT_mutex_lock(mid->pending_operations_mtx);
+    pending = mid->pending_operations;
+    ABT_mutex_unlock(mid->pending_operations_mtx);
+    if(pending) {
+        mid->finalize_requested = 1;
+        return;
+    }
 
     /* tell progress thread to wrap things up */
     mid->hg_progress_shutdown_flag = 1;
@@ -1628,3 +1650,24 @@ static hg_id_t margo_register_internal(margo_instance_id mid, hg_id_t id,
     return(id);
 }
 
+int __margo_internal_finalize_requested(margo_instance_id mid)
+{
+    if(!mid) return 0;
+    return mid->finalize_requested;
+}
+
+void __margo_internal_incr_pending(margo_instance_id mid)
+{
+    if(!mid) return;
+    ABT_mutex_lock(mid->pending_operations_mtx);
+    mid->pending_operations += 1;
+    ABT_mutex_unlock(mid->pending_operations_mtx);
+}
+
+void __margo_internal_decr_pending(margo_instance_id mid)
+{
+    if(!mid) return;
+    ABT_mutex_lock(mid->pending_operations_mtx);
+    mid->pending_operations -= 1;
+    ABT_mutex_unlock(mid->pending_operations_mtx);
+}

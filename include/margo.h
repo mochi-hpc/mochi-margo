@@ -805,6 +805,35 @@ void margo_get_param(margo_instance_id mid, int option, void *param);
 
 
 /**
+ * @private
+ * Internal function used by MARGO_REGISTER, not
+ * supposed to be called by users!
+ *
+ * @param mid Margo instance
+ *
+ * @return whether margo_finalize() was called.
+ */
+int __margo_internal_finalize_requested(margo_instance_id mid);
+
+/**
+ * @private
+ * Internal function used by MARGO_REGISTER, not
+ * supposed to be called by users!
+ *
+ * @param mid Margo instance
+ */
+void __margo_internal_incr_pending(margo_instance_id mid);
+
+/**
+ * @private
+ * Internal function used by MARGO_REGISTER, not
+ * supposed to be called by users!
+ *
+ * @param mid Margo instance
+ */
+void __margo_internal_decr_pending(margo_instance_id mid);
+
+/**
  * macro that registers a function as an RPC.
  */
 #define MARGO_REGISTER(__mid, __func_name, __in_t, __out_t, __handler) \
@@ -828,14 +857,25 @@ void margo_get_param(margo_instance_id mid, int option, void *param);
  * @param [in] __name name of handler function
  */
 #define DEFINE_MARGO_RPC_HANDLER(__name) \
+void __name##_wrapper(hg_handle_t handle) { \
+    __name(handle); \
+    margo_instance_id __mid; \
+    __mid = margo_hg_handle_get_instance(handle); \
+    __margo_internal_decr_pending(__mid); \
+    if(__margo_internal_finalize_requested(__mid)) { \
+        margo_finalize(__mid); \
+    } \
+} \
 hg_return_t __name##_handler(hg_handle_t handle) { \
     int __ret; \
     ABT_pool __pool; \
     margo_instance_id __mid; \
     __mid = margo_hg_handle_get_instance(handle); \
     if(__mid == MARGO_INSTANCE_NULL) { return(HG_OTHER_ERROR); } \
+    if(__margo_internal_finalize_requested(__mid)) { return(HG_CANCELED); } \
     __pool = margo_hg_handle_get_handler_pool(handle); \
-    __ret = ABT_thread_create(__pool, (void (*)(void *))__name, handle, ABT_THREAD_ATTR_NULL, NULL); \
+    __margo_internal_incr_pending(__mid); \
+    __ret = ABT_thread_create(__pool, (void (*)(void *))__name##_wrapper, handle, ABT_THREAD_ATTR_NULL, NULL); \
     if(__ret != 0) { \
         return(HG_NOMEM_ERROR); \
     } \
