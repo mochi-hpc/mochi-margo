@@ -833,7 +833,9 @@ hg_return_t __name##_handler(hg_handle_t handle) { \
     ABT_pool __pool; \
     margo_instance_id __mid; \
     __mid = margo_hg_handle_get_instance(handle); \
-    if(__mid == MARGO_INSTANCE_NULL) { return(HG_OTHER_ERROR); } \
+    if(__mid == MARGO_INSTANCE_NULL) { \
+        return(HG_OTHER_ERROR); \
+    } \
     __pool = margo_hg_handle_get_handler_pool(handle); \
     __ret = ABT_thread_create(__pool, (void (*)(void *))__name, handle, ABT_THREAD_ATTR_NULL, NULL); \
     if(__ret != 0) { \
