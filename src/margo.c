@@ -544,7 +544,6 @@ hg_id_t margo_provider_register_name(margo_instance_id mid, const char *func_nam
     hg_proc_cb_t in_proc_cb, hg_proc_cb_t out_proc_cb, hg_rpc_cb_t rpc_cb,
     uint16_t provider_id, ABT_pool pool)
 {
-    struct provider_element *element;
     hg_id_t id;
     int ret;
 
@@ -569,9 +568,6 @@ hg_return_t margo_registered_name(margo_instance_id mid, const char *func_name,
 hg_return_t margo_provider_registered_name(margo_instance_id mid, const char *func_name,
     uint16_t provider_id, hg_id_t *id, hg_bool_t *flag)
 {
-    hg_bool_t b;
-    hg_return_t ret;
-
     *id = gen_id(func_name, provider_id);
 
     return HG_Registered(mid->hg_class, *id, flag);
@@ -1065,9 +1061,6 @@ ABT_pool margo_hg_handle_get_handler_pool(hg_handle_t h)
 {
     struct margo_rpc_data* data;
     const struct hg_info* info;
-    hg_id_t base_id; 
-    uint16_t provider_id;
-    int ret;
     ABT_pool pool;
     
     info = HG_Get_info(h);
