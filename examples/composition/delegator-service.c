@@ -43,7 +43,7 @@ static void delegator_read_ult(hg_handle_t handle)
     ABT_xstream_self(&my_xstream);
     ABT_thread_self(&my_ult);
     my_tid = pthread_self();
-    printf("svc1: do_thing: mplex_id: %u, ult: %p, xstream %p, tid: %lu\n", 
+    printf("svc1: do_thing: provider_id: %u, ult: %p, xstream %p, tid: %lu\n", 
         hgi->target_id, my_ult, my_xstream, my_tid);
 #endif
 
@@ -81,7 +81,7 @@ static void delegator_read_ult(hg_handle_t handle)
 }
 DEFINE_MARGO_RPC_HANDLER(delegator_read_ult)
 
-int delegator_service_register(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id)
+int delegator_service_register(margo_instance_id mid, ABT_pool pool, uint32_t provider_id)
 {
     /* register client-side of function to relay */
     /* NOTE: this RPC may already be registered if this process has already registered a
@@ -91,14 +91,14 @@ int delegator_service_register(margo_instance_id mid, ABT_pool pool, uint32_t mp
         data_xfer_read_in_t, data_xfer_read_out_t, NULL);
 
     /* register RPC handler */
-    MARGO_REGISTER_MPLEX(mid, "delegator_read", 
+    MARGO_REGISTER_PROVIDER(mid, "delegator_read", 
         delegator_read_in_t, delegator_read_out_t, 
-        delegator_read_ult, mplex_id, pool);
+        delegator_read_ult, provider_id, pool);
 
     return(0);
 }
 
-void delegator_deregister(margo_instance_id mid, ABT_pool pool, uint32_t mplex_id)
+void delegator_deregister(margo_instance_id mid, ABT_pool pool, uint32_t provider_id)
 {
     /* TODO: undo what was done in delegator_register() */
     return;

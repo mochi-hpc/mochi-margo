@@ -23,21 +23,6 @@
 #define DEFAULT_MERCURY_PROGRESS_TIMEOUT_UB 100 /* 100 milliseconds */
 #define DEFAULT_MERCURY_HANDLE_CACHE_SIZE 32
 
-struct mplex_key
-{
-    hg_id_t id;
-    uint8_t mplex_id;
-};
-
-struct mplex_element
-{
-    struct mplex_key key;
-    ABT_pool pool;
-    void* user_data;
-    void(*user_free_callback)(void*);
-    UT_hash_handle hh;
-};
-
 struct diag_data
 {
     double min;
@@ -96,16 +81,18 @@ struct margo_instance
     ABT_cond finalize_cond;
     struct margo_finalize_cb* finalize_cb;
 
+    /* control logic to prevent margo_finalize from destroying
+       the instance when some operations are pending */
+    unsigned pending_operations;
+    ABT_mutex pending_operations_mtx;
+    int finalize_requested;
+
     /* control logic for shutting down */
     hg_id_t shutdown_rpc_id;
     int enable_remote_shutdown;
 
     /* timer data */
     struct margo_timer_list* timer_list;
-
-    /* hash table to track multiplexed rpcs registered with margo */
-    struct mplex_element *mplex_table;
-
     /* linked list of free hg handles and a hash of in-use handles */
     struct margo_handle_cache_el *free_handle_list;
     struct margo_handle_cache_el *used_handle_hash;
@@ -127,6 +114,7 @@ struct margo_instance
 struct margo_rpc_data
 {
 	margo_instance_id mid;
+    ABT_pool pool;
 	void* user_data;
 	void (*user_free_callback)(void *);
 };
@@ -138,14 +126,50 @@ static void margo_rpc_data_free(void* ptr);
 static void remote_shutdown_ult(hg_handle_t handle);
 DECLARE_MARGO_RPC_HANDLER(remote_shutdown_ult);
 
+static inline void demux_id(hg_id_t in, hg_id_t* base_id, uint16_t *provider_id)
+{
+    /* retrieve low bits for provider */
+    *provider_id = 0;
+    *provider_id += (in & (((1<<(__MARGO_PROVIDER_ID_SIZE*8))-1)));
+
+    /* clear low order bits */
+    *base_id = (in >> (__MARGO_PROVIDER_ID_SIZE*8)) <<
+        (__MARGO_PROVIDER_ID_SIZE*8);
+
+    return;
+}
+
+static inline hg_id_t mux_id(hg_id_t base_id, uint16_t provider_id)
+{
+    hg_id_t id;
+
+    id = (base_id >> (__MARGO_PROVIDER_ID_SIZE*8)) <<
+       (__MARGO_PROVIDER_ID_SIZE*8);
+    id |= provider_id;
+
+    return id;
+}
+
+static inline hg_id_t gen_id(const char* func_name, uint16_t provider_id)
+{
+    hg_id_t id;
+    unsigned hashval;
+
+    HASH_JEN(func_name, strlen(func_name), hashval);
+    id = hashval << (__MARGO_PROVIDER_ID_SIZE*8);
+    id |= provider_id;
+
+    return id;
+}
+
 static hg_return_t margo_handle_cache_init(margo_instance_id mid);
 static void margo_handle_cache_destroy(margo_instance_id mid);
 static hg_return_t margo_handle_cache_get(margo_instance_id mid,
     hg_addr_t addr, hg_id_t id, hg_handle_t *handle);
 static hg_return_t margo_handle_cache_put(margo_instance_id mid,
     hg_handle_t handle);
-static void delete_multiplexing_hash(margo_instance_id mid);
-
+static hg_id_t margo_register_internal(margo_instance_id mid, hg_id_t id,
+    hg_proc_cb_t in_proc_cb, hg_proc_cb_t out_proc_cb, hg_rpc_cb_t rpc_cb, ABT_pool pool);
 
 margo_instance_id margo_init(const char *addr_str, int mode,
     int use_progress_thread, int rpc_thread_count)
@@ -313,10 +337,14 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
     mid->hg_class = HG_Context_get_class(hg_context);
     mid->hg_context = hg_context;
     mid->hg_progress_timeout_ub = DEFAULT_MERCURY_PROGRESS_TIMEOUT_UB;
-    mid->mplex_table = NULL;
+
     mid->refcount = 1;
     mid->finalize_cb = NULL;
     mid->enable_remote_shutdown = 0;
+
+    mid->pending_operations = 0;
+    ABT_mutex_create(&mid->pending_operations_mtx);
+    mid->finalize_requested = 0;
 
     mid->timer_list = margo_timer_list_create();
     if(mid->timer_list == NULL) goto err;
@@ -341,6 +369,7 @@ err:
         margo_timer_list_free(mid->timer_list);
         ABT_mutex_free(&mid->finalize_mutex);
         ABT_cond_free(&mid->finalize_cond);
+        ABT_mutex_free(&mid->pending_operations_mtx);
         free(mid);
     }
     return MARGO_INSTANCE_NULL;
@@ -361,11 +390,9 @@ static void margo_cleanup(margo_instance_id mid)
 
     margo_timer_list_free(mid->timer_list);
 
-    /* delete the hash used for multiplexing */
-    delete_multiplexing_hash(mid);
-
     ABT_mutex_free(&mid->finalize_mutex);
     ABT_cond_free(&mid->finalize_cond);
+    ABT_mutex_free(&mid->pending_operations_mtx);
 
     if (mid->owns_progress_pool)
     {
@@ -401,6 +428,16 @@ static void margo_cleanup(margo_instance_id mid)
 void margo_finalize(margo_instance_id mid)
 {
     int do_cleanup;
+
+    /* check if there are pending operations */
+    int pending;
+    ABT_mutex_lock(mid->pending_operations_mtx);
+    pending = mid->pending_operations;
+    ABT_mutex_unlock(mid->pending_operations_mtx);
+    if(pending) {
+        mid->finalize_requested = 1;
+        return;
+    }
 
     /* tell progress thread to wrap things up */
     mid->hg_progress_shutdown_flag = 1;
@@ -466,38 +503,6 @@ void margo_push_finalize_callback(
     mid->finalize_cb = fcb;
 }
 
-hg_id_t margo_register_name(margo_instance_id mid, const char *func_name,
-    hg_proc_cb_t in_proc_cb, hg_proc_cb_t out_proc_cb, hg_rpc_cb_t rpc_cb)
-{
-	struct margo_rpc_data* margo_data;
-    hg_return_t hret;
-    hg_id_t id;
-
-    id = HG_Register_name(mid->hg_class, func_name, in_proc_cb, out_proc_cb, rpc_cb);
-    if(id <= 0)
-        return(0);
-
-	/* register the margo data with the RPC */
-    margo_data = (struct margo_rpc_data*)HG_Registered_data(mid->hg_class, id);
-    if(!margo_data)
-    {
-        margo_data = (struct margo_rpc_data*)malloc(sizeof(struct margo_rpc_data));
-        if(!margo_data)
-            return(0);
-        margo_data->mid = mid;
-        margo_data->user_data = NULL;
-        margo_data->user_free_callback = NULL;
-        hret = HG_Register_data(mid->hg_class, id, margo_data, margo_rpc_data_free);
-        if(hret != HG_SUCCESS)
-        {
-            free(margo_data);
-            return(0);
-        }
-    }
-
-	return(id);
-}
-
 void margo_enable_remote_shutdown(margo_instance_id mid)
 {
     mid->enable_remote_shutdown = 1;
@@ -535,37 +540,21 @@ int margo_shutdown_remote_instance(
     return out.ret;
 }
 
-hg_id_t margo_register_name_mplex(margo_instance_id mid, const char *func_name,
+hg_id_t margo_provider_register_name(margo_instance_id mid, const char *func_name,
     hg_proc_cb_t in_proc_cb, hg_proc_cb_t out_proc_cb, hg_rpc_cb_t rpc_cb,
-    uint8_t mplex_id, ABT_pool pool)
+    uint16_t provider_id, ABT_pool pool)
 {
-    struct mplex_key key;
-    struct mplex_element *element;
+    struct provider_element *element;
     hg_id_t id;
+    int ret;
 
-    id = margo_register_name(mid, func_name, in_proc_cb, out_proc_cb, rpc_cb);
-    if(id <= 0)
+    assert(provider_id <= MARGO_MAX_PROVIDER_ID);
+    
+    id = gen_id(func_name, provider_id);
+
+    ret = margo_register_internal(mid, id, in_proc_cb, out_proc_cb, rpc_cb, pool);
+    if(ret == 0)
         return(0);
-
-    /* nothing to do, we'll let the handler pool take this directly */
-    if(mplex_id == MARGO_DEFAULT_MPLEX_ID)
-        return(id);
-
-    memset(&key, 0, sizeof(key));
-    key.id = id;
-    key.mplex_id = mplex_id;
-
-    HASH_FIND(hh, mid->mplex_table, &key, sizeof(key), element);
-    if(element)
-        return(id);
-
-    element = calloc(1,sizeof(*element));
-    if(!element)
-        return(0);
-    element->key = key;
-    element->pool = pool;
-
-    HASH_ADD(hh, mid->mplex_table, key, sizeof(key), element);
 
     return(id);
 }
@@ -573,38 +562,19 @@ hg_id_t margo_register_name_mplex(margo_instance_id mid, const char *func_name,
 hg_return_t margo_registered_name(margo_instance_id mid, const char *func_name,
     hg_id_t *id, hg_bool_t *flag)
 {
-    return(HG_Registered_name(mid->hg_class, func_name, id, flag));
+    *id = gen_id(func_name, 0);
+    return(HG_Registered(mid->hg_class, *id, flag));
 }
 
-hg_return_t margo_registered_name_mplex(margo_instance_id mid, const char *func_name,
-    uint8_t mplex_id, hg_id_t *id, hg_bool_t *flag)
+hg_return_t margo_provider_registered_name(margo_instance_id mid, const char *func_name,
+    uint16_t provider_id, hg_id_t *id, hg_bool_t *flag)
 {
     hg_bool_t b;
-    hg_return_t ret = margo_registered_name(mid, func_name, id, &b);
-    if(ret != HG_SUCCESS) 
-        return ret;
-    if((!b) || (!mplex_id)) {
-        *flag = b;
-        return ret;
-    }
+    hg_return_t ret;
 
-    struct mplex_key key;
-    struct mplex_element *element;
+    *id = gen_id(func_name, provider_id);
 
-    memset(&key, 0, sizeof(key));
-    key.id = *id;
-    key.mplex_id = mplex_id;
-
-    HASH_FIND(hh, mid->mplex_table, &key, sizeof(key), element);
-    if(!element) {
-        *flag = 0;
-        return HG_SUCCESS;
-    }
-
-    assert(element->key.id == *id && element->key.mplex_id == mplex_id);
-
-    *flag = 1;
-    return HG_SUCCESS;
+    return HG_Registered(mid->hg_class, *id, flag);
 }
 
 hg_return_t margo_register_data(
@@ -766,19 +736,21 @@ static hg_return_t margo_cb(const struct hg_cb_info *info)
     return(HG_SUCCESS);
 }
 
-hg_return_t margo_forward(
+hg_return_t margo_provider_forward(
+    uint16_t provider_id,
     hg_handle_t handle,
     void *in_struct)
 {
 	hg_return_t hret;
 	margo_request req;
-	hret = margo_iforward(handle, in_struct, &req);
+	hret = margo_provider_iforward(provider_id, handle, in_struct, &req);
 	if(hret != HG_SUCCESS) 
 		return hret;
 	return margo_wait(req);
 }
 
-hg_return_t margo_iforward(
+hg_return_t margo_provider_iforward(
+    uint16_t provider_id,
     hg_handle_t handle,
     void *in_struct,
     margo_request* req)
@@ -786,6 +758,41 @@ hg_return_t margo_iforward(
     hg_return_t hret = HG_TIMEOUT;
     ABT_eventual eventual;
     int ret;
+    const struct hg_info* hgi; 
+    hg_id_t id;
+    hg_proc_cb_t in_cb, out_cb;
+    hg_bool_t flag;
+
+    assert(provider_id <= MARGO_MAX_PROVIDER_ID);
+
+    hgi = HG_Get_info(handle);
+    id = mux_id(hgi->id, provider_id);
+
+    hg_bool_t is_registered;
+    ret = HG_Registered(hgi->hg_class, id, &is_registered);
+    if(ret != HG_SUCCESS)
+        return(ret);
+    if(!is_registered)
+    {
+        /* if Mercury does not recognize this ID (with provider id included)
+         * then register it now
+         */
+        /* find encoders for base ID */
+        ret = HG_Registered_proc_cb(hgi->hg_class, hgi->id, &flag, &in_cb, &out_cb);
+        if(ret != HG_SUCCESS)
+            return(ret);
+        if(!flag)
+            return(HG_NO_MATCH);
+
+        /* register new ID that includes provider id */
+        ret = margo_register_internal(margo_hg_info_get_instance(hgi), 
+            id, in_cb, out_cb, NULL, ABT_POOL_NULL);
+        if(ret == 0)
+            return(HG_OTHER_ERROR);
+    }
+    ret = HG_Reset(handle, hgi->addr, id);
+    if(ret != HG_SUCCESS)
+        return(ret);
 
     ret = ABT_eventual_create(sizeof(hret), &eventual);
     if(ret != 0)
@@ -1054,92 +1061,50 @@ hg_class_t* margo_get_class(margo_instance_id mid)
     return(mid->hg_class);
 }
 
-margo_instance_id margo_hg_handle_get_instance(hg_handle_t h)
+ABT_pool margo_hg_handle_get_handler_pool(hg_handle_t h)
 {
-	const struct hg_info* info = HG_Get_info(h);
-	if(!info) return MARGO_INSTANCE_NULL;
-    return margo_hg_info_get_instance(info);
+    struct margo_rpc_data* data;
+    const struct hg_info* info;
+    hg_id_t base_id; 
+    uint16_t provider_id;
+    int ret;
+    ABT_pool pool;
+    
+    info = HG_Get_info(h);
+    if(!info) return ABT_POOL_NULL;
+
+    data = (struct margo_rpc_data*) HG_Registered_data(info->hg_class, info->id);
+    if(!data) return ABT_POOL_NULL;
+
+    pool = data->pool;
+    if(pool == ABT_POOL_NULL)
+        margo_get_handler_pool(data->mid, &pool);
+
+    return pool;
 }
 
 margo_instance_id margo_hg_info_get_instance(const struct hg_info *info)
 {
-	struct margo_rpc_data* data = 
-		(struct margo_rpc_data*) HG_Registered_data(info->hg_class, info->id);
-	if(!data) return MARGO_INSTANCE_NULL;
-	return data->mid;
+    struct margo_rpc_data* data = 
+        (struct margo_rpc_data*) HG_Registered_data(info->hg_class, info->id);
+    if(!data) return MARGO_INSTANCE_NULL;
+    return data->mid;
 }
 
-int margo_lookup_mplex(margo_instance_id mid, hg_id_t id, uint8_t mplex_id, ABT_pool *pool)
+margo_instance_id margo_hg_handle_get_instance(hg_handle_t h)
 {
-    struct mplex_key key;
-    struct mplex_element *element;
+    struct margo_rpc_data* data;
+    const struct hg_info* info;
+    
+    info = HG_Get_info(h);
+    if(!info) return MARGO_INSTANCE_NULL;
 
-    if(!mplex_id)
-    {
-        *pool = mid->handler_pool;
-        return(0);
-    }
+    data = (struct margo_rpc_data*) HG_Registered_data(info->hg_class, info->id);
+    if(!data) return MARGO_INSTANCE_NULL;
 
-    memset(&key, 0, sizeof(key));
-    key.id = id;
-    key.mplex_id = mplex_id;
-
-    HASH_FIND(hh, mid->mplex_table, &key, sizeof(key), element);
-    if(!element) {
-        if(mplex_id == 0) // element does not exist and mplex is 0, return default handler
-            *pool = mid->handler_pool;
-        else // otherwise it is an error
-            return(-1);
-    }
-
-    assert(element->key.id == id && element->key.mplex_id == mplex_id);
-
-    *pool = element->pool;
-
-    return(0);
+    return data->mid;
 }
 
-int margo_register_data_mplex(margo_instance_id mid, hg_id_t id, uint8_t mplex_id, void* data, void (*free_callback)(void *))
-{
-    struct mplex_key key;
-    struct mplex_element *element;
-
-    memset(&key, 0, sizeof(key));
-    key.id = id;
-    key.mplex_id = mplex_id;
-
-    HASH_FIND(hh, mid->mplex_table, &key, sizeof(key), element);
-    if(!element)
-        return -1;
-
-    assert(element->key.id == id && element->key.mplex_id == mplex_id);
-
-    if(element->user_data && element->user_free_callback)
-        (element->user_free_callback)(element->user_data);
-
-    element->user_data = data;
-    element->user_free_callback = free_callback;
-
-    return(0);
-}
-
-void* margo_registered_data_mplex(margo_instance_id mid, hg_id_t id, uint8_t mplex_id)
-{
-    struct mplex_key key;
-    struct mplex_element *element;
-
-    memset(&key, 0, sizeof(key));
-    key.id = id;
-    key.mplex_id = mplex_id;
-
-    HASH_FIND(hh, mid->mplex_table, &key, sizeof(key), element);
-    if(!element)
-        return NULL;
-
-    assert(element->key.id == id && element->key.mplex_id == mplex_id);
-
-    return element->user_data;
-}
 static void margo_rpc_data_free(void* ptr)
 {
 	struct margo_rpc_data* data = (struct margo_rpc_data*) ptr;
@@ -1147,18 +1112,6 @@ static void margo_rpc_data_free(void* ptr)
 		data->user_free_callback(data->user_data);
 	}
 	free(ptr);
-}
-
-static void delete_multiplexing_hash(margo_instance_id mid)
-{
-    struct mplex_element *current_element, *tmp;
-
-    HASH_ITER(hh, mid->mplex_table, current_element, tmp) {
-        if(current_element->user_data && current_element->user_free_callback)
-            (current_element->user_free_callback)(current_element->user_data);
-        HASH_DEL(mid->mplex_table, current_element);
-        free(current_element);
-    }
 }
 
 /* dedicated thread function to drive Mercury progress */
@@ -1468,9 +1421,6 @@ static hg_return_t margo_handle_cache_get(margo_instance_id mid,
     hret = HG_Reset(el->handle, addr, id);
     if(hret == HG_SUCCESS)
     {
-        /* XXX: Mercury doesn't reset the target_id so we need to do that manually for now */
-        HG_Set_target_id(el->handle, 0);
-
         /* put on in-use list and pass back handle */
         HASH_ADD(hh, mid->used_handle_hash, handle, sizeof(hg_handle_t), el);
         *handle = el->handle;
@@ -1535,3 +1485,58 @@ static void remote_shutdown_ult(hg_handle_t handle)
     }
 }
 DEFINE_MARGO_RPC_HANDLER(remote_shutdown_ult)
+
+static hg_id_t margo_register_internal(margo_instance_id mid, hg_id_t id,
+    hg_proc_cb_t in_proc_cb, hg_proc_cb_t out_proc_cb, hg_rpc_cb_t rpc_cb,
+    ABT_pool pool)
+{
+    struct margo_rpc_data* margo_data;
+    hg_return_t hret;
+    
+    hret = HG_Register(mid->hg_class, id, in_proc_cb, out_proc_cb, rpc_cb);
+    if(hret != HG_SUCCESS)
+        return(hret);
+
+    /* register the margo data with the RPC */
+    margo_data = (struct margo_rpc_data*)HG_Registered_data(mid->hg_class, id);
+    if(!margo_data)
+    {
+        margo_data = (struct margo_rpc_data*)malloc(sizeof(struct margo_rpc_data));
+        if(!margo_data)
+            return(0);
+        margo_data->mid = mid;
+        margo_data->pool = pool;
+        margo_data->user_data = NULL;
+        margo_data->user_free_callback = NULL;
+        hret = HG_Register_data(mid->hg_class, id, margo_data, margo_rpc_data_free);
+        if(hret != HG_SUCCESS)
+        {
+            free(margo_data);
+            return(0);
+        }
+    }
+
+    return(id);
+}
+
+int __margo_internal_finalize_requested(margo_instance_id mid)
+{
+    if(!mid) return 0;
+    return mid->finalize_requested;
+}
+
+void __margo_internal_incr_pending(margo_instance_id mid)
+{
+    if(!mid) return;
+    ABT_mutex_lock(mid->pending_operations_mtx);
+    mid->pending_operations += 1;
+    ABT_mutex_unlock(mid->pending_operations_mtx);
+}
+
+void __margo_internal_decr_pending(margo_instance_id mid)
+{
+    if(!mid) return;
+    ABT_mutex_lock(mid->pending_operations_mtx);
+    mid->pending_operations -= 1;
+    ABT_mutex_unlock(mid->pending_operations_mtx);
+}
