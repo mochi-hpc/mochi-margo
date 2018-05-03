@@ -556,6 +556,13 @@ hg_id_t margo_provider_register_name(margo_instance_id mid, const char *func_nam
     return(id);
 }
 
+hg_return_t margo_deregister(
+        margo_instance_id mid,
+        hg_id_t rpc_id)
+{
+    return HG_Deregister(mid->hg_class, rpc_id);
+}
+
 hg_return_t margo_registered_name(margo_instance_id mid, const char *func_name,
     hg_id_t *id, hg_bool_t *flag)
 {
