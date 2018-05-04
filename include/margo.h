@@ -198,6 +198,18 @@ inline hg_id_t margo_register_name(
             in_proc_cb, out_proc_cb, rpc_cb, 0, ABT_POOL_NULL);
 }
 
+/**
+ * Deregisters an RPC with margo
+ *
+ * \param [in] mid Margo instance
+ * \param [in] rpc_id Id of the RPC to deregister
+ *
+ * \return HG_SUCCESS or corresponding error code
+ */
+hg_return_t margo_deregister(
+    margo_instance_id mid,
+    hg_id_t rpc_id);
+
 /*
  * Indicate whether margo_register_name() has been called for the RPC specified by
  * func_name.
