@@ -249,7 +249,7 @@ margo_instance_id margo_init(const char *addr_str, int mode,
         if (ret != ABT_SUCCESS) goto err;
         for(i=0; i<rpc_thread_count; i++) 
         {
-            ret = ABT_sched_create_basic(ABT_SCHED_BASIC, 1, &rpc_pool,
+            ret = ABT_sched_create_basic(ABT_SCHED_BASIC_WAIT, 1, &rpc_pool,
                ABT_SCHED_CONFIG_NULL, &rpc_scheds[i]);
             if (ret != ABT_SUCCESS) goto err;
             ret = ABT_xstream_create(rpc_scheds[i], rpc_xstreams+i);
