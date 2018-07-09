@@ -187,7 +187,7 @@ hg_id_t margo_provider_register_name(
  *
  * \return unique ID associated to the registered function
  */
-inline hg_id_t margo_register_name(
+static inline hg_id_t margo_register_name(
     margo_instance_id mid,
     const char *func_name,
     hg_proc_cb_t in_proc_cb,
