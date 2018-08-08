@@ -711,6 +711,9 @@ hg_return_t margo_create(margo_instance_id mid, hg_addr_t addr,
 
 hg_return_t margo_destroy(hg_handle_t handle)
 {
+    if(handle == HG_HANDLE_NULL)
+        return HG_SUCCESS;
+
     margo_instance_id mid;
     hg_return_t hret = HG_OTHER_ERROR;
 
