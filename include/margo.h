@@ -46,6 +46,7 @@ typedef ABT_eventual margo_request;
 /**
  * Initializes margo library.
  * @param [in] addr_str            Mercury host address with port number
+ * @param [in] hg_init_info		   Mercury initialization options
  * @param [in] mode                Mode to run Margo in:
  *                                     - MARGO_CLIENT_MODE
  *                                     - MARGO_SERVER_MODE
@@ -67,6 +68,13 @@ typedef ABT_eventual margo_request;
  * call margo_wait_for_finalize() after margo_init() to relinguish control to 
  * Margo.
  */
+margo_instance_id margo_init(
+    const char *addr_str,
+    int mode,
+    const struct hg_init_info *hg_init_info,
+    int use_progress_thread,
+    int rpc_thread_count);
+
 margo_instance_id margo_init(
     const char *addr_str,
     int mode,

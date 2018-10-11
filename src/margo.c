@@ -171,7 +171,16 @@ static hg_return_t margo_handle_cache_put(margo_instance_id mid,
 static hg_id_t margo_register_internal(margo_instance_id mid, hg_id_t id,
     hg_proc_cb_t in_proc_cb, hg_proc_cb_t out_proc_cb, hg_rpc_cb_t rpc_cb, ABT_pool pool);
 
-margo_instance_id margo_init(const char *addr_str, int mode,
+margo_instance_id margo_init(const char *addr_str,
+	int mode,
+    int use_progress_thread, int rpc_thread_count)
+{
+	return margo_init(addr_str, mode, NULL, use_progress_thread, rpc_thread_count);
+}
+
+margo_instance_id margo_init(const char *addr_str,
+	int mode,
+	const struct hg_init_info *hg_init_info,
     int use_progress_thread, int rpc_thread_count)
 {
     ABT_xstream progress_xstream = ABT_XSTREAM_NULL;
@@ -268,7 +277,7 @@ margo_instance_id margo_init(const char *addr_str, int mode,
         rpc_pool = progress_pool;
     }
 
-    hg_class = HG_Init(addr_str, listen_flag);
+    hg_class = HG_Init_opt(addr_str, listen_flag, hg_init_info);
     if(!hg_class) goto err;
 
     hg_context = HG_Context_create(hg_class);
