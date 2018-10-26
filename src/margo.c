@@ -486,6 +486,13 @@ void margo_wait_for_finalize(margo_instance_id mid)
     return;
 }
 
+hg_bool_t margo_is_listening(
+            margo_instance_id mid)
+{
+    if(!mid) return HG_FALSE;
+    return HG_Class_is_listening(mid->hg_class);
+}
+
 void margo_push_finalize_callback(
             margo_instance_id mid,
             void(*cb)(void*),                  
@@ -611,6 +618,18 @@ hg_return_t margo_registered_disable_response(
     int disable_flag)
 {
     return(HG_Registered_disable_response(mid->hg_class, id, disable_flag));
+}
+
+hg_return_t margo_registered_disabled_response(
+    margo_instance_id mid,
+    hg_id_t id,
+    int* disabled_flag)
+{
+    hg_bool_t b;
+    hg_return_t ret = HG_Registered_disabled_response(mid->hg_class, id, &b);
+    if(ret != HG_SUCCESS) return ret;
+    *disabled_flag = b;
+    return HG_SUCCESS;
 }
 
 struct lookup_cb_evt

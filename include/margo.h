@@ -116,6 +116,16 @@ void margo_wait_for_finalize(
     margo_instance_id mid);
 
 /**
+ * Checks whether a Margo instance we initialized as a server.
+ *
+ * @param [in] mid Margo instance
+ *
+ * @return HG_TRUE if listening or HG_FALSE if not, or not a valid margo instance.
+ */
+hg_bool_t margo_is_listening(
+    margo_instance_id mid);
+
+/**
  * Installs a callback to be called before the margo instance is finalize.
  * Callbacks installed will be called in reverse ordered than they have been
  * pushed, and with the user-provider pointer as argument.
@@ -290,6 +300,20 @@ hg_return_t margo_registered_disable_response(
     margo_instance_id mid,
     hg_id_t id,
     int disable_flag);
+
+/**
+ * Checks if response is disabled for a given RPC ID.
+ *
+ * @param [in] mid           Margo instance
+ * @param [in] id            registered function ID
+ * @param [ou] disabled_flag flag indicating whether response is disabled (1) or not (0)
+ *
+ * @return HG_SUCCESS or corresponding HG error code
+ */
+hg_return_t margo_registered_disabled_response(
+    margo_instance_id mid,
+    hg_id_t id,
+    int* disabled_flag);
 
 /**
  * Lookup an addr from a peer address/name.
