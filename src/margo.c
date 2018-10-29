@@ -809,11 +809,20 @@ hg_return_t margo_provider_iforward(
         if(!flag)
             return(HG_NO_MATCH);
 
+        /* find out if disable_response was called for this RPC */
+        hg_bool_t response_disabled;
+        ret = HG_Registered_disabled_response(hgi->hg_class, hgi->id, &response_disabled);
+        if(ret != HG_SUCCESS)
+            return(ret);
+
         /* register new ID that includes provider id */
         ret = margo_register_internal(margo_hg_info_get_instance(hgi), 
             id, in_cb, out_cb, NULL, ABT_POOL_NULL);
         if(ret == 0)
             return(HG_OTHER_ERROR);
+        ret = HG_Registered_disable_response(hgi->hg_class, id, response_disabled);
+        if(ret != HG_SUCCESS)
+            return(ret);
     }
     ret = HG_Reset(handle, hgi->addr, id);
     if(ret != HG_SUCCESS)
