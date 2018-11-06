@@ -26,15 +26,12 @@ Note that Margo should be compatible with any Mercury transport (NA plugin).  Th
 ##  Dependencies
 
 * mercury  (git clone --recurse-submodules https://github.com/mercury-hpc/mercury.git)
-* argobots fork with scheduler wait support (git -b dev-fifo-wait clone https://github.com/carns/argobots.git)
+* argobots (git clone https://github.com/pmodels/argobots.git)
 
 ### Recommended Mercury build options
 
 * Mercury must be compiled with -DMERCURY_USE_BOOST_PP:BOOL=ON to enable the
   Boost preprocessor macros for encoding.
-* -DMERCURY_USE_CHECKSUMS:BOOL=OFF disables automatic checksumming of all
-  Mercury RPC messages.  This reduces latency by removing a layer of
-  integrity checking on communication.
 * Mercury should be compiled with -DMERCURY_USE_SELF_FORWARD:BOOL=ON in order to enable
   fast execution path for cases in which a Mercury service is linked into the same
   executable as the client
@@ -44,7 +41,7 @@ Example Mercury compilation:
 ```
 mkdir build
 cd build
-cmake -DMERCURY_USE_SELF_FORWARD:BOOL=ON -DMERCURY_USE_CHECKSUMS:BOOL=OFF \
+cmake -DMERCURY_USE_SELF_FORWARD:BOOL=ON \
  -DBUILD_TESTING:BOOL=ON -DMERCURY_USE_BOOST_PP:BOOL=ON \
  -DCMAKE_INSTALL_PREFIX=/home/pcarns/working/install \
  -DBUILD_SHARED_LIBS:BOOL=ON -DCMAKE_BUILD_TYPE:STRING=Debug ../
