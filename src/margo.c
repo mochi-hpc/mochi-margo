@@ -733,6 +733,13 @@ hg_return_t margo_destroy(hg_handle_t handle)
     if(handle == HG_HANDLE_NULL)
         return HG_SUCCESS;
 
+    /* check if the reference count of the handle is 1 */
+    int32_t refcount = HG_Ref_get(handle);
+    if(refcount != 1) {
+        /* if different from 1, then HG_Destroy will simply decrease it */
+        return HG_Destroy(handle);
+    }
+
     margo_instance_id mid;
     hg_return_t hret = HG_OTHER_ERROR;
 
