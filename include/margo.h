@@ -67,11 +67,42 @@ typedef ABT_eventual margo_request;
  * call margo_wait_for_finalize() after margo_init() to relinguish control to 
  * Margo.
  */
-margo_instance_id margo_init(
+#define margo_init(_addr_str, _mode, _use_progress_thread, _rpc_thread_count)\
+ margo_init_opt(_addr_str, _mode, NULL, _use_progress_thread, _rpc_thread_count)
+
+/**
+ * Initializes margo library with custom Mercury options.
+ * @param [in] addr_str            Mercury host address with port number
+ * @param [in] mode                Mode to run Margo in:
+ *                                     - MARGO_CLIENT_MODE
+ *                                     - MARGO_SERVER_MODE
+ * @param [in] hg_init_info        (Optional) Hg init info, passed directly
+ *                                 to Mercury
+ * @param [in] use_progress_thread Boolean flag to use a dedicated thread for
+ *                                 running Mercury's progress loop. If false,
+ *                                 it will run in the caller's thread context.
+ * @param [in] rpc_thread_count    Number of threads to use for running RPC
+ *                                 calls. A value of 0 directs Margo to execute
+ *                                 RPCs in the caller's thread context.
+ *                                 Clients (i.e processes that will *not* 
+ *                                 service incoming RPCs) should use a value 
+ *                                 of 0. A value of -1 directs Margo to use 
+ *                                 the same execution context as that used 
+ *                                 for Mercury progress.
+ * @returns margo instance id on success, MARGO_INSTANCE_NULL upon error
+ *
+ * NOTE: Servers (processes expecting to service incoming RPC requests) must
+ * specify non-zero values for use_progress_thread and rpc_thread_count *or*
+ * call margo_wait_for_finalize() after margo_init() to relinguish control to 
+ * Margo.
+ */
+margo_instance_id margo_init_opt(
     const char *addr_str,
     int mode,
+    const struct hg_init_info *hg_init_info,
     int use_progress_thread,
     int rpc_thread_count);
+
 
 /**
  * Initializes margo library from given argobots and Mercury instances.
