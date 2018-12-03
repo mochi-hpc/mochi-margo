@@ -11,12 +11,6 @@
 extern "C" {
 #endif
 
-/* This is to prevent the user from usin HG_Register_data
- * and HG_Registered_data, which are replaced with
- * margo_register_data and margo_registered_data
- * respecively.
- */
-
 #include <mercury.h>
 #include <mercury_types.h>
 #include <mercury_bulk.h>
@@ -27,6 +21,11 @@ extern "C" {
 #define __MARGO_PROVIDER_ID_SIZE (sizeof(hg_id_t)/4)
 #define __MARGO_RPC_HASH_SIZE (__MARGO_PROVIDER_ID_SIZE * 3)
 
+/* This is to prevent the user from usin HG_Register_data
+ * and HG_Registered_data, which are replaced with
+ * margo_register_data and margo_registered_data
+ * respecively.
+ */
 #undef MERCURY_REGISTER
 
 struct margo_instance;
