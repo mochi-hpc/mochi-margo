@@ -13,7 +13,10 @@ CLEANFILES = $(bin_SCRIPTS)
 MAINTAINERCLEANFILES =
 EXTRA_DIST =
 BUILT_SOURCES =
-include_HEADERS = include/margo.h
+include_HEADERS = \
+ include/margo.h \
+ include/margo-bulk-pool.h
+ 
 TESTS_ENVIRONMENT =
 
 EXTRA_DIST += \
