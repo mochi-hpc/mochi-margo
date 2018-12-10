@@ -120,6 +120,8 @@ err:
 int margo_bulk_pool_destroy(
     margo_bulk_pool_t pool)
 {
+    if(pool == NULL) return 0;
+
     hg_size_t i;
 
     if(pool->size != pool->count)
@@ -276,6 +278,8 @@ err:
 int margo_bulk_poolset_destroy(
     margo_bulk_poolset_t poolset)
 {
+    if(poolset == NULL) return 0;
+
     hg_size_t i;
 
     int ret = 0;
