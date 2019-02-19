@@ -133,6 +133,17 @@ int margo_bulk_poolset_destroy(
     margo_bulk_poolset_t poolset);
 
 /**
+ * @brief Get maximum size supported by a pool set
+ *
+ * @param poolset Poolset
+ * @param max_size Maximum supported buffer size
+ *
+ */
+void margo_bulk_poolset_get_max(
+    margo_bulk_poolset_t poolset,
+    hg_size_t *max_size);
+
+/**
  * @brief Gets a bulk handle from the pool with the minimum size required to satisfy
  * the provided size. May block until the pool has a bulk handle available.
  *

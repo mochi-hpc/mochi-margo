@@ -294,6 +294,14 @@ int margo_bulk_poolset_destroy(
     return ret;
 }
 
+void margo_bulk_poolset_get_max(
+    margo_bulk_poolset_t poolset,
+    hg_size_t *max_size)
+{
+    *max_size = poolset->pools[poolset->npools-1]->size;
+    return;
+}
+
 int margo_bulk_poolset_get(
     margo_bulk_poolset_t poolset,
     hg_size_t size,
