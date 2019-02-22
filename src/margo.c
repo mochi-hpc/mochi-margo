@@ -170,6 +170,42 @@ static hg_return_t margo_handle_cache_put(margo_instance_id mid,
     hg_handle_t handle);
 static hg_id_t margo_register_internal(margo_instance_id mid, hg_id_t id,
     hg_proc_cb_t in_proc_cb, hg_proc_cb_t out_proc_cb, hg_rpc_cb_t rpc_cb, ABT_pool pool);
+static void set_argobots_tunables(void);
+
+/* Set tunable parameters in Argobots to be more friendly to typical Margo
+ * use cases.  No return value, this is a best-effort advisory function. It
+ * also will (where possible) defer to any pre-existing explicit environment
+ * variable settings.  We only override if the user has not specified yet.
+ */
+static void set_argobots_tunables(void)
+{
+
+    /* Rationale: Margo is very likely to create a single producer (the
+     * progress function), multiple consumer usage pattern that
+     * causes excess memory consumption in some versions of
+     * Argobots.  See
+     * https://xgitlab.cels.anl.gov/sds/margo/issues/40 for details.
+     * We therefore set the ABT_MEM_MAX_NUM_STACKS parameter 
+     * for Argobots to a low value so that RPC handler threads do not
+     * queue large numbers of stacks for reuse in per-ES data 
+     * structures.
+     */
+    if(!getenv("ABT_MEM_MAX_NUM_STACKS"))
+        putenv("ABT_MEM_MAX_NUM_STACKS=8");
+
+    /* Rationale: the default stack size in Argobots (as of February 2019)
+     * is 16K, but this is likely to be too small for Margo as it traverses
+     * a Mercury -> communications library call stack, and the potential 
+     * stack corruptions are very hard to debug.  We therefore pick a much
+     * higher default stack size.  See this mailing list thread for
+     * discussion:
+     * https://lists.argobots.org/pipermail/discuss/2019-February/000039.html
+     */
+    if(!getenv("ABT_THREAD_STACKSIZE"))
+        putenv("ABT_THREAD_STACKSIZE=1048576");
+
+    return;
+}
 
 margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg_init_info *hg_init_info,
     int use_progress_thread, int rpc_thread_count)
@@ -193,17 +229,8 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
 
     if(mode != MARGO_CLIENT_MODE && mode != MARGO_SERVER_MODE) goto err;
 
-    /* NOTE: Margo is very likely to create a single producer (the
-     * progress function), multiple consumer usage pattern that
-     * causes excess memory consumption in some versions of
-     * Argobots.  See
-     * https://xgitlab.cels.anl.gov/sds/margo/issues/40 for details.
-     * We therefore manually set the ABT_MEM_MAX_NUM_STACKS parameter 
-     * for Argobots to a low value so that RPC handler threads do not
-     * queue large numbers of stacks for reuse in per-ES data 
-     * structures.
-     */
-    putenv("ABT_MEM_MAX_NUM_STACKS=8");
+    /* adjust argobots settings to suit Margo */
+    set_argobots_tunables();
 
     if (ABT_initialized() == ABT_ERR_UNINITIALIZED)
     {
