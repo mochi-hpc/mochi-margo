@@ -202,7 +202,7 @@ static void set_argobots_tunables(void)
      * https://lists.argobots.org/pipermail/discuss/2019-February/000039.html
      */
     if(!getenv("ABT_THREAD_STACKSIZE"))
-        putenv("ABT_THREAD_STACKSIZE=1048576");
+        putenv("ABT_THREAD_STACKSIZE=2097152");
 
     return;
 }
