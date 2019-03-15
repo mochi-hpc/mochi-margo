@@ -124,8 +124,10 @@ int margo_bulk_pool_destroy(
 
     hg_size_t i;
 
-    if(pool->size != pool->count)
-        return -1;
+    if(pool->count != pool->num_free)
+    {
+        fprintf(stderr, "WARNING: margo bulk pool buffers still in use at margo_bulk_pool_destroy()\n");
+    }
 
     ABT_cond_free(&pool->cond);
     ABT_mutex_free(&pool->mutex);
