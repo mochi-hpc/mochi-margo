@@ -459,6 +459,7 @@ static void margo_cleanup(margo_instance_id mid)
     }
 
     margo_handle_cache_destroy(mid);
+    margo_addr_cache_destroy(mid);
 
     if (mid->margo_init)
     {
