@@ -46,6 +46,13 @@ struct margo_handle_cache_el
     struct margo_handle_cache_el *next; /* free list link */
 };
 
+struct margo_addr_cache_el
+{
+    char*          name; /* address as a string */
+    hg_addr_t      addr; /* corresponding Mercury address */
+    UT_hash_handle hh;   /* hash pointer */
+};
+
 struct margo_finalize_cb
 {
     void(*callback)(void*);
@@ -98,6 +105,11 @@ struct margo_instance
     struct margo_handle_cache_el *used_handle_hash;
     ABT_mutex handle_cache_mtx; /* mutex protecting access to above caches */
 
+    /* cache of addresses */
+    int addr_cache_enabled;
+    struct margo_addr_cache_el *addr_cache;
+    ABT_mutex addr_cache_mtx; /* mutex protecting access to above cache */
+
     /* optional diagnostics data tracking */
     /* NOTE: technically the following fields are subject to races if they
      * are updated from more than one thread at a time.  We will be careful
@@ -113,10 +125,10 @@ struct margo_instance
 
 struct margo_rpc_data
 {
-	margo_instance_id mid;
+    margo_instance_id mid;
     ABT_pool pool;
-	void* user_data;
-	void (*user_free_callback)(void *);
+    void* user_data;
+    void (*user_free_callback)(void *);
 };
 
 MERCURY_GEN_PROC(margo_shutdown_out_t, ((int32_t)(ret)))
@@ -168,6 +180,10 @@ static hg_return_t margo_handle_cache_get(margo_instance_id mid,
     hg_addr_t addr, hg_id_t id, hg_handle_t *handle);
 static hg_return_t margo_handle_cache_put(margo_instance_id mid,
     hg_handle_t handle);
+static hg_return_t margo_addr_cache_init(margo_instance_id mid);
+static void margo_addr_cache_destroy(margo_instance_id mid);
+static hg_return_t margo_addr_cache_get_or_lookup(margo_instance_id mid,
+    const char* name, hg_addr_t* addr);
 static hg_id_t margo_register_internal(margo_instance_id mid, hg_id_t id,
     hg_proc_cb_t in_proc_cb, hg_proc_cb_t out_proc_cb, hg_rpc_cb_t rpc_cb, ABT_pool pool);
 static void set_argobots_tunables(void);
@@ -380,6 +396,10 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
     hret = margo_handle_cache_init(mid);
     if(hret != HG_SUCCESS) goto err;
 
+    /* initialize the addr cache */
+    hret = margo_addr_cache_init(mid);
+    if(hret != HG_SUCCESS) goto err;
+
     ret = ABT_thread_create(mid->progress_pool, hg_progress_fn, mid, 
         ABT_THREAD_ATTR_NULL, &mid->hg_progress_tid);
     if(ret != 0) goto err;
@@ -393,6 +413,7 @@ err:
     if(mid)
     {
         margo_handle_cache_destroy(mid);
+        margo_addr_cache_destroy(mid);
         margo_timer_list_free(mid->timer_list);
         ABT_mutex_free(&mid->finalize_mutex);
         ABT_cond_free(&mid->finalize_cond);
@@ -678,7 +699,7 @@ static hg_return_t margo_addr_lookup_cb(const struct hg_cb_info *info)
     return(HG_SUCCESS);
 }
 
-hg_return_t margo_addr_lookup(
+static hg_return_t margo_addr_lookup_internal(
     margo_instance_id mid,
     const char   *name,
     hg_addr_t    *addr)
@@ -706,6 +727,14 @@ hg_return_t margo_addr_lookup(
     ABT_eventual_free(&eventual);
 
     return(hret);
+}
+
+hg_return_t margo_addr_lookup(
+    margo_instance_id mid,
+    const char   *name,
+    hg_addr_t    *addr)
+{
+    return margo_addr_cache_get_or_lookup(mid, name, addr);
 }
 
 hg_return_t margo_addr_free(
@@ -1526,6 +1555,74 @@ static hg_return_t margo_handle_cache_put(margo_instance_id mid,
 
 finish:
     ABT_mutex_unlock(mid->handle_cache_mtx);
+    return hret;
+}
+
+
+static hg_return_t margo_addr_cache_init(margo_instance_id mid)
+{
+    int i;
+    struct margo_addr_cache_el *el;
+    hg_return_t hret = HG_SUCCESS;
+
+    ABT_mutex_create(&(mid->addr_cache_mtx));
+
+    return hret;
+}
+
+static void margo_addr_cache_destroy(margo_instance_id mid)
+{
+    struct margo_addr_cache_el *el, *tmp;
+
+    HASH_ITER(hh, mid->addr_cache, el, tmp) {
+        HASH_DEL(mid->addr_cache, el);
+        margo_addr_free(mid, el->addr);
+        free(el->name);
+        free(el);
+    }
+
+    ABT_mutex_free(&mid->addr_cache_mtx);
+
+    return;
+}
+
+static hg_return_t margo_addr_cache_get_or_lookup(margo_instance_id mid,
+    const char* name, hg_addr_t* addr)
+{
+    hg_return_t hret = HG_SUCCESS;
+    ABT_mutex_lock(mid->addr_cache_mtx);
+
+    struct margo_addr_cache_el *el = NULL;
+    HASH_FIND_STR(mid->addr_cache, name, el);
+    if(el != NULL) {
+        hret = margo_addr_dup(mid, el->addr, addr);
+        ABT_mutex_unlock(mid->addr_cache_mtx);
+        return hret;
+    }
+
+    ABT_mutex_unlock(mid->addr_cache_mtx);
+
+    hret = margo_addr_lookup_internal(mid, name, addr);
+    if(hret != HG_SUCCESS)
+        return hret;
+
+    ABT_mutex_lock(mid->addr_cache_mtx);
+
+    HASH_FIND_STR(mid->addr_cache, name, el);
+    if(el == NULL) {
+        el = (struct margo_addr_cache_el*)calloc(1, sizeof(*el));
+        hret = margo_addr_dup(mid, *addr, &(el->addr));
+        if(hret != HG_SUCCESS) {
+            ABT_mutex_unlock(mid->addr_cache_mtx);
+            free(el);
+            return hret;
+        }
+        el->name = strdup(name);
+        HASH_ADD_KEYPTR(hh, mid->addr_cache, el->name, strlen(el->name), el);
+    }
+
+    ABT_mutex_unlock(mid->addr_cache_mtx);
+
     return hret;
 }
 
