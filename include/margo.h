@@ -924,10 +924,9 @@ void __margo_internal_decr_pending(margo_instance_id mid);
  */
 #define DEFINE_MARGO_RPC_HANDLER(__name) \
 void __name##_wrapper(hg_handle_t handle) { \
-    __name(handle); \
     margo_instance_id __mid; \
     __mid = margo_hg_handle_get_instance(handle); \
-    margo_destroy(handle); \
+    __name(handle); \
     __margo_internal_decr_pending(__mid); \
     if(__margo_internal_finalize_requested(__mid)) { \
         margo_finalize(__mid); \
@@ -942,7 +941,6 @@ hg_return_t __name##_handler(hg_handle_t handle) { \
     if(__margo_internal_finalize_requested(__mid)) { return(HG_CANCELED); } \
     __pool = margo_hg_handle_get_handler_pool(handle); \
     __margo_internal_incr_pending(__mid); \
-    margo_ref_incr(handle); \
     __ret = ABT_thread_create(__pool, (void (*)(void *))__name##_wrapper, handle, ABT_THREAD_ATTR_NULL, NULL); \
     if(__ret != 0) { \
         return(HG_NOMEM_ERROR); \
