@@ -95,7 +95,7 @@ int main(int argc, char **argv)
 
     /* register RPC */
 	my_rpc_id = MARGO_REGISTER(mid, "my_rpc", my_rpc_in_t, my_rpc_out_t, NULL);
-	my_rpc_shutdown_id = MARGO_REGISTER(mid, "my_shutdown_rpc", void, void, NULL);
+	my_rpc_shutdown_id = MARGO_REGISTER(mid, "my_shutdown_rpc", margo_input_null, void, NULL);
 
     /* find addr for server */
     hret = margo_addr_lookup(mid, argv[1], &svr_addr);
@@ -145,7 +145,7 @@ int main(int argc, char **argv)
     hret = margo_create(mid, svr_addr, my_rpc_shutdown_id, &handle);
     assert(hret == HG_SUCCESS);
 
-    hret = margo_forward(handle, NULL);
+    hret = margo_forward(handle, MARGO_INPUT_NULL);
     assert(hret == HG_SUCCESS);
 
     margo_destroy(handle);

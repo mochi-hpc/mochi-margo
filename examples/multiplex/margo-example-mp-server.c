@@ -102,7 +102,7 @@ int main(int argc, char **argv)
     /* register a shutdown RPC as just a generic handler; not part of a
      * multiplexed service
      */
-    MARGO_REGISTER(mid, "my_shutdown_rpc", void, void, my_rpc_shutdown_ult);
+    MARGO_REGISTER(mid, "my_shutdown_rpc", margo_input_null, void, my_rpc_shutdown_ult);
 
     /* register svc1, with provider_id 1, to execute on the default handler pool
      * used by Margo

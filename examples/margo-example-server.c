@@ -66,7 +66,7 @@ int main(int argc, char **argv)
 
     /* register RPC */
     MARGO_REGISTER(mid, "my_rpc", my_rpc_in_t, my_rpc_out_t, my_rpc_ult);
-	MARGO_REGISTER(mid, "my_shutdown_rpc", void, void, my_rpc_shutdown_ult);
+    MARGO_REGISTER(mid, "my_shutdown_rpc", margo_input_null, void, my_rpc_shutdown_ult);
 
     /* NOTE: there isn't anything else for the server to do at this point
      * except wait for itself to be shut down.  The

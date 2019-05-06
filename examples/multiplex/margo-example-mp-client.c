@@ -56,7 +56,7 @@ int main(int argc, char **argv)
     }
 
     /* register core RPC */
-    my_rpc_shutdown_id = MARGO_REGISTER(mid, "my_shutdown_rpc", void, void, NULL);
+    my_rpc_shutdown_id = MARGO_REGISTER(mid, "my_shutdown_rpc", margo_input_null, void, NULL);
     /* register service APIs */
     svc1_register_client(mid);
     svc2_register_client(mid);
@@ -77,7 +77,7 @@ int main(int argc, char **argv)
     hret = margo_create(mid, svr_addr, my_rpc_shutdown_id, &handle);
     assert(hret == HG_SUCCESS);
 
-    hret = margo_forward(handle, NULL);
+    hret = margo_forward(handle, MARGO_INPUT_NULL);
     assert(hret == HG_SUCCESS);
 
     margo_destroy(handle);

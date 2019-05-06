@@ -462,6 +462,10 @@ hg_return_t margo_destroy(
  */
 #define margo_get_info HG_Get_info
 
+/* TODO: find a way to make this a static inline if possible.  The challenge
+ * is access to the breadcrumb key we are using in ABT
+ */
+void __margo_breadcrumb_handler_set(uint64_t rpc_breadcrumb);
 /**
  * Get input from handle (requires registration of input proc to deserialize
  * parameters). Input must be freed using margo_free_input().
@@ -471,7 +475,13 @@ hg_return_t margo_destroy(
  *
  * \return HG_SUCCESS or corresponding HG error code
  */
-#define margo_get_input HG_Get_input
+/* TODO: technically this kind of statement is a gcc-ism.  Check if it works
+ * on clang and icc at least.
+ */
+#define margo_get_input(__handle, __in_struct) ({int __ret; \
+    __ret = HG_Get_input(__handle, __in_struct); \
+    __margo_breadcrumb_handler_set((((__in_struct)->rpc_breadcrumb) << 16)); \
+    __ret;}) 
 
 /**
  * Free resources allocated when deserializing the input.
@@ -511,10 +521,32 @@ hg_return_t margo_destroy(
  * @param [in] in_struct input argument struct for RPC
  * @returns 0 on success, hg_return_t values on error
  */
-hg_return_t margo_provider_forward(
+hg_return_t __margo_provider_forward(
     uint16_t provider_id,
     hg_handle_t handle,
     void *in_struct);
+
+/* TODO: figure out where to put these functions.  First draft of this code
+ * had them internal but they had to be exposed for use in macro in order to
+ * access input structs before type information is lost.  No one should use
+ * these functions directly, though.
+ */
+uint64_t margo_breadcrumb_set(hg_id_t rpc_id);
+void margo_breadcrumb_measure(uint64_t rpc_breadcrumb, double start);
+/* TODO: technically this kind of statement is a gcc-ism.  Check if it works
+ * on clang and icc at least.
+ */
+/* TODO: ideally this would pushed down a level somehow to capture
+ * asynchronous iforward() calls too.
+ */
+#define margo_provider_forward(__provider_id, __handle, __in_struct)\
+    ({int __ret; \
+    const struct hg_info* __hgi = HG_Get_info(__handle); \
+    double __start = ABT_get_wtime(); \
+    (__in_struct)->rpc_breadcrumb = margo_breadcrumb_set(__hgi->id); \
+    __ret = __margo_provider_forward(__provider_id, __handle, __in_struct); \
+    margo_breadcrumb_measure((__in_struct)->rpc_breadcrumb, __start); \
+    __ret;})
 
 #define margo_forward(__handle, __in_struct)\
     margo_provider_forward(MARGO_DEFAULT_PROVIDER_ID, __handle, __in_struct)
@@ -958,5 +990,11 @@ hg_return_t __name##_handler(hg_handle_t handle) { \
 #ifdef __cplusplus
 }
 #endif
+
+#define MARGO_GEN_PROC(...) MERCURY_GEN_PROC(__VA_ARGS__((uint64_t)(rpc_breadcrumb)))
+
+MERCURY_GEN_PROC(margo_input_null,((uint64_t)(rpc_breadcrumb)));
+static margo_input_null __margo_input_null;
+static __attribute__((unused)) margo_input_null* MARGO_INPUT_NULL = &__margo_input_null;
 
 #endif /* __MARGO */

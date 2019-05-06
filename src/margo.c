@@ -55,6 +55,24 @@ struct margo_finalize_cb
 
 struct margo_timer_list; /* defined in margo-timer.c */
 
+/* used for tracking chains of RPCs */
+static ABT_key rpc_breadcrumb_key = ABT_KEY_NULL;
+/* records timing statistics for rpc breadcrumbs */
+/* TODO: can we reuse the diag macros above? */
+struct rpc_breadcrumb_stat
+{
+    uint64_t rpc_breadcrumb;
+    uint64_t count;          /* number of times this rpc called */
+    double cumulative;       /* running sum of time spent in this rpc type */
+    double min;              /* min individual elapsed time for rpc */
+    double max;              /* max individual elapsed time for rpc */
+
+    UT_hash_handle hh; /* hash link */
+};
+/* TODO: these should probably be per instance instead of global? */
+struct rpc_breadcrumb_stat *rpc_breadcrumb_stats;
+static ABT_mutex rpc_breadcrumb_stats_mutex = ABT_MUTEX_NULL;
+
 struct margo_instance
 {
     /* mercury/argobots state */
@@ -119,7 +137,7 @@ struct margo_rpc_data
 	void (*user_free_callback)(void *);
 };
 
-MERCURY_GEN_PROC(margo_shutdown_out_t, ((int32_t)(ret)))
+MARGO_GEN_PROC(margo_shutdown_out_t, ((int32_t)(ret)))
 
 static void hg_progress_fn(void* foo);
 static void margo_rpc_data_free(void* ptr);
@@ -380,12 +398,25 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
     hret = margo_handle_cache_init(mid);
     if(hret != HG_SUCCESS) goto err;
 
+    /* register an ABT key that we can use to track RPC breadcrumbs
+     * across chains of RPCs.
+     */
+    /* TODO: make the idempotent since we are registering globally.  What
+     * happens in this call if the key has already been registered by a
+     * different call to margo_init()?
+     */
+    ret = ABT_key_create(free, &rpc_breadcrumb_key);
+    if(ret != 0) goto err;
+    /* TODO: this should probably be per instance? */
+    if(rpc_breadcrumb_stats_mutex == ABT_MUTEX_NULL);
+    ABT_mutex_create(&rpc_breadcrumb_stats_mutex);
+
     ret = ABT_thread_create(mid->progress_pool, hg_progress_fn, mid, 
         ABT_THREAD_ATTR_NULL, &mid->hg_progress_tid);
     if(ret != 0) goto err;
 
     mid->shutdown_rpc_id = MARGO_REGISTER(mid, "__shutdown__", 
-            void, margo_shutdown_out_t, remote_shutdown_ult);
+            margo_input_null, margo_shutdown_out_t, remote_shutdown_ult);
 
     return mid;
 
@@ -405,6 +436,7 @@ err:
 static void margo_cleanup(margo_instance_id mid)
 {
     int i;
+    struct rpc_breadcrumb_stat *s, *tmp;
 
     /* call finalize callbacks */
     struct margo_finalize_cb* fcb = mid->finalize_cb;
@@ -447,6 +479,35 @@ static void margo_cleanup(margo_instance_id mid)
             HG_Finalize(mid->hg_class);
         if (mid->abt_init)
             ABT_finalize();
+    }
+
+    printf("# rpc_breadcrumb: <breadcrumb stack>\t<count>\t<cumulative>\t<min>\t<avg>\t<max>\n");
+    HASH_ITER(hh, rpc_breadcrumb_stats, s, tmp)
+    {
+        int i;
+        uint64_t tmp_breadcrumb;
+        printf("rpc_breadcrumb: ");
+        for(i=3; i>=0; i--)
+        {
+            tmp_breadcrumb = s->rpc_breadcrumb;
+            tmp_breadcrumb >>= (i*16);
+            tmp_breadcrumb &= 0xffff;
+            printf("%lu ", tmp_breadcrumb);
+        }
+        printf("\t%lu\t%f\t%f\t%f\t%f\n", s->count, s->cumulative,
+            s->min, s->cumulative/s->count, s->max);
+        HASH_DELETE(hh, rpc_breadcrumb_stats, s);
+        free(s);
+    }
+
+    ABT_key_free(&rpc_breadcrumb_key);
+    /* TODO: put in a hack here to iterate through hash table and print all
+     * statistics at once for now.
+     */
+    if(rpc_breadcrumb_stats_mutex != ABT_MUTEX_NULL)
+    {
+        ABT_mutex_free(&rpc_breadcrumb_stats_mutex);
+        rpc_breadcrumb_stats_mutex = ABT_MUTEX_NULL;
     }
 
     free(mid);
@@ -553,7 +614,7 @@ int margo_shutdown_remote_instance(
                         mid->shutdown_rpc_id, &handle);
     if(hret != HG_SUCCESS) return -1;
 
-    hret = margo_forward(handle, NULL);
+    hret = margo_forward(handle, MARGO_INPUT_NULL);
     if(hret != HG_SUCCESS)
     {
         margo_destroy(handle);
@@ -580,10 +641,19 @@ hg_id_t margo_provider_register_name(margo_instance_id mid, const char *func_nam
 {
     hg_id_t id;
     int ret;
+    uint64_t breadcrumb;
 
     assert(provider_id <= MARGO_MAX_PROVIDER_ID);
     
     id = gen_id(func_name, provider_id);
+
+    /* low order bits of id are used for provider.  We need to right shift
+     * to get them out of the way, then mask off to use the first 16 bits of
+     * the result as our breadcrumb.
+     */
+    breadcrumb = id >> (__MARGO_PROVIDER_ID_SIZE*8);
+    breadcrumb &= 0xffff;
+    printf("# rpc_breadcrumb fragment %lu = %s\n", breadcrumb, func_name);
 
     ret = margo_register_internal(mid, id, in_proc_cb, out_proc_cb, rpc_cb, pool);
     if(ret == 0)
@@ -795,7 +865,7 @@ static hg_return_t margo_cb(const struct hg_cb_info *info)
     return(HG_SUCCESS);
 }
 
-hg_return_t margo_provider_forward(
+hg_return_t __margo_provider_forward(
     uint16_t provider_id,
     hg_handle_t handle,
     void *in_struct)
@@ -805,7 +875,7 @@ hg_return_t margo_provider_forward(
 	hret = margo_provider_iforward(provider_id, handle, in_struct, &req);
 	if(hret != HG_SUCCESS) 
 		return hret;
-	return margo_wait(req);
+	return(margo_wait(req));
 }
 
 hg_return_t margo_provider_iforward(
@@ -881,7 +951,7 @@ hg_return_t margo_wait(margo_request req)
     ABT_eventual_wait(req, (void**)&waited_hret);
 	hret = *waited_hret;
     ABT_eventual_free(&req);
-	
+
     return(hret);
 }
 
@@ -1605,3 +1675,97 @@ void __margo_internal_decr_pending(margo_instance_id mid)
     mid->pending_operations -= 1;
     ABT_mutex_unlock(mid->pending_operations_mtx);
 }
+
+/* records statistics for a breadcrumb, to be used after completion of an
+ * RPC */
+void margo_breadcrumb_measure(uint64_t rpc_breadcrumb, double start)
+{
+    struct rpc_breadcrumb_stat *stat;
+    double end = ABT_get_wtime();
+    double elapsed = end-start;
+
+    ABT_mutex_lock(rpc_breadcrumb_stats_mutex);
+
+    HASH_FIND(hh, rpc_breadcrumb_stats, &rpc_breadcrumb,
+        sizeof(rpc_breadcrumb), stat);
+    if(!stat)
+    {
+        /* we aren't tracking this breadcrumb yet; add it */
+        stat = calloc(1, sizeof(*stat));
+        /* TODO: error handling */
+        assert(stat);
+        stat->rpc_breadcrumb = rpc_breadcrumb;
+        HASH_ADD(hh, rpc_breadcrumb_stats, rpc_breadcrumb,
+            sizeof(rpc_breadcrumb), stat);
+    }
+
+    stat->count++;
+    stat->cumulative += elapsed;
+    if(elapsed > stat->max)
+        stat->max = elapsed;
+    if(stat->min == 0 || elapsed < stat->min)
+        stat->min = elapsed;
+
+    ABT_mutex_unlock(rpc_breadcrumb_stats_mutex);
+
+    return;
+}
+
+/* sets the value of a breadcrumb, to be used just before issuing an RPC */
+uint64_t margo_breadcrumb_set(hg_id_t rpc_id)
+{
+    uint64_t *val;
+    uint64_t tmp;
+
+    ABT_key_get(rpc_breadcrumb_key, (void**)(&val));
+    
+    if(val == NULL)
+    {
+        /* key not set yet on this ULT; we need to allocate a new one 
+         * with all zeroes for initial value of breadcrumb and idx 
+         */
+        val = calloc(1, sizeof(*val));
+        /* TODO: error handling */
+        assert(val);
+    }
+
+    /* NOTE: an rpc_id (after mux'ing) has provider in low order bits and
+     * base rpc_id in high order bits.  After demuxing, a base_id has zeroed
+     * out low bits.  So regardless of whether the rpc_id is a base_id or a
+     * mux'd id, either way we need to shift right to get either the
+     * provider id (or the space reserved for it) out of the way, then mask
+     * off 16 bits for use as a breadcrumb.
+     */
+    tmp = rpc_id >> (__MARGO_PROVIDER_ID_SIZE*8);
+    tmp &= 0xffff;
+
+    /* clear low 16 bits of breadcrumb */
+    *val = (*val >> 16) << 16;
+   
+    /* combine them, so that we have low order 16 of rpc id and high order
+     * bits of previous breadcrumb */
+    *val |= tmp;
+
+    ABT_key_set(rpc_breadcrumb_key, val);
+
+    return *val;
+}
+
+void __margo_breadcrumb_handler_set(uint64_t rpc_breadcrumb)
+{
+    uint64_t *val;
+
+    ABT_key_get(rpc_breadcrumb_key, (void**)(&val));
+    
+    if(val == NULL)
+    {
+        /* key not set yet on this ULT; we need to allocate a new one */
+        val = malloc(sizeof(*val));
+        /* TODO: error handling */
+        assert(val);
+    }
+    *val = rpc_breadcrumb;
+
+    ABT_key_set(rpc_breadcrumb_key, val);
+}
+

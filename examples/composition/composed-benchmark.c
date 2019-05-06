@@ -63,7 +63,7 @@ int main(int argc, char **argv)
 
     /* register core RPC */
     my_rpc_shutdown_id = MARGO_REGISTER(mid, "my_shutdown_rpc",
-        void, void, NULL);
+        margo_input_null, void, NULL);
     /* register service APIs */
     data_xfer_register_client(mid);
     composed_register_client(mid);
@@ -127,7 +127,7 @@ int main(int argc, char **argv)
     printf("Shutting down delegator server.\n");
     hret = margo_create(mid, delegator_svr_addr, my_rpc_shutdown_id, &handle);
     assert(hret == HG_SUCCESS);
-    hret = margo_forward(handle, NULL);
+    hret = margo_forward(handle, MARGO_INPUT_NULL);
     assert(hret == HG_SUCCESS);
     margo_destroy(handle);
     if(strcmp(argv[1], argv[2]))
@@ -136,7 +136,7 @@ int main(int argc, char **argv)
         printf("Shutting down data_xfer server.\n");
         hret = margo_create(mid, data_xfer_svr_addr, my_rpc_shutdown_id, &handle);
         assert(hret == HG_SUCCESS);
-        hret = margo_forward(handle, NULL);
+        hret = margo_forward(handle, MARGO_INPUT_NULL);
         assert(hret == HG_SUCCESS);
         margo_destroy(handle);
     }

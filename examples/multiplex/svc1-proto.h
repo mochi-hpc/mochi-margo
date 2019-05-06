@@ -9,13 +9,13 @@
 
 #include <margo.h>
 
-MERCURY_GEN_PROC(svc1_do_thing_out_t, ((int32_t)(ret)))
-MERCURY_GEN_PROC(svc1_do_thing_in_t,
+MARGO_GEN_PROC(svc1_do_thing_out_t, ((int32_t)(ret)))
+MARGO_GEN_PROC(svc1_do_thing_in_t,
     ((int32_t)(input_val))\
     ((hg_bulk_t)(bulk_handle)))
 
-MERCURY_GEN_PROC(svc1_do_other_thing_out_t, ((int32_t)(ret)))
-MERCURY_GEN_PROC(svc1_do_other_thing_in_t,
+MARGO_GEN_PROC(svc1_do_other_thing_out_t, ((int32_t)(ret)))
+MARGO_GEN_PROC(svc1_do_other_thing_in_t,
     ((int32_t)(input_val))\
     ((hg_bulk_t)(bulk_handle)))
 
