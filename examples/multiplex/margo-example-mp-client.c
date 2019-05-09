@@ -17,12 +17,12 @@ static hg_id_t my_rpc_shutdown_id;
 
 int main(int argc, char **argv) 
 {
-    int i;
     margo_instance_id mid;
     hg_return_t hret;
     hg_addr_t svr_addr = HG_ADDR_NULL;
     hg_handle_t handle;
-    char proto[12] = {0};
+    char *proto;
+    char *colon;
   
     if(argc != 2)
     {
@@ -33,8 +33,11 @@ int main(int argc, char **argv)
     /* initialize Mercury using the transport portion of the destination
      * address (i.e., the part before the first : character if present)
      */
-    for(i=0; i<11 && argv[1][i] != '\0' && argv[1][i] != ':'; i++)
-        proto[i] = argv[1][i];
+    proto = strdup(argv[1]);
+    assert(proto);
+    colon = strchr(proto, ':');
+    if(colon)
+        *colon = '\0';
 
     /* actually start margo -- margo_init() encapsulates the Mercury &
      * Argobots initialization, so this step must precede their use. */
@@ -45,6 +48,7 @@ int main(int argc, char **argv)
      */
     /***************************************/
     mid = margo_init(proto, MARGO_CLIENT_MODE, 0, 0);
+    free(proto);
     if(mid == MARGO_INSTANCE_NULL)
     {
         fprintf(stderr, "Error: margo_init()\n");

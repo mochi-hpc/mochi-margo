@@ -25,7 +25,8 @@ int main(int argc, char **argv)
     hg_addr_t delegator_svr_addr = HG_ADDR_NULL;
     hg_addr_t data_xfer_svr_addr = HG_ADDR_NULL;
     hg_handle_t handle;
-    char proto[12] = {0};
+    char *proto;
+    char *colon;
     int iterations;
     double start, end, t1, t2, avg, min=0, max=0;
   
@@ -41,8 +42,11 @@ int main(int argc, char **argv)
     /* initialize Mercury using the transport portion of the destination
      * address (i.e., the part before the first : character if present)
      */
-    for(i=0; i<11 && argv[1][i] != '\0' && argv[1][i] != ':'; i++)
-        proto[i] = argv[1][i];
+    proto = strdup(argv[1]);
+    assert(proto);
+    colon = strchr(proto, ':');
+    if(colon)
+        *colon = '\0';
 
     /* TODO: this is a hack for now; I don't really want this to operate in server mode,
      * but it seems like it needs to for now for sub-service to be able to get back to it
@@ -50,6 +54,7 @@ int main(int argc, char **argv)
     /* actually start margo */
     /***************************************/
     mid = margo_init(proto, MARGO_SERVER_MODE, 0, -1);
+    free(proto);
     if(mid == MARGO_INSTANCE_NULL)
     {
         fprintf(stderr, "Error: margo_init()\n");
