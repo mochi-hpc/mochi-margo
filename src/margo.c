@@ -36,7 +36,7 @@ do {\
     __data.count++; \
     __data.cumulative += (__time); \
     if((__time) > __data.max) __data.max = (__time); \
-    if((__time) < __data.min) __data.min = (__time); \
+    if(__data.min == 0 || (__time) < __data.min) __data.min = (__time); \
 } while(0)
 
 struct margo_handle_cache_el
