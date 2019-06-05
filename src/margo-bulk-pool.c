@@ -53,7 +53,7 @@ hg_return_t margo_bulk_pool_create(
         goto err;
     }
 
-    ret = posix_memalign(&p->buf, 4096, size);
+    ret = posix_memalign(&p->buf, 4096, size*count);
     if(ret != 0)
     {
         hret = HG_NOMEM_ERROR;
