@@ -1188,13 +1188,11 @@ static void hg_progress_fn(void* foo)
     size_t size;
     unsigned int hg_progress_timeout = mid->hg_progress_timeout_ub;
     double next_timer_exp;
-    int trigger_happened;
     double tm1, tm2;
     int diag_enabled = 0;
 
     while(!mid->hg_progress_shutdown_flag)
     {
-        trigger_happened = 0;
         do {
             /* save value of instance diag variable, in case it is modified
              * while we are in loop 
@@ -1208,29 +1206,45 @@ static void hg_progress_fn(void* foo)
                 tm2 = ABT_get_wtime();
                 __DIAG_UPDATE(mid->diag_trigger_elapsed, (tm2-tm1));
             }
-
-            if(ret == HG_SUCCESS && actual_count > 0)
-                trigger_happened = 1;
         } while((ret == HG_SUCCESS) && actual_count && !mid->hg_progress_shutdown_flag);
 
-        if(trigger_happened)
+        /* Check to see if there are any runnable ULTs in the pool now.  If
+         * so, then we yield here to allow them a chance to execute.  
+         * We check here because new ULTs may now be elegible as a result of
+         * being spawned by the trigger, but existing ones also may have been
+         * activated by an external event.
+         *
+         * NOTE: the output size value does not count the calling ULT itself, 
+         * because it is not technically in the pool as a runnable thread at 
+         * the moment.
+         */
+        ABT_pool_get_size(mid->progress_pool, &size);
+        if(size)
             ABT_thread_yield();
 
-        ABT_pool_get_size(mid->progress_pool, &size);
-        /* Are there any other threads executing in this pool that are *not*
-         * blocked ?  If so then, we can't sleep here or else those threads 
-         * will not get a chance to execute.
-         * TODO: check is ABT_pool_get_size returns the number of ULT/tasks
-         * that can be executed including this one, or not including this one.
+        ABT_pool_get_total_size(mid->progress_pool, &size);
+        /* Are there any other threads in this pool that *might* need to 
+         * execute at some point in the future?  If so, then it's not
+         * necessarily safe for Mercury to sleep here in progress.  It
+         * doesn't matter whether they are runnable now or not, because an
+         * external event could resume them.
+         *
+         * NOTE: we use ABT_pool_get_total_size() rather than
+         * ABT_pool_get_size() in order to include suspended ULTs in our
+         * count.  Note that this function *does* count the caller, so it
+         * will always be at least one, unlike ABT_pool_get_size().
          */
-        if(size > 0)
+        /* TODO: if we knew how many ESes were drawing from this pool then
+         * this could be less aggressive.  For now we assume this is the
+         * only ES that could be running those threads so we assume that we
+         * need to allow a context switch on this ES.
+         */
+        if(size > 1)
         {
-            /* TODO: this is being executed more than is necessary (i.e.
-             * in cases where there are other legitimate ULTs eligible
-             * for execution that are not blocking on any events, Margo
-             * or otherwise). Maybe we need an abt scheduling tweak here
-             * to make sure that this ULT is the lowest priority in that
-             * scenario.
+            /* TODO: a custom ABT scheduler could optimize this further by
+             * delaying Mercury progress until all other runnable ULTs have
+             * been given a chance to execute.  This will often happen
+             * anyway, but not guaranteed.
              */
             if(diag_enabled) tm1 = ABT_get_wtime();
             ret = HG_Progress(mid->hg_context, 0);
