@@ -1190,6 +1190,7 @@ static void hg_progress_fn(void* foo)
     double next_timer_exp;
     double tm1, tm2;
     int diag_enabled = 0;
+    unsigned int pending;
 
     while(!mid->hg_progress_shutdown_flag)
     {
@@ -1222,7 +1223,6 @@ static void hg_progress_fn(void* foo)
         if(size)
             ABT_thread_yield();
 
-        ABT_pool_get_total_size(mid->progress_pool, &size);
         /* Are there any other threads in this pool that *might* need to 
          * execute at some point in the future?  If so, then it's not
          * necessarily safe for Mercury to sleep here in progress.  It
@@ -1234,12 +1234,18 @@ static void hg_progress_fn(void* foo)
          * count.  Note that this function *does* count the caller, so it
          * will always be at least one, unlike ABT_pool_get_size().
          */
-        /* TODO: if we knew how many ESes were drawing from this pool then
-         * this could be less aggressive.  For now we assume this is the
-         * only ES that could be running those threads so we assume that we
-         * need to allow a context switch on this ES.
+        ABT_pool_get_total_size(mid->progress_pool, &size);
+
+        /* Are there any RPCs in flight, regardless of what pool they were
+         * issued to?  If so, then we also cannot block in Mercury, because
+         * they may issue self forward() calls that cannot complete until we
+         * get through this progress/trigger cycle
          */
-        if(size > 1)
+        ABT_mutex_lock(mid->pending_operations_mtx);
+        pending = mid->pending_operations;
+        ABT_mutex_unlock(mid->pending_operations_mtx);
+
+        if(size > 1 || pending)
         {
             /* TODO: a custom ABT scheduler could optimize this further by
              * delaying Mercury progress until all other runnable ULTs have
