@@ -1216,21 +1216,14 @@ static void hg_progress_fn(void* foo)
         if(trigger_happened)
             ABT_thread_yield();
 
-        ABT_pool_get_total_size(mid->progress_pool, &size);
-        /* Are there any other threads in this pool that *might* need to 
-         * execute at some point in the future?  If so, then it's not
-         * necessarily safe for Mercury to sleep here in progress. 
-         *
-         * NOTE: we use ABT_pool_get_total_size() rather than
-         * ABT_pool_get_size() because we need to account for suspended ULTs
-         * that could be resumed by an external resource (not Mercury) at
-         * some point.  Otherwise we might stall.
+        ABT_pool_get_size(mid->progress_pool, &size);
+        /* Are there any other threads executing in this pool that are *not*
+         * blocked ?  If so then, we can't sleep here or else those threads 
+         * will not get a chance to execute.
+         * TODO: check is ABT_pool_get_size returns the number of ULT/tasks
+         * that can be executed including this one, or not including this one.
          */
-        /* TODO: if we knew how many ESes were drawing from this pool then
-         * this could be less aggressive.  For now we assume this is the
-         * only ES that could be running those threads.
-         */
-        if(size > 1)
+        if(size > 0)
         {
             /* TODO: this is being executed more than is necessary (i.e.
              * in cases where there are other legitimate ULTs eligible
