@@ -55,6 +55,17 @@ struct margo_finalize_cb
 
 struct margo_timer_list; /* defined in margo-timer.c */
 
+struct margo_request_struct
+{
+    ABT_eventual eventual;
+    /* NOTE: as long as this struct only has a single ABT_eventual element,
+     * we can safely cast it and use it directly as an ABT_eventual type 
+     * without additional memory allocation.  If we add additional state to
+     * this struct, then the struct type must be allocated to hold the
+     * eventual plus the other fields.
+     */
+};
+
 struct margo_instance
 {
     /* mercury/argobots state */
@@ -880,7 +891,10 @@ hg_return_t margo_wait(margo_request req)
 
     ABT_eventual_wait(req, (void**)&waited_hret);
 	hret = *waited_hret;
-    ABT_eventual_free(&req);
+    /* NOTE: this works when margo_request_struct is just a single field
+     * struct with an ABT_eventual within it
+     */
+    ABT_eventual_free((ABT_eventual*)&req);
 	
     return(hret);
 }
