@@ -853,7 +853,6 @@ static hg_return_t margo_provider_iforward_internal(
     hg_id_t id;
     hg_proc_cb_t in_cb, out_cb;
     hg_bool_t flag;
-    margo_forward_timeout_cb_dat timeout_cb_dat;
     margo_instance_id mid = margo_hg_handle_get_instance(handle);
 
     assert(provider_id <= MARGO_MAX_PROVIDER_ID);
@@ -909,6 +908,10 @@ static hg_return_t margo_provider_iforward_internal(
     if(timeout_ms > 0) {
         /* set a timer object to expire when this forward times out */
         req->timer = calloc(1, sizeof(*(req->timer)));
+        if(!(req->timer)) {
+            ABT_eventual_free(&eventual);
+            return(HG_NOMEM_ERROR);
+        }
         margo_timer_init(mid, req->timer, margo_forward_timeout_cb,
                          req, timeout_ms);
     }
@@ -942,7 +945,7 @@ hg_return_t margo_provider_forward_timed(
     hg_return_t hret;
     struct margo_request_struct reqs;
     hret = margo_provider_iforward_internal(provider_id, handle, timeout_ms, in_struct, &reqs);
-    if(hret != HG_SUCCESS) 
+    if(hret != HG_SUCCESS)
         return hret;
     return margo_wait_internal(&reqs);
 }
@@ -956,6 +959,9 @@ hg_return_t margo_provider_iforward_timed(
 {
     hg_return_t hret;
     margo_request tmp_req = calloc(1, sizeof(*tmp_req));
+    if(!tmp_req) {
+        return HG_NOMEM_ERROR;
+    }
     hret = margo_provider_iforward_internal(provider_id, handle, timeout_ms, in_struct, tmp_req);
     if(hret !=  HG_SUCCESS) {
         free(tmp_req);
@@ -977,54 +983,6 @@ int margo_test(margo_request req, int* flag)
     return ABT_eventual_test(req->eventual, NULL, flag);
 }
 
-#if 0
-hg_return_t margo_forward_timed(
-    hg_handle_t handle,
-    void *in_struct,
-    double timeout_ms)
-{
-    int ret;
-    hg_return_t hret;
-    margo_instance_id mid;
-    struct margo_request_struct reqs;
-    hg_return_t* waited_hret;
-    margo_timer_t forward_timer;
-    margo_forward_timeout_cb_dat timeout_cb_dat;
-
-    ret = ABT_eventual_create(sizeof(hret), &(reqs.eventual));
-    if(ret != 0)
-    {
-        return(HG_NOMEM_ERROR);        
-    }
-
-    /* use the handle to get the associated mid */
-    mid = margo_hg_handle_get_instance(handle);
-
-    /* set a timer object to expire when this forward times out */
-    timeout_cb_dat.handle = handle;
-    margo_timer_init(mid, &forward_timer, margo_forward_timeout_cb,
-        &timeout_cb_dat, timeout_ms);
-
-    hret = HG_Forward(handle, margo_cb, (void*)(&reqs), in_struct);
-    if(hret == HG_SUCCESS)
-    {
-        ABT_eventual_wait(reqs.eventual, (void**)&waited_hret);
-        hret = *waited_hret;
-    }
-
-    /* convert HG_CANCELED to HG_TIMEOUT to indicate op timed out */
-    if(hret == HG_CANCELED)
-        hret = HG_TIMEOUT;
-
-    /* remove timer if it is still in place (i.e., not timed out) */
-    if(hret != HG_TIMEOUT)
-        margo_timer_destroy(mid, &forward_timer);
-
-    ABT_eventual_free(&(reqs.eventual));
-
-    return(hret);
-}
-#endif
 static hg_return_t margo_irespond_internal(
     hg_handle_t handle,
     void *out_struct,
@@ -1061,6 +1019,9 @@ hg_return_t margo_irespond(
 {
     hg_return_t hret;
     margo_request tmp_req = calloc(1, sizeof(*tmp_req));
+    if(!tmp_req) {
+        return(HG_NOMEM_ERROR);
+    }
     hret = margo_irespond_internal(handle, out_struct, tmp_req);
     if(hret != HG_SUCCESS) {
         free(req);
@@ -1156,8 +1117,10 @@ hg_return_t margo_bulk_itransfer(
     size_t size,
     margo_request* req)
 {
-    int ret;
     margo_request tmp_req = calloc(1, sizeof(*tmp_req));
+    if(!tmp_req) {
+        return(HG_NOMEM_ERROR);
+    }
     hg_return_t hret = margo_bulk_itransfer_internal(mid,op,origin_addr,
             origin_handle, origin_offset, local_handle,
             local_offset, size, tmp_req);
