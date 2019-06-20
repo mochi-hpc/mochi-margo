@@ -31,10 +31,10 @@ extern "C" {
 struct margo_instance;
 typedef struct margo_instance* margo_instance_id;
 typedef struct margo_data* margo_data_ptr;
-typedef ABT_eventual margo_request;
+typedef struct margo_request_struct* margo_request;
 
 #define MARGO_INSTANCE_NULL ((margo_instance_id)NULL)
-#define MARGO_REQUEST_NULL ABT_EVENTUAL_NULL
+#define MARGO_REQUEST_NULL ((margo_request)NULL)
 #define MARGO_CLIENT_MODE 0
 #define MARGO_SERVER_MODE 1
 #define MARGO_DEFAULT_PROVIDER_ID 0
