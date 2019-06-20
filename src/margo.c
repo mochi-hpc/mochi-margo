@@ -113,6 +113,8 @@ struct margo_instance
 
 struct margo_request_struct {
     ABT_eventual eventual;
+    margo_timer_t* timer;
+    hg_handle_t handle;
 };
 
 struct margo_rpc_data
@@ -793,6 +795,19 @@ static hg_return_t margo_cb(const struct hg_cb_info *info)
     hg_return_t hret = info->ret;
     margo_request req = (margo_request)(info->arg);
 
+    if(hret == HG_CANCELED && req->timer) {
+        hret = HG_TIMEOUT;
+    }
+
+    /* remove timer if there is one and it is still in place (i.e., not timed out) */
+    if(hret != HG_TIMEOUT && req->timer && req->handle) {
+        margo_instance_id mid = margo_hg_handle_get_instance(req->handle);
+        margo_timer_destroy(mid, req->timer);
+    }
+    if(req->timer) {
+        free(req->timer);
+    }
+
     /* propagate return code out through eventual */
     ABT_eventual_set(req->eventual, &hret, sizeof(hret));
     
@@ -811,9 +826,23 @@ static hg_return_t margo_wait_internal(margo_request req)
     return(hret);
 }
 
+typedef struct
+{
+    hg_handle_t handle;
+} margo_forward_timeout_cb_dat;
+
+static void margo_forward_timeout_cb(void *arg)
+{
+    margo_request req = (margo_request)arg;
+    /* cancel the Mercury op if the forward timed out */
+    HG_Cancel(req->handle);
+    return;
+}
+
 static hg_return_t margo_provider_iforward_internal(
     uint16_t provider_id,
     hg_handle_t handle,
+    double timeout_ms,
     void *in_struct,
     margo_request req) /* the request should have been allocated */
 {
@@ -824,6 +853,8 @@ static hg_return_t margo_provider_iforward_internal(
     hg_id_t id;
     hg_proc_cb_t in_cb, out_cb;
     hg_bool_t flag;
+    margo_forward_timeout_cb_dat timeout_cb_dat;
+    margo_instance_id mid = margo_hg_handle_get_instance(handle);
 
     assert(provider_id <= MARGO_MAX_PROVIDER_ID);
 
@@ -870,8 +901,17 @@ static hg_return_t margo_provider_iforward_internal(
     {
         return(HG_NOMEM_ERROR);        
     }
-
+    
+    req->timer = NULL;
     req->eventual = eventual;
+    req->handle = handle;
+
+    if(timeout_ms > 0) {
+        /* set a timer object to expire when this forward times out */
+        req->timer = calloc(1, sizeof(*(req->timer)));
+        margo_timer_init(mid, req->timer, margo_forward_timeout_cb,
+                         req, timeout_ms);
+    }
 
     return HG_Forward(handle, margo_cb, (void*)req, in_struct);
 }
@@ -881,12 +921,7 @@ hg_return_t margo_provider_forward(
     hg_handle_t handle,
     void *in_struct)
 {
-    hg_return_t hret;
-    struct margo_request_struct reqs;
-    hret = margo_provider_iforward_internal(provider_id, handle, in_struct, &reqs);
-    if(hret != HG_SUCCESS) 
-        return hret;
-    return margo_wait_internal(&reqs);
+    return margo_provider_forward_timed(provider_id, handle, in_struct, 0);
 }
 
 hg_return_t margo_provider_iforward(
@@ -895,9 +930,33 @@ hg_return_t margo_provider_iforward(
     void *in_struct,
     margo_request* req)
 {
+    return margo_provider_iforward_timed(provider_id, handle, in_struct, 0, req);
+}
+
+hg_return_t margo_provider_forward_timed(
+    uint16_t provider_id,
+    hg_handle_t handle,
+    void *in_struct,
+    double timeout_ms)
+{
+    hg_return_t hret;
+    struct margo_request_struct reqs;
+    hret = margo_provider_iforward_internal(provider_id, handle, timeout_ms, in_struct, &reqs);
+    if(hret != HG_SUCCESS) 
+        return hret;
+    return margo_wait_internal(&reqs);
+}
+
+hg_return_t margo_provider_iforward_timed(
+    uint16_t provider_id,
+    hg_handle_t handle,
+    void *in_struct,
+    double timeout_ms,
+    margo_request* req)
+{
     hg_return_t hret;
     margo_request tmp_req = calloc(1, sizeof(*tmp_req));
-    hret = margo_provider_iforward_internal(provider_id, handle, in_struct, tmp_req);
+    hret = margo_provider_iforward_internal(provider_id, handle, timeout_ms, in_struct, tmp_req);
     if(hret !=  HG_SUCCESS) {
         free(tmp_req);
         return hret;
@@ -918,21 +977,7 @@ int margo_test(margo_request req, int* flag)
     return ABT_eventual_test(req->eventual, NULL, flag);
 }
 
-typedef struct
-{
-    hg_handle_t handle;
-} margo_forward_timeout_cb_dat;
-
-static void margo_forward_timeout_cb(void *arg)
-{
-    margo_forward_timeout_cb_dat *timeout_cb_dat =
-        (margo_forward_timeout_cb_dat *)arg;
-
-    /* cancel the Mercury op if the forward timed out */
-    HG_Cancel(timeout_cb_dat->handle);
-    return;
-}
-
+#if 0
 hg_return_t margo_forward_timed(
     hg_handle_t handle,
     void *in_struct,
@@ -979,7 +1024,7 @@ hg_return_t margo_forward_timed(
 
     return(hret);
 }
-
+#endif
 static hg_return_t margo_irespond_internal(
     hg_handle_t handle,
     void *out_struct,
@@ -991,6 +1036,8 @@ static hg_return_t margo_irespond_internal(
     {
         return(HG_NOMEM_ERROR);
     }
+    req->handle = handle;
+    req->timer = NULL;
 
     return HG_Respond(handle, margo_cb, (void*)req, out_struct);
 }
@@ -1069,6 +1116,8 @@ static hg_return_t margo_bulk_itransfer_internal(
     {
         return(HG_NOMEM_ERROR);        
     }
+    req->timer = NULL;
+    req->handle = HG_HANDLE_NULL;
 
     hret = HG_Bulk_transfer(mid->hg_context, margo_cb,
         (void*)req, op, origin_addr, origin_handle, origin_offset, local_handle,

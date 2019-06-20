@@ -537,6 +537,41 @@ hg_return_t margo_provider_iforward(
     margo_provider_iforward(MARGO_DEFAULT_PROVIDER_ID, __handle, __in_struct, __req)
 
 /**
+ * Forward an RPC request to a remote provider with a user-defined timeout
+ * @param [in] provider_id provider id
+ * @param [in] handle identifier for the RPC to be sent
+ * @param [in] in_struct input argument struct for RPC
+ * @param [in] timeout_ms timeout in milliseconds
+ * @returns 0 on success, hg_return_t values on error
+ */
+hg_return_t margo_provider_forward_timed(
+    uint16_t provider_id,
+    hg_handle_t handle,
+    void *in_struct,
+    double timeout_ms);
+
+#define margo_forward_timed(__handle, __in_struct, __timeout)\
+    margo_provider_forward_timed(MARGO_DEFAULT_PROVIDER_ID, __handle, __in_struct, __timeout)
+
+/**
+ * Non-blocking version of margo_provider_forward_timed.
+ * @param [in] provider_id provider id
+ * @param [in] handle identifier for the RPC to be sent
+ * @param [in] in_struct input argument struct for RPC
+ * @param [in] timeout_ms timeout in milliseconds
+ * @returns 0 on success, hg_return_t values on error
+ */
+hg_return_t margo_provider_iforward_timed(
+    uint16_t provider_id,
+    hg_handle_t handle,
+    void *in_struct,
+    double timeout_ms,
+    margo_request* req);
+
+#define margo_iforward_timed(__handle, __in_struct, __timeout, __req)\
+    margo_provider_forward_timed(MARGO_DEFAULT_PROVIDER_ID, __handle, __in_struct, __timeout, __req)
+
+/**
  * Wait for an operation initiated by a non-blocking
  * margo function (margo_iforward, margo_irespond, etc.)
  * @param [in] req request to wait on
@@ -557,18 +592,6 @@ hg_return_t margo_wait(
  * @return 0 on success, ABT error code otherwise
  */
 int margo_test(margo_request req, int* flag);
-
-/**
- * Forward an RPC request to a remote host with a user-defined timeout
- * @param [in] handle identifier for the RPC to be sent
- * @param [in] in_struct input argument struct for RPC
- * @param [in] timeout_ms timeout in milliseconds
- * @returns 0 on success, hg_return_t values on error
- */
-hg_return_t margo_forward_timed(
-    hg_handle_t handle,
-    void *in_struct,
-    double timeout_ms);
 
 /**
  * Send an RPC response, waiting for completion before returning
