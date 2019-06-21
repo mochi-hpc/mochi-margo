@@ -60,6 +60,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "Error: margo_init()\n");
         return(-1);
     }
+    margo_diag_start(mid);
 
     /* register core RPC */
     my_rpc_shutdown_id = MARGO_REGISTER(mid, "my_shutdown_rpc",
@@ -145,6 +146,7 @@ int main(int argc, char **argv)
     margo_addr_free(mid, data_xfer_svr_addr);
 
     /* shut down everything */
+    margo_diag_dump(mid, "-", 0);
     margo_finalize(mid);
     free(buffer);
 

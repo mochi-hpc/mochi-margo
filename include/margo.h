@@ -923,6 +923,15 @@ void __margo_internal_incr_pending(margo_instance_id mid);
 void __margo_internal_decr_pending(margo_instance_id mid);
 
 /**
+ * @private
+ * Internal function used by DEFINE_MARGO_RPC_HANDLER, not supposed to be
+ * called by users!
+ *
+ * @param rpc_breadcrumb RPC tracking breadcrumb
+ */
+void __margo_internal_breadcrumb_handler_set(uint64_t rpc_breadcrumb);
+
+/**
  * macro that registers a function as an RPC.
  */
 #define MARGO_REGISTER(__mid, __func_name, __in_t, __out_t, __handler) \
@@ -944,11 +953,22 @@ void __margo_internal_decr_pending(margo_instance_id mid);
 /**
  * macro that defines a function to glue an RPC handler to a ult handler
  * @param [in] __name name of handler function
+ *
+ * Note: we use this opportunity to set a thread-local argobots key that stores
+ * the "breadcrumb" that was set in the RPC.  It is shifted down 16 bits so that
+ * if this handler in turn issues more RPCs there will be a stack showing their
+ * ancestry.
  */
 #define DEFINE_MARGO_RPC_HANDLER(__name) \
 void __name##_wrapper(hg_handle_t handle) { \
     margo_instance_id __mid; \
+    hg_return_t __ret; \
+    uint64_t *__rpc_breadcrumb; \
     __mid = margo_hg_handle_get_instance(handle); \
+    __ret = HG_Get_input_buf(handle, (void**)&__rpc_breadcrumb, NULL); \
+    assert(__ret == HG_SUCCESS); \
+    *__rpc_breadcrumb = le64toh(*__rpc_breadcrumb); \
+    __margo_internal_breadcrumb_handler_set((*__rpc_breadcrumb) << 16); \
     __name(handle); \
     __margo_internal_decr_pending(__mid); \
     if(__margo_internal_finalize_requested(__mid)) { \
