@@ -950,17 +950,7 @@ void __margo_internal_breadcrumb_handler_set(uint64_t rpc_breadcrumb);
 
 #define NULL_handler NULL
 
-/**
- * macro that defines a function to glue an RPC handler to a ult handler
- * @param [in] __name name of handler function
- *
- * Note: we use this opportunity to set a thread-local argobots key that stores
- * the "breadcrumb" that was set in the RPC.  It is shifted down 16 bits so that
- * if this handler in turn issues more RPCs there will be a stack showing their
- * ancestry.
- */
-#define DEFINE_MARGO_RPC_HANDLER(__name) \
-void __name##_wrapper(hg_handle_t handle) { \
+#define __MARGO_INTERNAL_RPC_WRAPPER_BODY(__name) \
     margo_instance_id __mid; \
     hg_return_t __ret; \
     uint64_t *__rpc_breadcrumb; \
@@ -973,9 +963,14 @@ void __name##_wrapper(hg_handle_t handle) { \
     __margo_internal_decr_pending(__mid); \
     if(__margo_internal_finalize_requested(__mid)) { \
         margo_finalize(__mid); \
-    } \
-} \
-hg_return_t __name##_handler(hg_handle_t handle) { \
+    }
+
+#define __MARGO_INTERNAL_RPC_WRAPPER(__name) \
+void __name##_wrapper(hg_handle_t handle) { \
+    __MARGO_INTERNAL_RPC_WRAPPER_BODY(__name) \
+}
+
+#define __MARGO_INTERNAL_RPC_HANDLER_BODY(__name) \
     int __ret; \
     ABT_pool __pool; \
     margo_instance_id __mid; \
@@ -988,8 +983,25 @@ hg_return_t __name##_handler(hg_handle_t handle) { \
     if(__ret != 0) { \
         return(HG_NOMEM_ERROR); \
     } \
-    return(HG_SUCCESS); \
+    return(HG_SUCCESS);
+
+#define __MARGO_INTERNAL_RPC_HANDLER(__name) \
+hg_return_t __name##_handler(hg_handle_t handle) { \
+    __MARGO_INTERNAL_RPC_HANDLER_BODY(__name) \
 }
+
+/**
+ * macro that defines a function to glue an RPC handler to a ult handler
+ * @param [in] __name name of handler function
+ *
+ * Note: we use this opportunity to set a thread-local argobots key that stores
+ * the "breadcrumb" that was set in the RPC.  It is shifted down 16 bits so that
+ * if this handler in turn issues more RPCs there will be a stack showing their
+ * ancestry.
+ */
+#define DEFINE_MARGO_RPC_HANDLER(__name) \
+    __MARGO_INTERNAL_RPC_WRAPPER(__name) \
+    __MARGO_INTERNAL_RPC_HANDLER(__name)
 
 /**
  * macro that declares the prototype for a function to glue an RPC 
