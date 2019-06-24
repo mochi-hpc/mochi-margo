@@ -943,17 +943,17 @@ void __margo_internal_post_wrapper_hooks(margo_instance_id mid);
     margo_provider_register_name(__mid, __func_name, \
         BOOST_PP_CAT(hg_proc_, __in_t), \
         BOOST_PP_CAT(hg_proc_, __out_t), \
-        __handler##_handler, \
+        _handler_for_##__handler, \
         MARGO_DEFAULT_PROVIDER_ID, ABT_POOL_NULL);
 
 #define MARGO_REGISTER_PROVIDER(__mid, __func_name, __in_t, __out_t, __handler, __provider_id, __pool) \
     margo_provider_register_name(__mid, __func_name, \
         BOOST_PP_CAT(hg_proc_, __in_t), \
         BOOST_PP_CAT(hg_proc_, __out_t), \
-        __handler##_handler, \
+        _handler_for_##__handler, \
         __provider_id, __pool);
 
-#define NULL_handler NULL
+#define _handler_for_NULL NULL
 
 #define __MARGO_INTERNAL_RPC_WRAPPER_BODY(__name) \
     margo_instance_id __mid; \
@@ -963,7 +963,7 @@ void __margo_internal_post_wrapper_hooks(margo_instance_id mid);
     __margo_internal_post_wrapper_hooks(__mid);
 
 #define __MARGO_INTERNAL_RPC_WRAPPER(__name) \
-void __name##_wrapper(hg_handle_t handle) { \
+void _wrapper_for_##__name(hg_handle_t handle) { \
     __MARGO_INTERNAL_RPC_WRAPPER_BODY(__name) \
 }
 
@@ -976,14 +976,14 @@ void __name##_wrapper(hg_handle_t handle) { \
     if(__margo_internal_finalize_requested(__mid)) { return(HG_CANCELED); } \
     __pool = margo_hg_handle_get_handler_pool(handle); \
     __margo_internal_incr_pending(__mid); \
-    __ret = ABT_thread_create(__pool, (void (*)(void *))__name##_wrapper, handle, ABT_THREAD_ATTR_NULL, NULL); \
+    __ret = ABT_thread_create(__pool, (void (*)(void *))_wrapper_for_##__name, handle, ABT_THREAD_ATTR_NULL, NULL); \
     if(__ret != 0) { \
         return(HG_NOMEM_ERROR); \
     } \
     return(HG_SUCCESS);
 
 #define __MARGO_INTERNAL_RPC_HANDLER(__name) \
-hg_return_t __name##_handler(hg_handle_t handle) { \
+hg_return_t _handler_for_##__name(hg_handle_t handle) { \
     __MARGO_INTERNAL_RPC_HANDLER_BODY(__name) \
 }
 
@@ -1005,7 +1005,7 @@ hg_return_t __name##_handler(hg_handle_t handle) { \
  * handler to a ult
  * @param [in] __name name of handler function
  */
-#define DECLARE_MARGO_RPC_HANDLER(__name) hg_return_t __name##_handler(hg_handle_t handle);
+#define DECLARE_MARGO_RPC_HANDLER(__name) hg_return_t _handler_for_##__name(hg_handle_t handle);
 
 #ifdef __cplusplus
 }
