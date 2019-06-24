@@ -1933,7 +1933,7 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
     return;
 }
 
-void __margo_internal_breadcrumb_handler_set(uint64_t rpc_breadcrumb)
+static void margo_internal_breadcrumb_handler_set(uint64_t rpc_breadcrumb)
 {
     uint64_t *val;
 
@@ -1952,4 +1952,22 @@ void __margo_internal_breadcrumb_handler_set(uint64_t rpc_breadcrumb)
     ABT_key_set(rpc_breadcrumb_key, val);
 
     return;
+}
+
+void __margo_internal_pre_wrapper_hooks(margo_instance_id mid, hg_handle_t handle)
+{
+    hg_return_t ret;
+    uint64_t *rpc_breadcrumb;
+    ret = HG_Get_input_buf(handle, (void**)&rpc_breadcrumb, NULL);
+    assert(ret == HG_SUCCESS);
+    *rpc_breadcrumb = le64toh(*rpc_breadcrumb);
+    margo_internal_breadcrumb_handler_set((*rpc_breadcrumb) << 16);
+}
+
+void __margo_internal_post_wrapper_hooks(margo_instance_id mid)
+{
+    __margo_internal_decr_pending(mid);
+    if(__margo_internal_finalize_requested(mid)) {
+        margo_finalize(mid);
+    }
 }

@@ -926,10 +926,15 @@ void __margo_internal_decr_pending(margo_instance_id mid);
  * @private
  * Internal function used by DEFINE_MARGO_RPC_HANDLER, not supposed to be
  * called by users!
- *
- * @param rpc_breadcrumb RPC tracking breadcrumb
  */
-void __margo_internal_breadcrumb_handler_set(uint64_t rpc_breadcrumb);
+void __margo_internal_pre_wrapper_hooks(margo_instance_id mid, hg_handle_t handle);
+
+/**
+ * @private
+ * Internal function used by DEFINE_MARGO_RPC_HANDLER, not supposed to be
+ * called by users!
+ */
+void __margo_internal_post_wrapper_hooks(margo_instance_id mid);
 
 /**
  * macro that registers a function as an RPC.
@@ -952,18 +957,10 @@ void __margo_internal_breadcrumb_handler_set(uint64_t rpc_breadcrumb);
 
 #define __MARGO_INTERNAL_RPC_WRAPPER_BODY(__name) \
     margo_instance_id __mid; \
-    hg_return_t __ret; \
-    uint64_t *__rpc_breadcrumb; \
     __mid = margo_hg_handle_get_instance(handle); \
-    __ret = HG_Get_input_buf(handle, (void**)&__rpc_breadcrumb, NULL); \
-    assert(__ret == HG_SUCCESS); \
-    *__rpc_breadcrumb = le64toh(*__rpc_breadcrumb); \
-    __margo_internal_breadcrumb_handler_set((*__rpc_breadcrumb) << 16); \
+    __margo_internal_pre_wrapper_hooks(__mid, handle); \
     __name(handle); \
-    __margo_internal_decr_pending(__mid); \
-    if(__margo_internal_finalize_requested(__mid)) { \
-        margo_finalize(__mid); \
-    }
+    __margo_internal_post_wrapper_hooks(__mid);
 
 #define __MARGO_INTERNAL_RPC_WRAPPER(__name) \
 void __name##_wrapper(hg_handle_t handle) { \
