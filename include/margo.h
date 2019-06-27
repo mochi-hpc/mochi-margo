@@ -990,11 +990,6 @@ hg_return_t _handler_for_##__name(hg_handle_t handle) { \
 /**
  * macro that defines a function to glue an RPC handler to a ult handler
  * @param [in] __name name of handler function
- *
- * Note: we use this opportunity to set a thread-local argobots key that stores
- * the "breadcrumb" that was set in the RPC.  It is shifted down 16 bits so that
- * if this handler in turn issues more RPCs there will be a stack showing their
- * ancestry.
  */
 #define DEFINE_MARGO_RPC_HANDLER(__name) \
     __MARGO_INTERNAL_RPC_WRAPPER(__name) \

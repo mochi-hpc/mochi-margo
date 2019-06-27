@@ -1958,9 +1958,16 @@ void __margo_internal_pre_wrapper_hooks(margo_instance_id mid, hg_handle_t handl
 {
     hg_return_t ret;
     uint64_t *rpc_breadcrumb;
+
     ret = HG_Get_input_buf(handle, (void**)&rpc_breadcrumb, NULL);
     assert(ret == HG_SUCCESS);
     *rpc_breadcrumb = le64toh(*rpc_breadcrumb);
+    /* Note: we use this opportunity to retrieve the incoming RPC
+     * breadcrumb and put it in a thread-local argobots key.  It is
+     * shifted down 16 bits so that if this handler in turn issues more
+     * RPCs, there will be a stack showing the ancestry of RPC calls that
+     * led to that point.
+     */
     margo_internal_breadcrumb_handler_set((*rpc_breadcrumb) << 16);
 }
 
