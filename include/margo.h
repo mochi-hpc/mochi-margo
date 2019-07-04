@@ -173,6 +173,45 @@ void margo_push_finalize_callback(
     void* uargs);
 
 /**
+ * @brief Removes the last finalize callback that was pushed into the margo instance
+ * without calling it. If a callback was remoted, this function returns 1, otherwise
+ * it returns 0.
+ *
+ * @param mid Margo instance.
+ */
+int margo_pop_finalize_callback(
+    margo_instance_id mid);
+
+/**
+ * @brief Installs a callback to be called before the margo instance is finalized.
+ * The owner pointer allows to identify callbacks installed by particular providers.
+ * Note that the same owner can install multiple callbacks. If they are not popped,
+ * they will be called in reverse order of installation by the margo cleanup procedure.
+ *
+ * @param mid The margo instance
+ * @param owner Owner of the callback (to be used when popping callbacks)
+ * @param cb Callback to install
+ * @param uargs User-provider argument to pass to the callback when called
+ */
+void margo_provider_push_finalize_callback(
+    margo_instance_id mid,
+    void* owner,
+    void(*cb)(void*),
+    void* uargs);
+
+/**
+ * @brief Removes the last finalize callback that was pushed into the margo instance
+ * by the specified owner. If a callback was remoted, this function returns 1, otherwise
+ * it returns 0.
+ *
+ * @param mid Margo instance.
+ * @param owner Owner of the callback.
+ */
+int margo_provider_pop_finalize_callback(
+    margo_instance_id mid,
+    void* owner);
+
+/**
  * Allows the passed Margo instance to be shut down remotely
  * using margo_shutdown_remote_instance().
  * 
