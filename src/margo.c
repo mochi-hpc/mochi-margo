@@ -48,6 +48,7 @@ struct margo_handle_cache_el
 
 struct margo_finalize_cb
 {
+    void* owner;
     void(*callback)(void*);
     void* uargs;
     struct margo_finalize_cb* next;
@@ -528,6 +529,25 @@ hg_bool_t margo_is_listening(
 
 void margo_push_finalize_callback(
             margo_instance_id mid,
+            void(*cb)(void*),
+            void* uargs)
+{
+    margo_provider_push_finalize_callback(
+            mid,
+            NULL,
+            cb,
+            uargs);
+}
+
+int margo_pop_finalize_callback(
+                    margo_instance_id mid)
+{   
+    return margo_provider_pop_finalize_callback(mid, NULL);
+}
+
+void margo_provider_push_finalize_callback(
+            margo_instance_id mid,
+            void* owner,
             void(*cb)(void*),                  
             void* uargs)
 {
@@ -535,12 +555,33 @@ void margo_push_finalize_callback(
 
     struct margo_finalize_cb* fcb = 
         (struct margo_finalize_cb*)malloc(sizeof(*fcb));
+    fcb->owner    = owner;
     fcb->callback = cb;
-    fcb->uargs = uargs;
+    fcb->uargs    = uargs;
 
     struct margo_finalize_cb* next = mid->finalize_cb;
     fcb->next = next;
     mid->finalize_cb = fcb;
+}
+
+int margo_provider_pop_finalize_callback(
+            margo_instance_id mid,
+            void* owner)
+{
+    struct margo_finalize_cb* prev = NULL;
+    struct margo_finalize_cb* fcb  =  mid->finalize_cb;
+    while(fcb != NULL && fcb->owner != owner) {
+        prev = fcb;
+        fcb = fcb->next;
+    }
+    if(fcb == NULL) return 0;
+    if(prev == NULL) {
+        mid->finalize_cb = fcb->next;
+    } else {
+        prev->next = fcb->next;
+    }
+    free(fcb);
+    return 1;
 }
 
 void margo_enable_remote_shutdown(margo_instance_id mid)
