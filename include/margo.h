@@ -174,7 +174,7 @@ void margo_push_finalize_callback(
 
 /**
  * @brief Removes the last finalize callback that was pushed into the margo instance
- * without calling it. If a callback was remoted, this function returns 1, otherwise
+ * without calling it. If a callback was removed, this function returns 1, otherwise
  * it returns 0.
  *
  * @param mid Margo instance.
@@ -185,8 +185,9 @@ int margo_pop_finalize_callback(
 /**
  * @brief Installs a callback to be called before the margo instance is finalized.
  * The owner pointer allows to identify callbacks installed by particular providers.
- * Note that the same owner can install multiple callbacks. If they are not popped,
- * they will be called in reverse order of installation by the margo cleanup procedure.
+ * Note that one can install multiple callbacks with the same owner. If popped, they
+ * will be popped in reverse order of installation. If they are not popped, they will
+ * be called in reverse order of installation by the margo cleanup procedure.
  *
  * @param mid The margo instance
  * @param owner Owner of the callback (to be used when popping callbacks)
@@ -201,7 +202,7 @@ void margo_provider_push_finalize_callback(
 
 /**
  * @brief Removes the last finalize callback that was pushed into the margo instance
- * by the specified owner. If a callback was remoted, this function returns 1, otherwise
+ * by the specified owner. If a callback was removed, this function returns 1, otherwise
  * it returns 0.
  *
  * @param mid Margo instance.
