@@ -416,6 +416,7 @@ static void margo_cleanup(margo_instance_id mid)
     /* call finalize callbacks */
     struct margo_finalize_cb* fcb = mid->finalize_cb;
     while(fcb) {
+        mid->finalize_cb = fcb->next;
         (fcb->callback)(fcb->uargs);
         struct margo_finalize_cb* tmp = fcb;
         fcb = fcb->next;
