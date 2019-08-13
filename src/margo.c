@@ -419,7 +419,7 @@ static void margo_cleanup(margo_instance_id mid)
         mid->finalize_cb = fcb->next;
         (fcb->callback)(fcb->uargs);
         struct margo_finalize_cb* tmp = fcb;
-        fcb = fcb->next;
+        fcb = mid->finalize_cb;
         free(tmp);
     }
 
