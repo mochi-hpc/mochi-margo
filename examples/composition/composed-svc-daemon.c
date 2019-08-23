@@ -42,6 +42,7 @@ static void my_rpc_shutdown_ult(hg_handle_t handle)
      * margo_wait_for_finalize() to suspend until this RPC executes, so there
      * is no need to send any extra signal to notify it.
      */
+    margo_diag_dump(mid, "-", 0);
     margo_finalize(mid);
 
     return;
@@ -80,6 +81,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "Error: margo_init()\n");
         return(-1);
     }
+    margo_diag_start(mid);
 
     /* figure out what address this server is listening on */
     hret = margo_addr_self(mid, &addr_self);
