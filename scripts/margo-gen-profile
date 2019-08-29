@@ -22,6 +22,9 @@ class ProfileGenerator:
 		self.poolsizehwm = defaultdict(list) #RPC handler pool size low water mark on the target, in the form <KEY = RPC breadcrumb name, VALUE = [list of individual low watermarks]>
 		self.poolsizelwm = defaultdict(list) #RPC handler pool size high  water mark on the target, in the form <KEY = RPC breadcrumb name, VALUE = [list of individual low watermarks]>
 
+		self.countsparklines = [defaultdict(list), defaultdict(list)]
+		self.timesparklines = [defaultdict(list), defaultdict(list)]
+
 		self.rpc2name = dict() #Map the RPC ID to a proper registered name
 		self.pp = PdfPages('profile.pdf')
 
@@ -80,11 +83,15 @@ class ProfileGenerator:
 				for lines in contents[1:num_registered_rpcs]: #Populate map of RPC ID's to RPC names
 					k, v = lines.split(',', 2)
 					self.rpc2name[k] = v
-			for lines in contents[1 + 3 + num_registered_rpcs:]: #Skip 3 internal Margo routines (progress w/o zero timeout, trigger_elapsed)
+			contents_ = contents[1 + 6 + num_registered_rpcs:] #Skip 3 internal Margo routines (progress w/o zero timeout, trigger_elapsed) and corresponding sparklines, which are useless
+			for i in range(0,len(contents_),2):
+				breadcrumb_line = contents_[i]
+				spark_line = contents_[i+1]
+				#Even lines contain breadcrumb data
 				name, avg, rpc_breadcrumb, \
 					addr_hash, origin_or_target, \
 						cumulative, _min, _max, count, \
-							handler_max, handler_min, handler_cumulative = lines.split(',', 12)
+							handler_max, handler_min, handler_cumulative = breadcrumb_line.split(',', 12)
 				origin_or_target = int(origin_or_target)
 				addr_hash = int(addr_hash)
 
@@ -96,6 +103,16 @@ class ProfileGenerator:
 				if(origin_or_target == 1):
 					if (float(handler_min) >= 0): self.poolsizelwm[name].append(float(handler_min))
 					if(float(handler_max) < 100000): self.poolsizehwm[name].append(float(handler_max))
+
+				#Oddlines contain sparkline data
+				value_list = spark_line.split(";")
+				name, origin_or_target = (value_list[0]).split(',')
+				origin_or_target = int(origin_or_target)
+				for v in value_list[1:]:
+					if v != "\n":
+						t, c = v.split(',')
+						self.countsparklines[origin_or_target][name].append(float(c))
+						self.timesparklines[origin_or_target][name].append(float(t))
 			
 			f1.close()
 
@@ -234,6 +251,11 @@ class ProfileGenerator:
 
                 	self.__gengraph(x_pos, [maximum, mean, minimum], 'Breadcrumb ID',
                         	'Pool Size', graph_names[i], is_stat_graph=True, use_x_ticks=True, objects=objects)
+
+	#def gencountsparklines(self):
+				
+	#def gentimesparklines(self):
+	
 
 
 	def finalize(self):
