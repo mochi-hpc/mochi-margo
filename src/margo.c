@@ -1629,7 +1629,7 @@ static void print_diag_data(FILE *file, const char* name, const char *descriptio
     fprintf(file, "%s,%.9f,%lu,%lu,%d,%.9f,%.9f,%.9f,%d,%.9f,%.9f,%.9f\n", name, avg, data->key.rpc_breadcrumb, data->key.addr_hash, data->type, data->cumulative, data->min, data->max, data->count, data->handler_max, data->handler_min, data->handler_cumulative);
 
     /* print sparkline data */
-    fprintf(file, "%s;", name);
+    fprintf(file, "%s,%d;", name,data->type);
     for(int i = 0; i < data->sparkline_index; i ++)
       fprintf(file, "%.9f,%.9f;", data->sparkline_time[i], data->sparkline_count[i]);
     fprintf(file,"\n");
