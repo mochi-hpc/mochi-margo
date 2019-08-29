@@ -17,6 +17,8 @@ extern "C" {
 #include <mercury_macros.h>
 #include <abt.h>
 
+#include "margo-diag.h"
+
 /* determine how much of the Mercury ID space to use for Margo provider IDs */
 #define __MARGO_PROVIDER_ID_SIZE (sizeof(hg_id_t)/4)
 #define __MARGO_RPC_HASH_SIZE (__MARGO_PROVIDER_ID_SIZE * 3)
@@ -41,6 +43,7 @@ typedef struct margo_request_struct* margo_request;
 #define MARGO_MAX_PROVIDER_ID ((1 << (8*__MARGO_PROVIDER_ID_SIZE))-1)
 
 #define MARGO_PARAM_PROGRESS_TIMEOUT_UB 1
+#define MARGO_PARAM_WRITE_PERF_SUMMARY 2
 
 /**
  * Initializes margo library.
@@ -911,6 +914,15 @@ void margo_diag_start(margo_instance_id mid);
  * @returns void
  */
 void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify);
+
+/**
+ * Grabs a snapshot of the current state of diagnostics within the margo instance 
+ *
+ * @param [in] mid Margo instance
+ * @param [out] snap Margo diagnostics snapshot
+ * @returns void
+ */
+void margo_diag_breadcrumb_snapshot(margo_instance_id mid, struct margo_breadcrumb_snapshot* snap); 
 
 /**
  * Sets configurable parameters/hints

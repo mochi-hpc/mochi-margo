@@ -1,0 +1,269 @@
+#!/usr/bin/env python
+
+import matplotlib.pyplot as plt; plt.rcdefaults()
+import numpy as np
+from matplotlib.backends.backend_pdf import PdfPages
+import operator
+import sys
+import os
+import glob, re
+from collections import defaultdict, OrderedDict
+
+class ProfileGenerator:
+	def __init__(self):
+		self.name = "MargoProfileGenerator"
+
+		self.cumulative = [dict(), dict()] #Separate dictionaries for origin and target in the form <KEY = RPC breadcrumb name, VALUE = cumulative time>
+		self.count = dict() #Dictionary in the form <KEY = RPC breadcrumb name, VALUE = cumulative count>
+
+		self.cumulativestat = [defaultdict(list), defaultdict(list)]  #Separate dictionaries for origin and target in the form <KEY = RPC breadcrumb name, VALUE = [list of individual times] >
+		self.countstat = [defaultdict(list), defaultdict(list)] #Separate dictionaries for origin and target in the form <KEY = RPC breadcrumb name, VALUE = [list of individual counts] >
+
+		self.poolsizehwm = defaultdict(list) #RPC handler pool size low water mark on the target, in the form <KEY = RPC breadcrumb name, VALUE = [list of individual low watermarks]>
+		self.poolsizelwm = defaultdict(list) #RPC handler pool size high  water mark on the target, in the form <KEY = RPC breadcrumb name, VALUE = [list of individual low watermarks]>
+
+		self.rpc2name = dict() #Map the RPC ID to a proper registered name
+		self.pp = PdfPages('profile.pdf')
+
+	# Takes in a list of hexadecimal RPC breadcrumbs and returns a list 
+	# of breadcrumb names
+	def __getrpc2name(self, o):
+		output = []
+		for i in o:
+			l = list(i.split(' '))
+			tmp = ""
+			for j in (l[::-1])[1:]:
+				if tmp != '':
+					tmp = tmp+"->"+self.rpc2name.get(j, "UNKNOWN_RPC_ID")
+				else:
+					tmp = self.rpc2name.get(j, "UNKNOWN_RPC_ID")
+			output.append(re.sub("(->)", "\\1\n", tmp, 0, re.DOTALL))
+		return output
+
+	# Boilerplate for graph generation
+	# x_pos = positions on the x-axis
+	# perf_arr = performance numbers to plot
+	# is_stat_graph = whether this graph is a statistics graph or not
+	# objects = list of stuff to plot on the x-axis
+	def __gengraph(self, x_pos, perf_arr, xlabel, ylabel, title, is_stat_graph=False, use_x_ticks=False, objects=None):
+		plt.figure(num=None, figsize=(15, 10), dpi=80, facecolor='w', edgecolor='k')
+
+		if(is_stat_graph):
+			plt.bar(x_pos - 0.25, perf_arr[0], color = 'b', width = 0.25)
+			plt.bar(x_pos, perf_arr[1], color = 'r', width = 0.25)
+			plt.bar(x_pos + 0.25, perf_arr[2], color = 'g', width = 0.25)
+		else:
+			plt.bar(x_pos, perf_arr[0], align='center', alpha=0.5)
+			
+		if(use_x_ticks):
+			plt.xticks(x_pos, objects)
+		plt.xlabel(xlabel)
+		plt.ylabel(ylabel)
+		plt.title(title)
+		plt.savefig(self.pp, format='pdf')
+		plt.close()
+	
+
+	# Read the current working directory for profile*.csv files and populate the relevant data-structures	
+	# Profile files are expected to be in the following format:
+	#   N = num RPC's registered on this instance
+	#   Followed by N lines of <RPC ID>,<RPC NAME>
+	#   3 lines for Margo internal routines: trigger elapsed, progress_elapsed_zero_timeout, progress_elapsed_nonzero_timeout
+	#   Followed by actual breadcrumb data in the form <name, avg, rpc_breadcrumb, addr_hash, origin_or_target, cumulative, _min, _max, count,  handler_max, handler_min, handler_cumulative>
+	def readfiles(self):
+		files = glob.glob(str(os.getcwd())+"/*.csv") #Read all *.csv files in CURRENT_WORKING_DIRECTORY
+		for f in files:
+			f1 = open(f, "r")
+			contents = f1.readlines()
+			num_registered_rpcs = int(contents[0]) #First line is always number of RPC's registered with the margo instance generating this particular profile file
+			if num_registered_rpcs > 0:
+				for lines in contents[1:num_registered_rpcs]: #Populate map of RPC ID's to RPC names
+					k, v = lines.split(',', 2)
+					self.rpc2name[k] = v
+			for lines in contents[1 + 3 + num_registered_rpcs:]: #Skip 3 internal Margo routines (progress w/o zero timeout, trigger_elapsed)
+				name, avg, rpc_breadcrumb, \
+					addr_hash, origin_or_target, \
+						cumulative, _min, _max, count, \
+							handler_max, handler_min, handler_cumulative = lines.split(',', 12)
+				origin_or_target = int(origin_or_target)
+				addr_hash = int(addr_hash)
+
+				self.count[name] = self.count.get(name, 0) + int(count)
+				self.cumulative[origin_or_target][name] = self.cumulative[origin_or_target].get(name, 0.0) + float(cumulative)
+				self.countstat[origin_or_target][name].append(int(count))
+				self.cumulativestat[origin_or_target][name].append(float(cumulative))
+
+				if(origin_or_target == 1):
+					if (float(handler_min) >= 0): self.poolsizelwm[name].append(float(handler_min))
+					if(float(handler_max) < 100000): self.poolsizehwm[name].append(float(handler_max))
+			
+			f1.close()
+
+
+	#Cumulative counts of RPC breadcrumbs across the entire profile
+	#Sort and display only top 5
+	def gencountgraph(self):
+		self.count = OrderedDict(sorted(self.count.items(), key=operator.itemgetter(1), reverse=True)[:5])
+		objects = self.__getrpc2name(self.count.keys())
+		x_pos = np.arange(len(objects))
+		performance = self.count.values()
+		performance = [x/2 for x in performance] #Invocation of an RPC on the origin and execution of the RPC on the target counts as 1, not 2
+		self.__gengraph(x_pos, [performance], 'Breadcrumb ID', 'Count', 
+			'Breadcrumb Call Counts', is_stat_graph=False, use_x_ticks=True, objects=objects)
+
+	#Display statistics on origin and target for the top 5 RPC breadcrumbs determined by cumulative count 
+	def gencountstatgraph(self):
+		graph_names = ['Max, Mean, Min of Breadcrumb Call Counts: Origin', 'Max, Mean, Min of Breadcrumb Call Counts: Target']
+		for i in 0,1:
+			x = defaultdict(list)
+			for k,v in self.countstat[i].items():
+				if k in self.count:
+					x[k] = v
+
+			x = OrderedDict(sorted(x.items(), key=lambda it: sum(it[1]), reverse=True))
+				
+			maximum = []
+			minimum = []
+			mean = []
+
+			for k in x:
+				maximum.append((max(x[k])))
+				minimum.append((min(x[k])))
+				mean.append((sum(x[k])/len(x[k])))
+
+			objects = self.__getrpc2name(x.keys())
+			x_pos = np.arange(len(objects))
+			self.__gengraph(x_pos, [maximum, mean, minimum], 'Breadcrumb ID', 
+				'Count', graph_names[i], is_stat_graph=True, use_x_ticks=True, objects=objects)
+
+	#Display raw distribution of counts on the target for the breadcrumb with the highest cumulative count
+	def gencountrawgraph(self):
+		x = defaultdict(list)
+		for k, v in self.countstat[1].items():
+			if k in self.count:
+				x[k] = v
+
+		y = sorted(x.items(), key=lambda it: sum(it[1]), reverse=True)[:1]
+		[(a,b)] = y
+	
+		performance = b
+ 
+		x_pos = np.arange(len(performance))
+		self.__gengraph(x_pos, [performance], 'Breadcrumb ID: ' + self.__getrpc2name([a])[0], 
+			'Count', 'Raw Breadcrumb Call Counts: Target', is_stat_graph=False, use_x_ticks=False)
+
+	# Cumulative time for breadcrumbs, both on client as well as provider
+	# Sort and display only top 5
+	def gencumulativegraph(self):
+		graph_names = ['Cumulative Time: Origin', 'Cumulative Time: Target']
+		for i in 0,1:
+			self.cumulative[i] = OrderedDict(sorted(self.cumulative[i].items(), key=operator.itemgetter(1), reverse=True)[:5])
+			objects = self.__getrpc2name(self.cumulative[i].keys())
+			x_pos = np.arange(len(objects))
+			performance = self.cumulative[i].values()
+	                self.__gengraph(x_pos, [performance], 'Breadcrumb ID', 'Seconds',
+	                        graph_names[i], is_stat_graph=False, use_x_ticks=True, objects=objects)
+
+	#Display raw distribution of times on the origin and target for the breadcrumb with the highest cumulative time
+	def gencumulativerawgraph(self):
+		graph_names = ['Raw Cumulative Time: Origin', 'Raw Cumulative Time: Target']
+		for i in 0,1:
+	                x = defaultdict(list)
+        	        for k,v in self.cumulativestat[i].items():
+                	        if k in self.cumulative[i]:
+                        	        x[k] = v
+
+	                y = sorted(x.items(), key=lambda it: sum(it[1]), reverse=True)[:1]
+        	        [(a,b)] = y
+
+                	performance = b
+	                x_pos = np.arange(len(performance))
+        	        self.__gengraph(x_pos, [performance], 'Breadcrumb ID: ' + self.__getrpc2name([a])[0],
+                	        'Seconds', graph_names[i], is_stat_graph=False, use_x_ticks=False)
+
+	#Display statistics on origin and target for the top 5 RPC breadcrumbs determined by cumulative time
+	def gencumulativestatgraph(self):
+		graph_names = ['Max, Mean, Min of Cumulative Time: Origin', 'Max, Mean, Min of Cumulative Time: Target']
+
+		for i in 0,1:
+	                x = defaultdict(list)
+        	        for k,v in self.cumulativestat[i].items():
+                	        if k in self.cumulative[i]:
+                        	        x[k] = v
+
+	                x = OrderedDict(sorted(x.items(), key=lambda it: sum(it[1]), reverse=True))
+
+        	        maximum = []
+                	minimum = []
+	                mean = []
+
+        	        for k in x:
+                	        maximum.append((max(x[k])))
+                        	minimum.append((min(x[k])))
+	                        mean.append((sum(x[k])/len(x[k])))
+
+        	        objects = self.__getrpc2name(x.keys())
+                	x_pos = np.arange(len(objects))
+
+	                self.__gengraph(x_pos, [maximum, mean, minimum], 'Breadcrumb ID',
+        	                'Seconds', graph_names[i], is_stat_graph=True, use_x_ticks=True, objects=objects)
+
+	#Display statistics of the low and highwater mark of RPC handler pool sizes across target instances
+	def genargobotpoolsizegraph(self):
+		graph_names = ['Max, Mean, Min of Low-water-mark of Argobot Pool Size: Target', 'Max, Mean, Min of High-water-mark of Argobot Pool Size: Target']
+		lwm = OrderedDict(defaultdict(list))
+		hwm = OrderedDict(defaultdict(list))
+		for k in self.cumulative[1].keys():
+			lwm[k] = self.poolsizelwm[k]
+			hwm[k] = self.poolsizehwm[k]
+		
+		l = [lwm, hwm]
+
+		for i in 0,1:
+	                maximum = []
+        	        minimum = []
+                	mean = []
+
+	                for k in l[i]:
+        	                maximum.append((max(l[i][k])))
+	                        minimum.append((min(l[i][k])))
+        	                mean.append((sum(l[i][k])/len(l[i][k])))
+
+	                objects = self.__getrpc2name(l[i].keys())
+        	        x_pos = np.arange(len(objects))
+
+                	self.__gengraph(x_pos, [maximum, mean, minimum], 'Breadcrumb ID',
+                        	'Pool Size', graph_names[i], is_stat_graph=True, use_x_ticks=True, objects=objects)
+
+
+	def finalize(self):
+		self.pp.close()
+	
+def main():
+	print
+	print
+	print "*******************MARGO Profile Generator******************"
+	print
+	print "Reading CSV files from: " + os.getcwd()
+
+	p = ProfileGenerator()
+	p.readfiles()
+
+	p.gencountgraph()
+	p.gencountstatgraph()
+	p.gencountrawgraph()
+
+	p.gencumulativegraph()
+	p.gencumulativestatgraph()
+	p.gencumulativerawgraph()
+
+	p.genargobotpoolsizegraph()
+
+	p.finalize()
+
+	print "Done."
+	print
+	print "************************************************************"
+
+
+main()
