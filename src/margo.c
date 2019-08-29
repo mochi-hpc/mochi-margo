@@ -47,9 +47,9 @@ struct diag_data
     __uint128_t x;
 
     /*sparkline data for breadcrumb */
-    uint64_t sparkline_time[100];
+    double sparkline_time[100];
     uint16_t sparkline_index;
-    uint64_t sparkline_count[100];
+    double sparkline_count[100];
 
     UT_hash_handle hh;        /* hash table link */
 };
@@ -1625,6 +1625,13 @@ static void print_diag_data(FILE *file, const char* name, const char *descriptio
     else
         avg = 0;
     fprintf(file, "%s,%.9f,%lu,%lu,%d,%.9f,%.9f,%.9f,%d,%.9f,%.9f,%.9f\n", name, avg, data->key.rpc_breadcrumb, data->key.addr_hash, data->type, data->cumulative, data->min, data->max, data->count, data->handler_max, data->handler_min, data->handler_cumulative);
+
+    /* print sparkline data */
+    fprintf(file, "%s;", name);
+    for(int i = 0; i < data->sparkline_index; i ++)
+      fprintf(file, "%.9f,%.9f;", data->sparkline_time[i], data->sparkline_count[i]);
+    fprintf(file,"\n");
+
     return;
 }
 
@@ -2109,8 +2116,8 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
         stat->handler_max = -1;
    
         /* initialize sparkline data */
-        memset(stat->sparkline_time, 0, 100);
-        memset(stat->sparkline_count, 0, 100);
+        memset(stat->sparkline_time, 0.0, 100);
+        memset(stat->sparkline_count, 0.0, 100);
         stat->sparkline_index = 0;
  
         HASH_ADD(hh, mid->diag_rpc, x,
@@ -2150,7 +2157,10 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
     /* sparkline info */
     time_passed = end - mid->countdown_start_time; 
 
-    if(time_passed >= 1) {
+    if(time_passed >= 2) {
+      if(type == target)
+        fprintf(stderr, "Time passed: %f\n", time_passed);
+
       if(stat->sparkline_index) {
         stat->sparkline_time[stat->sparkline_index] = stat->cumulative - stat->sparkline_time[stat->sparkline_index - 1];
         stat->sparkline_count[stat->sparkline_index] = stat->count - stat->sparkline_count[stat->sparkline_index - 1];
