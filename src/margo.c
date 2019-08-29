@@ -46,6 +46,11 @@ struct diag_data
     /* used to combine rpc_breadcrumb, addr_hash and provider_id to create a unique key for HASH_ADD inside margo_breadcrumb_measure */
     __uint128_t x;
 
+    /*sparkline data for breadcrumb */
+    uint64_t sparkline_time[100];
+    uint16_t sparkline_index;
+    uint64_t sparkline_count[100];
+
     UT_hash_handle hh;        /* hash table link */
 };
 
@@ -148,6 +153,7 @@ struct margo_instance
      */
     int diag_enabled;
     unsigned int write_perf_summary;
+    double countdown_start_time;
     struct diag_data diag_trigger_elapsed;
     struct diag_data diag_progress_elapsed_zero_timeout;
     struct diag_data diag_progress_elapsed_nonzero_timeout;
@@ -371,6 +377,7 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
     /* start profiling */
     int write_perf_summary = 0;
     margo_set_param(mid, MARGO_PARAM_WRITE_PERF_SUMMARY, &write_perf_summary);
+    mid->countdown_start_time = ABT_get_wtime();
     margo_diag_start(mid);
 
     return mid;
@@ -2048,6 +2055,8 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
     //uint32_t temp_ = provider_id;
     uint16_t t = (type == origin) ? 2: 1;
 
+    double time_passed = 0;
+
     __uint128_t x = 0;
 
     /* IMPT NOTE: presently not adding provider_id to the breadcrumb,
@@ -2098,6 +2107,11 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
         stat->handler_min = 0x11111111; // Some high value
         stat->handler_cumulative = 0;
         stat->handler_max = -1;
+   
+        /* initialize sparkline data */
+        memset(stat->sparkline_time, 0, 100);
+        memset(stat->sparkline_count, 0, 100);
+        stat->sparkline_index = 0;
  
         HASH_ADD(hh, mid->diag_rpc, x,
             sizeof(x), stat);
@@ -2130,6 +2144,24 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
         stat->max = elapsed;
     if(stat->min == 0 || elapsed < stat->min)
         stat->min = elapsed;
+
+   
+
+    /* sparkline info */
+    time_passed = end - mid->countdown_start_time; 
+
+    if(time_passed >= 1) {
+      if(stat->sparkline_index) {
+        stat->sparkline_time[stat->sparkline_index] = stat->cumulative - stat->sparkline_time[stat->sparkline_index - 1];
+        stat->sparkline_count[stat->sparkline_index] = stat->count - stat->sparkline_count[stat->sparkline_index - 1];
+      } else {
+        stat->sparkline_time[stat->sparkline_index] = stat->cumulative;
+        stat->sparkline_count[stat->sparkline_index] = stat->count;
+      }
+     
+      stat->sparkline_index++;
+      mid->countdown_start_time = ABT_get_wtime();
+    }
 
     ABT_mutex_unlock(mid->diag_rpc_mutex);
 
