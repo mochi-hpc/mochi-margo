@@ -23,6 +23,8 @@
 #define DEFAULT_MERCURY_PROGRESS_TIMEOUT_UB 100 /* 100 milliseconds */
 #define DEFAULT_MERCURY_HANDLE_CACHE_SIZE 32
 
+#define MARGO_SPARKLINE_TIMESLICE 2
+
 /* internal structure to store timing information */
 struct diag_data
 {
@@ -50,6 +52,7 @@ struct diag_data
     double sparkline_time[100];
     uint16_t sparkline_index;
     double sparkline_count[100];
+    double countdown_start_time;
 
     UT_hash_handle hh;        /* hash table link */
 };
@@ -377,7 +380,6 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
     /* start profiling */
     int write_perf_summary = 0;
     margo_set_param(mid, MARGO_PARAM_WRITE_PERF_SUMMARY, &write_perf_summary);
-    mid->countdown_start_time = ABT_get_wtime();
     margo_diag_start(mid);
 
     return mid;
@@ -2119,6 +2121,7 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
         memset(stat->sparkline_time, 0.0, 100);
         memset(stat->sparkline_count, 0.0, 100);
         stat->sparkline_index = 0;
+	stat->countdown_start_time = ABT_get_wtime();
  
         HASH_ADD(hh, mid->diag_rpc, x,
             sizeof(x), stat);
@@ -2152,25 +2155,22 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
     if(stat->min == 0 || elapsed < stat->min)
         stat->min = elapsed;
 
-   
-
     /* sparkline info */
-    time_passed = end - mid->countdown_start_time; 
+    time_passed = end - stat->countdown_start_time; 
 
-    if(time_passed >= 2) {
-      if(type == target)
-        fprintf(stderr, "Time passed: %f\n", time_passed);
+    if(time_passed >= MARGO_SPARKLINE_TIMESLICE) {
 
-      if(stat->sparkline_index) {
+      if(stat->sparkline_index > 0 && stat->sparkline_index < 100) {
         stat->sparkline_time[stat->sparkline_index] = stat->cumulative - stat->sparkline_time[stat->sparkline_index - 1];
         stat->sparkline_count[stat->sparkline_index] = stat->count - stat->sparkline_count[stat->sparkline_index - 1];
-      } else {
+      } else if(stat->sparkline_index == 0) {
         stat->sparkline_time[stat->sparkline_index] = stat->cumulative;
         stat->sparkline_count[stat->sparkline_index] = stat->count;
+      } else {
+        //Drop!
       }
-     
       stat->sparkline_index++;
-      mid->countdown_start_time = ABT_get_wtime();
+      stat->countdown_start_time = ABT_get_wtime();
     }
 
     ABT_mutex_unlock(mid->diag_rpc_mutex);
