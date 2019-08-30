@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+import matplotlib
+matplotlib.use("Agg")
+import base64
 import matplotlib.pyplot as plt; plt.rcdefaults()
 import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
@@ -22,7 +25,7 @@ class ProfileGenerator:
 		self.poolsizehwm = defaultdict(list) #RPC handler pool size low water mark on the target, in the form <KEY = RPC breadcrumb name, VALUE = [list of individual low watermarks]>
 		self.poolsizelwm = defaultdict(list) #RPC handler pool size high  water mark on the target, in the form <KEY = RPC breadcrumb name, VALUE = [list of individual low watermarks]>
 
-		self.countsparklines = [defaultdict(list), defaultdict(list)]
+		self.countsparklines = defaultdict(list)
 		self.timesparklines = [defaultdict(list), defaultdict(list)]
 
 		self.rpc2name = dict() #Map the RPC ID to a proper registered name
@@ -40,7 +43,7 @@ class ProfileGenerator:
 					tmp = tmp+"->"+self.rpc2name.get(j, "UNKNOWN_RPC_ID")
 				else:
 					tmp = self.rpc2name.get(j, "UNKNOWN_RPC_ID")
-			output.append(re.sub("(->)", "\\1\n", tmp, 0, re.DOTALL))
+			output.append((re.sub("(->)", "\\1 ", tmp, 0, re.DOTALL)).strip('\n'))
 		return output
 
 	# Boilerplate for graph generation
@@ -62,7 +65,7 @@ class ProfileGenerator:
 			plt.xticks(x_pos, objects)
 		plt.xlabel(xlabel)
 		plt.ylabel(ylabel)
-		plt.title(title)
+		plt.title(title, fontsize=16)
 		plt.savefig(self.pp, format='pdf')
 		plt.close()
 	
@@ -111,11 +114,11 @@ class ProfileGenerator:
 				for v in value_list[1:]:
 					if v != "\n":
 						t, c = v.split(',')
-						self.countsparklines[origin_or_target][name].append(float(c))
+						if(origin_or_target):
+							self.countsparklines[name].append(float(c))
 						self.timesparklines[origin_or_target][name].append(float(t))
 			
 			f1.close()
-
 
 	#Cumulative counts of RPC breadcrumbs across the entire profile
 	#Sort and display only top 5
@@ -252,12 +255,33 @@ class ProfileGenerator:
                 	self.__gengraph(x_pos, [maximum, mean, minimum], 'Breadcrumb ID',
                         	'Pool Size', graph_names[i], is_stat_graph=True, use_x_ticks=True, objects=objects)
 
-	#def gencountsparklines(self):
-				
-	#def gentimesparklines(self):
-	
+	def gencountsparklines(self):
+		x = defaultdict(list)
+		for k, v in self.countsparklines.items():
+			if k in self.count:
+				x[k] = v
 
+		x = OrderedDict(sorted(x.items(), key=lambda it: sum(it[1]), reverse=True))
 
+		fig, ax = plt.subplots(len(x.items()), figsize=(15,10))
+		fig.suptitle('Sparkline for cumulative count on target', fontsize=16)
+		objects = self.__getrpc2name(x.keys())
+		for i in range(0, len(x.items())):
+			k, v = (x.items())[i]
+			ax[i].plot(v)
+
+			for k1, v1 in ax[i].spines.items():
+				v1.set_visible(False)
+
+			ax[i].set_xticks([])
+			ax[i].set_yticks([])
+			ax[i].plot(len(v) - 1, v[len(v) - 1], 'r.')
+			ax[i].fill_between(range(len(v)), v, len(v)*[min(v)], alpha=0.1)
+			ax[i].set_title((objects[i]).strip('\n'), fontsize=8)
+		plt.savefig(self.pp, format='pdf')
+		plt.close()
+
+			
 	def finalize(self):
 		self.pp.close()
 	
@@ -280,6 +304,8 @@ def main():
 	p.gencumulativerawgraph()
 
 	p.genargobotpoolsizegraph()
+
+	p.gencountsparklines()
 
 	p.finalize()
 
