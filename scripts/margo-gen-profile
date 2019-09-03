@@ -52,21 +52,25 @@ class ProfileGenerator:
 	# is_stat_graph = whether this graph is a statistics graph or not
 	# objects = list of stuff to plot on the x-axis
 	def __gengraph(self, x_pos, perf_arr, xlabel, ylabel, title, is_stat_graph=False, use_x_ticks=False, objects=None):
-		plt.figure(num=None, figsize=(15, 10), dpi=80, facecolor='w', edgecolor='k')
+		fig = plt.figure(num=None, figsize=(15, 10), dpi=80, facecolor='w', edgecolor='k')
+		ax = fig.add_subplot(111)
 
 		if(is_stat_graph):
-			plt.bar(x_pos - 0.25, perf_arr[0], color = 'b', width = 0.25)
-			plt.bar(x_pos, perf_arr[1], color = 'r', width = 0.25)
-			plt.bar(x_pos + 0.25, perf_arr[2], color = 'g', width = 0.25)
+			ax.boxplot(perf_arr)
+			ax.set_ylim(ymin=0)
 		else:
-			plt.bar(x_pos, perf_arr[0], align='center', alpha=0.5)
+			ax.bar(x_pos, perf_arr[0], align='center', alpha=0.5)
 			
 		if(use_x_ticks):
-			plt.xticks(x_pos, objects)
-		plt.xlabel(xlabel)
-		plt.ylabel(ylabel)
-		plt.title(title, fontsize=16)
-		plt.savefig(self.pp, format='pdf')
+			ax.set_xticklabels(objects)
+			if(not is_stat_graph):
+				ax.set_xticks(x_pos)
+
+		ax.set_xlabel(xlabel)
+		ax.set_ylabel(ylabel)
+		ax.set_title(title, fontsize=16)
+		fig.savefig(self.pp, format='pdf')
+
 		plt.close()
 	
 
@@ -142,18 +146,20 @@ class ProfileGenerator:
 
 			x = OrderedDict(sorted(x.items(), key=lambda it: sum(it[1]), reverse=True))
 				
-			maximum = []
-			minimum = []
-			mean = []
+			#maximum = []
+			#minimum = []
+			#mean = []
+			perf_arr = []
 
 			for k in x:
-				maximum.append((max(x[k])))
-				minimum.append((min(x[k])))
-				mean.append((sum(x[k])/len(x[k])))
+				perf_arr.append(x[k])
+				#maximum.append((max(x[k])))
+				#minimum.append((min(x[k])))
+				#mean.append((sum(x[k])/len(x[k])))
 
 			objects = self.__getrpc2name(x.keys())
 			x_pos = np.arange(len(objects))
-			self.__gengraph(x_pos, [maximum, mean, minimum], 'Breadcrumb ID', 
+			self.__gengraph(x_pos, perf_arr, 'Breadcrumb ID', 
 				'Count', graph_names[i], is_stat_graph=True, use_x_ticks=True, objects=objects)
 
 	#Display raw distribution of counts on the target for the breadcrumb with the highest cumulative count
