@@ -146,16 +146,10 @@ class ProfileGenerator:
 
 			x = OrderedDict(sorted(x.items(), key=lambda it: sum(it[1]), reverse=True))
 				
-			#maximum = []
-			#minimum = []
-			#mean = []
 			perf_arr = []
 
 			for k in x:
 				perf_arr.append(x[k])
-				#maximum.append((max(x[k])))
-				#minimum.append((min(x[k])))
-				#mean.append((sum(x[k])/len(x[k])))
 
 			objects = self.__getrpc2name(x.keys())
 			x_pos = np.arange(len(objects))
@@ -219,19 +213,15 @@ class ProfileGenerator:
 
 	                x = OrderedDict(sorted(x.items(), key=lambda it: sum(it[1]), reverse=True))
 
-        	        maximum = []
-                	minimum = []
-	                mean = []
+			perf_arr = []
 
         	        for k in x:
-                	        maximum.append((max(x[k])))
-                        	minimum.append((min(x[k])))
-	                        mean.append((sum(x[k])/len(x[k])))
+				perf_arr.append(x[k])
 
         	        objects = self.__getrpc2name(x.keys())
                 	x_pos = np.arange(len(objects))
 
-	                self.__gengraph(x_pos, [maximum, mean, minimum], 'Breadcrumb ID',
+	                self.__gengraph(x_pos, perf_arr, 'Breadcrumb ID',
         	                'Seconds', graph_names[i], is_stat_graph=True, use_x_ticks=True, objects=objects)
 
 	#Display statistics of the low and highwater mark of RPC handler pool sizes across target instances
@@ -246,19 +236,14 @@ class ProfileGenerator:
 		l = [lwm, hwm]
 
 		for i in 0,1:
-	                maximum = []
-        	        minimum = []
-                	mean = []
-
+			perf_arr = []
 	                for k in l[i]:
-        	                maximum.append((max(l[i][k])))
-	                        minimum.append((min(l[i][k])))
-        	                mean.append((sum(l[i][k])/len(l[i][k])))
+        	                perf_arr.append(l[i][k])
 
 	                objects = self.__getrpc2name(l[i].keys())
         	        x_pos = np.arange(len(objects))
 
-                	self.__gengraph(x_pos, [maximum, mean, minimum], 'Breadcrumb ID',
+                	self.__gengraph(x_pos, perf_arr, 'Breadcrumb ID',
                         	'Pool Size', graph_names[i], is_stat_graph=True, use_x_ticks=True, objects=objects)
 
 	def gencountsparklines(self):
