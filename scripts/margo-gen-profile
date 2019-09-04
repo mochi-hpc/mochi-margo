@@ -51,20 +51,25 @@ class ProfileGenerator:
 	# perf_arr = performance numbers to plot
 	# is_stat_graph = whether this graph is a statistics graph or not
 	# objects = list of stuff to plot on the x-axis
-	def __gengraph(self, x_pos, perf_arr, xlabel, ylabel, title, is_stat_graph=False, use_x_ticks=False, objects=None):
+	def __gengraph(self, x_pos, perf_arr, xlabel, ylabel, title, is_stat_graph=False, use_x_ticks=False, objects=None, labels=[None, None]):
 		fig = plt.figure(num=None, figsize=(15, 10), dpi=80, facecolor='w', edgecolor='k')
 		ax = fig.add_subplot(111)
+		width=0.35
 
 		if(is_stat_graph):
 			ax.boxplot(perf_arr)
 			ax.set_ylim(ymin=0)
 		else:
-			ax.bar(x_pos, perf_arr[0], align='center', alpha=0.5)
+			for i in range(0, len(perf_arr)):
+				ax.bar(x_pos+i*width, perf_arr[i], width=width, align='center', alpha=0.5, label=labels[i])
+				ax.legend(loc='best')
 			
 		if(use_x_ticks):
 			ax.set_xticklabels(objects)
 			if(not is_stat_graph):
-				ax.set_xticks(x_pos)
+				ax.set_xticks(x_pos+((width/2)*(len(perf_arr)-1)))
+		else:
+			plt.xticks([])
 
 		ax.set_xlabel(xlabel)
 		ax.set_ylabel(ylabel)
@@ -175,14 +180,21 @@ class ProfileGenerator:
 	# Cumulative time for breadcrumbs, both on client as well as provider
 	# Sort and display only top 5
 	def gencumulativegraph(self):
-		graph_names = ['Cumulative Time: Origin', 'Cumulative Time: Target']
+		graph_name = 'Cumulative Time'
+		labels = ['Origin', 'Target']
+		perf_arr = []
+		x_pos = []
+		objects = []
+
 		for i in 0,1:
 			self.cumulative[i] = OrderedDict(sorted(self.cumulative[i].items(), key=operator.itemgetter(1), reverse=True)[:5])
 			objects = self.__getrpc2name(self.cumulative[i].keys())
 			x_pos = np.arange(len(objects))
 			performance = self.cumulative[i].values()
-	                self.__gengraph(x_pos, [performance], 'Breadcrumb ID', 'Seconds',
-	                        graph_names[i], is_stat_graph=False, use_x_ticks=True, objects=objects)
+			perf_arr.append(performance)
+
+	       	self.__gengraph(x_pos, perf_arr, 'Breadcrumb ID', 'Seconds',
+	        	graph_name, is_stat_graph=False, use_x_ticks=True, objects=objects, labels=labels)
 
 	#Display raw distribution of times on the origin and target for the breadcrumb with the highest cumulative time
 	def gencumulativerawgraph(self):
