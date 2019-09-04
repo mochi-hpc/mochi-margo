@@ -245,7 +245,9 @@ class ProfileGenerator:
 		graph_names = ['Max, Mean, Min of Low-water-mark of Argobot Pool Size: Target', 'Max, Mean, Min of High-water-mark of Argobot Pool Size: Target']
 		lwm = OrderedDict(defaultdict(list))
 		hwm = OrderedDict(defaultdict(list))
-		for k in self.cumulative[1].keys():
+		keys = (OrderedDict(sorted(self.cumulative[0].items(), key=operator.itemgetter(1), reverse=True)[:5])).keys()
+
+		for k in keys:
 			lwm[k] = self.poolsizelwm[k]
 			hwm[k] = self.poolsizehwm[k]
 		
@@ -270,7 +272,7 @@ class ProfileGenerator:
 
 		x = OrderedDict(sorted(x.items(), key=lambda it: sum(it[1]), reverse=True))
 
-		fig, ax = plt.subplots(len(x.items()), figsize=(15,8))
+		fig, ax = plt.subplots(len(x.items()), figsize=(15,10))
 		plt.subplots_adjust(hspace=0.3)
 		fig.suptitle('Sparkline for cumulative count on target', fontsize=16)
 		objects = self.__getrpc2name(x.keys())
@@ -291,10 +293,12 @@ class ProfileGenerator:
 
 	def gentimesparklines(self):
 		graph_names = ['Sparkline for cumulative time on origin', 'Sparkline for cumulative time on target']
+		keys = (OrderedDict(sorted(self.cumulative[0].items(), key=operator.itemgetter(1), reverse=True)[:5])).keys()
+
 		for p in 0,1:
 			x = defaultdict(list)
 			for k, v in self.timesparklines[p].items():
-				if k in self.count:
+				if k in keys:
 					x[k] = v
 
 			x = OrderedDict(sorted(x.items(), key=lambda it: sum(it[1]), reverse=True))
