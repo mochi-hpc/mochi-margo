@@ -135,9 +135,9 @@ class ProfileGenerator:
 		self.count = OrderedDict(sorted(self.count.items(), key=operator.itemgetter(1), reverse=True)[:5])
 		objects = self.__getrpc2name(self.count.keys())
 		x_pos = np.arange(len(objects))
-		performance = self.count.values()
-		performance = [x/2 for x in performance] #Invocation of an RPC on the origin and execution of the RPC on the target counts as 1, not 2
-		self.__gengraph(x_pos, [performance], 'Breadcrumb ID', 'Count', 
+		perf = self.count.values()
+		perf = [x/2 for x in perf] #Invocation of an RPC on the origin and execution of the RPC on the target counts as 1, not 2
+		self.__gengraph(x_pos, [perf], 'Breadcrumb ID', 'Count', 
 			'Breadcrumb Call Counts', is_stat_graph=False, use_x_ticks=True, objects=objects)
 
 	#Display statistics on origin and target for the top 5 RPC breadcrumbs determined by cumulative count 
@@ -171,10 +171,10 @@ class ProfileGenerator:
 		y = sorted(x.items(), key=lambda it: sum(it[1]), reverse=True)[:1]
 		[(a,b)] = y
 	
-		performance = b
+		perf = b
  
-		x_pos = np.arange(len(performance))
-		self.__gengraph(x_pos, [performance], 'Breadcrumb ID: ' + self.__getrpc2name([a])[0], 
+		x_pos = np.arange(len(perf))
+		self.__gengraph(x_pos, [perf], 'Breadcrumb ID: ' + self.__getrpc2name([a])[0], 
 			'Count', 'Raw Breadcrumb Call Counts: Target', is_stat_graph=False, use_x_ticks=False)
 
 	# Cumulative time for breadcrumbs, both on client as well as provider
@@ -183,18 +183,45 @@ class ProfileGenerator:
 		graph_name = 'Cumulative Time'
 		labels = ['Origin', 'Target']
 		perf_arr = []
-		x_pos = []
-		objects = []
 
+		#Sort by top-5 side origin-side breadcrumbs by cumulative time
+		keys = (OrderedDict(sorted(self.cumulative[0].items(), key=operator.itemgetter(1), reverse=True)[:5])).keys()
+		objects = self.__getrpc2name(keys)
+		x_pos = np.arange(len(objects))
+		
 		for i in 0,1:
-			self.cumulative[i] = OrderedDict(sorted(self.cumulative[i].items(), key=operator.itemgetter(1), reverse=True)[:5])
-			objects = self.__getrpc2name(self.cumulative[i].keys())
-			x_pos = np.arange(len(objects))
-			performance = self.cumulative[i].values()
-			perf_arr.append(performance)
+			perf = []
+			for k in keys:
+				perf.append(self.cumulative[i][k])
+
+			perf_arr.append(perf)
 
 	       	self.__gengraph(x_pos, perf_arr, 'Breadcrumb ID', 'Seconds',
 	        	graph_name, is_stat_graph=False, use_x_ticks=True, objects=objects, labels=labels)
+
+	#Display statistics on origin and target for the top 5 RPC breadcrumbs determined by cumulative time
+	def gencumulativestatgraph(self):
+		graph_names = ['Max, Mean, Min of Cumulative Time: Origin', 'Max, Mean, Min of Cumulative Time: Target']
+
+		keys = (OrderedDict(sorted(self.cumulative[0].items(), key=operator.itemgetter(1), reverse=True)[:5])).keys()
+		objects = self.__getrpc2name(keys)
+                x_pos = np.arange(len(objects))
+
+		for i in 0,1:
+	                x = defaultdict(list)
+        	        for k,v in self.cumulativestat[i].items():
+                	        if k in keys:
+                        	        x[k] = v
+
+	                x = OrderedDict(sorted(x.items(), key=lambda it: sum(it[1]), reverse=True))
+
+			perf_arr = []
+
+        	        for k in x:
+				perf_arr.append(x[k])
+
+	                self.__gengraph(x_pos, perf_arr, 'Breadcrumb ID',
+        	                'Seconds', graph_names[i], is_stat_graph=True, use_x_ticks=True, objects=objects)
 
 	#Display raw distribution of times on the origin and target for the breadcrumb with the highest cumulative time
 	def gencumulativerawgraph(self):
@@ -212,29 +239,6 @@ class ProfileGenerator:
 	                x_pos = np.arange(len(performance))
         	        self.__gengraph(x_pos, [performance], 'Breadcrumb ID: ' + self.__getrpc2name([a])[0],
                 	        'Seconds', graph_names[i], is_stat_graph=False, use_x_ticks=False)
-
-	#Display statistics on origin and target for the top 5 RPC breadcrumbs determined by cumulative time
-	def gencumulativestatgraph(self):
-		graph_names = ['Max, Mean, Min of Cumulative Time: Origin', 'Max, Mean, Min of Cumulative Time: Target']
-
-		for i in 0,1:
-	                x = defaultdict(list)
-        	        for k,v in self.cumulativestat[i].items():
-                	        if k in self.cumulative[i]:
-                        	        x[k] = v
-
-	                x = OrderedDict(sorted(x.items(), key=lambda it: sum(it[1]), reverse=True))
-
-			perf_arr = []
-
-        	        for k in x:
-				perf_arr.append(x[k])
-
-        	        objects = self.__getrpc2name(x.keys())
-                	x_pos = np.arange(len(objects))
-
-	                self.__gengraph(x_pos, perf_arr, 'Breadcrumb ID',
-        	                'Seconds', graph_names[i], is_stat_graph=True, use_x_ticks=True, objects=objects)
 
 	#Display statistics of the low and highwater mark of RPC handler pool sizes across target instances
 	def genargobotpoolsizegraph(self):
