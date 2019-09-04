@@ -129,6 +129,11 @@ also need to specify
 
 We do not recommend using any BMI methods besides TCP.  It's usage is very similar to the CCI/TCP examples above, except that "bmi+" should be substituted for "cci+".
 
+## Instrumentation
+
+See the [Instrumentation documentation](doc/instrumentation.md) for
+information on how to extract diagnostic instrumentation from Margo.
+
 ## Design details
 
 ![Margo architecture](doc/fig/margo-diagram.png)
