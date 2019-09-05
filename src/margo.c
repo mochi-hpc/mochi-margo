@@ -1631,7 +1631,7 @@ static void print_diag_data(FILE *file, const char* name, const char *descriptio
     /* print sparkline data */
     fprintf(file, "%s,%d;", name,data->type);
     for(int i = 0; i < data->sparkline_index; i ++)
-      fprintf(file, "%.9f,%.9f;", data->sparkline_time[i], data->sparkline_count[i]);
+      fprintf(file, "%.9f,%.9f, %d;", data->sparkline_time[i], data->sparkline_count[i], data->sparkline_index);
     fprintf(file,"\n");
 
     return;
