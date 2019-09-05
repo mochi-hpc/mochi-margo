@@ -25,8 +25,8 @@ class ProfileGenerator:
 		self.poolsizehwm = defaultdict(list) #RPC handler pool size low water mark on the target, in the form <KEY = RPC breadcrumb name, VALUE = [list of individual low watermarks]>
 		self.poolsizelwm = defaultdict(list) #RPC handler pool size high  water mark on the target, in the form <KEY = RPC breadcrumb name, VALUE = [list of individual low watermarks]>
 
-		self.countsparklines = defaultdict(list)
-		self.timesparklines = [defaultdict(list), defaultdict(list)]
+		self.countsparklines = defaultdict(list) #Sparkline data for RPC breadcrumb counts, in the form <KEY = <RPC breadcrumb name, sparkline_index>, VALUE = [list of individual counts for target instances]>
+		self.timesparklines = [defaultdict(list), defaultdict(list)] #Sparkline data for RPC cumulative time, in the form <KEY = <RPC breadcrumb name, sparkline_index>, VALUE = [list of individual counts for origin or target instaces]>
 
 		self.rpc2name = dict() #Map the RPC ID to a proper registered name
 		self.pp = PdfPages('profile.pdf')
@@ -79,6 +79,10 @@ class ProfileGenerator:
 		plt.close()
 	
 
+	# Boilerplate for sparkline graph generation
+	# objects = list of stuff to plot on the x-axis
+	# num_subplots = number of sparklines to draw
+	# perf_arr = sparkline data to use for plotting
 	def __gensparklinegraph(self, objects, title, num_subplots, perf_arr):
 		fig, ax = plt.subplots(num_subplots, figsize=(15,10))
 		plt.subplots_adjust(hspace=0.3)
@@ -201,6 +205,7 @@ class ProfileGenerator:
 
 	# Cumulative time for breadcrumbs, both on client as well as provider
 	# Sort and display only top 5
+	# 0 = origin, 1 = target
 	def gencumulativegraph(self):
 		graph_name = 'Cumulative Time'
 		labels = ['Origin', 'Target']
@@ -222,6 +227,7 @@ class ProfileGenerator:
 	        	graph_name, is_stat_graph=False, use_x_ticks=True, objects=objects, labels=labels)
 
 	#Display statistics on origin and target for the top 5 RPC breadcrumbs determined by cumulative time
+	# 0 = origin, 1 = target
 	def gencumulativestatgraph(self):
 		graph_names = ['Statistics of Cumulative Time: Origin', 'Statistics of Cumulative Time: Target']
 
@@ -246,6 +252,7 @@ class ProfileGenerator:
         	                'Seconds', graph_names[i], is_stat_graph=True, use_x_ticks=True, objects=objects)
 
 	#Display raw distribution of times on the origin and target for the breadcrumb with the highest cumulative time
+	# 0 = origin, 1 = target
 	def gencumulativerawgraph(self):
 		graph_names = ['Raw Cumulative Time: Origin', 'Raw Cumulative Time: Target']
 		keys = (OrderedDict(sorted(self.cumulative[0].items(), key=operator.itemgetter(1), reverse=True)[:5])).keys()
@@ -288,6 +295,7 @@ class ProfileGenerator:
                 	self.__gengraph(x_pos, perf_arr, 'Breadcrumb ID',
                         	'Pool Size', graph_names[i], is_stat_graph=True, use_x_ticks=True, objects=objects)
 
+	#Generate and display sparklines for the top-5 RPC breadcrumbs, sorted by cumulative counts
 	def gencountsparklines(self):
 		x = defaultdict(list)
 		for (k, i), v in self.countsparklines.items():
@@ -304,6 +312,8 @@ class ProfileGenerator:
 		objects = self.__getrpc2name(x.keys())
 		self.__gensparklinegraph(objects=objects, title='Sparkline for cumulative count on target', num_subplots=len(x.items()), perf_arr=perf_arr)
 
+	#Generate and display sparklines for the top-5 RPC breadcrumbs, sorted by cumulative time, on both origin and target
+	# 0 = origin, 1 = target
 	def gentimesparklines(self):
 		graph_names = ['Sparkline for cumulative time on origin', 'Sparkline for cumulative time on target']
 		keys = (OrderedDict(sorted(self.cumulative[0].items(), key=operator.itemgetter(1), reverse=True)[:5])).keys()
