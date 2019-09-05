@@ -51,7 +51,7 @@ class ProfileGenerator:
 	# perf_arr = performance numbers to plot
 	# is_stat_graph = whether this graph is a statistics graph or not
 	# objects = list of stuff to plot on the x-axis
-	def __gengraph(self, x_pos, perf_arr, xlabel, ylabel, title, is_stat_graph=False, use_x_ticks=False, objects=None, labels=[None, None]):
+	def __gengraph(self, x_pos, perf_arr, xlabel, ylabel, title, txt=None, is_stat_graph=False, use_x_ticks=False, objects=None, labels=[None, None]):
 		fig = plt.figure(num=None, figsize=(15, 10), dpi=80, facecolor='w', edgecolor='k')
 		ax = fig.add_subplot(111)
 		width=0.35
@@ -71,9 +71,10 @@ class ProfileGenerator:
 		else:
 			plt.xticks([])
 
-		ax.set_xlabel(xlabel)
-		ax.set_ylabel(ylabel)
-		ax.set_title(title, fontsize=16)
+		ax.set_xlabel(xlabel, fontsize=16)
+		ax.set_ylabel(ylabel, fontsize=16)
+		ax.set_title(txt)
+		fig.suptitle(title, fontsize=20, fontweight='bold')
 		fig.savefig(self.pp, format='pdf')
 
 		plt.close()
@@ -83,22 +84,29 @@ class ProfileGenerator:
 	# objects = list of stuff to plot on the x-axis
 	# num_subplots = number of sparklines to draw
 	# perf_arr = sparkline data to use for plotting
-	def __gensparklinegraph(self, objects, title, num_subplots, perf_arr):
-		fig, ax = plt.subplots(num_subplots, figsize=(15,10))
+	def __gensparklinegraph(self, objects, title, num_subplots, perf_arr, txt=None):
+		fig, ax = plt.subplots(num_subplots+1, figsize=(15,10))
 		plt.subplots_adjust(hspace=0.3)
-		fig.suptitle(title, fontsize=16)
+		fig.suptitle(title, fontsize=20, fontweight='bold')
+		ax[0].text(0, 0.5, txt, style='italic',
+			bbox={'facecolor': 'red', 'alpha': 0.5, 'pad': 10}, horizontalalignment='left')
+		ax[0].set_xticks([])
+		ax[0].set_yticks([])
+		for k1, v1 in ax[0].spines.items():
+			v1.set_visible(False)
+
 		for i in range(0, num_subplots):
 			v = perf_arr[i]
-			ax[i].plot(v)
+			ax[i+1].plot(v)
 
-			for k1, v1 in ax[i].spines.items():
+			for k1, v1 in ax[i+1].spines.items():
 				v1.set_visible(False)
 
-			ax[i].set_xticks([])
-			ax[i].set_yticks([])
-			ax[i].plot(len(v) - 1, v[len(v) - 1], 'r.')
-			ax[i].fill_between(range(len(v)), v, len(v)*[min(v)], alpha=0.1)
-			ax[i].set_title((objects[i]).strip('\n'), fontsize=8)
+			ax[i+1].set_xticks([])
+			ax[i+1].set_yticks([])
+			ax[i+1].plot(len(v) - 1, v[len(v) - 1], 'r.')
+			ax[i+1].fill_between(range(len(v)), v, len(v)*[min(v)], alpha=0.1)
+			ax[i+1].set_title((objects[i]).strip('\n'), fontsize=8)
 
 		plt.savefig(self.pp, format='pdf')
 		plt.close()
@@ -160,15 +168,18 @@ class ProfileGenerator:
 	def gencountgraph(self):
 		self.count = OrderedDict(sorted(self.count.items(), key=operator.itemgetter(1), reverse=True)[:5])
 		objects = self.__getrpc2name(self.count.keys())
+		txt = 'Sort breadcrumbs by cumulative call count\n Display top-5 breadcrumbs in descending order of call count'
 		x_pos = np.arange(len(objects))
 		perf = self.count.values()
 		perf = [x/2 for x in perf] #Invocation of an RPC on the origin and execution of the RPC on the target counts as 1, not 2
 		self.__gengraph(x_pos, [perf], 'Breadcrumb ID', 'Count', 
-			'Breadcrumb Call Counts', is_stat_graph=False, use_x_ticks=True, objects=objects)
+			'Breadcrumb Call Counts', txt=txt, is_stat_graph=False, use_x_ticks=True, objects=objects)
 
 	#Display statistics on origin and target for the top 5 RPC breadcrumbs determined by cumulative count 
 	def gencountstatgraph(self):
 		graph_names = ['Statistics of Breadcrumb Call Counts: Origin', 'Statistics of Breadcrumb Call Counts: Target']
+		txt = ['Display statistics of distribution of individual, cumulative call-counts for the top-5 breadcrumbs, across all origin instances', \
+			'Display statistics of distribution of individual, cumulative call-counts for the top-5 breadcrumbs, across all target instances']
 		for i in 0,1:
 			x = defaultdict(list)
 			for k,v in self.countstat[i].items():
@@ -185,11 +196,12 @@ class ProfileGenerator:
 			objects = self.__getrpc2name(x.keys())
 			x_pos = np.arange(len(objects))
 			self.__gengraph(x_pos, perf_arr, 'Breadcrumb ID', 
-				'Count', graph_names[i], is_stat_graph=True, use_x_ticks=True, objects=objects)
+				'Count', graph_names[i], txt=txt[i], is_stat_graph=True, use_x_ticks=True, objects=objects)
 
 	#Display raw distribution of counts on the target for the breadcrumb with the highest cumulative count
 	def gencountrawgraph(self):
 		x = defaultdict(list)
+		txt = 'Display raw distribution of cumulative call-counts across all target instances for the breadcrumb with highest cumulative call-count'
 		for k, v in self.countstat[1].items():
 			if k in self.count:
 				x[k] = v
@@ -201,7 +213,7 @@ class ProfileGenerator:
  
 		x_pos = np.arange(len(perf))
 		self.__gengraph(x_pos, [perf], 'Breadcrumb ID: ' + self.__getrpc2name([a])[0], 
-			'Count', 'Raw Breadcrumb Call Counts: Target', is_stat_graph=False, use_x_ticks=False)
+			'Count', 'Raw Breadcrumb Call Counts: Target', txt=txt, is_stat_graph=False, use_x_ticks=False)
 
 	# Cumulative time for breadcrumbs, both on client as well as provider
 	# Sort and display only top 5
@@ -210,6 +222,7 @@ class ProfileGenerator:
 		graph_name = 'Cumulative Time'
 		labels = ['Origin', 'Target']
 		perf_arr = []
+		txt = 'Sort breadcrumbs by cumulative time on the origin \n Display top-5 breadcrumbs in descending order of cumulative time on origin and target'
 
 		#Sort by top-5 side origin-side breadcrumbs by cumulative time
 		keys = (OrderedDict(sorted(self.cumulative[0].items(), key=operator.itemgetter(1), reverse=True)[:5])).keys()
@@ -224,12 +237,14 @@ class ProfileGenerator:
 			perf_arr.append(perf)
 
 	       	self.__gengraph(x_pos, perf_arr, 'Breadcrumb ID', 'Seconds',
-	        	graph_name, is_stat_graph=False, use_x_ticks=True, objects=objects, labels=labels)
+	        	graph_name, txt=txt, is_stat_graph=False, use_x_ticks=True, objects=objects, labels=labels)
 
 	#Display statistics on origin and target for the top 5 RPC breadcrumbs determined by cumulative time
 	# 0 = origin, 1 = target
 	def gencumulativestatgraph(self):
 		graph_names = ['Statistics of Cumulative Time: Origin', 'Statistics of Cumulative Time: Target']
+		txt = ['Display statistics of distribution of individual, cumulative time for the top-5 breadcrumbs, across all origin instances', \
+			'Display statistics of distribution of individual, cumulative time for the top-5 breadcrumbs, across all target instances']
 
 		keys = (OrderedDict(sorted(self.cumulative[0].items(), key=operator.itemgetter(1), reverse=True)[:5])).keys()
 		objects = self.__getrpc2name(keys)
@@ -249,13 +264,15 @@ class ProfileGenerator:
 				perf_arr.append(x[k])
 
 	                self.__gengraph(x_pos, perf_arr, 'Breadcrumb ID',
-        	                'Seconds', graph_names[i], is_stat_graph=True, use_x_ticks=True, objects=objects)
+        	                'Seconds', graph_names[i], txt=txt[i], is_stat_graph=True, use_x_ticks=True, objects=objects)
 
 	#Display raw distribution of times on the origin and target for the breadcrumb with the highest cumulative time
 	# 0 = origin, 1 = target
 	def gencumulativerawgraph(self):
 		graph_names = ['Raw Cumulative Time: Origin', 'Raw Cumulative Time: Target']
 		keys = (OrderedDict(sorted(self.cumulative[0].items(), key=operator.itemgetter(1), reverse=True)[:5])).keys()
+		txt = ['Display raw distribution of cumulative times across all origin instances for the breadcrumb with highest cumulative time', \
+			'Display raw distribution of cumulative time across all target instances for the breadcrumb with highest cumulative time'] 
 		
 		for i in 0,1:
 	                x = defaultdict(list)
@@ -269,7 +286,7 @@ class ProfileGenerator:
                 	perf = b
 	                x_pos = np.arange(len(perf))
         	        self.__gengraph(x_pos, [perf], 'Breadcrumb ID: ' + self.__getrpc2name([a])[0],
-                	        'Seconds', graph_names[i], is_stat_graph=False, use_x_ticks=False)
+                	        'Seconds', graph_names[i], txt=txt[i], is_stat_graph=False, use_x_ticks=False)
 
 	#Display statistics of the low and highwater mark of RPC handler pool sizes across target instances
 	def genargobotpoolsizegraph(self):
@@ -277,6 +294,10 @@ class ProfileGenerator:
 		lwm = OrderedDict(defaultdict(list))
 		hwm = OrderedDict(defaultdict(list))
 		keys = (OrderedDict(sorted(self.cumulative[0].items(), key=operator.itemgetter(1), reverse=True)[:5])).keys()
+		txt = ['Sort breadcrumbs by cumulative time on the origin \n Display the distribution of low-water mark for the Argobot pool size across target instances for the top-5 breadcrumbs sorted by cumulative time \
+\n Argobot pool sizes are captured on the target when an RPC response is sent back to origin' \
+			,'Sort breadcrumbs by cumulative time on the origin \n Display the distribution of high-water mark for the Argobot pool size across target instances for the top-5 breadcrumbs sorted by cumulative time \
+\n Argobot pool sizes are captured on the target when an RPC response is sent back to origin']
 
 		for k in keys:
 			lwm[k] = self.poolsizelwm[k]
@@ -293,11 +314,16 @@ class ProfileGenerator:
         	        x_pos = np.arange(len(objects))
 
                 	self.__gengraph(x_pos, perf_arr, 'Breadcrumb ID',
-                        	'Pool Size', graph_names[i], is_stat_graph=True, use_x_ticks=True, objects=objects)
+                        	'Pool Size', graph_names[i], txt=txt[i], is_stat_graph=True, use_x_ticks=True, objects=objects)
 
 	#Generate and display sparklines for the top-5 RPC breadcrumbs, sorted by cumulative counts
 	def gencountsparklines(self):
 		x = defaultdict(list)
+		txt = 'Sort breadcrumbs by cumulative call-count \n \
+For the top-5 breadcrumbs, display sparklines for the cumulative call-count across all target instances\n \
+CAUTION: Sparkline-data is collected by each target instance at most every 2 seconds, where the timer is maintained and reset on a per-breadcrumb level.\n \
+Thus, sparkline data is collected in an un-coordinated fashion, and the number of data points displayed depends on the relative frequency of invocation of breadcrumb.\n \
+Interpret data with care.'
 		for (k, i), v in self.countsparklines.items():
 			if k in self.count:
 				x[k].append(sum(v))
@@ -310,13 +336,17 @@ class ProfileGenerator:
 			perf_arr.append(v)
 
 		objects = self.__getrpc2name(x.keys())
-		self.__gensparklinegraph(objects=objects, title='Sparkline for cumulative count on target', num_subplots=len(x.items()), perf_arr=perf_arr)
+		self.__gensparklinegraph(objects=objects, title='Sparkline for cumulative count on target', num_subplots=len(x.items()), perf_arr=perf_arr, txt=txt)
 
 	#Generate and display sparklines for the top-5 RPC breadcrumbs, sorted by cumulative time, on both origin and target
 	# 0 = origin, 1 = target
 	def gentimesparklines(self):
 		graph_names = ['Sparkline for cumulative time on origin', 'Sparkline for cumulative time on target']
 		keys = (OrderedDict(sorted(self.cumulative[0].items(), key=operator.itemgetter(1), reverse=True)[:5])).keys()
+		txt = ['Sort breadcrumbs by cumulative call-time on origin \n \
+For the top-5 breadcrumbs, display sparklines for the cumulative call-time across all origin instances', \
+			'Sort breadcrumbs by cumulative call-time on origin \n \
+For the top-5 breadcrumbs, display sparklines for the cumulative call-time across all target instances']
 
 		for p in 0,1:
 			x = defaultdict(list)
@@ -332,7 +362,7 @@ class ProfileGenerator:
 				k, v = (x.items())[i]
 				perf_arr.append(v)
 		
-			self.__gensparklinegraph(objects=objects, title=graph_names[p], num_subplots=len(x.items()), perf_arr=perf_arr)
+			self.__gensparklinegraph(objects=objects, title=graph_names[p], num_subplots=len(x.items()), perf_arr=perf_arr, txt=txt[p])
 			
 	def finalize(self):
 		self.pp.close()
