@@ -79,6 +79,28 @@ class ProfileGenerator:
 		plt.close()
 	
 
+	def __gensparklinegraph(self, objects, title, num_subplots, perf_arr):
+		fig, ax = plt.subplots(num_subplots, figsize=(15,10))
+		plt.subplots_adjust(hspace=0.3)
+		fig.suptitle(title, fontsize=16)
+		for i in range(0, num_subplots):
+			v = perf_arr[i]
+			ax[i].plot(v)
+
+			for k1, v1 in ax[i].spines.items():
+				v1.set_visible(False)
+
+			ax[i].set_xticks([])
+			ax[i].set_yticks([])
+			ax[i].plot(len(v) - 1, v[len(v) - 1], 'r.')
+			ax[i].fill_between(range(len(v)), v, len(v)*[min(v)], alpha=0.1)
+			ax[i].set_title((objects[i]).strip('\n'), fontsize=8)
+
+		plt.savefig(self.pp, format='pdf')
+		plt.close()
+		
+		
+	
 	# Read the current working directory for profile*.csv files and populate the relevant data-structures	
 	# Profile files are expected to be in the following format:
 	#   N = num RPC's registered on this instance
@@ -122,10 +144,10 @@ class ProfileGenerator:
 				origin_or_target = int(origin_or_target)
 				for v in value_list[1:]:
 					if v != "\n":
-						t, c = v.split(',')
+						t, c, i = v.split(',')
 						if(origin_or_target):
-							self.countsparklines[name].append(float(c))
-						self.timesparklines[origin_or_target][name].append(float(t))
+							self.countsparklines[(name, int(i))].append(float(c))
+						self.timesparklines[origin_or_target][(name, int(i))].append(float(t))
 			
 			f1.close()
 
@@ -268,30 +290,19 @@ class ProfileGenerator:
 
 	def gencountsparklines(self):
 		x = defaultdict(list)
-		for k, v in self.countsparklines.items():
+		for (k, i), v in self.countsparklines.items():
 			if k in self.count:
-				x[k] = v
+				x[k].append(sum(v))
 
 		x = OrderedDict(sorted(x.items(), key=lambda it: sum(it[1]), reverse=True))
+		perf_arr = []
 
-		fig, ax = plt.subplots(len(x.items()), figsize=(15,10))
-		plt.subplots_adjust(hspace=0.3)
-		fig.suptitle('Sparkline for cumulative count on target', fontsize=16)
-		objects = self.__getrpc2name(x.keys())
 		for i in range(0, len(x.items())):
 			k, v = (x.items())[i]
-			ax[i].plot(v)
+			perf_arr.append(v)
 
-			for k1, v1 in ax[i].spines.items():
-				v1.set_visible(False)
-
-			ax[i].set_xticks([])
-			ax[i].set_yticks([])
-			ax[i].plot(len(v) - 1, v[len(v) - 1], 'r.')
-			ax[i].fill_between(range(len(v)), v, len(v)*[min(v)], alpha=0.1)
-			ax[i].set_title((objects[i]).strip('\n'), fontsize=8)
-		plt.savefig(self.pp, format='pdf')
-		plt.close()
+		objects = self.__getrpc2name(x.keys())
+		self.__gensparklinegraph(objects=objects, title='Sparkline for cumulative count on target', num_subplots=len(x.items()), perf_arr=perf_arr)
 
 	def gentimesparklines(self):
 		graph_names = ['Sparkline for cumulative time on origin', 'Sparkline for cumulative time on target']
@@ -299,30 +310,19 @@ class ProfileGenerator:
 
 		for p in 0,1:
 			x = defaultdict(list)
-			for k, v in self.timesparklines[p].items():
+			for (k, i), v in self.timesparklines[p].items():
 				if k in keys:
-					x[k] = v
+					x[k].append(sum(v))
 
 			x = OrderedDict(sorted(x.items(), key=lambda it: sum(it[1]), reverse=True))
-
-			fig, ax = plt.subplots(len(x.items()), figsize=(15,10))
-			plt.subplots_adjust(hspace=0.3)
-			fig.suptitle(graph_names[p], fontsize=16)
 			objects = self.__getrpc2name(x.keys())
+			perf_arr = []
+
 			for i in range(0, len(x.items())):
 				k, v = (x.items())[i]
-				ax[i].plot(v)
-	
-				for k1, v1 in ax[i].spines.items():
-					v1.set_visible(False)
-	
-				ax[i].set_xticks([])
-				ax[i].set_yticks([])
-				ax[i].plot(len(v) - 1, v[len(v) - 1], 'r.')
-				ax[i].fill_between(range(len(v)), v, len(v)*[min(v)], alpha=0.1)
-				ax[i].set_title((objects[i]).strip('\n'), fontsize=8)
-			plt.savefig(self.pp, format='pdf')
-			plt.close()
+				perf_arr.append(v)
+		
+			self.__gensparklinegraph(objects=objects, title=graph_names[p], num_subplots=len(x.items()), perf_arr=perf_arr)
 			
 	def finalize(self):
 		self.pp.close()
