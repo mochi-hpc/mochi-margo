@@ -28,7 +28,7 @@ class ProfileGenerator:
 		self.countsparklines = defaultdict(list) #Sparkline data for RPC breadcrumb counts, in the form <KEY = <RPC breadcrumb name, sparkline_index>, VALUE = [list of individual counts for target instances]>
 		self.timesparklines = [defaultdict(list), defaultdict(list)] #Sparkline data for RPC cumulative time, in the form <KEY = <RPC breadcrumb name, sparkline_index>, VALUE = [list of individual counts for origin or target instaces]>
 
-		self.nodelist = set()
+		self.nodetomid = defaultdict(list)
 
 		self.rpc2name = dict() #Map the RPC ID to a proper registered name
 		self.pp = PdfPages('profile.pdf')
@@ -125,14 +125,15 @@ class ProfileGenerator:
 		files = glob.glob(str(os.getcwd())+"/*.csv") #Read all *.csv files in CURRENT_WORKING_DIRECTORY
 		for f in files:
 			f1 = open(f, "r")
-			self.nodelist.add(((os.path.basename(f1.name)).split('-')[1]).replace(".", ""))
 			contents = f1.readlines()
 			num_registered_rpcs = int(contents[0]) #First line is always number of RPC's registered with the margo instance generating this particular profile file
+			mid = str(contents[1]) #Second line is always the margo instance network name
+			self.nodetomid(((os.path.basename(f1.name)).split('-')[1]).replace(".", "")).append(mid) #Collect list of margo instances on this node
 			if num_registered_rpcs > 0:
-				for lines in contents[1:num_registered_rpcs]: #Populate map of RPC ID's to RPC names
+				for lines in contents[2:num_registered_rpcs]: #Populate map of RPC ID's to RPC names
 					k, v = lines.split(',', 2)
 					self.rpc2name[k] = v
-			contents_ = contents[1 + 6 + num_registered_rpcs:] #Skip 3 internal Margo routines (progress w/o zero timeout, trigger_elapsed) and corresponding sparklines, which are useless
+			contents_ = contents[2 + 6 + num_registered_rpcs:] #Skip 3 internal Margo routines (progress w/o zero timeout, trigger_elapsed) and corresponding sparklines, which are useless
 			for i in range(0,len(contents_),2):
 				breadcrumb_line = contents_[i]
 				spark_line = contents_[i+1]
@@ -370,10 +371,11 @@ For the top-5 breadcrumbs, display sparklines for the cumulative call-time acros
 	def gengvfile(self):
 		f = open("graph.gv", "w")
 		f.write("digraph G {\n")
-		for node in self.nodelist:
+		for (node, midlist) in self.nodetomid.items():
 			f.write("subgraph cluster" + node + " {\n")
 			f.write("node [style=filled, color=white];\n style=filled;\n color=lightgrey;\n")
-			f.write("a0 -> a1 -> a2 -> a3\n")
+			for mid in midlist:
+				f.write(mid + " [shape=box];\n")
 			f.write("label = \"" + node + "\";\n")
 			f.write("}\n")
 			
