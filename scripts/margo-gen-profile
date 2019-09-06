@@ -28,6 +28,8 @@ class ProfileGenerator:
 		self.countsparklines = defaultdict(list) #Sparkline data for RPC breadcrumb counts, in the form <KEY = <RPC breadcrumb name, sparkline_index>, VALUE = [list of individual counts for target instances]>
 		self.timesparklines = [defaultdict(list), defaultdict(list)] #Sparkline data for RPC cumulative time, in the form <KEY = <RPC breadcrumb name, sparkline_index>, VALUE = [list of individual counts for origin or target instaces]>
 
+		self.nodelist = set()
+
 		self.rpc2name = dict() #Map the RPC ID to a proper registered name
 		self.pp = PdfPages('profile.pdf')
 
@@ -123,6 +125,7 @@ class ProfileGenerator:
 		files = glob.glob(str(os.getcwd())+"/*.csv") #Read all *.csv files in CURRENT_WORKING_DIRECTORY
 		for f in files:
 			f1 = open(f, "r")
+			self.nodelist.add(((os.path.basename(f1.name)).split('-')[1]).replace(".", ""))
 			contents = f1.readlines()
 			num_registered_rpcs = int(contents[0]) #First line is always number of RPC's registered with the margo instance generating this particular profile file
 			if num_registered_rpcs > 0:
@@ -363,6 +366,19 @@ For the top-5 breadcrumbs, display sparklines for the cumulative call-time acros
 				perf_arr.append(v)
 		
 			self.__gensparklinegraph(objects=objects, title=graph_names[p], num_subplots=len(x.items()), perf_arr=perf_arr, txt=txt[p])
+
+	def gengvfile(self):
+		f = open("graph.gv", "w")
+		f.write("digraph G {\n")
+		for node in self.nodelist:
+			f.write("subgraph cluster" + node + " {\n")
+			f.write("node [style=filled, color=white];\n style=filled;\n color=lightgrey;\n")
+			f.write("a0 -> a1 -> a2 -> a3\n")
+			f.write("label = \"" + node + "\";\n")
+			f.write("}\n")
+			
+		f.write("}\n")
+		f.close()
 			
 	def finalize(self):
 		self.pp.close()
@@ -389,6 +405,8 @@ def main():
 
 	p.gencountsparklines()
 	p.gentimesparklines()
+
+	p.gengvfile()
 
 	p.finalize()
 
