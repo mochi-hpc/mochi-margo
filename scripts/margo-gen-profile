@@ -28,9 +28,9 @@ class ProfileGenerator:
 		self.countsparklines = defaultdict(list) #Sparkline data for RPC breadcrumb counts, in the form <KEY = <RPC breadcrumb name, sparkline_index>, VALUE = [list of individual counts for target instances]>
 		self.timesparklines = [defaultdict(list), defaultdict(list)] #Sparkline data for RPC cumulative time, in the form <KEY = <RPC breadcrumb name, sparkline_index>, VALUE = [list of individual counts for origin or target instaces]>
 
-		self.nodetomid = defaultdict(list)
-		self.midtoprovider = defaultdict(list)
-		self.provider_id = dict()
+		self.nodetomid = defaultdict(list) #List of margo instances on a given node
+		self.midtoprovider = defaultdict(list) #List of registered provider types on a given margo instance
+		self.provider_id = dict() #Used to generate a unique global ID for every provider. This is necessary in order to properly generate the graphViz file
 
 		self.rpc2name = dict() #Map the RPC ID to a proper registered name
 		self.pp = PdfPages('profile.pdf')
@@ -139,12 +139,12 @@ class ProfileGenerator:
 				for lines in contents[2:2+num_registered_rpcs]: #Populate map of RPC ID's to RPC names
 					k, v = lines.split(',', 2)
 					self.rpc2name[k] = v
-					provider_type = v.split("_")[0]
+					provider_type = v.split("_")[0] #IMPT: Assumption made: Every RPC registered has the form <provider_type>_RPC_type
 					providers.add(provider_type)
 
 				for provider in providers:
 					self.midtoprovider[mid].append(provider + "_" + str(self.provider_id.get(provider, 0)))
-					self.provider_id[provider] = self.provider_id.get(provider, 0) + 1
+					self.provider_id[provider] = self.provider_id.get(provider, 0) + 1 #Increment counter for the provider_type
 		
 			contents_ = contents[2 + 6 + num_registered_rpcs:] #Skip 3 internal Margo routines (progress w/o zero timeout, trigger_elapsed) and corresponding sparklines, which are useless
 			for i in range(0,len(contents_),2):
@@ -381,22 +381,36 @@ For the top-5 breadcrumbs, display sparklines for the cumulative call-time acros
 		
 			self.__gensparklinegraph(objects=objects, title=graph_names[p], num_subplots=len(x.items()), perf_arr=perf_arr, txt=txt[p])
 
+
+	#Generate the nodes of the graph
+	#Grey: Nodes
+	#Blue: Margo instances
+	#White: Providers
+	def __gengraphnodes(self):
+		node_string = "/* First describe and generate the nodes and entities in the graph */\n"
+		for (node, midlist) in self.nodetomid.items():
+			node_string += ("subgraph cluster" + node + " {\n")
+			node_string += ("node [style=filled, color=white];\n style=filled;\n color=lightgrey;\n")
+			for mid in midlist:
+				node_string += ("subgraph cluster" + mid.replace("+", "_").replace(":", "_").replace(".","_").replace("//", "_") + " {\n")
+				node_string += ("node [style=filled];\n color=lightblue;\n")
+				for provider in self.midtoprovider[mid]:
+					node_string += (str(provider) + ";\n")
+				node_string += ("label = \"" + mid + "\";\n")
+				node_string += ("}\n")
+			node_string += ("label = \"" + node + "\";\n")
+			node_string += ("}\n")
+		
+		return node_string
+
+	#Generate a graphViz file that describes the structure of the RPC communication graph in the DOT language
+	#From this file, generate a PNG image using: $dot -Tpng graph.gv -o graph.png
 	def gengvfile(self):
 		f = open("graph.gv", "w")
 		f.write("digraph G {\n")
-		for (node, midlist) in self.nodetomid.items():
-			f.write("subgraph cluster" + node + " {\n")
-			f.write("node [style=filled, color=white];\n style=filled;\n color=lightgrey;\n")
-			for mid in midlist:
-				f.write("subgraph cluster" + mid.replace("+", "_").replace(":", "_").replace(".","_").replace("//", "_") + " {\n")
-				f.write("node [style=filled];\n color=lightblue;\n")
-				for provider in self.midtoprovider[mid]:
-					f.write(str(provider) + ";\n")
-				f.write("label = \"" + mid + "\";\n")
-				f.write("}\n")
-			f.write("label = \"" + node + "\";\n")
-			f.write("}\n")
-			
+
+		f.write(self.__gengraphnodes())
+
 		f.write("}\n")
 		f.close()
 			
