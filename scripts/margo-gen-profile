@@ -29,6 +29,8 @@ class ProfileGenerator:
 		self.timesparklines = [defaultdict(list), defaultdict(list)] #Sparkline data for RPC cumulative time, in the form <KEY = <RPC breadcrumb name, sparkline_index>, VALUE = [list of individual counts for origin or target instaces]>
 
 		self.nodetomid = defaultdict(list)
+		self.midtoprovider = defaultdict(list)
+		self.provider_id = dict()
 
 		self.rpc2name = dict() #Map the RPC ID to a proper registered name
 		self.pp = PdfPages('profile.pdf')
@@ -133,9 +135,17 @@ class ProfileGenerator:
 			self.nodetomid[node].append(mid) #Collect list of margo instances on this node
 
 			if num_registered_rpcs > 0:
-				for lines in contents[2:num_registered_rpcs]: #Populate map of RPC ID's to RPC names
+				providers = set()
+				for lines in contents[2:2+num_registered_rpcs]: #Populate map of RPC ID's to RPC names
 					k, v = lines.split(',', 2)
 					self.rpc2name[k] = v
+					provider_type = v.split("_")[0]
+					providers.add(provider_type)
+
+				for provider in providers:
+					self.midtoprovider[mid].append(provider + "_" + str(self.provider_id.get(provider, 0)))
+					self.provider_id[provider] = self.provider_id.get(provider, 0) + 1
+		
 			contents_ = contents[2 + 6 + num_registered_rpcs:] #Skip 3 internal Margo routines (progress w/o zero timeout, trigger_elapsed) and corresponding sparklines, which are useless
 			for i in range(0,len(contents_),2):
 				breadcrumb_line = contents_[i]
@@ -380,6 +390,8 @@ For the top-5 breadcrumbs, display sparklines for the cumulative call-time acros
 			for mid in midlist:
 				f.write("subgraph cluster" + mid.replace("+", "_").replace(":", "_").replace(".","_").replace("//", "_") + " {\n")
 				f.write("node [style=filled];\n color=lightblue;\n")
+				for provider in self.midtoprovider[mid]:
+					f.write(str(provider) + ";\n")
 				f.write("label = \"" + mid + "\";\n")
 				f.write("}\n")
 			f.write("label = \"" + node + "\";\n")
