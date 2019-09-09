@@ -127,10 +127,11 @@ class ProfileGenerator:
 			f1 = open(f, "r")
 			contents = f1.readlines()
 			num_registered_rpcs = int(contents[0]) #First line is always number of RPC's registered with the margo instance generating this particular profile file
-			mid = str(contents[1]) #Second line is always the margo instance network name
-			mid = (((((mid.replace("+","_"))).replace(":", "_")).replace("//", "_")).replace(".","_")).strip("\n")
+
+			mid = (str(contents[1])).strip("\n") #Second line is always the margo instance network name
 			node = (((os.path.basename(f1.name)).split('-')[1]).replace(".", ""))
 			self.nodetomid[node].append(mid) #Collect list of margo instances on this node
+
 			if num_registered_rpcs > 0:
 				for lines in contents[2:num_registered_rpcs]: #Populate map of RPC ID's to RPC names
 					k, v = lines.split(',', 2)
@@ -377,7 +378,10 @@ For the top-5 breadcrumbs, display sparklines for the cumulative call-time acros
 			f.write("subgraph cluster" + node + " {\n")
 			f.write("node [style=filled, color=white];\n style=filled;\n color=lightgrey;\n")
 			for mid in midlist:
-				f.write(mid + " [shape=box];\n")
+				f.write("subgraph cluster" + mid.replace("+", "_").replace(":", "_").replace(".","_").replace("//", "_") + " {\n")
+				f.write("node [style=filled];\n color=lightblue;\n")
+				f.write("label = \"" + mid + "\";\n")
+				f.write("}\n")
 			f.write("label = \"" + node + "\";\n")
 			f.write("}\n")
 			

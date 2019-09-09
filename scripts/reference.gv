@@ -7,8 +7,10 @@ subgraph clusterofi_sockets__10_3_1_2_34268 {
 node [style=filled];
  color=lightblue;
  label = "ofi_sockets__10_3_1_2_34268";
-mobject_server_1 -> bake_server_1 [label="100, 54", weight="100, 54"];
-mobject_server_1 -> sdskv_server_1 [label="40", weight="40"];
+
+mobject_server_1;
+sdskv_server_1;
+bake_server_1;
 }
 
 subgraph clusterofi_sockets__10_3_1_2_39025 {
@@ -48,4 +50,7 @@ node [style=filled];
 
 label = "gpu12cluster";
 }
+
+//mobject_server_1 -> bake_server_1 [label="100, 54", weight="100, 54"];
+//mobject_server_1 -> sdskv_server_1 [label="40", weight="40"];
 }
