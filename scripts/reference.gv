@@ -1,0 +1,51 @@
+digraph G {
+subgraph clustergpu02cluster {
+node [style=filled, color=white];
+ style=filled;
+ color=lightgrey;
+subgraph clusterofi_sockets__10_3_1_2_34268 {
+node [style=filled];
+ color=lightblue;
+ label = "ofi_sockets__10_3_1_2_34268";
+mobject_server_1 -> bake_server_1 [label="100, 54", weight="100, 54"];
+mobject_server_1 -> sdskv_server_1 [label="40", weight="40"];
+}
+
+subgraph clusterofi_sockets__10_3_1_2_39025 {
+node [style=filled];
+ color=lightblue;
+label = "ofi_sockets__10_3_1_2_39025";
+mobject_client_1 -> mobject_server_1 [label="60", weight="60"];
+}
+
+subgraph clusterofi_sockets__10_3_1_2_38523 {
+node [style=filled];
+ color=lightblue;
+label = "ofi_sockets__10_3_1_2_38523";
+mobject_client_2 -> mobject_server_1 [label="56", weight="56"];
+}
+
+label = "gpu02cluster";
+}
+
+subgraph clustergpu12cluster {
+node [style=filled, color=white];
+ style=filled;
+ color=lightgrey;
+subgraph clusterofi_sockets__10_3_1_12_46641 {
+node [style=filled];
+ color=lightblue;
+label = "ofi_sockets__10_3_1_12_46641";
+mobject_client_6 -> mobject_server_1 [label="64", weight="64"];
+}
+
+subgraph clusterofi_sockets__10_3_1_12_46398 {
+node [style=filled];
+ color=lightblue;
+ label = "ofi_sockets__10_3_1_12_46398";
+ mobject_client_7 -> mobject_server_1 [label="50", weight="50"];
+}
+
+label = "gpu12cluster";
+}
+}

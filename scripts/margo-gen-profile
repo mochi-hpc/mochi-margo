@@ -128,7 +128,9 @@ class ProfileGenerator:
 			contents = f1.readlines()
 			num_registered_rpcs = int(contents[0]) #First line is always number of RPC's registered with the margo instance generating this particular profile file
 			mid = str(contents[1]) #Second line is always the margo instance network name
-			self.nodetomid(((os.path.basename(f1.name)).split('-')[1]).replace(".", "")).append(mid) #Collect list of margo instances on this node
+			mid = (((((mid.replace("+","_"))).replace(":", "_")).replace("//", "_")).replace(".","_")).strip("\n")
+			node = (((os.path.basename(f1.name)).split('-')[1]).replace(".", ""))
+			self.nodetomid[node].append(mid) #Collect list of margo instances on this node
 			if num_registered_rpcs > 0:
 				for lines in contents[2:num_registered_rpcs]: #Populate map of RPC ID's to RPC names
 					k, v = lines.split(',', 2)
