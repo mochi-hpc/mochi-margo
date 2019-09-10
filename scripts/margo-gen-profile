@@ -122,7 +122,6 @@ class ProfileGenerator:
 	
 	def __addtoedgelist(self, name, mid, addr_hash, cumulative, count):
 		raw_rpc_calls = list(name.split(" "))
-		print raw_rpc_calls
 		del raw_rpc_calls[len(raw_rpc_calls) - 1]
 
 		if(len(raw_rpc_calls) > 1):
@@ -160,7 +159,7 @@ class ProfileGenerator:
 					providers.add(provider_type)
 
 				for provider in providers:
-					self.midtoprovider[mid].append(provider + "_" + str(self.provider_id.get(provider, 0)))
+					self.midtoprovider[mid].append((provider, provider + "_" + str(self.provider_id.get(provider, 0))))
 					self.provider_id[provider] = self.provider_id.get(provider, 0) + 1 #Increment counter for the provider_type
 		
 			contents_ = contents[2 + 6 + num_registered_rpcs:] #Skip 3 internal Margo routines (progress w/o zero timeout, trigger_elapsed) and corresponding sparklines, which are useless
@@ -414,8 +413,8 @@ For the top-5 breadcrumbs, display sparklines for the cumulative call-time acros
 			for mid in midlist:
 				node_string += ("subgraph cluster" + mid.replace("+", "_").replace(":", "_").replace(".","_").replace("//", "_") + " {\n")
 				node_string += ("node [style=filled];\n color=lightblue;\n")
-				for provider in self.midtoprovider[mid]:
-					node_string += (str(provider) + ";\n")
+				for (provider_type, provider_id) in self.midtoprovider[mid]:
+					node_string += (str(provider_id) + ";\n")
 				node_string += ("label = \"" + mid + "\";\n")
 				node_string += ("}\n")
 			node_string += ("label = \"" + node + "\";\n")
@@ -425,13 +424,28 @@ For the top-5 breadcrumbs, display sparklines for the cumulative call-time acros
 
 	def __gengraphedges(self):
 		edge_string = "/* Generate a list of weighted edges for the graph in the form (count, time) */"
-		for edge_info, weight_info in self.edgelistcount.items():
+		for edge_info, count in self.edgelistcount.items():
+			cumulative_time = self.edgelisttime[edge_info]
+			source_provider_id = ""
+			dest_provider_id = ""
+
 			(source, source_call, destination, dest_call) = edge_info
 			destination = self.hash64tomid[destination]
-			source_call = self.rpc2name.get(source_call, "UNKNOWN")
-			dest_call = self.rpc2name.get(source_call, "UNKNOWN")
-			if(source_call != "UNKNOWN" and dest_call != "UNKNOWN"):
-				source, source_call, destination, dest_call
+			source_provider = ((self.rpc2name.get(str(source_call), "UNKNOWN")).split("_"))[0]
+			dest_provider = ((self.rpc2name.get(str(dest_call), "UNKNOWN")).split("_"))[0]
+
+			if source_provider != "UNKNOWN" and dest_provider != "UNKNOWN":
+
+				for (provider_type, provider_id) in self.midtoprovider[source]:
+					if source_provider == provider_type:
+						source_provider_id = provider_id
+			
+				for (provider_type, provider_id) in self.midtoprovider[destination]:
+					if dest_provider == provider_type:
+						dest_provider_id = provider_id
+				dest_call = self.rpc2name[str(dest_call)]
+			
+				edge_string += (str(source_provider_id) + " -> " + str(dest_provider_id) + "[label=\""+dest_call+","+str(count)+","+str(cumulative_time)+"\", weight=\""+str(dest_call)+","+str(count)+","+str(cumulative_time)+"\"];\n")
 
 		return edge_string			
 
