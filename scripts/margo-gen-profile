@@ -117,6 +117,11 @@ class ProfileGenerator:
 		
 		
 	
+	def __addtoedgelist(self, name, mid, addr_hash, cumulative, count):
+		raw_rpc_calls = name.split(" ")
+		raw_rpc_call = raw_rpc_calls[len(raw_rpc_calls) - 1]
+		self.edgelist[(mid, addr_hash, raw_rpc_call)] = self.edgelist.get((mid, addr_hash, raw_rpc_call), (0, 0)) + (count, cumulative)
+
 	# Read the current working directory for profile*.csv files and populate the relevant data-structures	
 	# Profile files are expected to be in the following format:
 	#   N = num RPC's registered on this instance
@@ -166,6 +171,7 @@ class ProfileGenerator:
 				if(origin_or_target == 1):
 					if (float(handler_min) >= 0): self.poolsizelwm[name].append(float(handler_min))
 					if(float(handler_max) < 100000): self.poolsizehwm[name].append(float(handler_max))
+					self.__addtoedgelist(name, mid, addr_hash, cumulative, count)
 
 				#Oddlines contain sparkline data
 				value_list = spark_line.split(";")

@@ -1678,6 +1678,7 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
     char rpc_breadcrumb_str[24] = {0};
     struct margo_registered_rpc *tmp_rpc;
     char * name;
+    uint64_t hash;
 
     assert(mid->diag_enabled);
     int write_perf_summary;
@@ -1730,7 +1731,9 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
     fprintf(outfile, "# RPC breadcrumbs for RPCs that were registered on this process:\n");*/
     fprintf(outfile, "%u\n", mid->num_registered_rpcs);
     GET_SELF_ADDR_STR(mid, name);
-    fprintf(outfile, "%s\n", name);
+    hash = hash64_str(name);
+    
+    fprintf(outfile, "%lu,%s\n", hash, name);
 
     tmp_rpc = mid->registered_rpcs;
     while(tmp_rpc)
