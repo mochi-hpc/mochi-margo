@@ -122,9 +122,16 @@ class ProfileGenerator:
 	
 	def __addtoedgelist(self, name, mid, addr_hash, cumulative, count):
 		raw_rpc_calls = list(name.split(" "))
-		raw_rpc_call = (raw_rpc_calls[::-1])[1]
-		self.edgelistcount[(mid, addr_hash, raw_rpc_call)] = self.edgelistcount.get((mid, addr_hash, raw_rpc_call), 0) + int(count)
-		self.edgelisttime[(mid, addr_hash, raw_rpc_call)] = self.edgelisttime.get((mid, addr_hash, raw_rpc_call), 0) + float(cumulative)
+		print raw_rpc_calls
+		del raw_rpc_calls[len(raw_rpc_calls) - 1]
+
+		if(len(raw_rpc_calls) > 1):
+			self.edgelistcount[(mid, raw_rpc_calls[1], addr_hash, raw_rpc_calls[0])] = self.edgelistcount.get((mid, raw_rpc_calls[1], addr_hash, raw_rpc_calls[0]), 0) + int(count)
+			self.edgelisttime[(mid, raw_rpc_calls[1], addr_hash, raw_rpc_calls[0])] = self.edgelisttime.get((mid, raw_rpc_calls[1], addr_hash, raw_rpc_calls[0]), 0) + float(cumulative)
+		else:
+			self.edgelistcount[(mid, raw_rpc_calls[0], addr_hash, raw_rpc_calls[0])] = self.edgelistcount.get((mid, raw_rpc_calls[0], addr_hash, raw_rpc_calls[0]), 0) + int(count)
+			self.edgelisttime[(mid, raw_rpc_calls[0], addr_hash, raw_rpc_calls[0])] = self.edgelisttime.get((mid, raw_rpc_calls[0], addr_hash, raw_rpc_calls[0]), 0) + float(cumulative)
+			
 
 	# Read the current working directory for profile*.csv files and populate the relevant data-structures	
 	# Profile files are expected to be in the following format:
@@ -140,7 +147,7 @@ class ProfileGenerator:
 			num_registered_rpcs = int(contents[0]) #First line is always number of RPC's registered with the margo instance generating this particular profile file
 
 			self_hash, mid = ((str(contents[1])).strip("\n")).split(',') #Second line is always the margo instance network name, succeeding the hash of this name
-			self.hash64tomid[self_hash] = mid
+			self.hash64tomid[long (self_hash)] = mid
 			node = (((os.path.basename(f1.name)).split('-')[1]).replace(".", ""))
 			self.nodetomid[node].append(mid) #Collect list of margo instances on this node
 
@@ -419,10 +426,12 @@ For the top-5 breadcrumbs, display sparklines for the cumulative call-time acros
 	def __gengraphedges(self):
 		edge_string = "/* Generate a list of weighted edges for the graph in the form (count, time) */"
 		for edge_info, weight_info in self.edgelistcount.items():
-			(source, destination, call) = edge_info
-			call = self.rpc2name[call]
-			destionation = self.hash64tomid[destination]
-			print source, destination, call
+			(source, source_call, destination, dest_call) = edge_info
+			destination = self.hash64tomid[destination]
+			source_call = self.rpc2name.get(source_call, "UNKNOWN")
+			dest_call = self.rpc2name.get(source_call, "UNKNOWN")
+			if(source_call != "UNKNOWN" and dest_call != "UNKNOWN"):
+				source, source_call, destination, dest_call
 
 		return edge_string			
 

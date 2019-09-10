@@ -2083,10 +2083,10 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
     /* Bake in information about whether or not this was an origin or target-side breadcrumb */
     hash_ = hash;
     hash_ = (hash_ >> 16) << 16;
-    hash |= t;
+    hash_ |= t;
   
     /* add in the server address */
-    x = hash;
+    x = hash_;
     x = x << 64; 
     x |= rpc_breadcrumb;
 
