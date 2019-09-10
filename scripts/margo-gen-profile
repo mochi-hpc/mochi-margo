@@ -31,7 +31,9 @@ class ProfileGenerator:
 		self.nodetomid = defaultdict(list) #List of margo instances on a given node
 		self.midtoprovider = defaultdict(list) #List of registered provider types on a given margo instance
 		self.provider_id = dict() #Used to generate a unique global ID for every provider. This is necessary in order to properly generate the graphViz file
+		self.edgelist = dict()
 
+		self.hash64tomid = dict()
 		self.rpc2name = dict() #Map the RPC ID to a proper registered name
 		self.pp = PdfPages('profile.pdf')
 
@@ -135,7 +137,8 @@ class ProfileGenerator:
 			contents = f1.readlines()
 			num_registered_rpcs = int(contents[0]) #First line is always number of RPC's registered with the margo instance generating this particular profile file
 
-			mid = (str(contents[1])).strip("\n") #Second line is always the margo instance network name
+			self_hash, mid = ((str(contents[1])).strip("\n")).split(',') #Second line is always the margo instance network name, succeeding the hash of this name
+			self.hash64tomid[self_hash] = mid
 			node = (((os.path.basename(f1.name)).split('-')[1]).replace(".", ""))
 			self.nodetomid[node].append(mid) #Collect list of margo instances on this node
 
