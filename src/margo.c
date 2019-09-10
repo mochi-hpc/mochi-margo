@@ -2070,6 +2070,7 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
     double end, elapsed;
     //uint32_t temp_ = provider_id;
     uint16_t t = (type == origin) ? 2: 1;
+    uint64_t hash_;
 
     double time_passed = 0;
 
@@ -2080,7 +2081,8 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
        offering or making a certain RPC call on this Margo instance */
 
     /* Bake in information about whether or not this was an origin or target-side breadcrumb */
-    hash = (hash >> 16) << 16;
+    hash_ = hash;
+    hash_ = (hash_ >> 16) << 16;
     hash |= t;
   
     /* add in the server address */
