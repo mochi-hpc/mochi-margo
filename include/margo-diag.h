@@ -297,9 +297,14 @@ struct margo_breadcrumb
     double cumulative;
 
     /* stats for RPC handler pool sizes */
-    double handler_min; /* low watermark */
-    double handler_max; /* high watermark */
-    double handler_cumulative;
+    /* Total pool size = Total number of runnable items + items waiting on a lock */
+    double abt_pool_total_size_lwm; /* low watermark */
+    double abt_pool_total_size_hwm; /* high watermark */
+    double abt_pool_total_size_cumulative;
+
+    double abt_pool_size_lwm; /* low watermark */
+    double abt_pool_size_hwm; /* high watermark */
+    double abt_pool_size_cumulative;
 
     /* count of occurrences of breadcrumb */
     int count;

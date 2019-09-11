@@ -34,9 +34,13 @@ struct diag_data
     double cumulative;
     
     /* RPC handler pool stats */
-    double handler_min;
-    double handler_max;
-    double handler_cumulative;
+    double abt_pool_total_size_lwm;
+    double abt_pool_total_size_hwm;
+    double abt_pool_total_size_cumulative;
+
+    double abt_pool_size_lwm;
+    double abt_pool_size_hwm;
+    double abt_pool_size_cumulative;
     
     /* origin or target */
     breadcrumb_type type;
@@ -1626,7 +1630,7 @@ static void print_diag_data(FILE *file, const char* name, const char *descriptio
         avg = data->cumulative/data->count;
     else
         avg = 0;
-    fprintf(file, "%s,%.9f,%lu,%lu,%d,%.9f,%.9f,%.9f,%d,%.9f,%.9f,%.9f\n", name, avg, data->key.rpc_breadcrumb, data->key.addr_hash, data->type, data->cumulative, data->min, data->max, data->count, data->handler_max, data->handler_min, data->handler_cumulative);
+    fprintf(file, "%s,%.9f,%lu,%lu,%d,%.9f,%.9f,%.9f,%d,%.9f,%.9f,%.9f,%.9f,%.9f,%.9f\n", name, avg, data->key.rpc_breadcrumb, data->key.addr_hash, data->type, data->cumulative, data->min, data->max, data->count, data->abt_pool_size_hwm, data->abt_pool_size_lwm, data->abt_pool_size_cumulative, data->abt_pool_total_size_hwm, data->abt_pool_total_size_lwm, data->abt_pool_total_size_cumulative);
 
     /* print sparkline data */
     fprintf(file, "%s,%d;", name,data->type);
@@ -1662,6 +1666,14 @@ void margo_diag_breadcrumb_snapshot(margo_instance_id mid, struct margo_breadcru
     tmp_bc->key = dd->key;
     tmp_bc->count = dd->count;
     tmp_bc->cumulative = dd->cumulative;
+
+    tmp_bc->abt_pool_total_size_hwm = dd->abt_pool_total_size_hwm;
+    tmp_bc->abt_pool_total_size_lwm = dd->abt_pool_total_size_lwm;
+    tmp_bc->abt_pool_total_size_cumulative = dd->abt_pool_total_size_cumulative;
+    tmp_bc->abt_pool_size_hwm = dd->abt_pool_size_hwm;
+    tmp_bc->abt_pool_size_lwm = dd->abt_pool_size_lwm;
+    tmp_bc->abt_pool_size_cumulative = dd->abt_pool_size_cumulative;
+
     tmp_bc->next = calloc(1, sizeof(struct margo_breadcrumb));
     tmp_bc = tmp_bc->next;
     tmp_bc->next = NULL;
@@ -2122,9 +2134,13 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
         stat->x = x;
 
         /* initialize pool stats for breadcrumb */
-        stat->handler_min = 0x11111111; // Some high value
-        stat->handler_cumulative = 0;
-        stat->handler_max = -1;
+        stat->abt_pool_size_lwm = 0x11111111; // Some high value
+        stat->abt_pool_size_cumulative = 0;
+        stat->abt_pool_size_hwm = -1;
+
+        stat->abt_pool_total_size_lwm = 0x11111111; // Some high value
+        stat->abt_pool_total_size_cumulative = 0;
+        stat->abt_pool_total_size_hwm = -1;
    
         /* initialize sparkline data */
         memset(stat->sparkline_time, 0.0, 100);
@@ -2138,7 +2154,7 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
 
 
     /* Argobots pool info */
-    size_t s;
+    size_t s, s1;
     struct margo_rpc_data * margo_data;
     if(type) {
       const struct hg_info * info;
@@ -2146,13 +2162,20 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
       margo_data = (struct margo_rpc_data*)HG_Registered_data(mid->hg_class, info->id);
       if(margo_data && margo_data->pool != ABT_POOL_NULL) {
         ABT_pool_get_total_size(margo_data->pool, &s);
+        ABT_pool_get_size(margo_data->pool, &s1);
       }
       else {
         ABT_pool_get_total_size(mid->handler_pool, &s);
+        ABT_pool_get_size(mid->handler_pool, &s1);
       }
-      stat->handler_max = stat->handler_max > (double)s ? stat->handler_max : s;
-      stat->handler_min = stat->handler_min < (double)s ? stat->handler_min : s;
-      stat->handler_cumulative += s;
+
+      stat->abt_pool_size_hwm = stat->abt_pool_size_hwm > (double)s ? stat->abt_pool_size_hwm : s1;
+      stat->abt_pool_size_lwm = stat->abt_pool_size_lwm < (double)s1 ? stat->abt_pool_size_lwm : s1;
+      stat->abt_pool_size_cumulative += s1;
+
+      stat->abt_pool_total_size_hwm = stat->abt_pool_total_size_hwm > (double)s ? stat->abt_pool_total_size_hwm : s;
+      stat->abt_pool_total_size_lwm = stat->abt_pool_total_size_lwm < (double)s1 ? stat->abt_pool_total_size_lwm : s;
+      stat->abt_pool_total_size_cumulative += s;
 
     }
     /* Argobots pool info */

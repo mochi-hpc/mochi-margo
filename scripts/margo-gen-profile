@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+# (C) 2015 The University of Chicago
+#
+# See COPYRIGHT in top-level directory.
+# 
 
 import matplotlib
 matplotlib.use("Agg")
