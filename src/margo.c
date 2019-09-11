@@ -117,6 +117,7 @@ struct margo_instance
     int margo_init;
     int abt_init;
     ABT_thread hg_progress_tid;
+    ABT_thread sparkline_data_collection_tid;
     int hg_progress_shutdown_flag;
     ABT_xstream progress_xstream;
     int owns_progress_pool;
@@ -190,6 +191,8 @@ struct margo_rpc_data
 MERCURY_GEN_PROC(margo_shutdown_out_t, ((int32_t)(ret)))
 
 static void hg_progress_fn(void* foo);
+static void sparkline_data_collection_fn(void* foo);
+
 static void margo_rpc_data_free(void* ptr);
 static uint64_t margo_breadcrumb_set(hg_id_t rpc_id);
 static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcrumb, double start, breadcrumb_type type, uint16_t provider_id, uint64_t hash, hg_handle_t h);
@@ -479,6 +482,11 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
         ABT_THREAD_ATTR_NULL, &mid->hg_progress_tid);
     if(ret != 0) goto err;
 
+    /* Create a ULT to collect sparkline data */
+    ret = ABT_thread_create(mid->progress_pool, sparkline_data_collection_fn, mid, 
+        ABT_THREAD_ATTR_NULL, &mid->sparkline_data_collection_tid);
+    if(ret != 0) goto err;
+
     mid->shutdown_rpc_id = MARGO_REGISTER(mid, "__shutdown__", 
             void, margo_shutdown_out_t, remote_shutdown_ult);
 
@@ -576,7 +584,7 @@ void margo_finalize(margo_instance_id mid)
         mid->finalize_requested = 1;
         return;
     }
-   
+
     /* dump out the profile */ 
     margo_diag_dump(mid, "profile", 1);
 
@@ -586,6 +594,8 @@ void margo_finalize(margo_instance_id mid)
     /* wait for it to shutdown cleanly */
     ABT_thread_join(mid->hg_progress_tid);
     ABT_thread_free(&mid->hg_progress_tid);
+    ABT_thread_join(mid->sparkline_data_collection_tid);
+    ABT_thread_free(&mid->sparkline_data_collection_tid);
 
     ABT_mutex_lock(mid->finalize_mutex);
     mid->finalize_flag = 1;
@@ -608,6 +618,8 @@ void margo_finalize(margo_instance_id mid)
 void margo_wait_for_finalize(margo_instance_id mid)
 {
     int do_cleanup;
+    ABT_thread_join(mid->sparkline_data_collection_tid);
+    ABT_thread_free(&mid->sparkline_data_collection_tid);
 
     ABT_mutex_lock(mid->finalize_mutex);
 
@@ -1470,6 +1482,18 @@ static void margo_rpc_data_free(void* ptr)
 		data->user_free_callback(data->user_data);
 	}
 	free(ptr);
+}
+
+/* dedicated thread function to collect sparkline data */
+static void sparkline_data_collection_fn(void* foo)
+{
+    int ret;
+    struct margo_instance *mid = (struct margo_instance *)foo;
+    while(!mid->hg_progress_shutdown_flag)
+    {
+      margo_thread_sleep(mid, 2000);
+      fprintf(stderr, "Waking up to do work...\n");
+    }
 }
 
 /* dedicated thread function to drive Mercury progress */
