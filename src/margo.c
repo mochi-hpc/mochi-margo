@@ -1498,7 +1498,6 @@ static void sparkline_data_collection_fn(void* foo)
       time_passed = end - mid->previous_sparkline_data_collection_time;
 
       if(time_passed >= MARGO_SPARKLINE_TIMESLICE) {
-        fprintf(stderr, "Waking up to do work... %f\n", time_passed);
         HASH_ITER(hh, mid->diag_rpc, stat, tmp)
         {
 
