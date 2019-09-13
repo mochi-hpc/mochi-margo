@@ -174,7 +174,7 @@ class ProfileGenerator:
 				name, avg, rpc_breadcrumb, \
 					addr_hash, origin_or_target, \
 						cumulative, _min, _max, count, \
-							handler_max, handler_min, handler_cumulative = breadcrumb_line.split(',', 12)
+							handler_max, handler_min, handler_cumulative, handler_total_max, handler_total_min, handler_total_cumulative = breadcrumb_line.split(',', 15)
 				origin_or_target = int(origin_or_target)
 				addr_hash = int(addr_hash)
 
