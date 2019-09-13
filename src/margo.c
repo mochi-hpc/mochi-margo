@@ -23,7 +23,7 @@
 #define DEFAULT_MERCURY_PROGRESS_TIMEOUT_UB 100 /* 100 milliseconds */
 #define DEFAULT_MERCURY_HANDLE_CACHE_SIZE 32
 
-#define MARGO_SPARKLINE_TIMESLICE 2
+#define MARGO_SPARKLINE_TIMESLICE 0.5
 
 /* internal structure to store timing information */
 struct diag_data
@@ -56,7 +56,6 @@ struct diag_data
     double sparkline_time[100];
     uint16_t sparkline_index;
     double sparkline_count[100];
-    double countdown_start_time;
 
     UT_hash_handle hh;        /* hash table link */
 };
@@ -161,7 +160,8 @@ struct margo_instance
      */
     int diag_enabled;
     unsigned int write_perf_summary;
-    double countdown_start_time;
+    //double countdown_start_time;
+    double previous_sparkline_data_collection_time;
     struct diag_data diag_trigger_elapsed;
     struct diag_data diag_progress_elapsed_zero_timeout;
     struct diag_data diag_progress_elapsed_nonzero_timeout;
@@ -386,6 +386,7 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
 
     /* start profiling */
     int write_perf_summary = 0;
+    mid->previous_sparkline_data_collection_time = ABT_get_wtime();
     margo_set_param(mid, MARGO_PARAM_WRITE_PERF_SUMMARY, &write_perf_summary);
     margo_diag_start(mid);
 
@@ -618,8 +619,6 @@ void margo_finalize(margo_instance_id mid)
 void margo_wait_for_finalize(margo_instance_id mid)
 {
     int do_cleanup;
-    ABT_thread_join(mid->sparkline_data_collection_tid);
-    ABT_thread_free(&mid->sparkline_data_collection_tid);
 
     ABT_mutex_lock(mid->finalize_mutex);
 
@@ -1489,11 +1488,40 @@ static void sparkline_data_collection_fn(void* foo)
 {
     int ret;
     struct margo_instance *mid = (struct margo_instance *)foo;
+    double time_passed, end = 0;
+    struct diag_data *stat, *tmp;
+
     while(!mid->hg_progress_shutdown_flag)
     {
-      margo_thread_sleep(mid, 2000);
-      fprintf(stderr, "Waking up to do work...\n");
-    }
+      
+      end = ABT_get_wtime();
+      time_passed = end - mid->previous_sparkline_data_collection_time;
+
+      if(time_passed >= MARGO_SPARKLINE_TIMESLICE) {
+        fprintf(stderr, "Waking up to do work... %f\n", time_passed);
+        HASH_ITER(hh, mid->diag_rpc, stat, tmp)
+        {
+
+          if(stat->sparkline_index > 0 && stat->sparkline_index < 100) {
+            stat->sparkline_time[stat->sparkline_index] = stat->cumulative - stat->sparkline_time[stat->sparkline_index - 1];
+            stat->sparkline_count[stat->sparkline_index] = stat->count - stat->sparkline_count[stat->sparkline_index - 1];
+          } else if(stat->sparkline_index == 0) {
+            stat->sparkline_time[stat->sparkline_index] = stat->cumulative;
+            stat->sparkline_count[stat->sparkline_index] = stat->count;
+          } else {
+            //Drop!
+          }
+          stat->sparkline_index++;
+        }
+      
+        mid->previous_sparkline_data_collection_time = ABT_get_wtime();
+   	ABT_thread_yield();
+      } else {
+        ABT_thread_yield();
+      }
+   }
+
+   return;
 }
 
 /* dedicated thread function to drive Mercury progress */
@@ -2170,7 +2198,7 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
         memset(stat->sparkline_time, 0.0, 100);
         memset(stat->sparkline_count, 0.0, 100);
         stat->sparkline_index = 0;
-	stat->countdown_start_time = ABT_get_wtime();
+	//stat->countdown_start_time = ABT_get_wtime();
  
         HASH_ADD(hh, mid->diag_rpc, x,
             sizeof(x), stat);
@@ -2212,7 +2240,7 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
         stat->min = elapsed;
 
     /* sparkline info */
-    time_passed = end - stat->countdown_start_time; 
+    /*time_passed = end - stat->countdown_start_time; 
 
     if(time_passed >= MARGO_SPARKLINE_TIMESLICE) {
 
@@ -2227,7 +2255,7 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
       }
       stat->sparkline_index++;
       stat->countdown_start_time = ABT_get_wtime();
-    }
+    }*/
 
     ABT_mutex_unlock(mid->diag_rpc_mutex);
 
