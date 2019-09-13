@@ -28,6 +28,8 @@ class ProfileGenerator:
 
 		self.poolsizehwm = defaultdict(list) #RPC handler pool size low water mark on the target, in the form <KEY = RPC breadcrumb name, VALUE = [list of individual low watermarks]>
 		self.poolsizelwm = defaultdict(list) #RPC handler pool size high  water mark on the target, in the form <KEY = RPC breadcrumb name, VALUE = [list of individual low watermarks]>
+		self.pooltotalsizehwm = defaultdict(list) #RPC handler pool total size low water mark on the target, in the form <KEY = RPC breadcrumb name, VALUE = [list of individual low watermarks]>
+		self.pooltotalsizelwm = defaultdict(list) #RPC handler pool total size high  water mark on the target, in the form <KEY = RPC breadcrumb name, VALUE = [list of individual low watermarks]>
 
 		self.countsparklines = defaultdict(list) #Sparkline data for RPC breadcrumb counts, in the form <KEY = <RPC breadcrumb name, sparkline_index>, VALUE = [list of individual counts for target instances]>
 		self.timesparklines = [defaultdict(list), defaultdict(list)] #Sparkline data for RPC cumulative time, in the form <KEY = <RPC breadcrumb name, sparkline_index>, VALUE = [list of individual counts for origin or target instaces]>
@@ -174,7 +176,8 @@ class ProfileGenerator:
 				name, avg, rpc_breadcrumb, \
 					addr_hash, origin_or_target, \
 						cumulative, _min, _max, count, \
-							handler_max, handler_min, handler_cumulative, handler_total_max, handler_total_min, handler_total_cumulative = breadcrumb_line.split(',', 15)
+							abt_pool_size_hwm, abt_pool_size_lwm, abt_pool_size_cumulative,  \
+								abt_pool_total_size_hwm, abt_pool_total_size_lwm, abt_pool_total_size_cumulative = breadcrumb_line.split(',', 15)
 				origin_or_target = int(origin_or_target)
 				addr_hash = int(addr_hash)
 
@@ -184,8 +187,10 @@ class ProfileGenerator:
 				self.cumulativestat[origin_or_target][name].append(float(cumulative))
 
 				if(origin_or_target == 1):
-					if (float(handler_min) >= 0): self.poolsizelwm[name].append(float(handler_min))
-					if(float(handler_max) < 100000): self.poolsizehwm[name].append(float(handler_max))
+					if (float(abt_pool_size_lwm) >= 0): self.poolsizelwm[name].append(float(abt_pool_size_lwm))
+					if(float(abt_pool_size_hwm) < 100000): self.poolsizehwm[name].append(float(abt_pool_size_hwm))
+					if (float(abt_pool_total_size_lwm) >= 0): self.pooltotalsizelwm[name].append(float(abt_pool_total_size_lwm))
+					if(float(abt_pool_total_size_hwm) < 100000): self.pooltotalsizehwm[name].append(float(abt_pool_total_size_hwm))
 
 				else:
 					self.__addtoedgelist(name, mid, addr_hash, cumulative, count)
@@ -356,14 +361,41 @@ class ProfileGenerator:
                 	self.__gengraph(x_pos, perf_arr, 'Breadcrumb ID',
                         	'Pool Size', graph_names[i], txt=txt[i], is_stat_graph=True, use_x_ticks=True, objects=objects)
 
+	#Display statistics of the low and highwater mark of RPC handler total pool sizes across target instances
+	def genargobottotalpoolsizegraph(self):
+		graph_names = ['Statistics of Low-water-mark of Argobot Total Pool Size: Target', 'Statistics of High-water-mark of Argobot Total Pool Size: Target']
+		lwm = OrderedDict(defaultdict(list))
+		hwm = OrderedDict(defaultdict(list))
+		keys = (OrderedDict(sorted(self.cumulative[0].items(), key=operator.itemgetter(1), reverse=True)[:5])).keys()
+		txt = ['Sort breadcrumbs by cumulative time on the origin \n Display the distribution of low-water mark for the Argobot total pool size across target instances for the top-5 breadcrumbs sorted by cumulative time \
+\n Argobot pool sizes are captured on the target when an RPC response is sent back to origin \n \
+Argobot total pool size includes the number of suspended work items in addition to the number of runnable work items'
+			,'Sort breadcrumbs by cumulative time on the origin \n Display the distribution of high-water mark for the Argobot total pool size across target instances for the top-5 breadcrumbs sorted by cumulative time \
+\n Argobot pool sizes are captured on the target when an RPC response is sent back to origin \n \
+Argobot total pool size includes the number of suspended work items in addition to the number of runnable work items']
+
+		for k in keys:
+			lwm[k] = self.pooltotalsizelwm[k]
+			hwm[k] = self.pooltotalsizehwm[k]
+		
+		l = [lwm, hwm]
+
+		for i in 0,1:
+			perf_arr = []
+	                for k in l[i]:
+        	                perf_arr.append(l[i][k])
+
+	                objects = self.__getrpc2name(l[i].keys())
+        	        x_pos = np.arange(len(objects))
+
+                	self.__gengraph(x_pos, perf_arr, 'Breadcrumb ID',
+                        	'Total Pool Size', graph_names[i], txt=txt[i], is_stat_graph=True, use_x_ticks=True, objects=objects)
+
 	#Generate and display sparklines for the top-5 RPC breadcrumbs, sorted by cumulative counts
 	def gencountsparklines(self):
 		x = defaultdict(list)
 		txt = 'Sort breadcrumbs by cumulative call-count \n \
-For the top-5 breadcrumbs, display sparklines for the cumulative call-count across all target instances\n \
-CAUTION: Sparkline-data is collected by each target instance at most every 2 seconds, where the timer is maintained and reset on a per-breadcrumb level.\n \
-Thus, sparkline data is collected in an un-coordinated fashion, and the number of data points displayed depends on the relative frequency of invocation of breadcrumb.\n \
-Interpret data with care.'
+For the top-5 breadcrumbs, display sparklines for the cumulative call-count across all target instances'
 		for (k, i), v in self.countsparklines.items():
 			if k in self.count:
 				x[k].append(sum(v))
@@ -487,6 +519,7 @@ def main():
 	p.gencumulativerawgraph()
 
 	p.genargobotpoolsizegraph()
+	p.genargobottotalpoolsizegraph()
 
 	p.gencountsparklines()
 	p.gentimesparklines()
