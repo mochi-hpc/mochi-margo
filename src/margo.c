@@ -23,7 +23,7 @@
 #define DEFAULT_MERCURY_PROGRESS_TIMEOUT_UB 100 /* 100 milliseconds */
 #define DEFAULT_MERCURY_HANDLE_CACHE_SIZE 32
 
-#define MARGO_SPARKLINE_TIMESLICE 0.5
+#define MARGO_SPARKLINE_TIMESLICE 1
 
 /* internal structure to store timing information */
 struct diag_data
@@ -54,7 +54,6 @@ struct diag_data
 
     /*sparkline data for breadcrumb */
     double sparkline_time[100];
-    uint16_t sparkline_index;
     double sparkline_count[100];
 
     UT_hash_handle hh;        /* hash table link */
@@ -160,8 +159,8 @@ struct margo_instance
      */
     int diag_enabled;
     unsigned int write_perf_summary;
-    //double countdown_start_time;
     double previous_sparkline_data_collection_time;
+    uint16_t sparkline_index;
     struct diag_data diag_trigger_elapsed;
     struct diag_data diag_progress_elapsed_zero_timeout;
     struct diag_data diag_progress_elapsed_nonzero_timeout;
@@ -387,6 +386,7 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
     /* start profiling */
     int write_perf_summary = 0;
     mid->previous_sparkline_data_collection_time = ABT_get_wtime();
+    mid->sparkline_index = 0;
     margo_set_param(mid, MARGO_PARAM_WRITE_PERF_SUMMARY, &write_perf_summary);
     margo_diag_start(mid);
 
@@ -1502,18 +1502,18 @@ static void sparkline_data_collection_fn(void* foo)
         HASH_ITER(hh, mid->diag_rpc, stat, tmp)
         {
 
-          if(stat->sparkline_index > 0 && stat->sparkline_index < 100) {
-            stat->sparkline_time[stat->sparkline_index] = stat->cumulative - stat->sparkline_time[stat->sparkline_index - 1];
-            stat->sparkline_count[stat->sparkline_index] = stat->count - stat->sparkline_count[stat->sparkline_index - 1];
-          } else if(stat->sparkline_index == 0) {
-            stat->sparkline_time[stat->sparkline_index] = stat->cumulative;
-            stat->sparkline_count[stat->sparkline_index] = stat->count;
+          if(mid->sparkline_index > 0 && mid->sparkline_index < 100) {
+            stat->sparkline_time[mid->sparkline_index] = stat->cumulative - stat->sparkline_time[mid->sparkline_index - 1];
+            stat->sparkline_count[mid->sparkline_index] = stat->count - stat->sparkline_count[mid->sparkline_index - 1];
+          } else if(mid->sparkline_index == 0) {
+            stat->sparkline_time[mid->sparkline_index] = stat->cumulative;
+            stat->sparkline_count[mid->sparkline_index] = stat->count;
           } else {
             //Drop!
           }
-          stat->sparkline_index++;
         }
       
+        mid->sparkline_index++;
         mid->previous_sparkline_data_collection_time = ABT_get_wtime();
    	ABT_thread_yield();
       } else {
@@ -1674,7 +1674,7 @@ void margo_diag_start(margo_instance_id mid)
     mid->diag_enabled = 1;
 }
 
-static void print_diag_data(FILE *file, const char* name, const char *description, struct diag_data *data)
+static void print_diag_data(margo_instance_id mid, FILE *file, const char* name, const char *description, struct diag_data *data)
 {
     double avg;
 
@@ -1686,7 +1686,7 @@ static void print_diag_data(FILE *file, const char* name, const char *descriptio
 
     /* print sparkline data */
     fprintf(file, "%s,%d;", name,data->type);
-    for(int i = 0; i < data->sparkline_index; i ++)
+    for(int i = 0; i < mid->sparkline_index; i++)
       fprintf(file, "%.9f,%.9f, %d;", data->sparkline_time[i], data->sparkline_count[i], i);
     fprintf(file,"\n");
 
@@ -1808,13 +1808,13 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
     //fprintf(outfile, "# <stat>\t<avg>\t<min>\t<max>\t<count>\n");
 
     
-    print_diag_data(outfile, "trigger_elapsed", 
+    print_diag_data(mid, outfile, "trigger_elapsed", 
         "Time consumed by HG_Trigger()", 
         &mid->diag_trigger_elapsed);
-    print_diag_data(outfile, "progress_elapsed_zero_timeout", 
+    print_diag_data(mid, outfile, "progress_elapsed_zero_timeout", 
         "Time consumed by HG_Progress() when called with timeout==0", 
         &mid->diag_progress_elapsed_zero_timeout);
-    print_diag_data(outfile, "progress_elapsed_nonzero_timeout", 
+    print_diag_data(mid, outfile, "progress_elapsed_nonzero_timeout", 
         "Time consumed by HG_Progress() when called with timeout!=0", 
         &mid->diag_progress_elapsed_nonzero_timeout);
     /*print_diag_data(outfile, "progress_timeout_value", 
@@ -1843,7 +1843,7 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
                 sprintf(&rpc_breadcrumb_str[(3-i)*5], "0x%4lx", tmp_breadcrumb);
 #endif
         }
-        print_diag_data(outfile, rpc_breadcrumb_str, "RPC statistics", dd);
+        print_diag_data(mid, outfile, rpc_breadcrumb_str, "RPC statistics", dd);
     }
 
     if(outfile != stdout)
@@ -2197,8 +2197,6 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
         /* initialize sparkline data */
         memset(stat->sparkline_time, 0.0, 100);
         memset(stat->sparkline_count, 0.0, 100);
-        stat->sparkline_index = 0;
-	//stat->countdown_start_time = ABT_get_wtime();
  
         HASH_ADD(hh, mid->diag_rpc, x,
             sizeof(x), stat);
@@ -2238,24 +2236,6 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
         stat->max = elapsed;
     if(stat->min == 0 || elapsed < stat->min)
         stat->min = elapsed;
-
-    /* sparkline info */
-    /*time_passed = end - stat->countdown_start_time; 
-
-    if(time_passed >= MARGO_SPARKLINE_TIMESLICE) {
-
-      if(stat->sparkline_index > 0 && stat->sparkline_index < 100) {
-        stat->sparkline_time[stat->sparkline_index] = stat->cumulative - stat->sparkline_time[stat->sparkline_index - 1];
-        stat->sparkline_count[stat->sparkline_index] = stat->count - stat->sparkline_count[stat->sparkline_index - 1];
-      } else if(stat->sparkline_index == 0) {
-        stat->sparkline_time[stat->sparkline_index] = stat->cumulative;
-        stat->sparkline_count[stat->sparkline_index] = stat->count;
-      } else {
-        //Drop!
-      }
-      stat->sparkline_index++;
-      stat->countdown_start_time = ABT_get_wtime();
-    }*/
 
     ABT_mutex_unlock(mid->diag_rpc_mutex);
 
