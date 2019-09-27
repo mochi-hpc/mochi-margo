@@ -2,6 +2,8 @@ TESTS_ENVIRONMENT += \
  TIMEOUT="$(TIMEOUT)" \
  MKTEMP="$(MKTEMP)"
 
+# disable tests if there is no timeout command
+if BUILD_TESTS
 check_PROGRAMS += \
  tests/margo-test-sleep \
  tests/margo-test-server \
@@ -25,4 +27,4 @@ EXTRA_DIST += \
 tests_margo_test_server_SOURCES = \
  tests/margo-test-server.c \
  tests/my-rpc.c
-
+endif
