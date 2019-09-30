@@ -37,10 +37,10 @@ class ProfileGenerator:
 		self.nodetomid = defaultdict(list) #List of margo instances on a given node
 		self.midtoprovider = defaultdict(list) #List of registered provider types on a given margo instance
 		self.provider_id = dict() #Used to generate a unique global ID for every provider. This is necessary in order to properly generate the graphViz file
-		self.edgelistcount = dict()
-		self.edgelisttime = dict()
+		self.edgelistcount = dict() #Count information in the form <KEY = (source instance, source call, dest instance, destination call), VALYE = cumulative count >
+		self.edgelisttime = dict() #Time information in the form <KEY = (source instance, source call, dest instance, destination call), VALYE = cumulative time >
 
-		self.hash64tomid = dict()
+		self.hash64tomid = dict() #Map a 64-bit hash to a margo instance address string
 		self.rpc2name = dict() #Map the RPC ID to a proper registered name
 		self.pp = PdfPages('profile.pdf')
 
@@ -125,7 +125,9 @@ class ProfileGenerator:
 		plt.close()
 		
 		
-	
+
+	#Add to the edgelist that collects count information in the form <KEY = (source instance, source call, dest instance, destination call), VALYE = cumulative count >
+	#Add to the edgelist that collects time information in the form <KEY = (source instance, source call, dest instance, destination call), VALUE = cumulative time >
 	def __addtoedgelist(self, name, mid, addr_hash, cumulative, count):
 		raw_rpc_calls = list(name.split(" "))
 		del raw_rpc_calls[len(raw_rpc_calls) - 1]
@@ -137,6 +139,63 @@ class ProfileGenerator:
 			self.edgelistcount[(mid, raw_rpc_calls[0], addr_hash, raw_rpc_calls[0])] = self.edgelistcount.get((mid, raw_rpc_calls[0], addr_hash, raw_rpc_calls[0]), 0) + int(count)
 			self.edgelisttime[(mid, raw_rpc_calls[0], addr_hash, raw_rpc_calls[0])] = self.edgelisttime.get((mid, raw_rpc_calls[0], addr_hash, raw_rpc_calls[0]), 0) + float(cumulative)
 			
+
+	#Generate the nodes of the graph
+	#Grey: Nodes
+	#Blue: Margo instances
+	#White: Providers
+	def __gengraphnodes(self):
+		node_string = "/* First describe and generate the nodes and entities in the graph */\n"
+		for (node, midlist) in self.nodetomid.items():
+			node_string += ("subgraph cluster" + node + " {\n")
+			node_string += ("node [style=filled, color=white];\n style=filled;\n color=lightgrey;\n")
+			for mid in midlist:
+				node_string += ("subgraph cluster" + mid.replace("+", "_").replace(":", "_").replace(".","_").replace("//", "_") + " {\n")
+				node_string += ("node [style=filled];\n color=lightblue;\n")
+				for (provider_type, provider_id) in self.midtoprovider[mid]:
+					node_string += (str(provider_id) + ";\n")
+				node_string += ("label = \"" + mid + "\";\n")
+				node_string += ("}\n")
+			node_string += ("label = \"" + node + "\";\n")
+			node_string += ("}\n")
+		
+		return node_string
+
+	#Generate weighted edges of the form (cumulative time, cumulative count)
+	#(source_provider_id (unique), source_call, destination_provider_id (globally unique), destination_call)
+	#IMPT: We derive the "provider type" from the RPC call by assuming that every RPC call has the form <provider_type>_<RPC_call>
+	#For instance, the call sdskv_get_keys has the provider type as "sdskv" and RPC call as "get_keys"
+	def __gengraphedges(self):
+		edge_string = "/* Generate a list of weighted edges for the graph in the form (count, time) */"
+		for edge_info, count in self.edgelistcount.items():
+			cumulative_time = self.edgelisttime[edge_info]
+			source_provider_id = ""
+			dest_provider_id = ""
+
+			#IMPT: We only have source and destination margo instances. We need to derive the id's for the providers inside the margo instance that made
+			#the call.
+			#Assumption: We make an assumption that there is only one provider of a given type inside a margo instance. If there are multiple, then
+			#the edge represents the cumulative counts or time values for all providers of a given type.
+			(source, source_call, destination, dest_call) = edge_info
+			destination = self.hash64tomid[destination]
+			source_provider = ((self.rpc2name.get(str(source_call), "UNKNOWN")).split("_"))[0]
+			dest_provider = ((self.rpc2name.get(str(dest_call), "UNKNOWN")).split("_"))[0]
+
+			if source_provider != "UNKNOWN" and dest_provider != "UNKNOWN":
+
+				for (provider_type, provider_id) in self.midtoprovider[source]:
+					if source_provider == provider_type:
+						source_provider_id = provider_id
+			
+				for (provider_type, provider_id) in self.midtoprovider[destination]:
+					if dest_provider == provider_type:
+						dest_provider_id = provider_id
+				dest_call = self.rpc2name[str(dest_call)]
+			
+				edge_string += (str(source_provider_id) + " -> " + str(dest_provider_id) + "[label=\""+dest_call+","+str(count)+","+str(cumulative_time)+"\", weight=\""+str(dest_call)+","+str(count)+","+str(cumulative_time)+"\"];\n")
+
+		return edge_string			
+
 
 	# Read the current working directory for profile*.csv files and populate the relevant data-structures	
 	# Profile files are expected to be in the following format:
@@ -186,12 +245,14 @@ class ProfileGenerator:
 				self.countstat[origin_or_target][name].append(int(count))
 				self.cumulativestat[origin_or_target][name].append(float(cumulative))
 
+				#Add Argobot pool size information if this is a target-side data point
 				if(origin_or_target == 1):
 					if (float(abt_pool_size_lwm) >= 0): self.poolsizelwm[name].append(float(abt_pool_size_lwm))
 					if(float(abt_pool_size_hwm) < 100000): self.poolsizehwm[name].append(float(abt_pool_size_hwm))
 					if (float(abt_pool_total_size_lwm) >= 0): self.pooltotalsizelwm[name].append(float(abt_pool_total_size_lwm))
 					if(float(abt_pool_total_size_hwm) < 100000): self.pooltotalsizehwm[name].append(float(abt_pool_total_size_hwm))
 
+				#If this is an origin-side data-point, collect information about the breadcrumb in order to generate a topology graph
 				else:
 					self.__addtoedgelist(name, mid, addr_hash, cumulative, count)
 
@@ -436,54 +497,6 @@ For the top-5 breadcrumbs, display sparklines for the cumulative call-time acros
 		
 			self.__gensparklinegraph(objects=objects, title=graph_names[p], num_subplots=len(x.items()), perf_arr=perf_arr, txt=txt[p])
 
-
-	#Generate the nodes of the graph
-	#Grey: Nodes
-	#Blue: Margo instances
-	#White: Providers
-	def __gengraphnodes(self):
-		node_string = "/* First describe and generate the nodes and entities in the graph */\n"
-		for (node, midlist) in self.nodetomid.items():
-			node_string += ("subgraph cluster" + node + " {\n")
-			node_string += ("node [style=filled, color=white];\n style=filled;\n color=lightgrey;\n")
-			for mid in midlist:
-				node_string += ("subgraph cluster" + mid.replace("+", "_").replace(":", "_").replace(".","_").replace("//", "_") + " {\n")
-				node_string += ("node [style=filled];\n color=lightblue;\n")
-				for (provider_type, provider_id) in self.midtoprovider[mid]:
-					node_string += (str(provider_id) + ";\n")
-				node_string += ("label = \"" + mid + "\";\n")
-				node_string += ("}\n")
-			node_string += ("label = \"" + node + "\";\n")
-			node_string += ("}\n")
-		
-		return node_string
-
-	def __gengraphedges(self):
-		edge_string = "/* Generate a list of weighted edges for the graph in the form (count, time) */"
-		for edge_info, count in self.edgelistcount.items():
-			cumulative_time = self.edgelisttime[edge_info]
-			source_provider_id = ""
-			dest_provider_id = ""
-
-			(source, source_call, destination, dest_call) = edge_info
-			destination = self.hash64tomid[destination]
-			source_provider = ((self.rpc2name.get(str(source_call), "UNKNOWN")).split("_"))[0]
-			dest_provider = ((self.rpc2name.get(str(dest_call), "UNKNOWN")).split("_"))[0]
-
-			if source_provider != "UNKNOWN" and dest_provider != "UNKNOWN":
-
-				for (provider_type, provider_id) in self.midtoprovider[source]:
-					if source_provider == provider_type:
-						source_provider_id = provider_id
-			
-				for (provider_type, provider_id) in self.midtoprovider[destination]:
-					if dest_provider == provider_type:
-						dest_provider_id = provider_id
-				dest_call = self.rpc2name[str(dest_call)]
-			
-				edge_string += (str(source_provider_id) + " -> " + str(dest_provider_id) + "[label=\""+dest_call+","+str(count)+","+str(cumulative_time)+"\", weight=\""+str(dest_call)+","+str(count)+","+str(cumulative_time)+"\"];\n")
-
-		return edge_string			
 
 	#Generate a graphViz file that describes the structure of the RPC communication graph in the DOT language
 	#From this file, generate a PNG image using: $dot -Tpng graph.gv -o graph.png
