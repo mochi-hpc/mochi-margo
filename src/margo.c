@@ -42,17 +42,17 @@ struct diag_data
     double cumulative;
     
     /* RPC handler pool stats */
-    double abt_pool_total_size_lwm;
-    double abt_pool_total_size_hwm;
-    double abt_pool_total_size_cumulative;
+    unsigned long abt_pool_total_size_lwm;
+    unsigned long abt_pool_total_size_hwm;
+    unsigned long abt_pool_total_size_cumulative;
 
-    double abt_pool_size_lwm;
-    double abt_pool_size_hwm;
-    double abt_pool_size_cumulative;
+    unsigned long abt_pool_size_lwm;
+    unsigned long abt_pool_size_hwm;
+    unsigned long abt_pool_size_cumulative;
     
     /* origin or target */
     breadcrumb_type type;
-    int count;
+    unsigned long count;
 
     uint64_t rpc_breadcrumb;  /* identifier for rpc and it's ancestors */
     struct global_breadcrumb_key key;
@@ -1713,7 +1713,7 @@ static void print_diag_data(margo_instance_id mid, FILE *file, const char* name,
         avg = 0;
 
     /* first line is breadcrumb data */
-    fprintf(file, "%s,%.9f,%lu,%lu,%d,%.9f,%.9f,%.9f,%d,%.9f,%.9f,%.9f,%.9f,%.9f,%.9f\n", name, avg, data->key.rpc_breadcrumb, data->key.addr_hash, data->type, data->cumulative, data->min, data->max, data->count, data->abt_pool_size_hwm, data->abt_pool_size_lwm, data->abt_pool_size_cumulative, data->abt_pool_total_size_hwm, data->abt_pool_total_size_lwm, data->abt_pool_total_size_cumulative);
+    fprintf(file, "%s,%.9f,%lu,%lu,%d,%.9f,%.9f,%.9f,%lu,%lu,%lu,%lu,%lu,%lu,%lu\n", name, avg, data->key.rpc_breadcrumb, data->key.addr_hash, data->type, data->cumulative, data->min, data->max, data->count, data->abt_pool_size_hwm, data->abt_pool_size_lwm, data->abt_pool_size_cumulative, data->abt_pool_total_size_hwm, data->abt_pool_total_size_lwm, data->abt_pool_total_size_cumulative);
 
     /* second line is sparkline data for the given breadcrumb*/
     fprintf(file, "%s,%d;", name, data->type);

@@ -63,22 +63,22 @@ typedef enum breadcrumb_type breadcrumb_type;
 struct margo_breadcrumb
 {
     /* stats for breadcrumb call times */
-    double min;
+    double  min;
     double max;
     double cumulative;
 
     /* stats for RPC handler pool sizes */
     /* Total pool size = Total number of runnable items + items waiting on a lock */
-    double abt_pool_total_size_lwm; /* low watermark */
-    double abt_pool_total_size_hwm; /* high watermark */
-    double abt_pool_total_size_cumulative;
+    unsigned long abt_pool_total_size_lwm; /* low watermark */
+    unsigned long abt_pool_total_size_hwm; /* high watermark */
+    unsigned long abt_pool_total_size_cumulative;
 
-    double abt_pool_size_lwm; /* low watermark */
-    double abt_pool_size_hwm; /* high watermark */
-    double abt_pool_size_cumulative;
+    unsigned long abt_pool_size_lwm; /* low watermark */
+    unsigned long abt_pool_size_hwm; /* high watermark */
+    unsigned long abt_pool_size_cumulative;
 
     /* count of occurrences of breadcrumb */
-    int count;
+    unsigned long count;
     /* 0 is this is a origin-side breadcrumb, 1 if this is a target-side breadcrumb */
     breadcrumb_type type;
 
