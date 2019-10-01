@@ -1160,7 +1160,7 @@ static hg_return_t margo_provider_iforward_internal(
     req->provider_id = provider_id; /*store id of provider servicing the request */
     const struct hg_info * inf = HG_Get_info(req->handle);
     margo_addr_to_string(mid, addr_self_string, &addr_self_string_sz, inf->addr);
-    req->server_addr_hash = hash64_str(addr_self_string); /* store address of server instance */ 
+    HASH_JEN(addr_self_string, strlen(addr_self_string), req->server_addr_hash); /*record own address in the breadcrumb */
 
     return HG_Forward(handle, margo_cb, (void*)req, in_struct);
 }
@@ -1826,7 +1826,7 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
     fprintf(outfile, "# RPC breadcrumbs for RPCs that were registered on this process:\n");*/
     fprintf(outfile, "%u\n", mid->num_registered_rpcs);
     GET_SELF_ADDR_STR(mid, name);
-    hash = hash64_str(name);
+    HASH_JEN(name, strlen(name), hash); /*record own address in the breadcrumb */
     
     fprintf(outfile, "%lu,%s\n", hash, name);
 
@@ -2323,7 +2323,7 @@ void __margo_internal_pre_wrapper_hooks(margo_instance_id mid, hg_handle_t handl
     req->provider_id = 0;
     req->provider_id += ((info->id) & (((1<<(__MARGO_PROVIDER_ID_SIZE*8))-1)));
     GET_SELF_ADDR_STR(mid, name);
-    req->server_addr_hash = hash64_str(name); /*record own address in the breadcrumb */
+    HASH_JEN(name, strlen(name), req->server_addr_hash); /*record own address in the breadcrumb */
  
     /* Note: we use this opportunity to retrieve the incoming RPC
      * breadcrumb and put it in a thread-local argobots key.  It is
