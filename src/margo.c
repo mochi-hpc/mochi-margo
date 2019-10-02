@@ -165,7 +165,7 @@ struct margo_instance
      * which will serialize access.
      */
     int diag_enabled;
-    unsigned int write_perf_summary;
+    unsigned int profile;
     double previous_sparkline_data_collection_time;
     uint16_t sparkline_index;
     struct diag_data diag_trigger_elapsed;
@@ -392,12 +392,20 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
     mid->rpc_xstreams = rpc_xstreams;
     mid->num_registered_rpcs = 0;
 
-    /* start profiling */
-    int write_perf_summary = 0;
+    /* start profiling if env variable MARGO_PROFILE is set */
+    int profile = 0;
     mid->previous_sparkline_data_collection_time = ABT_get_wtime();
     mid->sparkline_index = 0;
-    margo_set_param(mid, MARGO_PARAM_WRITE_PERF_SUMMARY, &write_perf_summary);
-    margo_diag_start(mid);
+    margo_get_param(mid, MARGO_PARAM_PROFILE, &profile);
+    if(profile) {
+       margo_diag_start(mid);
+
+       ret = ABT_thread_create(mid->progress_pool, sparkline_data_collection_fn, mid, 
+       ABT_THREAD_ATTR_NULL, &mid->sparkline_data_collection_tid);
+       if(!ret)
+         fprintf(stderr, "MARGO_PROFILE: Failed to start sparkline data collection thread. Continuing to profile without sparkline data collection.\n");
+
+    }
 
     return mid;
 
@@ -493,11 +501,6 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
 
     ret = ABT_thread_create(mid->progress_pool, hg_progress_fn, mid, 
         ABT_THREAD_ATTR_NULL, &mid->hg_progress_tid);
-    if(ret != 0) goto err;
-
-    /* Create a ULT to collect sparkline data */
-    ret = ABT_thread_create(mid->progress_pool, sparkline_data_collection_fn, mid, 
-        ABT_THREAD_ATTR_NULL, &mid->sparkline_data_collection_tid);
     if(ret != 0) goto err;
 
     mid->shutdown_rpc_id = MARGO_REGISTER(mid, "__shutdown__", 
@@ -617,7 +620,8 @@ void margo_finalize(margo_instance_id mid)
     }
 
     /* dump out the profile */ 
-    margo_diag_dump(mid, "profile", 1);
+    int profile = 0;
+    margo_get_param(mid, MARGO_PARAM_PROFILE, &profile);
 
     /* tell progress thread to wrap things up */
     mid->hg_progress_shutdown_flag = 1;
@@ -625,8 +629,12 @@ void margo_finalize(margo_instance_id mid)
     /* wait for it to shutdown cleanly */
     ABT_thread_join(mid->hg_progress_tid);
     ABT_thread_free(&mid->hg_progress_tid);
-    ABT_thread_join(mid->sparkline_data_collection_tid);
-    ABT_thread_free(&mid->sparkline_data_collection_tid);
+
+    if(profile) {
+      ABT_thread_join(mid->sparkline_data_collection_tid);
+      ABT_thread_free(&mid->sparkline_data_collection_tid);
+      margo_diag_dump(mid, "profile", 1);
+    }
 
     ABT_mutex_lock(mid->finalize_mutex);
     mid->finalize_flag = 1;
@@ -1521,6 +1529,12 @@ static void sparkline_data_collection_fn(void* foo)
     double time_passed, end = 0;
     struct diag_data *stat, *tmp;
 
+    /* double check that diagnostics is running, else, close this ULT */
+    if(!mid->diag_enabled) {
+      ABT_thread_join(mid->sparkline_data_collection_tid);
+      ABT_thread_free(&mid->sparkline_data_collection_tid);
+    }
+
     while(!mid->hg_progress_shutdown_flag)
     {
       
@@ -1776,13 +1790,6 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
     uint64_t hash;
 
     assert(mid->diag_enabled);
-    int write_perf_summary;
-    margo_get_param(mid, MARGO_PARAM_WRITE_PERF_SUMMARY, &write_perf_summary);
-
-    if(!write_perf_summary) {
-	fprintf(stderr, "MARGO PROFILE: Please set MARGO_WRITE_PERF_SUMMARY in order for performance data to be written out\n");
-	return;
-    }
 
     if(uniquify)
     {
@@ -1890,8 +1897,8 @@ void margo_set_param(margo_instance_id mid, int option, const void *param)
         case MARGO_PARAM_PROGRESS_TIMEOUT_UB:
             mid->hg_progress_timeout_ub = (*((const unsigned int*)param));
             break;
-	case MARGO_PARAM_WRITE_PERF_SUMMARY:
-	    mid->write_perf_summary = (*((const unsigned int*)param));
+	case MARGO_PARAM_PROFILE:
+	    mid->profile = (*((const unsigned int*)param));
 	    break;
     }
 
@@ -1906,15 +1913,15 @@ void margo_get_param(margo_instance_id mid, int option, void *param)
         case MARGO_PARAM_PROGRESS_TIMEOUT_UB:
             (*((unsigned int*)param)) = mid->hg_progress_timeout_ub;
             break;
-	case MARGO_PARAM_WRITE_PERF_SUMMARY:
-	    if(mid->write_perf_summary) {
-		(*((unsigned int*)param)) = mid->write_perf_summary;
+	case MARGO_PARAM_PROFILE:
+	    if(mid->profile) {
+		(*((unsigned int*)param)) = mid->profile;
             } else {
-		if(getenv("MARGO_WRITE_PERF_SUMMARY")) {
-		     mid->write_perf_summary = (*((unsigned int*)param)) = (unsigned int)atoi(getenv("MARGO_WRITE_PERF_SUMMARY"));
+		if(getenv("MARGO_PROFILE")) {
+		     mid->profile = (*((unsigned int*)param)) = (unsigned int)atoi(getenv("MARGO_PROFILE"));
 		}
 		else {
-		     mid->write_perf_summary = (*((unsigned int*)param)) = 0;
+		     mid->profile = (*((unsigned int*)param)) = 0;
                 }
 	    }
 	    break;

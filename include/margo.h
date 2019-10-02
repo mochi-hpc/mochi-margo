@@ -43,7 +43,7 @@ typedef struct margo_request_struct* margo_request;
 #define MARGO_MAX_PROVIDER_ID ((1 << (8*__MARGO_PROVIDER_ID_SIZE))-1)
 
 #define MARGO_PARAM_PROGRESS_TIMEOUT_UB 1
-#define MARGO_PARAM_WRITE_PERF_SUMMARY 2
+#define MARGO_PARAM_PROFILE 2
 
 /**
  * Initializes margo library.
