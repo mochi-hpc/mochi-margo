@@ -1089,8 +1089,8 @@ static hg_return_t margo_provider_iforward_internal(
     hg_bool_t flag;
     margo_instance_id mid = margo_hg_handle_get_instance(handle);
     uint64_t *rpc_breadcrumb;
-    char addr_self_string[128];
-    hg_size_t addr_self_string_sz = 128;
+    char addr_string[128];
+    hg_size_t addr_string_sz = 128;
 
     assert(provider_id <= MARGO_MAX_PROVIDER_ID);
 
@@ -1167,8 +1167,8 @@ static hg_return_t margo_provider_iforward_internal(
     /* add information about the server and provider servicing the request */
     req->provider_id = provider_id; /*store id of provider servicing the request */
     const struct hg_info * inf = HG_Get_info(req->handle);
-    margo_addr_to_string(mid, addr_self_string, &addr_self_string_sz, inf->addr);
-    HASH_JEN(addr_self_string, strlen(addr_self_string), req->server_addr_hash); /*record own address in the breadcrumb */
+    margo_addr_to_string(mid, addr_string, &addr_string_sz, inf->addr);
+    HASH_JEN(addr_string, strlen(addr_string), req->server_addr_hash); /*record server address in the breadcrumb */
 
     return HG_Forward(handle, margo_cb, (void*)req, in_struct);
 }
