@@ -37,22 +37,10 @@ static ABT_mutex g_num_margo_instances_mtx = ABT_MUTEX_NULL; // mutex for above 
 struct diag_data
 {
     /* breadcrumb stats */
-    double min;
-    double max;
-    double cumulative;
-    
-    /* RPC handler pool stats */
-    unsigned long abt_pool_total_size_lwm;
-    unsigned long abt_pool_total_size_hwm;
-    unsigned long abt_pool_total_size_cumulative;
-
-    unsigned long abt_pool_size_lwm;
-    unsigned long abt_pool_size_hwm;
-    unsigned long abt_pool_size_cumulative;
+    breadcrumb_stats stats;
     
     /* origin or target */
     breadcrumb_type type;
-    unsigned long count;
 
     uint64_t rpc_breadcrumb;  /* identifier for rpc and it's ancestors */
     struct global_breadcrumb_key key;
@@ -77,10 +65,10 @@ static ABT_key target_timing_key = ABT_KEY_NULL;
 
 #define __DIAG_UPDATE(__data, __time)\
 do {\
-    __data.count++; \
-    __data.cumulative += (__time); \
-    if((__time) > __data.max) __data.max = (__time); \
-    if(__data.min == 0 || (__time) < __data.min) __data.min = (__time); \
+    __data.stats.count++; \
+    __data.stats.cumulative += (__time); \
+    if((__time) > __data.stats.max) __data.stats.max = (__time); \
+    if(__data.stats.min == 0 || (__time) < __data.stats.min) __data.stats.min = (__time); \
 } while(0)
 
 struct margo_handle_cache_el
@@ -1546,11 +1534,11 @@ static void sparkline_data_collection_fn(void* foo)
         {
 
           if(mid->sparkline_index > 0 && mid->sparkline_index < 100) {
-            stat->sparkline_time[mid->sparkline_index] = stat->cumulative - stat->sparkline_time[mid->sparkline_index - 1];
-            stat->sparkline_count[mid->sparkline_index] = stat->count - stat->sparkline_count[mid->sparkline_index - 1];
+            stat->sparkline_time[mid->sparkline_index] = stat->stats.cumulative - stat->sparkline_time[mid->sparkline_index - 1];
+            stat->sparkline_count[mid->sparkline_index] = stat->stats.count - stat->sparkline_count[mid->sparkline_index - 1];
           } else if(mid->sparkline_index == 0) {
-            stat->sparkline_time[mid->sparkline_index] = stat->cumulative;
-            stat->sparkline_count[mid->sparkline_index] = stat->count;
+            stat->sparkline_time[mid->sparkline_index] = stat->stats.cumulative;
+            stat->sparkline_count[mid->sparkline_index] = stat->stats.count;
           } else {
             //Drop!
           }
@@ -1721,13 +1709,13 @@ static void print_diag_data(margo_instance_id mid, FILE *file, const char* name,
 {
     double avg;
 
-    if(data->count != 0)
-        avg = data->cumulative/data->count;
+    if(data->stats.count != 0)
+        avg = data->stats.cumulative/data->stats.count;
     else
         avg = 0;
 
     /* first line is breadcrumb data */
-    fprintf(file, "%s,%.9f,%lu,%lu,%d,%.9f,%.9f,%.9f,%lu,%lu,%lu,%lu,%lu,%lu,%lu\n", name, avg, data->key.rpc_breadcrumb, data->key.addr_hash, data->type, data->cumulative, data->min, data->max, data->count, data->abt_pool_size_hwm, data->abt_pool_size_lwm, data->abt_pool_size_cumulative, data->abt_pool_total_size_hwm, data->abt_pool_total_size_lwm, data->abt_pool_total_size_cumulative);
+    fprintf(file, "%s,%.9f,%lu,%lu,%d,%.9f,%.9f,%.9f,%lu,%lu,%lu,%lu,%lu,%lu,%lu\n", name, avg, data->key.rpc_breadcrumb, data->key.addr_hash, data->type, data->stats.cumulative, data->stats.min, data->stats.max, data->stats.count, data->stats.abt_pool_size_hwm, data->stats.abt_pool_size_lwm, data->stats.abt_pool_size_cumulative, data->stats.abt_pool_total_size_hwm, data->stats.abt_pool_total_size_lwm, data->stats.abt_pool_total_size_cumulative);
 
     /* second line is sparkline data for the given breadcrumb*/
     fprintf(file, "%s,%d;", name, data->type);
@@ -1757,19 +1745,19 @@ void margo_diag_breadcrumb_snapshot(margo_instance_id mid, struct margo_breadcru
 #if 0
     fprintf(stderr, "Copying out RPC breadcrumb %d\n", dd->rpc_breadcrumb);
 #endif
-    tmp_bc->min = dd->min;
-    tmp_bc->max = dd->max;
+    tmp_bc->stats.min = dd->stats.min;
+    tmp_bc->stats.max = dd->stats.max;
     tmp_bc->type = dd->type;
     tmp_bc->key = dd->key;
-    tmp_bc->count = dd->count;
-    tmp_bc->cumulative = dd->cumulative;
+    tmp_bc->stats.count = dd->stats.count;
+    tmp_bc->stats.cumulative = dd->stats.cumulative;
 
-    tmp_bc->abt_pool_total_size_hwm = dd->abt_pool_total_size_hwm;
-    tmp_bc->abt_pool_total_size_lwm = dd->abt_pool_total_size_lwm;
-    tmp_bc->abt_pool_total_size_cumulative = dd->abt_pool_total_size_cumulative;
-    tmp_bc->abt_pool_size_hwm = dd->abt_pool_size_hwm;
-    tmp_bc->abt_pool_size_lwm = dd->abt_pool_size_lwm;
-    tmp_bc->abt_pool_size_cumulative = dd->abt_pool_size_cumulative;
+    tmp_bc->stats.abt_pool_total_size_hwm = dd->stats.abt_pool_total_size_hwm;
+    tmp_bc->stats.abt_pool_total_size_lwm = dd->stats.abt_pool_total_size_lwm;
+    tmp_bc->stats.abt_pool_total_size_cumulative = dd->stats.abt_pool_total_size_cumulative;
+    tmp_bc->stats.abt_pool_size_hwm = dd->stats.abt_pool_size_hwm;
+    tmp_bc->stats.abt_pool_size_lwm = dd->stats.abt_pool_size_lwm;
+    tmp_bc->stats.abt_pool_size_cumulative = dd->stats.abt_pool_size_cumulative;
 
     tmp_bc->next = calloc(1, sizeof(struct margo_breadcrumb));
     tmp_bc = tmp_bc->next;
@@ -2224,13 +2212,13 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
         stat->x = x;
 
         /* initialize pool stats for breadcrumb */
-        stat->abt_pool_size_lwm = 0x11111111; // Some high value
-        stat->abt_pool_size_cumulative = 0;
-        stat->abt_pool_size_hwm = -1;
+        stat->stats.abt_pool_size_lwm = 0x11111111; // Some high value
+        stat->stats.abt_pool_size_cumulative = 0;
+        stat->stats.abt_pool_size_hwm = -1;
 
-        stat->abt_pool_total_size_lwm = 0x11111111; // Some high value
-        stat->abt_pool_total_size_cumulative = 0;
-        stat->abt_pool_total_size_hwm = -1;
+        stat->stats.abt_pool_total_size_lwm = 0x11111111; // Some high value
+        stat->stats.abt_pool_total_size_cumulative = 0;
+        stat->stats.abt_pool_total_size_hwm = -1;
    
         /* initialize sparkline data */
         memset(stat->sparkline_time, 0.0, 100);
@@ -2257,23 +2245,23 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
         ABT_pool_get_size(mid->handler_pool, &s1);
       }
 
-      stat->abt_pool_size_hwm = stat->abt_pool_size_hwm > (double)s ? stat->abt_pool_size_hwm : s1;
-      stat->abt_pool_size_lwm = stat->abt_pool_size_lwm < (double)s1 ? stat->abt_pool_size_lwm : s1;
-      stat->abt_pool_size_cumulative += s1;
+      stat->stats.abt_pool_size_hwm = stat->stats.abt_pool_size_hwm > (double)s ? stat->stats.abt_pool_size_hwm : s1;
+      stat->stats.abt_pool_size_lwm = stat->stats.abt_pool_size_lwm < (double)s1 ? stat->stats.abt_pool_size_lwm : s1;
+      stat->stats.abt_pool_size_cumulative += s1;
 
-      stat->abt_pool_total_size_hwm = stat->abt_pool_total_size_hwm > (double)s ? stat->abt_pool_total_size_hwm : s;
-      stat->abt_pool_total_size_lwm = stat->abt_pool_total_size_lwm < (double)s1 ? stat->abt_pool_total_size_lwm : s;
-      stat->abt_pool_total_size_cumulative += s;
+      stat->stats.abt_pool_total_size_hwm = stat->stats.abt_pool_total_size_hwm > (double)s ? stat->stats.abt_pool_total_size_hwm : s;
+      stat->stats.abt_pool_total_size_lwm = stat->stats.abt_pool_total_size_lwm < (double)s1 ? stat->stats.abt_pool_total_size_lwm : s;
+      stat->stats.abt_pool_total_size_cumulative += s;
 
     }
     /* Argobots pool info */
 
-    stat->count++;
-    stat->cumulative += elapsed;
-    if(elapsed > stat->max)
-        stat->max = elapsed;
-    if(stat->min == 0 || elapsed < stat->min)
-        stat->min = elapsed;
+    stat->stats.count++;
+    stat->stats.cumulative += elapsed;
+    if(elapsed > stat->stats.max)
+        stat->stats.max = elapsed;
+    if(stat->stats.min == 0 || elapsed < stat->stats.min)
+        stat->stats.min = elapsed;
 
     ABT_mutex_unlock(mid->diag_rpc_mutex);
 

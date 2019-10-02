@@ -58,12 +58,10 @@ enum breadcrumb_type
 
 typedef enum breadcrumb_type breadcrumb_type;
 
-/* structure to store breadcrumb snapshot, for consumption outside of margo.
-   reflects the margo-internal structure used to hold diagnostic data */
-struct margo_breadcrumb
+struct breadcrumb_stats
 {
     /* stats for breadcrumb call times */
-    double  min;
+    double min;
     double max;
     double cumulative;
 
@@ -79,6 +77,15 @@ struct margo_breadcrumb
 
     /* count of occurrences of breadcrumb */
     unsigned long count;
+};
+
+typedef struct breadcrumb_stats breadcrumb_stats;
+
+/* structure to store breadcrumb snapshot, for consumption outside of margo.
+   reflects the margo-internal structure used to hold diagnostic data */
+struct margo_breadcrumb
+{
+    breadcrumb_stats stats;
     /* 0 is this is a origin-side breadcrumb, 1 if this is a target-side breadcrumb */
     breadcrumb_type type;
 
