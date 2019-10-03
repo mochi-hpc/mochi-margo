@@ -1720,6 +1720,7 @@ void margo_profile_stop(margo_instance_id mid)
 static void print_diag_data(margo_instance_id mid, FILE *file, const char* name, const char *description, struct diag_data *data)
 {
     double avg;
+    int i;
 
     if(data->stats.count != 0)
         avg = data->stats.cumulative/data->stats.count;
@@ -1731,7 +1732,7 @@ static void print_diag_data(margo_instance_id mid, FILE *file, const char* name,
 
     /* second line is sparkline data for the given breadcrumb*/
     fprintf(file, "%s,%d;", name, data->type);
-    for(int i = 0; i < mid->sparkline_index; i++)
+    for(i = 0; i < mid->sparkline_index; i++)
       fprintf(file, "%.9f,%.9f, %d;", data->sparkline_time[i], data->sparkline_count[i], i);
     fprintf(file,"\n");
 
