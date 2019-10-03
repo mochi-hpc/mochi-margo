@@ -946,7 +946,7 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify);
  * @param [out] snap Margo diagnostics snapshot
  * @returns void
  */
-void margo_diag_breadcrumb_snapshot(margo_instance_id mid, struct margo_breadcrumb_snapshot* snap); 
+void margo_breadcrumb_snapshot(margo_instance_id mid, struct margo_breadcrumb_snapshot* snap); 
 
 /**
  * Sets configurable parameters/hints

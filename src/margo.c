@@ -774,7 +774,7 @@ hg_id_t margo_provider_register_name(margo_instance_id mid, const char *func_nam
     
     id = gen_id(func_name, provider_id);
 
-    if(mid->diag_enabled)
+    if(mid->profile_enabled)
     {
         /* track information about this rpc registration for debugging and
          * profiling
@@ -794,7 +794,7 @@ hg_id_t margo_provider_register_name(margo_instance_id mid, const char *func_nam
     ret = margo_register_internal(mid, id, in_proc_cb, out_proc_cb, rpc_cb, pool);
     if(ret == 0)
     {
-        if(mid->diag_enabled)
+        if(mid->profile_enabled)
         {
             mid->registered_rpcs = tmp_rpc->next;
             free(tmp_rpc);
@@ -1514,8 +1514,8 @@ static void sparkline_data_collection_fn(void* foo)
     double time_passed, end = 0;
     struct diag_data *stat, *tmp;
 
-    /* double check that diagnostics is running, else, close this ULT */
-    if(!mid->diag_enabled) {
+    /* double check that profile collection should run, else, close this ULT */
+    if(!mid->profile_enabled) {
       ABT_thread_join(mid->sparkline_data_collection_tid);
       ABT_thread_free(&mid->sparkline_data_collection_tid);
     }
@@ -1739,9 +1739,9 @@ static void print_diag_data(margo_instance_id mid, FILE *file, const char* name,
 }
 
 /* copy out the entire list of breadcrumbs on this margo instance */
-void margo_diag_breadcrumb_snapshot(margo_instance_id mid, struct margo_breadcrumb_snapshot* snap)
+void margo_breadcrumb_snapshot(margo_instance_id mid, struct margo_breadcrumb_snapshot* snap)
 {
-  assert(mid->diag_enabled);
+  assert(mid->profile_enabled);
   struct diag_data *dd, *tmp;
   struct margo_breadcrumb *tmp_bc;
 
@@ -2170,7 +2170,6 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
 {
     struct diag_data *stat;
     double end, elapsed;
-    //uint32_t temp_ = provider_id;
     uint16_t t = (type == origin) ? 2: 1;
     uint64_t hash_;
 
@@ -2192,7 +2191,7 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
     x = x << 64; 
     x |= rpc_breadcrumb;
 
-    if(!mid->diag_enabled)
+    if(!mid->profile_enabled)
         return;
 
     end = ABT_get_wtime();
