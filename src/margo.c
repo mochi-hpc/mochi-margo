@@ -396,6 +396,13 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
 
     }
 
+    /* start diagnostics if the variable MARGO_ENABLE_DIAGNOSTICS is set */
+    int diag = 0;
+    mid->diag_enabled = 0;
+    margo_get_param(mid, MARGO_PARAM_ENABLE_DIAGNOSTICS, &diag);
+    if(diag)
+      margo_diag_start(mid);
+
     return mid;
 
 err:
@@ -618,8 +625,11 @@ void margo_finalize(margo_instance_id mid)
     if(mid->profile_enabled) {
       ABT_thread_join(mid->sparkline_data_collection_tid);
       ABT_thread_free(&mid->sparkline_data_collection_tid);
-      margo_diag_dump(mid, "profile", 1);
+      margo_profile_dump(mid, "profile", 1);
     }
+    
+    if(mid->diag_enabled) 
+      margo_diag_dump(mid, "profile", 1);
 
     ABT_mutex_lock(mid->finalize_mutex);
     mid->finalize_flag = 1;
@@ -1023,8 +1033,11 @@ static hg_return_t margo_cb(const struct hg_cb_info *info)
          */
         mid = margo_hg_handle_get_instance(req->handle);
         assert(mid);
-        /* 0 here indicates this is a origin-side call */
-        margo_breadcrumb_measure(mid, req->rpc_breadcrumb, req->start_time, 0, req->provider_id, req->server_addr_hash, req->handle);
+
+        if(mid->profile_enabled) {
+          /* 0 here indicates this is a origin-side call */
+          margo_breadcrumb_measure(mid, req->rpc_breadcrumb, req->start_time, 0, req->provider_id, req->server_addr_hash, req->handle);
+        }
     }
 
     /* propagate return code out through eventual */
@@ -1245,14 +1258,17 @@ hg_return_t margo_respond(
     hg_handle_t handle,
     void *out_struct)
 {
+
     /* retrieve the ULT-local key for this breadcrumb and add measurement to profile */
     struct margo_request_struct* treq;
     margo_instance_id mid = margo_hg_handle_get_instance(handle);
-    ABT_key_get(target_timing_key, (void**)(&treq));
-    assert(treq != NULL);
+    if(mid->profile_enabled) {
+      ABT_key_get(target_timing_key, (void**)(&treq));
+      assert(treq != NULL);
     
-    /* the "1" indicates that this a target-side breadcrumb */
-    margo_breadcrumb_measure(mid, treq->rpc_breadcrumb, treq->start_time, 1, treq->provider_id, treq->server_addr_hash, handle);
+      /* the "1" indicates that this a target-side breadcrumb */
+      margo_breadcrumb_measure(mid, treq->rpc_breadcrumb, treq->start_time, 1, treq->provider_id, treq->server_addr_hash, handle);
+    }
 
     hg_return_t hret;
     struct margo_request_struct reqs;
@@ -1507,6 +1523,10 @@ static void margo_rpc_data_free(void* ptr)
 }
 
 /* dedicated thread function to collect sparkline data */
+/* TODO:  Initially, we had used margo_thread_sleep() here to keep the logic simple, but for some reason this ULT was not cleaning itself properly. It continued to run even after margo_finalize(), but we weren't able to figure out why. So we resorted to this logic of the ULT continuously being scheduled to run, and checking the timer to see if it needs to collect sparkline data. Either ways, it checks and yields. 
+ * We need to: 
+ * a. Figure out the performance overhead of this sort of busy waiting for timeout to trigger sparkline data collection
+ * b. Replace this logic with the correct way of doing it: using margo_thread_sleep() */
 static void sparkline_data_collection_fn(void* foo)
 {
     int ret;
@@ -1717,7 +1737,7 @@ void margo_profile_stop(margo_instance_id mid)
     mid->profile_enabled = 0;
 }
 
-static void print_diag_data(margo_instance_id mid, FILE *file, const char* name, const char *description, struct diag_data *data)
+static void print_data(margo_instance_id mid, FILE *file, const char* name, const char *description, struct diag_data *data)
 {
     double avg;
     int i;
@@ -1800,6 +1820,75 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
         gethostname(hostname, 128);
         pid = getpid();
 
+        sprintf(revised_file_name, "%s-%s-%d.diag", file, hostname, pid);
+    }
+
+    else
+    {
+        sprintf(revised_file_name, "%s.diag", file);
+    }
+
+    if(strcmp("-", file) == 0)
+    {
+        outfile = stdout;
+    }
+    else
+    {
+        outfile = fopen(revised_file_name, "a");
+        if(!outfile)
+        {
+            perror("fopen");
+            return;
+        }
+    }
+
+    /* TODO: retrieve self addr and include in output */
+    /* TODO: support pattern substitution in file name to create unique
+     * output files per process
+     */
+
+    time(&ltime);
+
+    fprintf(outfile, "# Margo diagnostics\n");
+    fprintf(outfile, "# %s\n", ctime(&ltime));
+    
+    print_data(mid, outfile, "trigger_elapsed", 
+        "Time consumed by HG_Trigger()", 
+        &mid->diag_trigger_elapsed);
+    print_data(mid, outfile, "progress_elapsed_zero_timeout", 
+        "Time consumed by HG_Progress() when called with timeout==0", 
+        &mid->diag_progress_elapsed_zero_timeout);
+    print_data(mid, outfile, "progress_elapsed_nonzero_timeout", 
+        "Time consumed by HG_Progress() when called with timeout!=0", 
+        &mid->diag_progress_elapsed_nonzero_timeout);
+
+    if(outfile != stdout)
+        fclose(outfile);
+    
+    return;
+}
+
+void margo_profile_dump(margo_instance_id mid, const char* file, int uniquify)
+{
+    FILE *outfile;
+    time_t ltime;
+    char revised_file_name[256] = {0};
+    struct diag_data *dd, *tmp;
+    char rpc_breadcrumb_str[24] = {0};
+    struct margo_registered_rpc *tmp_rpc;
+    char * name;
+    uint64_t hash;
+
+    assert(mid->profile_enabled);
+
+    if(uniquify)
+    {
+        char hostname[128] = {0};
+        int pid;
+
+        gethostname(hostname, 128);
+        pid = getpid();
+
         sprintf(revised_file_name, "%s-%s-%d.csv", file, hostname, pid);
     }
 
@@ -1829,9 +1918,6 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
 
     time(&ltime);
 
-    /*fprintf(outfile, "# Margo diagnostics\n");
-    fprintf(outfile, "# %s\n", ctime(&ltime));
-    fprintf(outfile, "# RPC breadcrumbs for RPCs that were registered on this process:\n");*/
     fprintf(outfile, "%u\n", mid->num_registered_rpcs);
     GET_SELF_ADDR_STR(mid, name);
     HASH_JEN(name, strlen(name), hash); /*record own address in the breadcrumb */
@@ -1844,21 +1930,7 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
         fprintf(outfile, "0x%.4lx,%s\n", tmp_rpc->rpc_breadcrumb_fragment, tmp_rpc->func_name);
         tmp_rpc = tmp_rpc->next;
     }
-    //fprintf(outfile, "# <stat>\t<avg>\t<min>\t<max>\t<count>\n");
-
     
-    print_diag_data(mid, outfile, "trigger_elapsed", 
-        "Time consumed by HG_Trigger()", 
-        &mid->diag_trigger_elapsed);
-    print_diag_data(mid, outfile, "progress_elapsed_zero_timeout", 
-        "Time consumed by HG_Progress() when called with timeout==0", 
-        &mid->diag_progress_elapsed_zero_timeout);
-    print_diag_data(mid, outfile, "progress_elapsed_nonzero_timeout", 
-        "Time consumed by HG_Progress() when called with timeout!=0", 
-        &mid->diag_progress_elapsed_nonzero_timeout);
-    /*print_diag_data(outfile, "progress_timeout_value", 
-        "Timeout values passed to HG_Progress()", 
-        &mid->diag_progress_timeout_value);*/
     HASH_ITER(hh, mid->diag_rpc, dd, tmp)
     {
         int i;
@@ -1875,14 +1947,8 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
                 sprintf(&rpc_breadcrumb_str[i*7], "0x%.4lx", tmp_breadcrumb);
             else
                 sprintf(&rpc_breadcrumb_str[i*7], "0x%.4lx ", tmp_breadcrumb);
-#if 0
-            if(i==0)
-                sprintf(&rpc_breadcrumb_str[(3-i)*5], "0x%4lx ", tmp_breadcrumb);
-            else
-                sprintf(&rpc_breadcrumb_str[(3-i)*5], "0x%4lx", tmp_breadcrumb);
-#endif
         }
-        print_diag_data(mid, outfile, rpc_breadcrumb_str, "RPC statistics", dd);
+        print_data(mid, outfile, rpc_breadcrumb_str, "RPC statistics", dd);
     }
 
     if(outfile != stdout)
@@ -1900,6 +1966,9 @@ void margo_set_param(margo_instance_id mid, int option, const void *param)
             break;
 	case MARGO_PARAM_ENABLE_PROFILING:
 	    mid->profile_enabled = (*((const unsigned int*)param));
+	    break;
+	case MARGO_PARAM_ENABLE_DIAGNOSTICS:
+	    mid->diag_enabled = (*((const unsigned int*)param));
 	    break;
     }
 
@@ -1923,6 +1992,18 @@ void margo_get_param(margo_instance_id mid, int option, void *param)
 		}
 		else {
 		     mid->profile_enabled = (*((unsigned int*)param)) = 0;
+                }
+	    }
+	    break;
+	case MARGO_PARAM_ENABLE_DIAGNOSTICS:
+	    if(mid->diag_enabled) {
+		(*((unsigned int*)param)) = mid->diag_enabled;
+            } else {
+		if(getenv("MARGO_ENABLE_DIAGNOSTICS")) {
+		     mid->diag_enabled = (*((unsigned int*)param)) = (unsigned int)atoi(getenv("MARGO_ENABLE_DIAGNOSTICS"));
+		}
+		else {
+		     mid->diag_enabled = (*((unsigned int*)param)) = 0;
                 }
 	    }
 	    break;

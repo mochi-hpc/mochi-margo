@@ -44,6 +44,7 @@ typedef struct margo_request_struct* margo_request;
 
 #define MARGO_PARAM_PROGRESS_TIMEOUT_UB 1
 #define MARGO_PARAM_ENABLE_PROFILING 2
+#define MARGO_PARAM_ENABLE_DIAGNOSTICS 3
 
 /**
  * Initializes margo library.
@@ -938,6 +939,18 @@ void margo_profile_stop(margo_instance_id mid);
  * @returns void
  */
 void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify);
+
+/**
+ * Appends profile statistics (enabled via margo_profile_start()) to specified 
+ * output file.
+ *
+ * @param [in] mid Margo instance
+ * @param [in] file output file ("-" for stdout)
+ * @param [in] uniquify flag indicating if file name should have additional
+ *   information added to it to make output from different processes unique
+ * @returns void
+ */
+void margo_profile_dump(margo_instance_id mid, const char* file, int uniquify);
 
 /**
  * Grabs a snapshot of the current state of diagnostics within the margo instance 
