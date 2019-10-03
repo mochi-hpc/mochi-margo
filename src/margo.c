@@ -153,7 +153,7 @@ struct margo_instance
      * which will serialize access.
      */
     int diag_enabled;
-    unsigned int profile;
+    unsigned int profile_enabled;
     double previous_sparkline_data_collection_time;
     uint16_t sparkline_index;
     struct diag_data diag_trigger_elapsed;
@@ -380,13 +380,14 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
     mid->rpc_xstreams = rpc_xstreams;
     mid->num_registered_rpcs = 0;
 
-    /* start profiling if env variable MARGO_PROFILE is set */
+    /* start profiling if env variable MARGO_ENABLE_PROFILING is set */
     int profile = 0;
+    mid->profile_enabled = 0;
     mid->previous_sparkline_data_collection_time = ABT_get_wtime();
     mid->sparkline_index = 0;
-    margo_get_param(mid, MARGO_PARAM_PROFILE, &profile);
+    margo_get_param(mid, MARGO_PARAM_ENABLE_PROFILING, &profile);
     if(profile) {
-       margo_diag_start(mid);
+       margo_profile_start(mid);
 
        ret = ABT_thread_create(mid->progress_pool, sparkline_data_collection_fn, mid, 
        ABT_THREAD_ATTR_NULL, &mid->sparkline_data_collection_tid);
@@ -607,10 +608,6 @@ void margo_finalize(margo_instance_id mid)
         return;
     }
 
-    /* dump out the profile */ 
-    int profile = 0;
-    margo_get_param(mid, MARGO_PARAM_PROFILE, &profile);
-
     /* tell progress thread to wrap things up */
     mid->hg_progress_shutdown_flag = 1;
 
@@ -618,7 +615,7 @@ void margo_finalize(margo_instance_id mid)
     ABT_thread_join(mid->hg_progress_tid);
     ABT_thread_free(&mid->hg_progress_tid);
 
-    if(profile) {
+    if(mid->profile_enabled) {
       ABT_thread_join(mid->sparkline_data_collection_tid);
       ABT_thread_free(&mid->sparkline_data_collection_tid);
       margo_diag_dump(mid, "profile", 1);
@@ -1705,6 +1702,21 @@ void margo_diag_start(margo_instance_id mid)
     mid->diag_enabled = 1;
 }
 
+void margo_profile_start(margo_instance_id mid)
+{
+    mid->profile_enabled = 1;
+}
+
+void margo_diag_stop(margo_instance_id mid)
+{
+    mid->diag_enabled = 0;
+}
+
+void margo_profile_stop(margo_instance_id mid)
+{
+    mid->profile_enabled = 0;
+}
+
 static void print_diag_data(margo_instance_id mid, FILE *file, const char* name, const char *description, struct diag_data *data)
 {
     double avg;
@@ -1885,8 +1897,8 @@ void margo_set_param(margo_instance_id mid, int option, const void *param)
         case MARGO_PARAM_PROGRESS_TIMEOUT_UB:
             mid->hg_progress_timeout_ub = (*((const unsigned int*)param));
             break;
-	case MARGO_PARAM_PROFILE:
-	    mid->profile = (*((const unsigned int*)param));
+	case MARGO_PARAM_ENABLE_PROFILING:
+	    mid->profile_enabled = (*((const unsigned int*)param));
 	    break;
     }
 
@@ -1901,15 +1913,15 @@ void margo_get_param(margo_instance_id mid, int option, void *param)
         case MARGO_PARAM_PROGRESS_TIMEOUT_UB:
             (*((unsigned int*)param)) = mid->hg_progress_timeout_ub;
             break;
-	case MARGO_PARAM_PROFILE:
-	    if(mid->profile) {
-		(*((unsigned int*)param)) = mid->profile;
+	case MARGO_PARAM_ENABLE_PROFILING:
+	    if(mid->profile_enabled) {
+		(*((unsigned int*)param)) = mid->profile_enabled;
             } else {
-		if(getenv("MARGO_PROFILE")) {
-		     mid->profile = (*((unsigned int*)param)) = (unsigned int)atoi(getenv("MARGO_PROFILE"));
+		if(getenv("MARGO_ENABLE_PROFILING")) {
+		     mid->profile_enabled = (*((unsigned int*)param)) = (unsigned int)atoi(getenv("MARGO_ENABLE_PROFILING"));
 		}
 		else {
-		     mid->profile = (*((unsigned int*)param)) = 0;
+		     mid->profile_enabled = (*((unsigned int*)param)) = 0;
                 }
 	    }
 	    break;

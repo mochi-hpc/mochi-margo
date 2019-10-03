@@ -43,7 +43,7 @@ typedef struct margo_request_struct* margo_request;
 #define MARGO_MAX_PROVIDER_ID ((1 << (8*__MARGO_PROVIDER_ID_SIZE))-1)
 
 #define MARGO_PARAM_PROGRESS_TIMEOUT_UB 1
-#define MARGO_PARAM_PROFILE 2
+#define MARGO_PARAM_ENABLE_PROFILING 2
 
 /**
  * Initializes margo library.
@@ -902,6 +902,30 @@ margo_instance_id margo_hg_info_get_instance(const struct hg_info *info);
  * @returns void
  */
 void margo_diag_start(margo_instance_id mid);
+
+/**
+ * Enables profile data collection on specified Margo instance
+ *
+ * @param [in] mid Margo instance
+ * @returns void
+ */
+void margo_profile_start(margo_instance_id mid);
+
+/**
+ * Disables diagnostic collection on specified Margo instance
+ *
+ * @param [in] mid Margo instance
+ * @returns void
+ */
+void margo_diag_stop(margo_instance_id mid);
+
+/**
+ * Disables profile data collection on specified Margo instance
+ *
+ * @param [in] mid Margo instance
+ * @returns void
+ */
+void margo_profile_stop(margo_instance_id mid);
 
 /**
  * Appends diagnostic statistics (enabled via margo_diag_start()) to specified 
