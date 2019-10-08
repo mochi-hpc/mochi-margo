@@ -391,7 +391,7 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
 
        ret = ABT_thread_create(mid->progress_pool, sparkline_data_collection_fn, mid, 
        ABT_THREAD_ATTR_NULL, &mid->sparkline_data_collection_tid);
-       if(!ret)
+       if(ret != 0)
          fprintf(stderr, "MARGO_PROFILE: Failed to start sparkline data collection thread. Continuing to profile without sparkline data collection.\n");
 
     }
