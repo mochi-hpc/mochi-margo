@@ -227,7 +227,7 @@ class ProfileGenerator:
 					self.midtoprovider[mid].append((provider, provider + "_" + str(self.provider_id.get(provider, 0))))
 					self.provider_id[provider] = self.provider_id.get(provider, 0) + 1 #Increment counter for the provider_type
 		
-			contents_ = contents[2 + 6 + num_registered_rpcs:] #Skip 3 internal Margo routines (progress w/o zero timeout, trigger_elapsed) and corresponding sparklines, which are useless
+			contents_ = contents[2 + num_registered_rpcs:] 
 			for i in range(0,len(contents_),2):
 				breadcrumb_line = contents_[i]
 				spark_line = contents_[i+1]
