@@ -1737,7 +1737,22 @@ void margo_profile_stop(margo_instance_id mid)
     mid->profile_enabled = 0;
 }
 
-static void print_data(margo_instance_id mid, FILE *file, const char* name, const char *description, struct diag_data *data)
+static void print_diag_data(margo_instance_id mid, FILE *file, const char* name, const char *description, struct diag_data *data)
+{
+    double avg;
+    int i;
+
+    if(data->stats.count != 0)
+        avg = data->stats.cumulative/data->stats.count;
+    else
+        avg = 0;
+
+    fprintf(file, "%s,%.9f,%.9f,%.9f,%.9f,%lu\n", name, avg, data->stats.cumulative, data->stats.min, data->stats.max, data->stats.count);
+
+    return;
+}
+
+static void print_profile_data(margo_instance_id mid, FILE *file, const char* name, const char *description, struct diag_data *data)
 {
     double avg;
     int i;
@@ -1850,15 +1865,19 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
     time(&ltime);
 
     fprintf(outfile, "# Margo diagnostics\n");
+    GET_SELF_ADDR_STR(mid, name);
+    HASH_JEN(name, strlen(name), hash); /*record own address in the breadcrumb */
+    fprintf(outfile, "#Addr Hash and Address Name: %lu,%s\n", hash, name);
     fprintf(outfile, "# %s\n", ctime(&ltime));
+    fprintf(outfile, "# Function Name, Average Time Per Call, Cumulative Time, Highwatermark, Lowwatermark, Call Count\n");
     
-    print_data(mid, outfile, "trigger_elapsed", 
+    print_diag_data(mid, outfile, "trigger_elapsed", 
         "Time consumed by HG_Trigger()", 
         &mid->diag_trigger_elapsed);
-    print_data(mid, outfile, "progress_elapsed_zero_timeout", 
+    print_diag_data(mid, outfile, "progress_elapsed_zero_timeout", 
         "Time consumed by HG_Progress() when called with timeout==0", 
         &mid->diag_progress_elapsed_zero_timeout);
-    print_data(mid, outfile, "progress_elapsed_nonzero_timeout", 
+    print_diag_data(mid, outfile, "progress_elapsed_nonzero_timeout", 
         "Time consumed by HG_Progress() when called with timeout!=0", 
         &mid->diag_progress_elapsed_nonzero_timeout);
 
@@ -1948,7 +1967,7 @@ void margo_profile_dump(margo_instance_id mid, const char* file, int uniquify)
             else
                 sprintf(&rpc_breadcrumb_str[i*7], "0x%.4lx ", tmp_breadcrumb);
         }
-        print_data(mid, outfile, rpc_breadcrumb_str, "RPC statistics", dd);
+        print_profile_data(mid, outfile, rpc_breadcrumb_str, "RPC statistics", dd);
     }
 
     if(outfile != stdout)
