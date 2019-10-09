@@ -142,8 +142,8 @@ environment variable).
 * Invoke the ```margo-gen-profile``` program in the directory containing the *.csv.
   This will generate a ```profile.pdf``` and a ```graph.gv``` file. 
 * The ```profile.pdf``` contains a list of graphs summarizing various performance statistics. 
-  For example, the ![](fig/profile.png) is a graph representing the top-5 breadcrumbs
-  sorted by cumulative call times on the origin (client) and the target (server). 
+  For example, the following is a graph representing the top-5 breadcrumbs
+  sorted by cumulative call times on the origin (client) and the target (server): ![](fig/profile.png) 
 * The ```graph.gv``` file is a ```graphViz``` file that represents a topology graph
   of the MOCHI service setup. This is a visual representation of the RPC calls 
   and location of various margo processes mapped onto the physical system.
