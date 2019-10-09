@@ -107,9 +107,9 @@ Key components of the output are:
 
 ```
 Key components of the output are:
-* First line always contains the number of RPC names registerted on that process.
+* First line always contains the number of RPC names registered on that process.
 * Second line is the assigned unique network address of the margo instance and its 64-bit hash.
-* Next, a table of RPC names registered on that processes.  Each has a 16 bit
+* Next, a table of RPC names registered on that process.  Each has a 16 bit
   hexadecimal identifier and a string name.  There may be duplicates in the
   table if the same RPC is registered more than once on the process.
 * A set of statistics for each RPC that was issued or received by that margo instance.
@@ -121,10 +121,24 @@ Key components of the output are:
   that was the side of receiving and executing a "mobject_write_op" request from a client.
 * RPC calls made from the margo instance in question to different margo server instances, or issued by different margo client instances
   to the margo instance in question are distinguished in the profile.
-  Additionally, the profile also indicates if it represents a client making a call or a server executing a call.
+  Additionally, the RPC statistic also indicates if it represents a client making a call or a server executing a call.
 * Each RPC statistic is associated with 2 consecutive lines in the profile: One containing profiling statistics such as timing information,
   and the other representing information to be used in the generation of a sparkline.
 * The user must keep in mind that the profiles only represent the RPC statistics. This is not the same as request tracing.
 
 ## Generating a Profile and Topology Graph
+While the diagnostic files are simple enough to be read and understood by the user,
+the profile files, although readable, represent too much information to be processed
+manually. Thus, we have developed a "profile generator" that reads the *.csv files
+in the current working directory and generates a PDF file summarizing important 
+performance statistics that can help in detecting load imbalance among margo instances,
+relative call-counts and calltimes for various RPC breadcrumbs, and so on. 
+
+In order to the generate the PDF, follow these steps:
+* Enable profiling in your margo instances (easiest way is to use the `MARGO_ENABLE_PROFILING`
+environment variable).
+* Add the $MARGO_INSTALL/bin to your path, and run the MOCHI program. 
+* After the program executes, verify that the directory contains the *.csv files. 
+* Invoke the ```margo-gen-profile``` program. This will generate a ```profile.pdf```
+  file and a ```graph.gv``` file. 
 
