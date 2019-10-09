@@ -140,5 +140,7 @@ environment variable).
 * Add the $MARGO_INSTALL/bin to your path, and run the MOCHI program. 
 * After the program executes, verify that the directory contains the *.csv files. 
 * Invoke the ```margo-gen-profile``` program. This will generate a ```profile.pdf```
-  file and a ```graph.gv``` file. 
+  file and a ```graph.gv``` file.
+The graph file would look like: ![](gg.png)
+
 
