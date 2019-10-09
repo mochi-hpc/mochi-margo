@@ -1,28 +1,41 @@
 # Margo instrumentation
 
-This file documents instrumentation capabilities that are built into the
+This file documents instrumentation and profiling capabilities that are built into the
 margo library.  See the [top level README.md](../README.md) for general
 information about margo.
 
-Margo includes two forms of instrumentation.  The first measures time spent
+Margo includes two levels of instrumentation and profiling.  The first (diagnostics) measures time spent
 executing key Mercury functions within the communication progress
-loop.  The second measures time spent invoking remote procedure calls.
+loop.  The second (breadcrumb profiling) measures time spent invoking remote procedure calls.
 
 ## Usage
 
-Both can be enabled at run time by calling the `margo_diag_start()` any
+Diagnostics can be enabled in two ways:
+* At program startup, using the env variable `MARGO_ENABLE_DIAGNOSTICS`.
+* At run time by calling the `margo_diag_start()` any
 time after `margo_init()` on the process that you wish to instrument.
-Statistics from both can then be emitted at any time prior to
-`margo_finalize()` by calling the `margo_diag_dump()` function.
 
-The arguments to `margo_diag_dump()` are as follows:
+Statistics from mercury diagnostics can then be emitted at any time prior to
+`margo_finalize()` by calling the `margo_diag_dump()` function. Diagnostics
+can be stopped by calling the `margo_diag_stop` on the process. 
+
+Similarly, profining can by enabled/disabled either by use of the environment
+variable `MARGO_ENABLE_PROFILING` or by using the `margo_profile_start`/`margo_profile_stop`
+functions. Statistics from profiling can be output by invoking the `margo_profile_dump`
+on the process.
+
+The arguments to `margo_diag_dump()` and `margo_profile_dump` are as follows:
 * `mid`: the margo instance to retrieve instrumentation from
 * `file`: name of the file to write the (text) data to.  If the "-" string
   is used, then data will be written to `STDOUT`.
 * `uniquify`: flag indicating that the file name should be suffixed with
-  additional characters to make it unique from other diagnostic files emited
+  additional characters to make it unique from other files emited
   on the same node.
-
+* Diagnostic files have the *.diag suffix for the file name, and 
+profile files have the *.csv suffix. 
+* If the environment variable is used to control diagnostics/profiling,
+all the corresponding files have the default "profile" prefix to the name.
+ 
 ## Output format
 
 Example output from `margo_diag_dump()` will look like this for a given
