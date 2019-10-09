@@ -134,13 +134,19 @@ in the current working directory and generates a PDF file summarizing important
 performance statistics that can help in detecting load imbalance among margo instances,
 relative call-counts and calltimes for various RPC breadcrumbs, and so on. 
 
-In order to the generate the PDF, follow these steps:
+In order to the generate the PDF summarizing performance, follow these steps:
 * Enable profiling in your margo instances (easiest way is to use the `MARGO_ENABLE_PROFILING`
 environment variable).
 * Add the $MARGO_INSTALL/bin to your path, and run the MOCHI program. 
-* After the program executes, verify that the directory contains the *.csv files. 
-* Invoke the ```margo-gen-profile``` program. This will generate a ```profile.pdf```
-  file and a ```graph.gv``` file.
-The graph file would look like: ![](gg.png)
-
-
+* After the program executes, verify that the current directory contains the *.csv files. 
+* Invoke the ```margo-gen-profile``` program in the directory containing the *.csv.
+  This will generate a ```profile.pdf``` and a ```graph.gv``` file. 
+* The ```profile.pdf``` contains a list of graphs summarizing various performance statistics. 
+  For example, the ![](fig/profile.png) is a graph representing the top-5 breadcrumbs
+  sorted by cumulative call times on the origin (client) and the target (server). 
+* The ```graph.gv``` file is a ```graphViz``` file that represents a topology graph
+  of the MOCHI service setup. This is a visual representation of the RPC calls 
+  and location of various margo processes mapped onto the physical system.
+  If the user has ```graphViz``` installed, a PNG file can be generated using
+  the command ```dot -Tpng graph.gv -o gg.png```, and the resulting image would
+  look like: ![](fig/gg.png)
