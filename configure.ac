@@ -33,11 +33,12 @@ AC_ARG_VAR([MKTEMP], mktemp program)
 if test -z "$TIMEOUT" ; then
     AC_CHECK_PROGS(TIMEOUT, [timeout gtimeout])
     if test -z "$TIMEOUT" ; then
-        AC_MSG_ERROR([Could not find timeout command (can optionally provide via the TIMEOUT variable)])
+        AC_MSG_WARN([Could not find timeout command (can optionally provide via the TIMEOUT variable): tests disabled])
     fi
 else
     AC_SUBST([TIMEOUT], ["$TIMEOUT"])
 fi
+AM_CONDITIONAL([BUILD_TESTS], [test x$TIMEOUT != x])
 
 if test -z "$MKTEMP" ; then
     AC_CHECK_PROGS(MKTEMP, [mktemp gmktemp])
