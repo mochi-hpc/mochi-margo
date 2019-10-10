@@ -350,6 +350,7 @@ int margo_bulk_poolset_tryget(
         }
         this_size *= size_mult;
     }
+    *bulk = HG_BULK_NULL;
 
     return 0;
 }
