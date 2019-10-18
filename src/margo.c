@@ -2312,8 +2312,8 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
         stat->stats.abt_pool_total_size_hwm = -1;
    
         /* initialize sparkline data */
-        memset(stat->sparkline_time, 0.0, 100);
-        memset(stat->sparkline_count, 0.0, 100);
+        memset(stat->sparkline_time, 0.0, 100*sizeof(double));
+        memset(stat->sparkline_count, 0.0, 100*sizeof(double));
  
         HASH_ADD(hh, mid->diag_rpc, x,
             sizeof(x), stat);
