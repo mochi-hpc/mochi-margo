@@ -1529,7 +1529,6 @@ static void margo_rpc_data_free(void* ptr)
  * b. Replace this logic with the correct way of doing it: using margo_thread_sleep() */
 static void sparkline_data_collection_fn(void* foo)
 {
-    int ret;
     struct margo_instance *mid = (struct margo_instance *)foo;
     double time_passed, end = 0;
     struct diag_data *stat, *tmp;
@@ -1740,7 +1739,6 @@ void margo_profile_stop(margo_instance_id mid)
 static void print_diag_data(margo_instance_id mid, FILE *file, const char* name, const char *description, struct diag_data *data)
 {
     double avg;
-    int i;
 
     if(data->stats.count != 0)
         avg = data->stats.cumulative/data->stats.count;
@@ -1819,9 +1817,6 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
     FILE *outfile;
     time_t ltime;
     char revised_file_name[256] = {0};
-    struct diag_data *dd, *tmp;
-    char rpc_breadcrumb_str[24] = {0};
-    struct margo_registered_rpc *tmp_rpc;
     char * name;
     uint64_t hash;
 
@@ -2273,8 +2268,6 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
     double end, elapsed;
     uint16_t t = (type == origin) ? 2: 1;
     uint64_t hash_;
-
-    double time_passed = 0;
 
     __uint128_t x = 0;
 
