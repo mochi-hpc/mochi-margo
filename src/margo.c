@@ -381,11 +381,16 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
     mid->num_registered_rpcs = 0;
 
     /* start profiling if env variable MARGO_ENABLE_PROFILING is set */
-    int profile = 0;
+    unsigned int profile = 0;
     mid->profile_enabled = 0;
     mid->previous_sparkline_data_collection_time = ABT_get_wtime();
     mid->sparkline_index = 0;
-    margo_get_param(mid, MARGO_PARAM_ENABLE_PROFILING, &profile);
+
+    if(getenv("MARGO_ENABLE_PROFILING")) {
+      profile = (unsigned int)atoi(getenv("MARGO_ENABLE_PROFILING"));
+      margo_set_param(mid, MARGO_PARAM_ENABLE_PROFILING, &profile);
+    }
+
     if(profile) {
        margo_profile_start(mid);
 
@@ -397,9 +402,14 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
     }
 
     /* start diagnostics if the variable MARGO_ENABLE_DIAGNOSTICS is set */
-    int diag = 0;
+    unsigned int diag = 0;
     mid->diag_enabled = 0;
-    margo_get_param(mid, MARGO_PARAM_ENABLE_DIAGNOSTICS, &diag);
+
+    if(getenv("MARGO_ENABLE_DIAGNOSTICS")) {
+      diag = (unsigned int)atoi(getenv("MARGO_ENABLE_DIAGNOSTICS"));
+      margo_set_param(mid, MARGO_PARAM_ENABLE_DIAGNOSTICS, &diag);
+    }
+
     if(diag)
       margo_diag_start(mid);
 
@@ -1997,30 +2007,6 @@ void margo_get_param(margo_instance_id mid, int option, void *param)
         case MARGO_PARAM_PROGRESS_TIMEOUT_UB:
             (*((unsigned int*)param)) = mid->hg_progress_timeout_ub;
             break;
-	case MARGO_PARAM_ENABLE_PROFILING:
-	    if(mid->profile_enabled) {
-		(*((unsigned int*)param)) = mid->profile_enabled;
-            } else {
-		if(getenv("MARGO_ENABLE_PROFILING")) {
-		     mid->profile_enabled = (*((unsigned int*)param)) = (unsigned int)atoi(getenv("MARGO_ENABLE_PROFILING"));
-		}
-		else {
-		     mid->profile_enabled = (*((unsigned int*)param)) = 0;
-                }
-	    }
-	    break;
-	case MARGO_PARAM_ENABLE_DIAGNOSTICS:
-	    if(mid->diag_enabled) {
-		(*((unsigned int*)param)) = mid->diag_enabled;
-            } else {
-		if(getenv("MARGO_ENABLE_DIAGNOSTICS")) {
-		     mid->diag_enabled = (*((unsigned int*)param)) = (unsigned int)atoi(getenv("MARGO_ENABLE_DIAGNOSTICS"));
-		}
-		else {
-		     mid->diag_enabled = (*((unsigned int*)param)) = 0;
-                }
-	    }
-	    break;
     }
 
     return;
