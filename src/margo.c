@@ -22,6 +22,8 @@
 #define DEFAULT_MERCURY_PROGRESS_TIMEOUT_UB 100 /* 100 milliseconds */
 #define DEFAULT_MERCURY_HANDLE_CACHE_SIZE 32
 
+#define MARGO_SPARKLINE_TIMESLICE 1
+
 /* If margo is initializing ABT, we need to track how many instances of margo
  * are being created, so that the last one can call ABT_finalize.
  * If margo initializes ABT, g_num_margo_instances_mtx will be created, so
@@ -34,15 +36,22 @@ static ABT_mutex g_num_margo_instances_mtx = ABT_MUTEX_NULL; // mutex for above 
 /* Structure to store timing information */
 struct diag_data
 {
-    double min;
-    double max;
-    double cumulative;
-    int count;
+    /* breadcrumb stats */
+    breadcrumb_stats stats;
+    
+    /* origin or target */
+    breadcrumb_type type;
 
-    /* the following fields are only used when this structure is used to track
-     * rpc timing information
-     */
     uint64_t rpc_breadcrumb;  /* identifier for rpc and it's ancestors */
+    struct global_breadcrumb_key key;
+
+    /* used to combine rpc_breadcrumb, addr_hash and provider_id to create a unique key for HASH_ADD inside margo_breadcrumb_measure */
+    __uint128_t x;
+
+    /*sparkline data for breadcrumb */
+    double sparkline_time[100];
+    double sparkline_count[100];
+
     UT_hash_handle hh;        /* hash table link */
 };
 
@@ -51,12 +60,15 @@ struct diag_data
  */
 static ABT_key rpc_breadcrumb_key = ABT_KEY_NULL;
 
+/* ULT-local key to hold breadcrumb timing data on the target */
+static ABT_key target_timing_key = ABT_KEY_NULL;
+
 #define __DIAG_UPDATE(__data, __time)\
 do {\
-    __data.count++; \
-    __data.cumulative += (__time); \
-    if((__time) > __data.max) __data.max = (__time); \
-    if(__data.min == 0 || (__time) < __data.min) __data.min = (__time); \
+    __data.stats.count++; \
+    __data.stats.cumulative += (__time); \
+    if((__time) > __data.stats.max) __data.stats.max = (__time); \
+    if(__data.stats.min == 0 || (__time) < __data.stats.min) __data.stats.min = (__time); \
 } while(0)
 
 struct margo_handle_cache_el
@@ -98,12 +110,14 @@ struct margo_instance
     /* internal to margo for this particular instance */
     int margo_init;
     ABT_thread hg_progress_tid;
+    ABT_thread sparkline_data_collection_tid;
     int hg_progress_shutdown_flag;
     ABT_xstream progress_xstream;
     int owns_progress_pool;
     ABT_xstream *rpc_xstreams;
     int num_handler_pool_threads;
     unsigned int hg_progress_timeout_ub;
+    uint16_t num_registered_rpcs; 	   /* number of registered rpc's by all providers on this instance */
 
     /* list of rpcs registered on this instance for debugging and profiling purposes */
     struct margo_registered_rpc *registered_rpcs;
@@ -139,6 +153,9 @@ struct margo_instance
      * which will serialize access.
      */
     int diag_enabled;
+    unsigned int profile_enabled;
+    double previous_sparkline_data_collection_time;
+    uint16_t sparkline_index;
     struct diag_data diag_trigger_elapsed;
     struct diag_data diag_progress_elapsed_zero_timeout;
     struct diag_data diag_progress_elapsed_nonzero_timeout;
@@ -153,6 +170,8 @@ struct margo_request_struct {
     hg_handle_t handle;
     double start_time;       /* timestamp of when the operation started */
     uint64_t rpc_breadcrumb; /* statistics tracking identifier, if applicable */
+    uint64_t server_addr_hash; /* hash of globally unique string addr of margo server instance */
+    uint16_t provider_id; /* id of the provider servicing the request, local to the margo server instance */
 };
 
 struct margo_rpc_data
@@ -166,9 +185,11 @@ struct margo_rpc_data
 MERCURY_GEN_PROC(margo_shutdown_out_t, ((int32_t)(ret)))
 
 static void hg_progress_fn(void* foo);
+static void sparkline_data_collection_fn(void* foo);
+
 static void margo_rpc_data_free(void* ptr);
 static uint64_t margo_breadcrumb_set(hg_id_t rpc_id);
-static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcrumb, double start);
+static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcrumb, double start, breadcrumb_type type, uint16_t provider_id, uint64_t hash, hg_handle_t h);
 static void remote_shutdown_ult(hg_handle_t handle);
 DECLARE_MARGO_RPC_HANDLER(remote_shutdown_ult);
 
@@ -313,7 +334,6 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
     }
     ret = ABT_xstream_get_main_pools(progress_xstream, 1, &progress_pool);
     if (ret != ABT_SUCCESS) goto err;
-
     if (rpc_thread_count > 0)
     {
         /* create a collection of xstreams to run RPCs */
@@ -358,6 +378,40 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
     mid->progress_xstream = progress_xstream;
     mid->num_handler_pool_threads = rpc_thread_count < 0 ? 0 : rpc_thread_count;
     mid->rpc_xstreams = rpc_xstreams;
+    mid->num_registered_rpcs = 0;
+
+    /* start profiling if env variable MARGO_ENABLE_PROFILING is set */
+    unsigned int profile = 0;
+    mid->profile_enabled = 0;
+    mid->previous_sparkline_data_collection_time = ABT_get_wtime();
+    mid->sparkline_index = 0;
+
+    if(getenv("MARGO_ENABLE_PROFILING")) {
+      profile = (unsigned int)atoi(getenv("MARGO_ENABLE_PROFILING"));
+      margo_set_param(mid, MARGO_PARAM_ENABLE_PROFILING, &profile);
+    }
+
+    if(profile) {
+       margo_profile_start(mid);
+
+       ret = ABT_thread_create(mid->progress_pool, sparkline_data_collection_fn, mid, 
+       ABT_THREAD_ATTR_NULL, &mid->sparkline_data_collection_tid);
+       if(ret != 0)
+         fprintf(stderr, "MARGO_PROFILE: Failed to start sparkline data collection thread. Continuing to profile without sparkline data collection.\n");
+
+    }
+
+    /* start diagnostics if the variable MARGO_ENABLE_DIAGNOSTICS is set */
+    unsigned int diag = 0;
+    mid->diag_enabled = 0;
+
+    if(getenv("MARGO_ENABLE_DIAGNOSTICS")) {
+      diag = (unsigned int)atoi(getenv("MARGO_ENABLE_DIAGNOSTICS"));
+      margo_set_param(mid, MARGO_PARAM_ENABLE_DIAGNOSTICS, &diag);
+    }
+
+    if(diag)
+      margo_diag_start(mid);
 
     return mid;
 
@@ -444,6 +498,10 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
      * seem to be a problem to call ABT_key_create() multiple times.
      */
     ret = ABT_key_create(free, &rpc_breadcrumb_key);
+    if(ret != 0)
+        goto err;
+
+    ret = ABT_key_create(free, &target_timing_key);
     if(ret != 0)
         goto err;
 
@@ -573,6 +631,15 @@ void margo_finalize(margo_instance_id mid)
     /* wait for it to shutdown cleanly */
     ABT_thread_join(mid->hg_progress_tid);
     ABT_thread_free(&mid->hg_progress_tid);
+
+    if(mid->profile_enabled) {
+      ABT_thread_join(mid->sparkline_data_collection_tid);
+      ABT_thread_free(&mid->sparkline_data_collection_tid);
+      margo_profile_dump(mid, "profile", 1);
+    }
+    
+    if(mid->diag_enabled) 
+      margo_diag_dump(mid, "profile", 1);
 
     ABT_mutex_lock(mid->finalize_mutex);
     mid->finalize_flag = 1;
@@ -727,7 +794,7 @@ hg_id_t margo_provider_register_name(margo_instance_id mid, const char *func_nam
     
     id = gen_id(func_name, provider_id);
 
-    if(mid->diag_enabled)
+    if(mid->profile_enabled)
     {
         /* track information about this rpc registration for debugging and
          * profiling
@@ -741,12 +808,13 @@ hg_id_t margo_provider_register_name(margo_instance_id mid, const char *func_nam
         strncpy(tmp_rpc->func_name, func_name, 63);
         tmp_rpc->next = mid->registered_rpcs;
         mid->registered_rpcs = tmp_rpc;
+	mid->num_registered_rpcs += 1;
     }
 
     ret = margo_register_internal(mid, id, in_proc_cb, out_proc_cb, rpc_cb, pool);
     if(ret == 0)
     {
-        if(mid->diag_enabled)
+        if(mid->profile_enabled)
         {
             mid->registered_rpcs = tmp_rpc->next;
             free(tmp_rpc);
@@ -975,7 +1043,11 @@ static hg_return_t margo_cb(const struct hg_cb_info *info)
          */
         mid = margo_hg_handle_get_instance(req->handle);
         assert(mid);
-        margo_breadcrumb_measure(mid, req->rpc_breadcrumb, req->start_time);
+
+        if(mid->profile_enabled) {
+          /* 0 here indicates this is a origin-side call */
+          margo_breadcrumb_measure(mid, req->rpc_breadcrumb, req->start_time, 0, req->provider_id, req->server_addr_hash, req->handle);
+        }
     }
 
     /* propagate return code out through eventual */
@@ -1025,6 +1097,8 @@ static hg_return_t margo_provider_iforward_internal(
     hg_bool_t flag;
     margo_instance_id mid = margo_hg_handle_get_instance(handle);
     uint64_t *rpc_breadcrumb;
+    char addr_string[128];
+    hg_size_t addr_string_sz = 128;
 
     assert(provider_id <= MARGO_MAX_PROVIDER_ID);
 
@@ -1097,6 +1171,12 @@ static hg_return_t margo_provider_iforward_internal(
     /* LE encoding */
     *rpc_breadcrumb = htole64(req->rpc_breadcrumb);
     req->start_time = ABT_get_wtime();
+    
+    /* add information about the server and provider servicing the request */
+    req->provider_id = provider_id; /*store id of provider servicing the request */
+    const struct hg_info * inf = HG_Get_info(req->handle);
+    margo_addr_to_string(mid, addr_string, &addr_string_sz, inf->addr);
+    HASH_JEN(addr_string, strlen(addr_string), req->server_addr_hash); /*record server address in the breadcrumb */
 
     return HG_Forward(handle, margo_cb, (void*)req, in_struct);
 }
@@ -1188,6 +1268,18 @@ hg_return_t margo_respond(
     hg_handle_t handle,
     void *out_struct)
 {
+
+    /* retrieve the ULT-local key for this breadcrumb and add measurement to profile */
+    struct margo_request_struct* treq;
+    margo_instance_id mid = margo_hg_handle_get_instance(handle);
+    if(mid->profile_enabled) {
+      ABT_key_get(target_timing_key, (void**)(&treq));
+      assert(treq != NULL);
+    
+      /* the "1" indicates that this a target-side breadcrumb */
+      margo_breadcrumb_measure(mid, treq->rpc_breadcrumb, treq->start_time, 1, treq->provider_id, treq->server_addr_hash, handle);
+    }
+
     hg_return_t hret;
     struct margo_request_struct reqs;
     hret = margo_irespond_internal(handle, out_struct, &reqs);
@@ -1440,6 +1532,55 @@ static void margo_rpc_data_free(void* ptr)
 	free(ptr);
 }
 
+/* dedicated thread function to collect sparkline data */
+/* TODO:  Initially, we had used margo_thread_sleep() here to keep the logic simple, but for some reason this ULT was not cleaning itself properly. It continued to run even after margo_finalize(), but we weren't able to figure out why. So we resorted to this logic of the ULT continuously being scheduled to run, and checking the timer to see if it needs to collect sparkline data. Either ways, it checks and yields. 
+ * We need to: 
+ * a. Figure out the performance overhead of this sort of busy waiting for timeout to trigger sparkline data collection
+ * b. Replace this logic with the correct way of doing it: using margo_thread_sleep() */
+static void sparkline_data_collection_fn(void* foo)
+{
+    struct margo_instance *mid = (struct margo_instance *)foo;
+    double time_passed, end = 0;
+    struct diag_data *stat, *tmp;
+
+    /* double check that profile collection should run, else, close this ULT */
+    if(!mid->profile_enabled) {
+      ABT_thread_join(mid->sparkline_data_collection_tid);
+      ABT_thread_free(&mid->sparkline_data_collection_tid);
+    }
+
+    while(!mid->hg_progress_shutdown_flag)
+    {
+      
+      end = ABT_get_wtime();
+      time_passed = end - mid->previous_sparkline_data_collection_time;
+
+      if(time_passed >= MARGO_SPARKLINE_TIMESLICE) {
+        HASH_ITER(hh, mid->diag_rpc, stat, tmp)
+        {
+
+          if(mid->sparkline_index > 0 && mid->sparkline_index < 100) {
+            stat->sparkline_time[mid->sparkline_index] = stat->stats.cumulative - stat->sparkline_time[mid->sparkline_index - 1];
+            stat->sparkline_count[mid->sparkline_index] = stat->stats.count - stat->sparkline_count[mid->sparkline_index - 1];
+          } else if(mid->sparkline_index == 0) {
+            stat->sparkline_time[mid->sparkline_index] = stat->stats.cumulative;
+            stat->sparkline_count[mid->sparkline_index] = stat->stats.count;
+          } else {
+            //Drop!
+          }
+        }
+      
+        mid->sparkline_index++;
+        mid->previous_sparkline_data_collection_time = ABT_get_wtime();
+   	ABT_thread_yield();
+      } else {
+        ABT_thread_yield();
+      }
+   }
+
+   return;
+}
+
 /* dedicated thread function to drive Mercury progress */
 static void hg_progress_fn(void* foo)
 {
@@ -1590,27 +1731,104 @@ void margo_diag_start(margo_instance_id mid)
     mid->diag_enabled = 1;
 }
 
-static void print_diag_data(FILE *file, const char* name, const char *description, struct diag_data *data)
+void margo_profile_start(margo_instance_id mid)
+{
+    mid->profile_enabled = 1;
+}
+
+void margo_diag_stop(margo_instance_id mid)
+{
+    mid->diag_enabled = 0;
+}
+
+void margo_profile_stop(margo_instance_id mid)
+{
+    mid->profile_enabled = 0;
+}
+
+static void print_diag_data(margo_instance_id mid, FILE *file, const char* name, const char *description, struct diag_data *data)
 {
     double avg;
 
-    fprintf(file, "# %s\n", description);
-    if(data->count != 0)
-        avg = data->cumulative/data->count;
+    if(data->stats.count != 0)
+        avg = data->stats.cumulative/data->stats.count;
     else
         avg = 0;
-    fprintf(file, "%s\t%.9f\t%.9f\t%.9f\t%d\n", name, avg, data->min, data->max, data->count);
+
+    fprintf(file, "%s,%.9f,%.9f,%.9f,%.9f,%lu\n", name, avg, data->stats.cumulative, data->stats.min, data->stats.max, data->stats.count);
+
     return;
 }
 
+static void print_profile_data(margo_instance_id mid, FILE *file, const char* name, const char *description, struct diag_data *data)
+{
+    double avg;
+    int i;
+
+    if(data->stats.count != 0)
+        avg = data->stats.cumulative/data->stats.count;
+    else
+        avg = 0;
+
+    /* first line is breadcrumb data */
+    fprintf(file, "%s,%.9f,%lu,%lu,%d,%.9f,%.9f,%.9f,%lu,%lu,%lu,%lu,%lu,%lu,%lu\n", name, avg, data->key.rpc_breadcrumb, data->key.addr_hash, data->type, data->stats.cumulative, data->stats.min, data->stats.max, data->stats.count, data->stats.abt_pool_size_hwm, data->stats.abt_pool_size_lwm, data->stats.abt_pool_size_cumulative, data->stats.abt_pool_total_size_hwm, data->stats.abt_pool_total_size_lwm, data->stats.abt_pool_total_size_cumulative);
+
+    /* second line is sparkline data for the given breadcrumb*/
+    fprintf(file, "%s,%d;", name, data->type);
+    for(i = 0; i < mid->sparkline_index; i++)
+      fprintf(file, "%.9f,%.9f, %d;", data->sparkline_time[i], data->sparkline_count[i], i);
+    fprintf(file,"\n");
+
+    return;
+}
+
+/* copy out the entire list of breadcrumbs on this margo instance */
+void margo_breadcrumb_snapshot(margo_instance_id mid, struct margo_breadcrumb_snapshot* snap)
+{
+  assert(mid->profile_enabled);
+  struct diag_data *dd, *tmp;
+  struct margo_breadcrumb *tmp_bc;
+
+#if 0
+  fprintf(stderr, "Taking a snapshot\n");
+#endif
+  
+  snap->ptr = calloc(1, sizeof(struct margo_breadcrumb));
+  tmp_bc = snap->ptr;
+
+  HASH_ITER(hh, mid->diag_rpc, dd, tmp)
+  {
+#if 0
+    fprintf(stderr, "Copying out RPC breadcrumb %d\n", dd->rpc_breadcrumb);
+#endif
+    tmp_bc->stats.min = dd->stats.min;
+    tmp_bc->stats.max = dd->stats.max;
+    tmp_bc->type = dd->type;
+    tmp_bc->key = dd->key;
+    tmp_bc->stats.count = dd->stats.count;
+    tmp_bc->stats.cumulative = dd->stats.cumulative;
+
+    tmp_bc->stats.abt_pool_total_size_hwm = dd->stats.abt_pool_total_size_hwm;
+    tmp_bc->stats.abt_pool_total_size_lwm = dd->stats.abt_pool_total_size_lwm;
+    tmp_bc->stats.abt_pool_total_size_cumulative = dd->stats.abt_pool_total_size_cumulative;
+    tmp_bc->stats.abt_pool_size_hwm = dd->stats.abt_pool_size_hwm;
+    tmp_bc->stats.abt_pool_size_lwm = dd->stats.abt_pool_size_lwm;
+    tmp_bc->stats.abt_pool_size_cumulative = dd->stats.abt_pool_size_cumulative;
+
+    tmp_bc->next = calloc(1, sizeof(struct margo_breadcrumb));
+    tmp_bc = tmp_bc->next;
+    tmp_bc->next = NULL;
+  }
+
+}
+ 
 void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
 {
     FILE *outfile;
     time_t ltime;
     char revised_file_name[256] = {0};
-    struct diag_data *dd, *tmp;
-    char rpc_breadcrumb_str[24] = {0};
-    struct margo_registered_rpc *tmp_rpc;
+    char * name;
+    uint64_t hash;
 
     assert(mid->diag_enabled);
 
@@ -1622,11 +1840,12 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
         gethostname(hostname, 128);
         pid = getpid();
 
-        sprintf(revised_file_name, "%s-%s-%d", file, hostname, pid);
+        sprintf(revised_file_name, "%s-%s-%d.diag", file, hostname, pid);
     }
+
     else
     {
-        sprintf(revised_file_name, "%s", file);
+        sprintf(revised_file_name, "%s.diag", file);
     }
 
     if(strcmp("-", file) == 0)
@@ -1649,28 +1868,93 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
      */
 
     time(&ltime);
+
     fprintf(outfile, "# Margo diagnostics\n");
+    GET_SELF_ADDR_STR(mid, name);
+    HASH_JEN(name, strlen(name), hash); /*record own address in the breadcrumb */
+    fprintf(outfile, "#Addr Hash and Address Name: %lu,%s\n", hash, name);
     fprintf(outfile, "# %s\n", ctime(&ltime));
-    fprintf(outfile, "# RPC breadcrumbs for RPCs that were registered on this process:\n");
+    fprintf(outfile, "# Function Name, Average Time Per Call, Cumulative Time, Highwatermark, Lowwatermark, Call Count\n");
+    
+    print_diag_data(mid, outfile, "trigger_elapsed", 
+        "Time consumed by HG_Trigger()", 
+        &mid->diag_trigger_elapsed);
+    print_diag_data(mid, outfile, "progress_elapsed_zero_timeout", 
+        "Time consumed by HG_Progress() when called with timeout==0", 
+        &mid->diag_progress_elapsed_zero_timeout);
+    print_diag_data(mid, outfile, "progress_elapsed_nonzero_timeout", 
+        "Time consumed by HG_Progress() when called with timeout!=0", 
+        &mid->diag_progress_elapsed_nonzero_timeout);
+
+    if(outfile != stdout)
+        fclose(outfile);
+    
+    return;
+}
+
+void margo_profile_dump(margo_instance_id mid, const char* file, int uniquify)
+{
+    FILE *outfile;
+    time_t ltime;
+    char revised_file_name[256] = {0};
+    struct diag_data *dd, *tmp;
+    char rpc_breadcrumb_str[24] = {0};
+    struct margo_registered_rpc *tmp_rpc;
+    char * name;
+    uint64_t hash;
+
+    assert(mid->profile_enabled);
+
+    if(uniquify)
+    {
+        char hostname[128] = {0};
+        int pid;
+
+        gethostname(hostname, 128);
+        pid = getpid();
+
+        sprintf(revised_file_name, "%s-%s-%d.csv", file, hostname, pid);
+    }
+
+    else
+    {
+        sprintf(revised_file_name, "%s.csv", file);
+    }
+
+    if(strcmp("-", file) == 0)
+    {
+        outfile = stdout;
+    }
+    else
+    {
+        outfile = fopen(revised_file_name, "a");
+        if(!outfile)
+        {
+            perror("fopen");
+            return;
+        }
+    }
+
+    /* TODO: retrieve self addr and include in output */
+    /* TODO: support pattern substitution in file name to create unique
+     * output files per process
+     */
+
+    time(&ltime);
+
+    fprintf(outfile, "%u\n", mid->num_registered_rpcs);
+    GET_SELF_ADDR_STR(mid, name);
+    HASH_JEN(name, strlen(name), hash); /*record own address in the breadcrumb */
+    
+    fprintf(outfile, "%lu,%s\n", hash, name);
+
     tmp_rpc = mid->registered_rpcs;
     while(tmp_rpc)
     {
-        fprintf(outfile, "# 0x%4lx\t%s\n", tmp_rpc->rpc_breadcrumb_fragment, tmp_rpc->func_name);
+        fprintf(outfile, "0x%.4lx,%s\n", tmp_rpc->rpc_breadcrumb_fragment, tmp_rpc->func_name);
         tmp_rpc = tmp_rpc->next;
     }
-    fprintf(outfile, "# <stat>\t<avg>\t<min>\t<max>\t<count>\n");
-    print_diag_data(outfile, "trigger_elapsed", 
-        "Time consumed by HG_Trigger()", 
-        &mid->diag_trigger_elapsed);
-    print_diag_data(outfile, "progress_elapsed_zero_timeout", 
-        "Time consumed by HG_Progress() when called with timeout==0", 
-        &mid->diag_progress_elapsed_zero_timeout);
-    print_diag_data(outfile, "progress_elapsed_nonzero_timeout", 
-        "Time consumed by HG_Progress() when called with timeout!=0", 
-        &mid->diag_progress_elapsed_nonzero_timeout);
-    print_diag_data(outfile, "progress_timeout_value", 
-        "Timeout values passed to HG_Progress()", 
-        &mid->diag_progress_timeout_value);
+    
     HASH_ITER(hh, mid->diag_rpc, dd, tmp)
     {
         int i;
@@ -1680,18 +1964,15 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
             tmp_breadcrumb = dd->rpc_breadcrumb;
             tmp_breadcrumb >>= (i*16);
             tmp_breadcrumb &= 0xffff;
-            if(i==4)
+
+	    if(!tmp_breadcrumb) continue;
+
+            if(i==3)
                 sprintf(&rpc_breadcrumb_str[i*7], "0x%.4lx", tmp_breadcrumb);
             else
                 sprintf(&rpc_breadcrumb_str[i*7], "0x%.4lx ", tmp_breadcrumb);
-#if 0
-            if(i==0)
-                sprintf(&rpc_breadcrumb_str[(3-i)*5], "0x%4lx ", tmp_breadcrumb);
-            else
-                sprintf(&rpc_breadcrumb_str[(3-i)*5], "0x%4lx", tmp_breadcrumb);
-#endif
         }
-        print_diag_data(outfile, rpc_breadcrumb_str, "RPC statistics", dd);
+        print_profile_data(mid, outfile, rpc_breadcrumb_str, "RPC statistics", dd);
     }
 
     if(outfile != stdout)
@@ -1707,6 +1988,12 @@ void margo_set_param(margo_instance_id mid, int option, const void *param)
         case MARGO_PARAM_PROGRESS_TIMEOUT_UB:
             mid->hg_progress_timeout_ub = (*((const unsigned int*)param));
             break;
+	case MARGO_PARAM_ENABLE_PROFILING:
+	    mid->profile_enabled = (*((const unsigned int*)param));
+	    break;
+	case MARGO_PARAM_ENABLE_DIAGNOSTICS:
+	    mid->diag_enabled = (*((const unsigned int*)param));
+	    break;
     }
 
     return;
@@ -1960,13 +2247,31 @@ static uint64_t margo_breadcrumb_set(hg_id_t rpc_id)
 }
 
 /* records statistics for a breadcrumb, to be used after completion of an
- * RPC */
-static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcrumb, double start)
+ * RPC, both on the origin as well as on the target */
+static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcrumb, double start, breadcrumb_type type, uint16_t provider_id, uint64_t hash, hg_handle_t h)
 {
     struct diag_data *stat;
     double end, elapsed;
+    uint16_t t = (type == origin) ? 2: 1;
+    uint64_t hash_;
 
-    if(!mid->diag_enabled)
+    __uint128_t x = 0;
+
+    /* IMPT NOTE: presently not adding provider_id to the breadcrumb,
+       thus, the breadcrumb represents cumulative information for all providers
+       offering or making a certain RPC call on this Margo instance */
+
+    /* Bake in information about whether or not this was an origin or target-side breadcrumb */
+    hash_ = hash;
+    hash_ = (hash_ >> 16) << 16;
+    hash_ |= t;
+  
+    /* add in the server address */
+    x = hash_;
+    x = x << 64; 
+    x |= rpc_breadcrumb;
+
+    if(!mid->profile_enabled)
         return;
 
     end = ABT_get_wtime();
@@ -1974,8 +2279,9 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
 
     ABT_mutex_lock(mid->diag_rpc_mutex);
 
-    HASH_FIND(hh, mid->diag_rpc, &rpc_breadcrumb,
-        sizeof(rpc_breadcrumb), stat);
+    HASH_FIND(hh, mid->diag_rpc, &x,
+        sizeof(uint64_t)*2, stat);
+
     if(!stat)
     {
         /* we aren't tracking this breadcrumb yet; add it */
@@ -1988,17 +2294,65 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
             ABT_mutex_unlock(mid->diag_rpc_mutex);
             return;
         }
+
         stat->rpc_breadcrumb = rpc_breadcrumb;
-        HASH_ADD(hh, mid->diag_rpc, rpc_breadcrumb,
-            sizeof(rpc_breadcrumb), stat);
+        stat->type = type;
+        stat->key.rpc_breadcrumb = rpc_breadcrumb;
+        stat->key.addr_hash = hash;
+	stat->key.provider_id = provider_id;
+        stat->x = x;
+
+        /* initialize pool stats for breadcrumb */
+        stat->stats.abt_pool_size_lwm = 0x11111111; // Some high value
+        stat->stats.abt_pool_size_cumulative = 0;
+        stat->stats.abt_pool_size_hwm = -1;
+
+        stat->stats.abt_pool_total_size_lwm = 0x11111111; // Some high value
+        stat->stats.abt_pool_total_size_cumulative = 0;
+        stat->stats.abt_pool_total_size_hwm = -1;
+   
+        /* initialize sparkline data */
+        memset(stat->sparkline_time, 0.0, 100*sizeof(double));
+        memset(stat->sparkline_count, 0.0, 100*sizeof(double));
+ 
+        HASH_ADD(hh, mid->diag_rpc, x,
+            sizeof(x), stat);
     }
 
-    stat->count++;
-    stat->cumulative += elapsed;
-    if(elapsed > stat->max)
-        stat->max = elapsed;
-    if(stat->min == 0 || elapsed < stat->min)
-        stat->min = elapsed;
+
+    /* Argobots pool info */
+    size_t s, s1;
+    struct margo_rpc_data * margo_data;
+    if(type) {
+      const struct hg_info * info;
+      info = HG_Get_info(h); 
+      margo_data = (struct margo_rpc_data*)HG_Registered_data(mid->hg_class, info->id);
+      if(margo_data && margo_data->pool != ABT_POOL_NULL) {
+        ABT_pool_get_total_size(margo_data->pool, &s);
+        ABT_pool_get_size(margo_data->pool, &s1);
+      }
+      else {
+        ABT_pool_get_total_size(mid->handler_pool, &s);
+        ABT_pool_get_size(mid->handler_pool, &s1);
+      }
+
+      stat->stats.abt_pool_size_hwm = stat->stats.abt_pool_size_hwm > (double)s ? stat->stats.abt_pool_size_hwm : s1;
+      stat->stats.abt_pool_size_lwm = stat->stats.abt_pool_size_lwm < (double)s1 ? stat->stats.abt_pool_size_lwm : s1;
+      stat->stats.abt_pool_size_cumulative += s1;
+
+      stat->stats.abt_pool_total_size_hwm = stat->stats.abt_pool_total_size_hwm > (double)s ? stat->stats.abt_pool_total_size_hwm : s;
+      stat->stats.abt_pool_total_size_lwm = stat->stats.abt_pool_total_size_lwm < (double)s1 ? stat->stats.abt_pool_total_size_lwm : s;
+      stat->stats.abt_pool_total_size_cumulative += s;
+
+    }
+    /* Argobots pool info */
+
+    stat->stats.count++;
+    stat->stats.cumulative += elapsed;
+    if(elapsed > stat->stats.max)
+        stat->stats.max = elapsed;
+    if(stat->stats.min == 0 || elapsed < stat->stats.min)
+        stat->stats.min = elapsed;
 
     ABT_mutex_unlock(mid->diag_rpc_mutex);
 
@@ -2030,16 +2384,41 @@ void __margo_internal_pre_wrapper_hooks(margo_instance_id mid, hg_handle_t handl
 {
     hg_return_t ret;
     uint64_t *rpc_breadcrumb;
+    const struct hg_info* info;
+    char * name;
+    struct margo_request_struct* req;
 
     ret = HG_Get_input_buf(handle, (void**)&rpc_breadcrumb, NULL);
     assert(ret == HG_SUCCESS);
     *rpc_breadcrumb = le64toh(*rpc_breadcrumb);
+  
+    /* add the incoming breadcrumb info to a ULT-local key */
+
+    ABT_key_get(target_timing_key, (void**)(&req));
+
+    if(req == NULL)
+    {
+        req = calloc(1, sizeof(*req));
+    }
+    
+    req->rpc_breadcrumb = *rpc_breadcrumb;
+    req->timer = NULL;
+    req->handle = handle;
+    req->start_time = ABT_get_wtime(); /* measure start time */
+    info = HG_Get_info(handle);
+    req->provider_id = 0;
+    req->provider_id += ((info->id) & (((1<<(__MARGO_PROVIDER_ID_SIZE*8))-1)));
+    GET_SELF_ADDR_STR(mid, name);
+    HASH_JEN(name, strlen(name), req->server_addr_hash); /*record own address in the breadcrumb */
+ 
     /* Note: we use this opportunity to retrieve the incoming RPC
      * breadcrumb and put it in a thread-local argobots key.  It is
      * shifted down 16 bits so that if this handler in turn issues more
      * RPCs, there will be a stack showing the ancestry of RPC calls that
      * led to that point.
      */
+    ABT_key_set(target_timing_key, req);
+
     margo_internal_breadcrumb_handler_set((*rpc_breadcrumb) << 16);
 }
 

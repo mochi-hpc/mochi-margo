@@ -3,6 +3,9 @@ ACLOCAL_AMFLAGS = -I m4
 
 bin_PROGRAMS =
 bin_SCRIPTS =
+dist_bin_SCRIPTS = scripts/margo-gen-profile
+dist_noinst_SCRIPTS = scripts/margo-gen-profile
+
 noinst_PROGRAMS =
 noinst_HEADERS =
 TESTS =
@@ -15,7 +18,8 @@ EXTRA_DIST =
 BUILT_SOURCES =
 include_HEADERS = \
  include/margo.h \
- include/margo-bulk-pool.h
+ include/margo-bulk-pool.h \
+ include/margo-diag.h
  
 TESTS_ENVIRONMENT =
 

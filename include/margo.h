@@ -17,6 +17,8 @@ extern "C" {
 #include <mercury_macros.h>
 #include <abt.h>
 
+#include "margo-diag.h"
+
 /* determine how much of the Mercury ID space to use for Margo provider IDs */
 #define __MARGO_PROVIDER_ID_SIZE (sizeof(hg_id_t)/4)
 #define __MARGO_RPC_HASH_SIZE (__MARGO_PROVIDER_ID_SIZE * 3)
@@ -41,6 +43,8 @@ typedef struct margo_request_struct* margo_request;
 #define MARGO_MAX_PROVIDER_ID ((1 << (8*__MARGO_PROVIDER_ID_SIZE))-1)
 
 #define MARGO_PARAM_PROGRESS_TIMEOUT_UB 1
+#define MARGO_PARAM_ENABLE_PROFILING 2
+#define MARGO_PARAM_ENABLE_DIAGNOSTICS 3
 
 /**
  * Initializes margo library.
@@ -901,6 +905,30 @@ margo_instance_id margo_hg_info_get_instance(const struct hg_info *info);
 void margo_diag_start(margo_instance_id mid);
 
 /**
+ * Enables profile data collection on specified Margo instance
+ *
+ * @param [in] mid Margo instance
+ * @returns void
+ */
+void margo_profile_start(margo_instance_id mid);
+
+/**
+ * Disables diagnostic collection on specified Margo instance
+ *
+ * @param [in] mid Margo instance
+ * @returns void
+ */
+void margo_diag_stop(margo_instance_id mid);
+
+/**
+ * Disables profile data collection on specified Margo instance
+ *
+ * @param [in] mid Margo instance
+ * @returns void
+ */
+void margo_profile_stop(margo_instance_id mid);
+
+/**
  * Appends diagnostic statistics (enabled via margo_diag_start()) to specified 
  * output file.
  *
@@ -911,6 +939,27 @@ void margo_diag_start(margo_instance_id mid);
  * @returns void
  */
 void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify);
+
+/**
+ * Appends profile statistics (enabled via margo_profile_start()) to specified 
+ * output file.
+ *
+ * @param [in] mid Margo instance
+ * @param [in] file output file ("-" for stdout)
+ * @param [in] uniquify flag indicating if file name should have additional
+ *   information added to it to make output from different processes unique
+ * @returns void
+ */
+void margo_profile_dump(margo_instance_id mid, const char* file, int uniquify);
+
+/**
+ * Grabs a snapshot of the current state of diagnostics within the margo instance 
+ *
+ * @param [in] mid Margo instance
+ * @param [out] snap Margo diagnostics snapshot
+ * @returns void
+ */
+void margo_breadcrumb_snapshot(margo_instance_id mid, struct margo_breadcrumb_snapshot* snap); 
 
 /**
  * Sets configurable parameters/hints
