@@ -150,7 +150,7 @@ class ProfileGenerator:
 			node_string += ("subgraph cluster" + node + " {\n")
 			node_string += ("node [style=filled, color=white];\n style=filled;\n color=lightgrey;\n")
 			for mid in midlist:
-				node_string += ("subgraph cluster" + mid.replace("+", "_").replace(":", "_").replace(".","_").replace("//", "_") + " {\n")
+				node_string += ("subgraph cluster" + mid.replace("+", "_").replace(":", "_").replace(".","_").replace("//", "_").replace("/", "_") + " {\n")
 				node_string += ("node [style=filled];\n color=lightblue;\n")
 				for (provider_type, provider_id) in self.midtoprovider[mid]:
 					node_string += (str(provider_id) + ";\n")
@@ -166,7 +166,7 @@ class ProfileGenerator:
 	#IMPT: We derive the "provider type" from the RPC call by assuming that every RPC call has the form <provider_type>_<RPC_call>
 	#For instance, the call sdskv_get_keys has the provider type as "sdskv" and RPC call as "get_keys"
 	def __gengraphedges(self):
-		edge_string = "/* Generate a list of weighted edges for the graph in the form (count, time) */"
+		edge_string = "/* Generate a list of weighted edges for the graph in the form (count, time) */\n"
 		for edge_info, count in self.edgelistcount.items():
 			cumulative_time = self.edgelisttime[edge_info]
 			source_provider_id = ""
@@ -469,7 +469,8 @@ For the top-5 breadcrumbs, display sparklines for the cumulative call-count acro
 			perf_arr.append(v)
 
 		objects = self.__getrpc2name(x.keys())
-		self.__gensparklinegraph(objects=objects, title='Sparkline for cumulative count on target', num_subplots=len(x.items()), perf_arr=perf_arr, txt=txt)
+		if(len(x.items()) > 0):
+			self.__gensparklinegraph(objects=objects, title='Sparkline for cumulative count on target', num_subplots=len(x.items()), perf_arr=perf_arr, txt=txt)
 
 	#Generate and display sparklines for the top-5 RPC breadcrumbs, sorted by cumulative time, on both origin and target
 	# 0 = origin, 1 = target
@@ -494,8 +495,10 @@ For the top-5 breadcrumbs, display sparklines for the cumulative call-time acros
 			for i in range(0, len(x.items())):
 				k, v = (x.items())[i]
 				perf_arr.append(v)
-		
-			self.__gensparklinegraph(objects=objects, title=graph_names[p], num_subplots=len(x.items()), perf_arr=perf_arr, txt=txt[p])
+
+			
+			if(len(x.items()) > 0):
+				self.__gensparklinegraph(objects=objects, title=graph_names[p], num_subplots=len(x.items()), perf_arr=perf_arr, txt=txt[p])
 
 
 	#Generate a graphViz file that describes the structure of the RPC communication graph in the DOT language
