@@ -93,9 +93,8 @@ int main(int argc, char **argv)
         my_rpc_ult);
     MARGO_REGISTER(mid, "my_rpc_hang", my_rpc_hang_in_t, my_rpc_hang_out_t, 
         my_rpc_hang_ult);
-    MARGO_REGISTER(mid, "my_shutdown_rpc", void, void, 
-        my_rpc_shutdown_ult);
 
+    margo_enable_remote_shutdown(mid);
     /* NOTE: at this point this server ULT has two options.  It can wait on
      * whatever mechanism it wants to (however long the daemon should run and
      * then call margo_finalize().  Otherwise, it can call

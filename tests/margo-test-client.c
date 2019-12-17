@@ -30,7 +30,6 @@ struct run_my_rpc_args
 static void run_my_rpc(void *_arg);
 
 static hg_id_t my_rpc_id;
-static hg_id_t my_rpc_shutdown_id;
 
 int main(int argc, char **argv) 
 {
@@ -89,7 +88,6 @@ int main(int argc, char **argv)
 
     /* register RPCs */
     my_rpc_id = MARGO_REGISTER(mid, "my_rpc", my_rpc_in_t, my_rpc_out_t, NULL);
-    my_rpc_shutdown_id = MARGO_REGISTER(mid, "my_shutdown_rpc", void, void, NULL);
 
     /* find addr for server */
     hret = margo_addr_lookup(mid, argv[1], &svr_addr);
@@ -134,15 +132,8 @@ int main(int argc, char **argv)
     }
 
     /* send one rpc to server to shut it down */
+    margo_shutdown_remote_instance(mid, svr_addr);
 
-    /* create handle */
-    hret = margo_create(mid, svr_addr, my_rpc_shutdown_id, &handle);
-    assert(hret == HG_SUCCESS);
-
-    hret = margo_forward(handle, NULL);
-    assert(hret == HG_SUCCESS);
-
-    margo_destroy(handle);
     margo_addr_free(mid, svr_addr);
 
     /* shut down everything */
