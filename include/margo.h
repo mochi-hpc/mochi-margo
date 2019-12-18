@@ -160,12 +160,83 @@ hg_bool_t margo_is_listening(
     margo_instance_id mid);
 
 /**
+ * Installs a callback to be called before the margo instance is finalize,
+ * and before the Mercury progress loop is terminated.
+ * Callbacks installed will be called in reverse ordered than they have been
+ * pushed, and with the user-provider pointer as argument.
+ *
+ * Note that callbacks may not be called within margo_finalize. They are called
+ * when the margo instance is cleaned up, which may happen in margo_wait_for_finalize.
+ * 
+ * Callbacks installed using this function may call RPCs or margo_thread_sleep,
+ * but do not guarantee that the process isn't itself going to receive RPCs in
+ * the mean time.
+ *
+ * @param mid The margo instance
+ * @param cb Callback to install
+ * @param uargs User-provider argument to pass to the callback when called
+ */
+void margo_push_prefinalize_callback(
+    margo_instance_id mid,
+    void(*cb)(void*), 
+    void* uargs);
+
+/**
+ * Removes the last pre-finalize callback that was pushed into the margo instance
+ * without calling it. If a callback was removed, this function returns 1, otherwise
+ * it returns 0.
+ *
+ * @param mid Margo instance.
+ */
+int margo_pop_prefinalize_callback(
+    margo_instance_id mid);
+
+/**
+ * @brief Installs a callback to be called before the margo instance is finalized,
+ * and before the Mercury progress loop is terminated.
+ * The owner pointer allows to identify callbacks installed by particular providers.
+ * Note that one can install multiple callbacks with the same owner. If popped, they
+ * will be popped in reverse order of installation. If they are not popped, they will
+ * be called in reverse order of installation by the margo cleanup procedure.
+ *
+ * Callbacks installed using this function may call RPCs or margo_thread_sleep,
+ * but do not guarantee that the process isn't itself going to receive RPCs in
+ * the mean time.
+ *
+ * @param mid The margo instance
+ * @param owner Owner of the callback (to be used when popping callbacks)
+ * @param cb Callback to install
+ * @param uargs User-provider argument to pass to the callback when called
+ */
+void margo_provider_push_prefinalize_callback(
+    margo_instance_id mid,
+    void* owner,
+    void(*cb)(void*),
+    void* uargs);
+
+/**
+ * Removes the last prefinalize callback that was pushed into the margo instance
+ * by the specified owner. If a callback was removed, this function returns 1, otherwise
+ * it returns 0.
+ *
+ * @param mid Margo instance.
+ * @param owner Owner of the callback.
+ */
+int margo_provider_pop_prefinalize_callback(
+    margo_instance_id mid,
+    void* owner);
+
+/**
  * Installs a callback to be called before the margo instance is finalize.
  * Callbacks installed will be called in reverse ordered than they have been
  * pushed, and with the user-provider pointer as argument.
  *
  * Note that callbacks may not be called within margo_finalize. They are called
  * when the margo instance is cleaned up, which may happen in margo_wait_for_finalize.
+ *
+ * Important: callbacks cannot make RPC calls nor use margo_thread_sleep. If you
+ * need to be able to make RPC calls or use margo_thread_sleep, you should use
+ * margo_push_prefinalize_callback instead.
  *
  * @param mid The margo instance
  * @param cb Callback to install
@@ -192,6 +263,10 @@ int margo_pop_finalize_callback(
  * Note that one can install multiple callbacks with the same owner. If popped, they
  * will be popped in reverse order of installation. If they are not popped, they will
  * be called in reverse order of installation by the margo cleanup procedure.
+ *
+ * Important: callbacks cannot make RPC calls nor use margo_thread_sleep. If you
+ * need to be able to make RPC calls or use margo_thread_sleep, you should use
+ * margo_provider_push_prefinalize_callback instead.
  *
  * @param mid The margo instance
  * @param owner Owner of the callback (to be used when popping callbacks)
