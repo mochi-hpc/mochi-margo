@@ -114,6 +114,7 @@ struct margo_instance
     ABT_mutex finalize_mutex;
     ABT_cond finalize_cond;
     struct margo_finalize_cb* finalize_cb;
+    struct margo_finalize_cb* prefinalize_cb;
 
     /* control logic to prevent margo_finalize from destroying
        the instance when some operations are pending */
@@ -423,6 +424,7 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
 
     mid->refcount = 1;
     mid->finalize_cb = NULL;
+    mid->prefinalize_cb = NULL;
     mid->enable_remote_shutdown = 0;
 
     mid->pending_operations = 0;
@@ -619,6 +621,63 @@ hg_bool_t margo_is_listening(
 {
     if(!mid) return HG_FALSE;
     return HG_Class_is_listening(mid->hg_class);
+}
+
+void margo_push_prefinalize_callback(
+            margo_instance_id mid,
+            void(*cb)(void*),
+            void* uargs)
+{
+    margo_provider_push_prefinalize_callback(
+            mid,
+            NULL,
+            cb,
+            uargs);
+}
+
+int margo_pop_prefinalize_callback(
+                    margo_instance_id mid)
+{   
+    return margo_provider_pop_prefinalize_callback(mid, NULL);
+}
+
+void margo_provider_push_prefinalize_callback(
+            margo_instance_id mid,
+            void* owner,
+            void(*cb)(void*),                  
+            void* uargs)
+{
+    if(cb == NULL) return;
+
+    struct margo_finalize_cb* fcb = 
+        (struct margo_finalize_cb*)malloc(sizeof(*fcb));
+    fcb->owner    = owner;
+    fcb->callback = cb;
+    fcb->uargs    = uargs;
+
+    struct margo_finalize_cb* next = mid->prefinalize_cb;
+    fcb->next = next;
+    mid->prefinalize_cb = fcb;
+}
+
+int margo_provider_pop_prefinalize_callback(
+            margo_instance_id mid,
+            void* owner)
+{
+    struct margo_finalize_cb* prev = NULL;
+    struct margo_finalize_cb* fcb  =  mid->prefinalize_cb;
+    while(fcb != NULL && fcb->owner != owner) {
+        prev = fcb;
+        fcb = fcb->next;
+    }
+    if(fcb == NULL) return 0;
+    if(prev == NULL) {
+        mid->prefinalize_cb = fcb->next;
+    } else {
+        prev->next = fcb->next;
+    }
+    free(fcb);
+    return 1;
 }
 
 void margo_push_finalize_callback(
@@ -1579,6 +1638,16 @@ static void hg_progress_fn(void* foo)
 
         /* check for any expired timers */
         margo_check_timers(mid);
+    }
+
+    /* exiting the progress loop, pre-finalize callbacks need to be called */
+    struct margo_finalize_cb* fcb = mid->prefinalize_cb;
+    while(fcb) {
+        mid->prefinalize_cb = fcb->next;
+        (fcb->callback)(fcb->uargs);
+        struct margo_finalize_cb* tmp = fcb;
+        fcb = mid->prefinalize_cb;
+        free(tmp);
     }
 
     return;
