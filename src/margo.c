@@ -569,6 +569,16 @@ void margo_finalize(margo_instance_id mid)
         return;
     }
 
+    /* before exiting the progress loop, pre-finalize callbacks need to be called */
+    struct margo_finalize_cb* fcb = mid->prefinalize_cb;
+    while(fcb) {
+        mid->prefinalize_cb = fcb->next;
+        (fcb->callback)(fcb->uargs);
+        struct margo_finalize_cb* tmp = fcb;
+        fcb = mid->prefinalize_cb;
+        free(tmp);
+    }
+
     /* tell progress thread to wrap things up */
     mid->hg_progress_shutdown_flag = 1;
 
@@ -1638,16 +1648,6 @@ static void hg_progress_fn(void* foo)
 
         /* check for any expired timers */
         margo_check_timers(mid);
-    }
-
-    /* exiting the progress loop, pre-finalize callbacks need to be called */
-    struct margo_finalize_cb* fcb = mid->prefinalize_cb;
-    while(fcb) {
-        mid->prefinalize_cb = fcb->next;
-        (fcb->callback)(fcb->uargs);
-        struct margo_finalize_cb* tmp = fcb;
-        fcb = mid->prefinalize_cb;
-        free(tmp);
     }
 
     return;
