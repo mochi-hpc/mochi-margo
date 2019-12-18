@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.63])
-AC_INIT([margo], [0.5.3], [],[],[]) 
+AC_INIT([margo], [0.6], [],[],[]) 
 AC_CONFIG_MACRO_DIR([m4])
 LT_INIT
 
