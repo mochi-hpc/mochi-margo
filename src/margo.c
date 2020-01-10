@@ -32,6 +32,7 @@
  */
 static int g_num_margo_instances = 0; // how many margo instances exist
 static ABT_mutex g_num_margo_instances_mtx = ABT_MUTEX_NULL; // mutex for above global variable
+static int g_margo_abt_init = 0;
 
 /* Structure to store timing information */
 struct diag_data
@@ -303,6 +304,7 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
     {
         ret = ABT_init(0, NULL); /* XXX: argc/argv not currently used by ABT ... */
         if(ret != 0) goto err;
+        g_margo_abt_init = 1;
         ret = ABT_mutex_create(&g_num_margo_instances_mtx);
         if(ret != 0) goto err;
     }
@@ -446,7 +448,7 @@ err:
     if(g_num_margo_instances_mtx != ABT_MUTEX_NULL && g_num_margo_instances == 0) {
         ABT_mutex_free(&g_num_margo_instances_mtx);
         g_num_margo_instances_mtx = ABT_MUTEX_NULL;
-        ABT_finalize();
+        if(g_margo_abt_init) ABT_finalize();
     }
     return MARGO_INSTANCE_NULL;
 }
@@ -598,7 +600,7 @@ static void margo_cleanup(margo_instance_id mid)
                 ABT_mutex_unlock(g_num_margo_instances_mtx);
                 ABT_mutex_free(&g_num_margo_instances_mtx);
                 g_num_margo_instances_mtx = ABT_MUTEX_NULL;
-                ABT_finalize();
+                if(g_margo_abt_init) ABT_finalize();
             }
         }
     }
