@@ -87,14 +87,14 @@ hg_return_t margo_bulk_pool_create(
     ret = ABT_mutex_create(&p->mutex);
     if (ret != ABT_SUCCESS)
     {
-        hret = HG_OTHER_ERROR;
+        hret = HG_NOMEM_ERROR;
         goto err;
     }
     ret = ABT_cond_create(&p->cond);
     if (ret != ABT_SUCCESS)
     {
         ABT_mutex_free(&p->mutex);
-        hret = HG_OTHER_ERROR;
+        hret = HG_NOMEM_ERROR;
         goto err;
     }
 

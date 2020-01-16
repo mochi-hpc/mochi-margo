@@ -1136,7 +1136,7 @@ void _wrapper_for_##__name(hg_handle_t handle) { \
     ABT_pool __pool; \
     margo_instance_id __mid; \
     __mid = margo_hg_handle_get_instance(handle); \
-    if(__mid == MARGO_INSTANCE_NULL) { return(HG_OTHER_ERROR); } \
+    if(__mid == MARGO_INSTANCE_NULL) { return(HG_INVALID_ARG); } \
     if(__margo_internal_finalize_requested(__mid)) { return(HG_CANCELED); } \
     __pool = margo_hg_handle_get_handler_pool(handle); \
     __margo_internal_incr_pending(__mid); \

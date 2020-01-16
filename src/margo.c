@@ -926,7 +926,7 @@ hg_return_t margo_register_data(
 {
 	struct margo_rpc_data* margo_data 
 		= (struct margo_rpc_data*) HG_Registered_data(mid->hg_class, id);
-	if(!margo_data) return HG_OTHER_ERROR;
+	if(!margo_data) return HG_INVALID_ARG;
     if(margo_data->user_data && margo_data->user_free_callback) {
         (margo_data->user_free_callback)(margo_data->user_data);
     }
@@ -1046,7 +1046,7 @@ hg_return_t margo_addr_to_string(
 hg_return_t margo_create(margo_instance_id mid, hg_addr_t addr,
     hg_id_t id, hg_handle_t *handle)
 {
-    hg_return_t hret = HG_OTHER_ERROR;
+    hg_return_t hret = HG_INVALID_ARG;
 
     /* look for a handle to reuse */
     hret = margo_handle_cache_get(mid, addr, id, handle);
@@ -1072,7 +1072,7 @@ hg_return_t margo_destroy(hg_handle_t handle)
     }
 
     margo_instance_id mid;
-    hg_return_t hret = HG_OTHER_ERROR;
+    hg_return_t hret = HG_INVALID_ARG;
 
     /* use the handle to get the associated mid */
     mid = margo_hg_handle_get_instance(handle);
@@ -1202,7 +1202,7 @@ static hg_return_t margo_provider_iforward_internal(
         ret = margo_register_internal(margo_hg_info_get_instance(hgi), 
             id, in_cb, out_cb, NULL, ABT_POOL_NULL);
         if(ret == 0)
-            return(HG_OTHER_ERROR);
+            return(HG_INVALID_ARG);
         ret = HG_Registered_disable_response(hgi->hg_class, id, response_disabled);
         if(ret != HG_SUCCESS)
             return(ret);
@@ -2145,7 +2145,7 @@ static hg_return_t margo_handle_cache_get(margo_instance_id mid,
     if(!mid->free_handle_list)
     {
         /* if no available handles, just fall through */
-        hret = HG_OTHER_ERROR;
+        hret = HG_NOMEM;
         goto finish;
     }
 
@@ -2185,7 +2185,7 @@ static hg_return_t margo_handle_cache_put(margo_instance_id mid,
     if(!el)
     {
         /* this handle was manually allocated -- just fall through */
-        hret = HG_OTHER_ERROR;
+        hret = HG_INVALID_ARG;
         goto finish;
     }
 
