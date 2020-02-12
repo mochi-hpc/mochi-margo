@@ -32,6 +32,7 @@
  */
 static int g_num_margo_instances = 0; // how many margo instances exist
 static ABT_mutex g_num_margo_instances_mtx = ABT_MUTEX_NULL; // mutex for above global variable
+static int g_margo_abt_init = 0;
 
 /* Structure to store timing information */
 struct diag_data
@@ -128,6 +129,7 @@ struct margo_instance
     ABT_mutex finalize_mutex;
     ABT_cond finalize_cond;
     struct margo_finalize_cb* finalize_cb;
+    struct margo_finalize_cb* prefinalize_cb;
 
     /* control logic to prevent margo_finalize from destroying
        the instance when some operations are pending */
@@ -302,6 +304,7 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
     {
         ret = ABT_init(0, NULL); /* XXX: argc/argv not currently used by ABT ... */
         if(ret != 0) goto err;
+        g_margo_abt_init = 1;
         ret = ABT_mutex_create(&g_num_margo_instances_mtx);
         if(ret != 0) goto err;
     }
@@ -445,7 +448,7 @@ err:
     if(g_num_margo_instances_mtx != ABT_MUTEX_NULL && g_num_margo_instances == 0) {
         ABT_mutex_free(&g_num_margo_instances_mtx);
         g_num_margo_instances_mtx = ABT_MUTEX_NULL;
-        ABT_finalize();
+        if(g_margo_abt_init) ABT_finalize();
     }
     return MARGO_INSTANCE_NULL;
 }
@@ -477,6 +480,7 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
 
     mid->refcount = 1;
     mid->finalize_cb = NULL;
+    mid->prefinalize_cb = NULL;
     mid->enable_remote_shutdown = 0;
 
     mid->pending_operations = 0;
@@ -596,7 +600,7 @@ static void margo_cleanup(margo_instance_id mid)
                 ABT_mutex_unlock(g_num_margo_instances_mtx);
                 ABT_mutex_free(&g_num_margo_instances_mtx);
                 g_num_margo_instances_mtx = ABT_MUTEX_NULL;
-                ABT_finalize();
+                if(g_margo_abt_init) ABT_finalize();
             }
         }
     }
@@ -623,6 +627,16 @@ void margo_finalize(margo_instance_id mid)
     if(pending) {
         mid->finalize_requested = 1;
         return;
+    }
+
+    /* before exiting the progress loop, pre-finalize callbacks need to be called */
+    struct margo_finalize_cb* fcb = mid->prefinalize_cb;
+    while(fcb) {
+        mid->prefinalize_cb = fcb->next;
+        (fcb->callback)(fcb->uargs);
+        struct margo_finalize_cb* tmp = fcb;
+        fcb = mid->prefinalize_cb;
+        free(tmp);
     }
 
     /* tell progress thread to wrap things up */
@@ -686,6 +700,63 @@ hg_bool_t margo_is_listening(
 {
     if(!mid) return HG_FALSE;
     return HG_Class_is_listening(mid->hg_class);
+}
+
+void margo_push_prefinalize_callback(
+            margo_instance_id mid,
+            void(*cb)(void*),
+            void* uargs)
+{
+    margo_provider_push_prefinalize_callback(
+            mid,
+            NULL,
+            cb,
+            uargs);
+}
+
+int margo_pop_prefinalize_callback(
+                    margo_instance_id mid)
+{   
+    return margo_provider_pop_prefinalize_callback(mid, NULL);
+}
+
+void margo_provider_push_prefinalize_callback(
+            margo_instance_id mid,
+            void* owner,
+            void(*cb)(void*),                  
+            void* uargs)
+{
+    if(cb == NULL) return;
+
+    struct margo_finalize_cb* fcb = 
+        (struct margo_finalize_cb*)malloc(sizeof(*fcb));
+    fcb->owner    = owner;
+    fcb->callback = cb;
+    fcb->uargs    = uargs;
+
+    struct margo_finalize_cb* next = mid->prefinalize_cb;
+    fcb->next = next;
+    mid->prefinalize_cb = fcb;
+}
+
+int margo_provider_pop_prefinalize_callback(
+            margo_instance_id mid,
+            void* owner)
+{
+    struct margo_finalize_cb* prev = NULL;
+    struct margo_finalize_cb* fcb  =  mid->prefinalize_cb;
+    while(fcb != NULL && fcb->owner != owner) {
+        prev = fcb;
+        fcb = fcb->next;
+    }
+    if(fcb == NULL) return 0;
+    if(prev == NULL) {
+        mid->prefinalize_cb = fcb->next;
+    } else {
+        prev->next = fcb->next;
+    }
+    free(fcb);
+    return 1;
 }
 
 void margo_push_finalize_callback(
