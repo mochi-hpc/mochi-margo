@@ -2407,12 +2407,12 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
         ABT_pool_get_size(mid->handler_pool, &s1);
       }
 
-      stat->stats.abt_pool_size_hwm = stat->stats.abt_pool_size_hwm > (double)s ? stat->stats.abt_pool_size_hwm : s1;
+      stat->stats.abt_pool_size_hwm = stat->stats.abt_pool_size_hwm > (double)s1 ? stat->stats.abt_pool_size_hwm : s1;
       stat->stats.abt_pool_size_lwm = stat->stats.abt_pool_size_lwm < (double)s1 ? stat->stats.abt_pool_size_lwm : s1;
       stat->stats.abt_pool_size_cumulative += s1;
 
       stat->stats.abt_pool_total_size_hwm = stat->stats.abt_pool_total_size_hwm > (double)s ? stat->stats.abt_pool_total_size_hwm : s;
-      stat->stats.abt_pool_total_size_lwm = stat->stats.abt_pool_total_size_lwm < (double)s1 ? stat->stats.abt_pool_total_size_lwm : s;
+      stat->stats.abt_pool_total_size_lwm = stat->stats.abt_pool_total_size_lwm < (double)s ? stat->stats.abt_pool_total_size_lwm : s;
       stat->stats.abt_pool_total_size_cumulative += s;
 
     }
