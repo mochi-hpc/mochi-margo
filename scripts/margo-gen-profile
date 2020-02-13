@@ -177,7 +177,7 @@ class ProfileGenerator:
 			#Assumption: We make an assumption that there is only one provider of a given type inside a margo instance. If there are multiple, then
 			#the edge represents the cumulative counts or time values for all providers of a given type.
 			(source, source_call, destination, dest_call) = edge_info
-			destination = self.hash64tomid[destination]
+			destination = self.hash64tomid.get(destination, "UNKNOWN_TARGET")
 			source_provider = ((self.rpc2name.get(str(source_call), "UNKNOWN")).split("_"))[0]
 			dest_provider = ((self.rpc2name.get(str(dest_call), "UNKNOWN")).split("_"))[0]
 
