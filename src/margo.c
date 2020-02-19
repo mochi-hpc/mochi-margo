@@ -400,7 +400,6 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
        margo_profile_start(mid);
 
        GET_SELF_ADDR_STR(mid, name);
-       fprintf(stderr, "Name is %s\n", name);
        HASH_JEN(name, strlen(name), mid->self_addr_hash); /*record own address in cache to be used in breadcrumb generation */
 
        ret = ABT_thread_create(mid->progress_pool, sparkline_data_collection_fn, mid, 
