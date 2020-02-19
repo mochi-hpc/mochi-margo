@@ -156,6 +156,7 @@ struct margo_instance
      */
     int diag_enabled;
     unsigned int profile_enabled;
+    uint64_t self_addr_hash;
     double previous_sparkline_data_collection_time;
     uint16_t sparkline_index;
     struct diag_data diag_trigger_elapsed;
@@ -395,7 +396,11 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
     }
 
     if(profile) {
+       char * name;
        margo_profile_start(mid);
+
+       GET_SELF_ADDR_STR(mid, name);
+       HASH_JEN(name, strlen(name), mid->self_addr_hash); /*record own address in cache to be used in breadcrumb generation */
 
        ret = ABT_thread_create(mid->progress_pool, sparkline_data_collection_fn, mid, 
        ABT_THREAD_ATTR_NULL, &mid->sparkline_data_collection_tid);
@@ -1235,19 +1240,24 @@ static hg_return_t margo_provider_iforward_internal(
     /* add rpc breadcrumb to outbound request; this will be used to track
      * rpc statistics.
      */
-    ret = HG_Get_input_buf(handle, (void**)&rpc_breadcrumb, NULL);
-    if(ret != HG_SUCCESS)
-        return(ret);
-    req->rpc_breadcrumb = margo_breadcrumb_set(hgi->id);
-    /* LE encoding */
-    *rpc_breadcrumb = htole64(req->rpc_breadcrumb);
-    req->start_time = ABT_get_wtime();
+
+    req->rpc_breadcrumb = 0;
+    if(mid->profile_enabled) {
+        ret = HG_Get_input_buf(handle, (void**)&rpc_breadcrumb, NULL);
+        if(ret != HG_SUCCESS)
+            return(ret);
+        req->rpc_breadcrumb = margo_breadcrumb_set(hgi->id);
+        /* LE encoding */
+        *rpc_breadcrumb = htole64(req->rpc_breadcrumb);
+
+        req->start_time = ABT_get_wtime();
     
-    /* add information about the server and provider servicing the request */
-    req->provider_id = provider_id; /*store id of provider servicing the request */
-    const struct hg_info * inf = HG_Get_info(req->handle);
-    margo_addr_to_string(mid, addr_string, &addr_string_sz, inf->addr);
-    HASH_JEN(addr_string, strlen(addr_string), req->server_addr_hash); /*record server address in the breadcrumb */
+       /* add information about the server and provider servicing the request */
+        req->provider_id = provider_id; /*store id of provider servicing the request */
+        const struct hg_info * inf = HG_Get_info(req->handle);
+        margo_addr_to_string(mid, addr_string, &addr_string_sz, inf->addr);
+        HASH_JEN(addr_string, strlen(addr_string), req->server_addr_hash); /*record server address in the breadcrumb */
+    }
 
     return HG_Forward(handle, margo_cb, (void*)req, in_struct);
 }
@@ -2407,12 +2417,12 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
         ABT_pool_get_size(mid->handler_pool, &s1);
       }
 
-      stat->stats.abt_pool_size_hwm = stat->stats.abt_pool_size_hwm > (double)s ? stat->stats.abt_pool_size_hwm : s1;
+      stat->stats.abt_pool_size_hwm = stat->stats.abt_pool_size_hwm > (double)s1 ? stat->stats.abt_pool_size_hwm : s1;
       stat->stats.abt_pool_size_lwm = stat->stats.abt_pool_size_lwm < (double)s1 ? stat->stats.abt_pool_size_lwm : s1;
       stat->stats.abt_pool_size_cumulative += s1;
 
       stat->stats.abt_pool_total_size_hwm = stat->stats.abt_pool_total_size_hwm > (double)s ? stat->stats.abt_pool_total_size_hwm : s;
-      stat->stats.abt_pool_total_size_lwm = stat->stats.abt_pool_total_size_lwm < (double)s1 ? stat->stats.abt_pool_total_size_lwm : s;
+      stat->stats.abt_pool_total_size_lwm = stat->stats.abt_pool_total_size_lwm < (double)s ? stat->stats.abt_pool_total_size_lwm : s;
       stat->stats.abt_pool_total_size_cumulative += s;
 
     }
@@ -2463,34 +2473,35 @@ void __margo_internal_pre_wrapper_hooks(margo_instance_id mid, hg_handle_t handl
     assert(ret == HG_SUCCESS);
     *rpc_breadcrumb = le64toh(*rpc_breadcrumb);
   
-    /* add the incoming breadcrumb info to a ULT-local key */
+    /* add the incoming breadcrumb info to a ULT-local key if profiling is enabled */
+    if(mid->profile_enabled) {
 
-    ABT_key_get(target_timing_key, (void**)(&req));
+        ABT_key_get(target_timing_key, (void**)(&req));
 
-    if(req == NULL)
-    {
-        req = calloc(1, sizeof(*req));
-    }
+        if(req == NULL)
+        {
+            req = calloc(1, sizeof(*req));
+        }
     
-    req->rpc_breadcrumb = *rpc_breadcrumb;
-    req->timer = NULL;
-    req->handle = handle;
-    req->start_time = ABT_get_wtime(); /* measure start time */
-    info = HG_Get_info(handle);
-    req->provider_id = 0;
-    req->provider_id += ((info->id) & (((1<<(__MARGO_PROVIDER_ID_SIZE*8))-1)));
-    GET_SELF_ADDR_STR(mid, name);
-    HASH_JEN(name, strlen(name), req->server_addr_hash); /*record own address in the breadcrumb */
- 
-    /* Note: we use this opportunity to retrieve the incoming RPC
-     * breadcrumb and put it in a thread-local argobots key.  It is
-     * shifted down 16 bits so that if this handler in turn issues more
-     * RPCs, there will be a stack showing the ancestry of RPC calls that
-     * led to that point.
-     */
-    ABT_key_set(target_timing_key, req);
+        req->rpc_breadcrumb = *rpc_breadcrumb;
 
-    margo_internal_breadcrumb_handler_set((*rpc_breadcrumb) << 16);
+        req->timer = NULL;
+        req->handle = handle;
+        req->start_time = ABT_get_wtime(); /* measure start time */
+        info = HG_Get_info(handle);
+        req->provider_id = 0;
+        req->provider_id += ((info->id) & (((1<<(__MARGO_PROVIDER_ID_SIZE*8))-1)));
+        req->server_addr_hash = mid->self_addr_hash;
+ 
+        /* Note: we use this opportunity to retrieve the incoming RPC
+         * breadcrumb and put it in a thread-local argobots key.  It is
+         * shifted down 16 bits so that if this handler in turn issues more
+         * RPCs, there will be a stack showing the ancestry of RPC calls that
+         * led to that point.
+         */
+        ABT_key_set(target_timing_key, req);
+        margo_internal_breadcrumb_handler_set((*rpc_breadcrumb) << 16);
+    }
 }
 
 void __margo_internal_post_wrapper_hooks(margo_instance_id mid)
