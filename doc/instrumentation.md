@@ -11,7 +11,7 @@ loop.  The second (breadcrumb profiling) measures time spent invoking remote pro
 ## Usage
 
 Diagnostics can be enabled in two ways:
-* At program startup, using the env variable `MARGO_ENABLE_DIAGNOSTICS`.
+* At program startup, setting the env variable `MARGO_ENABLE_DIAGNOSTICS` to `1`.
 * At run time by calling the `margo_diag_start()` any
 time after `margo_init()` on the process that you wish to instrument.
 
@@ -19,8 +19,8 @@ Statistics from mercury diagnostics can then be emitted at any time prior to
 `margo_finalize()` by calling the `margo_diag_dump()` function. Diagnostics
 can be stopped by calling the `margo_diag_stop` on the process. 
 
-Similarly, profining can by enabled/disabled either by use of the environment
-variable `MARGO_ENABLE_PROFILING` or by using the `margo_profile_start`/`margo_profile_stop`
+Similarly, profiling can by enabled/disabled either by setting the environment
+variable `MARGO_ENABLE_PROFILING` to `1` or by using the `margo_profile_start`/`margo_profile_stop`
 functions. Statistics from profiling can be output by invoking the `margo_profile_dump`
 on the process.
 
@@ -29,7 +29,7 @@ The arguments to `margo_diag_dump()` and `margo_profile_dump` are as follows:
 * `file`: name of the file to write the (text) data to.  If the "-" string
   is used, then data will be written to `STDOUT`.
 * `uniquify`: flag indicating that the file name should be suffixed with
-  additional characters to make it unique from other files emited
+  additional characters to make it unique from other files emitted
   on the same node.
 * Diagnostic files have the *.diag suffix for the file name, and 
 profile files have the *.csv suffix. 
@@ -58,7 +58,7 @@ Key components of the output are:
 * A set of basic statistics for Mercury functions used to drive communication and
   completion project.  There are counters and elapsed time measurements for
   the `HG_Trigger()` function and the `HG_Progress()` function (when called with
-  or without a timeout value, as Margo varies its pollin strategy).  There
+  or without a timeout value, as Margo varies its polling strategy).  There
   is also a category that records statistics about the actual timeout values
   used.
 * This file is intended to be read by the end-user directly. 
@@ -135,8 +135,8 @@ performance statistics that can help in detecting load imbalance among margo ins
 relative call-counts and calltimes for various RPC breadcrumbs, and so on. 
 
 In order to the generate the PDF summarizing performance, follow these steps:
-* Enable profiling in your margo instances (easiest way is to use the `MARGO_ENABLE_PROFILING`
-environment variable).
+* Enable profiling in your margo instances (easiest way is to set the `MARGO_ENABLE_PROFILING`
+environment variable to `1`).
 * Add the $MARGO_INSTALL/bin to your path, and run the MOCHI program. 
 * After the program executes, verify that the current directory contains the *.csv files. 
 * Invoke the ```margo-gen-profile``` program in the directory containing the *.csv.
