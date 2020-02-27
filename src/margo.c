@@ -407,6 +407,12 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
        if(ret != 0)
          fprintf(stderr, "MARGO_PROFILE: Failed to start sparkline data collection thread. Continuing to profile without sparkline data collection.\n");
 
+       /* Mercury Profiling Interface */
+       HG_Profiling_init();
+       hg_profiling_pvar_session_t session;
+       HG_Profiling_pvar_session_create(&session);
+       HG_Profiling_finalize();
+
     }
 
     /* start diagnostics if the variable MARGO_ENABLE_DIAGNOSTICS is set */
