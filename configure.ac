@@ -49,6 +49,15 @@ else
     AC_SUBST([MKTEMP], ["$MKTEMP"])
 fi
 
+dnl Example of default-enabled feature
+AC_ARG_ENABLE([handle-cache],
+    AS_HELP_STRING([--disable-handle-cache], [Disable caching of handles]))
+
+
+AS_IF([test "x$enable_handle_cache" != "xno"], [
+	AC_DEFINE([USE_HANDLE_CACHE], 1, "Use cache for handles")
+])
+
 AC_REQUIRE_CPP
 
 AC_CHECK_SIZEOF([long int])

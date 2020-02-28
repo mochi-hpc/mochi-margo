@@ -497,9 +497,11 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
     mid->timer_list = margo_timer_list_create();
     if(mid->timer_list == NULL) goto err;
 
+#ifdef USE_HANDLE_CACHE
     /* initialize the handle cache */
     hret = margo_handle_cache_init(mid);
     if(hret != HG_SUCCESS) goto err;
+#endif
 
     /* register thread local key to track RPC breadcrumbs across threads */
     /* NOTE: we are registering a global key, even though init could be called
@@ -533,7 +535,9 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
 err:
     if(mid)
     {
+#ifdef USE_HANDLE_CACHE
         margo_handle_cache_destroy(mid);
+#endif
         margo_timer_list_free(mid->timer_list);
         ABT_mutex_free(&mid->finalize_mutex);
         ABT_cond_free(&mid->finalize_cond);
@@ -582,7 +586,9 @@ static void margo_cleanup(margo_instance_id mid)
         free(mid->rpc_xstreams);
     }
 
+#ifdef USE_HANDLE_CACHE
     margo_handle_cache_destroy(mid);
+#endif
 
     /* TODO: technically we could/should call ABT_key_free() for
      * rpc_breadcrumb_key.  We can't do that here, though, because the key is
@@ -1053,13 +1059,15 @@ hg_return_t margo_create(margo_instance_id mid, hg_addr_t addr,
 {
     hg_return_t hret = HG_OTHER_ERROR;
 
+#ifdef USE_HANDLE_CACHE
     /* look for a handle to reuse */
     hret = margo_handle_cache_get(mid, addr, id, handle);
-    if(hret != HG_SUCCESS)
-    {
-        /* else try creating a new handle */
-        hret = HG_Create(mid->hg_context, addr, id, handle);
+    if(hret == HG_SUCCESS) {
+        return hret;
     }
+#endif
+    /* else try creating a new handle */
+    hret = HG_Create(mid->hg_context, addr, id, handle);
 
     return hret;
 }
