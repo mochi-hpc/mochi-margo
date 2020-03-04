@@ -36,8 +36,8 @@ static int g_margo_abt_init = 0;
 
 
 /* Mercury Profiling Interface */
-static hg_profiling_pvar_session_t pvar_session;
-static hg_profiling_pvar_handle_t pvar_handle;
+static hg_prof_pvar_session_t pvar_session;
+static hg_prof_pvar_handle_t pvar_handle;
 static int pvar_count;
 static void margo_initialize_mercury_profiling_interface();
 static void margo_finalize_mercury_profiling_interface();
@@ -476,19 +476,19 @@ static void margo_initialize_mercury_profiling_interface() {
        char name[128];
        char desc[128];
        int name_len, desc_len, continuous;
-       hg_profiling_class_t pvar_class;
-       hg_profiling_datatype_t pvar_datatype;
-       hg_profiling_bind_t pvar_bind;
-       HG_Profiling_init();
-       HG_Profiling_pvar_get_info(0, name, &name_len, &pvar_class, &pvar_datatype, desc, &desc_len, &pvar_bind, &continuous);
+       hg_prof_class_t pvar_class;
+       hg_prof_datatype_t pvar_datatype;
+       hg_prof_bind_t pvar_bind;
+       HG_Prof_init();
+       HG_Prof_pvar_get_info(0, name, &name_len, &pvar_class, &pvar_datatype, desc, &desc_len, &pvar_bind, &continuous);
        fprintf(stderr, "[MARGO] PVAR at index 0 has name: %s, name_len: %d, pvar_class: %d, pvar_datatype: %d, desc: %s, desc_len: %d, pvar_bind: %d, continuous_flag: %d\n", name, name_len, pvar_class, pvar_datatype, desc, desc_len, pvar_bind, continuous);
-       HG_Profiling_pvar_session_create(&pvar_session);
-       HG_Profiling_pvar_handle_alloc(pvar_session, 0, NULL, &pvar_handle, &pvar_count);
+       HG_Prof_pvar_session_create(&pvar_session);
+       HG_Prof_pvar_handle_alloc(pvar_session, 0, NULL, &pvar_handle, &pvar_count);
 }
 
 /* Finalize the Mercury Profiling Interface */
 static void margo_finalize_mercury_profiling_interface() {
-       HG_Profiling_finalize();
+       HG_Prof_finalize();
 }
 
 /* As of now, there is only one PVAR that mercury exports. Read the value of that PVAR only. 
@@ -499,7 +499,7 @@ static void margo_read_pvar_data() {
       should be queried from the interface */
    unsigned int * buf;
    buf = (unsigned int *)malloc(sizeof(unsigned int)*pvar_count);
-   HG_Profiling_pvar_read(pvar_session, pvar_handle, (void*)buf);
+   HG_Prof_pvar_read(pvar_session, pvar_handle, (void*)buf);
 
    fprintf(stderr, "[MARGO] PVAR at index 0 now has a value: %d\n", *(unsigned int *)buf);
 }
