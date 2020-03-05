@@ -1614,14 +1614,9 @@ static void margo_rpc_data_free(void* ptr)
 }
 
 /* dedicated thread function to collect sparkline data */
-/* TODO:  Initially, we had used margo_thread_sleep() here to keep the logic simple, but for some reason this ULT was not cleaning itself properly. It continued to run even after margo_finalize(), but we weren't able to figure out why. So we resorted to this logic of the ULT continuously being scheduled to run, and checking the timer to see if it needs to collect sparkline data. Either ways, it checks and yields. 
- * We need to: 
- * a. Figure out the performance overhead of this sort of busy waiting for timeout to trigger sparkline data collection
- * b. Replace this logic with the correct way of doing it: using margo_thread_sleep() */
 static void sparkline_data_collection_fn(void* foo)
 {
     struct margo_instance *mid = (struct margo_instance *)foo;
-    double time_passed, end = 0;
     struct diag_data *stat, *tmp;
 
     /* double check that profile collection should run, else, close this ULT */
@@ -1632,11 +1627,7 @@ static void sparkline_data_collection_fn(void* foo)
 
     while(!mid->hg_progress_shutdown_flag)
     {
-      
-      end = ABT_get_wtime();
-      time_passed = end - mid->previous_sparkline_data_collection_time;
-
-      if(time_passed >= MARGO_SPARKLINE_TIMESLICE) {
+        margo_thread_sleep(mid, MARGO_SPARKLINE_TIMESLICE*1000);
         HASH_ITER(hh, mid->diag_rpc, stat, tmp)
         {
 
@@ -1650,13 +1641,8 @@ static void sparkline_data_collection_fn(void* foo)
             //Drop!
           }
         }
-      
         mid->sparkline_index++;
         mid->previous_sparkline_data_collection_time = ABT_get_wtime();
-   	ABT_thread_yield();
-      } else {
-        ABT_thread_yield();
-      }
    }
 
    return;
