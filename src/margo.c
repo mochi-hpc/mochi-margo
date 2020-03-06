@@ -426,7 +426,7 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
 err:
     if(mid)
     {
-        margo_timer_list_free(mid->timer_list);
+        margo_timer_list_free(mid, mid->timer_list);
         ABT_mutex_free(&mid->finalize_mutex);
         ABT_cond_free(&mid->finalize_cond);
         free(mid);
@@ -534,7 +534,7 @@ err:
     if(mid)
     {
         margo_handle_cache_destroy(mid);
-        margo_timer_list_free(mid->timer_list);
+        margo_timer_list_free(mid, mid->timer_list);
         ABT_mutex_free(&mid->finalize_mutex);
         ABT_cond_free(&mid->finalize_cond);
         ABT_mutex_free(&mid->pending_operations_mtx);
@@ -558,8 +558,6 @@ static void margo_cleanup(margo_instance_id mid)
         fcb = mid->finalize_cb;
         free(tmp);
     }
-
-    margo_timer_list_free(mid->timer_list);
 
     ABT_mutex_free(&mid->finalize_mutex);
     ABT_cond_free(&mid->finalize_cond);
@@ -650,6 +648,9 @@ void margo_finalize(margo_instance_id mid)
     /* wait for it to shutdown cleanly */
     ABT_thread_join(mid->hg_progress_tid);
     ABT_thread_free(&mid->hg_progress_tid);
+
+    /* shut down pending timers */
+    margo_timer_list_free(mid, mid->timer_list);
 
     if(mid->profile_enabled) {
       ABT_thread_join(mid->sparkline_data_collection_tid);
