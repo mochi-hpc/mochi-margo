@@ -32,7 +32,7 @@ struct margo_timer_list* margo_timer_list_create();
  * Frees the timer list
  * @param [in] timer_lst timer list to free
  */
-void margo_timer_list_free(struct margo_timer_list* timer_lst);
+void margo_timer_list_free(margo_instance_id mid, struct margo_timer_list* timer_lst);
 
 /**
  * Initializes a margo timer object which will perform some action
