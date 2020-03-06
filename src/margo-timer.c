@@ -43,9 +43,11 @@ struct margo_timer_list* margo_timer_list_create()
     return timer_lst;
 }
 
-void margo_timer_list_free(struct margo_timer_list* timer_lst)
+void margo_timer_list_free(margo_instance_id mid, struct margo_timer_list* timer_lst)
 {
     margo_timer_t *cur;
+    ABT_pool handler_pool;
+    int ret;
 
     ABT_mutex_lock(timer_lst->mutex);
     /* delete any remaining timers from the queue */
@@ -53,6 +55,24 @@ void margo_timer_list_free(struct margo_timer_list* timer_lst)
     {
         cur = timer_lst->queue_head;
         DL_DELETE(timer_lst->queue_head, cur);
+        cur->prev = cur->next = NULL;
+
+        /* we must issue the callback now for any pending timers or else the
+         * callers will hang indefinitely
+         */
+        margo_get_handler_pool(mid, &handler_pool);
+        if(handler_pool != ABT_POOL_NULL)
+        {
+            /* if handler pool is present, run callback there */
+            ret = ABT_thread_create(handler_pool, cur->cb_fn, cur->cb_dat,
+                ABT_THREAD_ATTR_NULL, NULL);
+            assert(ret == ABT_SUCCESS);
+        }
+        else
+        {
+            /* else run callback in place */
+            cur->cb_fn(cur->cb_dat);
+        }
     }
     ABT_mutex_unlock(timer_lst->mutex);
     ABT_mutex_free(&(timer_lst->mutex));
