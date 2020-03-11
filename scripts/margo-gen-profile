@@ -42,6 +42,8 @@ class ProfileGenerator:
 
 		self.hash64tomid = dict() #Map a 64-bit hash to a margo instance address string
 		self.rpc2name = dict() #Map the RPC ID to a proper registered name
+		self.rpclist = list() #List of RPCs in the profile files
+		self.onesidedrpclist = list() #List of one-sided RPCs
 		self.pp = PdfPages('profile.pdf')
 
 	# Takes in a list of hexadecimal RPC breadcrumbs and returns a list 
@@ -197,6 +199,17 @@ class ProfileGenerator:
 		return edge_string			
 
 
+	# Remove profile information for one-sided RPCs that are characterized by having an origin entry but no corresponding target entry
+	def __filteroutonesidedrpcs(self):
+		for name in self.rpclist:
+			if name in self.cumulative[0].keys() and name not in self.cumulative[1].keys():
+				del self.cumulative[0][name]
+				del self.cumulativestat[0][name]
+				del self.count[name]
+				del self.countstat[0][name]
+				self.onesidedrpclist.append(name)
+			
+
 	# Read the current working directory for profile*.csv files and populate the relevant data-structures	
 	# Profile files are expected to be in the following format:
 	#   N = num RPC's registered on this instance
@@ -237,6 +250,8 @@ class ProfileGenerator:
 						cumulative, _min, _max, count, \
 							abt_pool_size_hwm, abt_pool_size_lwm, abt_pool_size_cumulative,  \
 								abt_pool_total_size_hwm, abt_pool_total_size_lwm, abt_pool_total_size_cumulative = breadcrumb_line.split(',', 15)
+
+				self.rpclist.append(str(name))
 				origin_or_target = int(origin_or_target)
 				addr_hash = int(addr_hash)
 
@@ -268,6 +283,10 @@ class ProfileGenerator:
 						self.timesparklines[origin_or_target][(name, int(i))].append(float(t))
 			
 			f1.close()
+	
+		# Filter out one sided RPCs. For now, we are handling this in post-processing and issuing a warning to the user
+		# when we detect that the profiles contain one-sided RPCs
+		self.__filteroutonesidedrpcs()
 
 	#Cumulative counts of RPC breadcrumbs across the entire profile
 	#Sort and display only top 5
@@ -509,6 +528,31 @@ For the top-5 breadcrumbs, display sparklines for the cumulative call-time acros
 
 		f.write("}\n")
 		f.close()
+
+	# Generate and display warnings about missing profile data, etc
+	def genwarnings(self):
+		if (len(self.onesidedrpclist) != 0):
+			txt = ""
+			rpcnamelist = self.__getrpc2name(self.onesidedrpclist)
+
+			for index, rpcname in enumerate(rpcnamelist):
+				txt = txt + str(index + 1) + ". " + rpcname + "\n"
+
+			txt = "Displaying profile information for one-sided RPCs is not yet supported. The following one-sided \
+RPCs were detected in the profile files: \n\n" + txt
+
+			fig, ax = plt.subplots(1, figsize=(15,4))
+			plt.subplots_adjust(hspace=0.5)
+			fig.suptitle("Profile Generator Warnings", fontsize=20, fontweight='bold')
+			ax.text(0, 0.5, txt, style='italic',
+				bbox={'facecolor': 'yellow', 'alpha': 0.5, 'pad': 10}, horizontalalignment='left')
+			ax.set_xticks([])
+			ax.set_yticks([])
+			for k1, v1 in ax.spines.items():
+				v1.set_visible(False)
+
+			plt.savefig(self.pp, format='pdf')
+			plt.close()
 			
 	def finalize(self):
 		self.pp.close()
@@ -538,6 +582,8 @@ def main():
 	p.gentimesparklines()
 
 	p.gengvfile()
+	
+	p.genwarnings()
 
 	p.finalize()
 
