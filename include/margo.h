@@ -17,7 +17,7 @@ extern "C" {
 #include <mercury_macros.h>
 #include <abt.h>
 
-#include "margo-diag.h"
+#include <margo-diag.h>
 
 /* determine how much of the Mercury ID space to use for Margo provider IDs */
 #define __MARGO_PROVIDER_ID_SIZE (sizeof(hg_id_t)/4)
