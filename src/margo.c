@@ -1488,7 +1488,7 @@ hg_return_t margo_bulk_parallel_transfer(
 
     size_t count = size/chunk_size;
     if(count*chunk_size < size) count += 1;
-    struct margo_request_struct* reqs = alloca(sizeof(*reqs)*count);
+    struct margo_request_struct* reqs = calloc(count, sizeof(*reqs));
 
     for(i = 0; i < count; i++) {
         if(remaining_size < chunk_size) chunk_size = remaining_size;
@@ -1512,6 +1512,7 @@ wait:
          }
     }
 finish:
+    free(reqs);
     return hret;
 }
 
