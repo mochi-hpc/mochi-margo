@@ -17,7 +17,7 @@ extern "C" {
 #include <mercury_macros.h>
 #include <abt.h>
 
-#include "margo-diag.h"
+#include <margo-diag.h>
 
 /* determine how much of the Mercury ID space to use for Margo provider IDs */
 #define __MARGO_PROVIDER_ID_SIZE (sizeof(hg_id_t)/4)
@@ -887,32 +887,6 @@ hg_return_t margo_bulk_transfer(
     hg_bulk_t local_handle,
     size_t local_offset,
     size_t size);
-
-/** 
- * Perform a bulk transfer by submitting multiple margo_bulk_transfer
- * in parallel.
- *
- * @param [in] mid Margo instance
- * @param [in] op type of operation to perform
- * @param [in] origin_addr remote Mercury address
- * @param [in] origin_handle remote Mercury bulk memory handle
- * @param [in] origin_offset offset into remote bulk memory to access
- * @param [in] local_handle local bulk memory handle
- * @param [in] local_offset offset into local bulk memory to access
- * @param [in] size size (in bytes) of transfer
- * @param [in] chunk_size size to by transferred by each operation
- * @returns 0 on success, hg_return_t values on error
- */
-hg_return_t margo_bulk_parallel_transfer(
-    margo_instance_id mid,
-    hg_bulk_op_t op,
-    hg_addr_t origin_addr,
-    hg_bulk_t origin_handle,
-    size_t origin_offset,
-    hg_bulk_t local_handle,
-    size_t local_offset,
-    size_t size,
-    size_t chunk_size);
 
 /** 
  * Asynchronously performs a bulk transfer

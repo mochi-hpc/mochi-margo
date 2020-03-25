@@ -15,6 +15,7 @@
 #include <math.h>
 
 #include "margo.h"
+#include "margo-bulk-util.h"
 #include "margo-timer.h"
 #include "utlist.h"
 #include "uthash.h"
