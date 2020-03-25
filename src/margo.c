@@ -1466,6 +1466,55 @@ hg_return_t margo_bulk_transfer(
     return margo_wait_internal(&reqs);
 }
 
+hg_return_t margo_bulk_parallel_transfer(
+    margo_instance_id mid,
+    hg_bulk_op_t op,
+    hg_addr_t origin_addr,
+    hg_bulk_t origin_handle,
+    size_t origin_offset,
+    hg_bulk_t local_handle,
+    size_t local_offset,
+    size_t size,
+    size_t chunk_size)
+{  
+    unsigned i, j;
+    hg_return_t hret      = HG_SUCCESS;
+    hg_return_t hret_wait = HG_SUCCESS;
+    hg_return_t hret_xfer = HG_SUCCESS;
+    size_t remaining_size = size;
+
+    if(chunk_size == 0)
+        return HG_INVALID_PARAM;
+
+    size_t count = size/chunk_size;
+    if(count*chunk_size < size) count += 1;
+    struct margo_request_struct* reqs = alloca(sizeof(*reqs)*count);
+
+    for(i = 0; i < count; i++) {
+        if(remaining_size < chunk_size) chunk_size = remaining_size;
+        hret = margo_bulk_itransfer_internal(mid, op, origin_addr,
+                          origin_handle, origin_offset, local_handle,
+                          local_offset, chunk_size, reqs+i);
+        if(hret_xfer != HG_SUCCESS) {
+            hret = hret_xfer;
+            goto wait;
+        }
+        origin_offset += chunk_size;
+        local_offset += chunk_size;
+    }
+
+wait:
+    for(j = 0; j < i; j++) {
+         hret_wait = margo_wait_internal(reqs + j);
+         if(hret == HG_SUCCESS && hret_wait != HG_SUCCESS) {
+            hret = hret_wait;
+            goto finish;
+         }
+    }
+finish:
+    return hret;
+}
+
 hg_return_t margo_bulk_itransfer(
     margo_instance_id mid,
     hg_bulk_op_t op,
