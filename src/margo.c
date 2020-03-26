@@ -39,8 +39,8 @@ static int g_margo_abt_init = 0;
 static hg_prof_pvar_session_t pvar_session;
 static hg_prof_pvar_handle_t pvar_handle;
 static int pvar_count;
-static void margo_initialize_mercury_profiling_interface();
-static void margo_finalize_mercury_profiling_interface();
+static void margo_initialize_mercury_profiling_interface(hg_class_t *hg_class);
+static void margo_finalize_mercury_profiling_interface(hg_class_t *hg_class);
 static void margo_read_pvar_data();
 
 /* Structure to store timing information */
@@ -417,7 +417,7 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
          fprintf(stderr, "MARGO_PROFILE: Failed to start sparkline data collection thread. Continuing to profile without sparkline data collection.\n");
 
        /* Initialize the Mercury Profiling Interface */
-       margo_initialize_mercury_profiling_interface();
+       margo_initialize_mercury_profiling_interface(hg_class);
 
     }
 
@@ -471,7 +471,7 @@ err:
 }
 
 /* Initialize the Mercury Profiling Interface */
-static void margo_initialize_mercury_profiling_interface() {
+static void margo_initialize_mercury_profiling_interface(hg_class_t *hg_class) {
 
        char name[128];
        char desc[128];
@@ -479,16 +479,16 @@ static void margo_initialize_mercury_profiling_interface() {
        hg_prof_class_t pvar_class;
        hg_prof_datatype_t pvar_datatype;
        hg_prof_bind_t pvar_bind;
-       HG_Prof_init();
-       HG_Prof_pvar_get_info(0, name, &name_len, &pvar_class, &pvar_datatype, desc, &desc_len, &pvar_bind, &continuous);
+       HG_Prof_init(hg_class);
+       HG_Prof_pvar_get_info(hg_class, 0, name, &name_len, &pvar_class, &pvar_datatype, desc, &desc_len, &pvar_bind, &continuous);
        fprintf(stderr, "[MARGO] PVAR at index 0 has name: %s, name_len: %d, pvar_class: %d, pvar_datatype: %d, desc: %s, desc_len: %d, pvar_bind: %d, continuous_flag: %d\n", name, name_len, pvar_class, pvar_datatype, desc, desc_len, pvar_bind, continuous);
-       HG_Prof_pvar_session_create(&pvar_session);
+       HG_Prof_pvar_session_create(hg_class, &pvar_session);
        HG_Prof_pvar_handle_alloc(pvar_session, 0, NULL, &pvar_handle, &pvar_count);
 }
 
 /* Finalize the Mercury Profiling Interface */
-static void margo_finalize_mercury_profiling_interface() {
-       HG_Prof_finalize();
+static void margo_finalize_mercury_profiling_interface(hg_class_t *hg_class) {
+       HG_Prof_finalize(hg_class);
 }
 
 /* As of now, there is only one PVAR that mercury exports. Read the value of that PVAR only. 
@@ -700,7 +700,7 @@ void margo_finalize(margo_instance_id mid)
     if(mid->profile_enabled) {
       ABT_thread_join(mid->sparkline_data_collection_tid);
       ABT_thread_free(&mid->sparkline_data_collection_tid);
-      margo_finalize_mercury_profiling_interface();
+      margo_finalize_mercury_profiling_interface(mid->hg_class);
       margo_profile_dump(mid, "profile", 1);
     }
     
