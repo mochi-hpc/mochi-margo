@@ -62,7 +62,7 @@ int main(int argc, char **argv)
     }
     margo_addr_free(mid, addr_self);
 
-    printf("# accepting RPCs on address \"%s\"\n", addr_self_string);
+    fprintf(stderr, "# accepting RPCs on address \"%s\"\n", addr_self_string);
 
     /* register RPC */
     MARGO_REGISTER(mid, "my_rpc", my_rpc_in_t, my_rpc_out_t, my_rpc_ult);
