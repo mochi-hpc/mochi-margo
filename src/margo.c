@@ -488,7 +488,16 @@ static void margo_initialize_mercury_profiling_interface(hg_class_t *hg_class) {
 
 /* Finalize the Mercury Profiling Interface */
 static void margo_finalize_mercury_profiling_interface(hg_class_t *hg_class) {
-       HG_Prof_finalize(hg_class);
+       int ret;
+
+       ret = HG_Prof_pvar_handle_free(pvar_session, 0, &pvar_handle);
+       assert(ret == HG_SUCCESS);
+       ret = HG_Prof_pvar_session_destroy(hg_class, &pvar_session);
+       assert(ret == HG_SUCCESS);
+       ret = HG_Prof_finalize(hg_class);
+       assert(ret == HG_SUCCESS);
+
+       fprintf(stderr, "[MARGO] Successfully shutdown profiling interface \n");
 }
 
 /* As of now, there is only one PVAR that mercury exports. Read the value of that PVAR only. 
