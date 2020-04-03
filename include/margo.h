@@ -699,6 +699,23 @@ hg_return_t margo_provider_iforward_timed(
 hg_return_t margo_wait(
     margo_request req);
 
+/**
+ * @brief Waits for any of the provided requests to complete.
+ * Note that even if an error occures, index will be set to
+ * the index of the request for which the error happened.
+ * This function will correctly ignore requests that are
+ * equal to MARGO_REQUEST_NULL. If all the requests are
+ * equal to MARGO_REQUEST_NULL, this function will return
+ * HG_SUCCESS and set index to count.
+ *
+ * @param req Array of requests
+ * @param count Number of requests
+ * @param index index of the request that completed
+ *
+ * @return 0 on success, hg_return_t values on error
+ */
+hg_return_t margo_wait_any(
+    size_t count, margo_request* req, size_t* index);
 
 /**
  * Test if an operation initiated by a non-blocking

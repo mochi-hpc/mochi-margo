@@ -1327,6 +1327,38 @@ int margo_test(margo_request req, int* flag)
     return ABT_eventual_test(req->eventual, NULL, flag);
 }
 
+hg_return_t margo_wait_any(
+    size_t count, margo_request* req, size_t* index)
+{
+    // XXX this is an active loop, we should change it
+    // when Argobots provide an ABT_eventual_wait_any
+    size_t i;
+    int ret;
+    int flag = 0;
+    int has_pending_requests = 0;
+try_again:
+    for(i = 0; i < count; i++) {
+        if(req[i] == MARGO_REQUEST_NULL)
+            continue;
+        else
+            has_pending_requests = 1;
+        ret = margo_test(req[i], &flag);
+        if(ret != ABT_SUCCESS) {
+            *index = i;
+            return HG_OTHER_ERROR;
+        }
+        if(flag) {
+            *index = i;
+            return margo_wait(req[i]);
+        }
+    }
+    ABT_thread_yield();
+    if(has_pending_requests)
+        goto try_again;
+    *index = count;
+    return HG_SUCCESS;
+}
+
 static hg_return_t margo_irespond_internal(
     hg_handle_t handle,
     void *out_struct,
