@@ -15,7 +15,7 @@ source $srcdir/tests/test-util.sh
 TMPOUT=$($MKTEMP --tmpdir test-XXXXXX)
 
 # start 1 server with 2 second wait, 8s timeout
-test_start_servers 1 2 8
+test_start_servers 1 2 10
 
 sleep 1
 
@@ -29,9 +29,9 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# check output; look for four "returned 2" to indicate HG_TIMEOUT in the four
+# check output; look for four "returned 18" to indicate HG_TIMEOUT in the four
 # concurrent RPCs
-LINECOUNT=$(grep "returned 2" $TMPOUT | wc -l) 
+LINECOUNT=$(grep "returned 18" $TMPOUT | wc -l) 
 if [ $LINECOUNT -ne 4 ]; then
     rm -rf $TMPOUT
     exit 1
