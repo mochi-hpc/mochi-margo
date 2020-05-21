@@ -1166,6 +1166,7 @@ void _wrapper_for_##__name(hg_handle_t handle) { \
     __ret = ABT_thread_create(__pool, (void (*)(void *))_wrapper_for_##__name, handle, ABT_THREAD_ATTR_NULL, NULL); \
     if(__ret != 0) { \
         margo_destroy(handle); \
+        __margo_internal_decr_pending(__mid); \
         return(HG_NOMEM_ERROR); \
     } \
     return(HG_SUCCESS);
