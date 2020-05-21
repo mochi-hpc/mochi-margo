@@ -1153,12 +1153,19 @@ void _wrapper_for_##__name(hg_handle_t handle) { \
     ABT_pool __pool; \
     margo_instance_id __mid; \
     __mid = margo_hg_handle_get_instance(handle); \
-    if(__mid == MARGO_INSTANCE_NULL) { return(HG_OTHER_ERROR); } \
-    if(__margo_internal_finalize_requested(__mid)) { return(HG_CANCELED); } \
+    if(__mid == MARGO_INSTANCE_NULL) { \
+        margo_destroy(handle); \
+        return(HG_OTHER_ERROR); \
+    } \
+    if(__margo_internal_finalize_requested(__mid)) { \
+        margo_destroy(handle); \
+        return(HG_CANCELED); \
+    } \
     __pool = margo_hg_handle_get_handler_pool(handle); \
     __margo_internal_incr_pending(__mid); \
     __ret = ABT_thread_create(__pool, (void (*)(void *))_wrapper_for_##__name, handle, ABT_THREAD_ATTR_NULL, NULL); \
     if(__ret != 0) { \
+        margo_destroy(handle); \
         return(HG_NOMEM_ERROR); \
     } \
     return(HG_SUCCESS);
