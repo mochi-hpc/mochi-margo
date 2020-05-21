@@ -181,10 +181,10 @@ struct margo_request_struct {
 
 struct margo_rpc_data
 {
-	margo_instance_id mid;
+    margo_instance_id mid;
     ABT_pool pool;
-	void* user_data;
-	void (*user_free_callback)(void *);
+    void* user_data;
+    void (*user_free_callback)(void *);
 };
 
 MERCURY_GEN_PROC(margo_shutdown_out_t, ((int32_t)(ret)))
@@ -887,7 +887,7 @@ hg_id_t margo_provider_register_name(margo_instance_id mid, const char *func_nam
         strncpy(tmp_rpc->func_name, func_name, 63);
         tmp_rpc->next = mid->registered_rpcs;
         mid->registered_rpcs = tmp_rpc;
-	mid->num_registered_rpcs += 1;
+        mid->num_registered_rpcs += 1;
     }
 
     ret = margo_register_internal(mid, id, in_proc_cb, out_proc_cb, rpc_cb, pool);
@@ -932,23 +932,23 @@ hg_return_t margo_register_data(
     void *data,
     void (*free_callback)(void *)) 
 {
-	struct margo_rpc_data* margo_data 
-		= (struct margo_rpc_data*) HG_Registered_data(mid->hg_class, id);
-	if(!margo_data) return HG_OTHER_ERROR;
+    struct margo_rpc_data* margo_data 
+        = (struct margo_rpc_data*) HG_Registered_data(mid->hg_class, id);
+    if(!margo_data) return HG_OTHER_ERROR;
     if(margo_data->user_data && margo_data->user_free_callback) {
         (margo_data->user_free_callback)(margo_data->user_data);
     }
-	margo_data->user_data = data;
-	margo_data->user_free_callback = free_callback;
-	return HG_SUCCESS;
+    margo_data->user_data = data;
+    margo_data->user_free_callback = free_callback;
+    return HG_SUCCESS;
 }
 
 void* margo_registered_data(margo_instance_id mid, hg_id_t id)
 {
-	struct margo_rpc_data* data
-		= (struct margo_rpc_data*) HG_Registered_data(margo_get_class(mid), id);
-	if(!data) return NULL;
-	else return data->user_data;
+    struct margo_rpc_data* data
+        = (struct margo_rpc_data*) HG_Registered_data(margo_get_class(mid), id);
+    if(!data) return NULL;
+    else return data->user_data;
 }
 
 hg_return_t margo_registered_disable_response(
@@ -1703,11 +1703,11 @@ margo_instance_id margo_hg_handle_get_instance(hg_handle_t h)
 
 static void margo_rpc_data_free(void* ptr)
 {
-	struct margo_rpc_data* data = (struct margo_rpc_data*) ptr;
-	if(data->user_data && data->user_free_callback) {
-		data->user_free_callback(data->user_data);
-	}
-	free(ptr);
+    struct margo_rpc_data* data = (struct margo_rpc_data*) ptr;
+    if(data->user_data && data->user_free_callback) {
+        data->user_free_callback(data->user_data);
+    }
+    free(ptr);
 }
 
 /* dedicated thread function to collect sparkline data */
@@ -2137,7 +2137,7 @@ void margo_profile_dump(margo_instance_id mid, const char* file, int uniquify)
             tmp_breadcrumb >>= (i*16);
             tmp_breadcrumb &= 0xffff;
 
-	    if(!tmp_breadcrumb) continue;
+            if(!tmp_breadcrumb) continue;
 
             if(i==3)
                 sprintf(&rpc_breadcrumb_str[i*7], "0x%.4lx", tmp_breadcrumb);
@@ -2160,12 +2160,12 @@ void margo_set_param(margo_instance_id mid, int option, const void *param)
         case MARGO_PARAM_PROGRESS_TIMEOUT_UB:
             mid->hg_progress_timeout_ub = (*((const unsigned int*)param));
             break;
-	case MARGO_PARAM_ENABLE_PROFILING:
-	    mid->profile_enabled = (*((const unsigned int*)param));
-	    break;
-	case MARGO_PARAM_ENABLE_DIAGNOSTICS:
-	    mid->diag_enabled = (*((const unsigned int*)param));
-	    break;
+        case MARGO_PARAM_ENABLE_PROFILING:
+            mid->profile_enabled = (*((const unsigned int*)param));
+            break;
+        case MARGO_PARAM_ENABLE_DIAGNOSTICS:
+            mid->diag_enabled = (*((const unsigned int*)param));
+            break;
     }
 
     return;
@@ -2471,7 +2471,7 @@ static void margo_breadcrumb_measure(margo_instance_id mid, uint64_t rpc_breadcr
         stat->type = type;
         stat->key.rpc_breadcrumb = rpc_breadcrumb;
         stat->key.addr_hash = hash;
-	stat->key.provider_id = provider_id;
+        stat->key.provider_id = provider_id;
         stat->x = x;
 
         /* initialize pool stats for breadcrumb */
