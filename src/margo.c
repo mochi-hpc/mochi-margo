@@ -164,6 +164,7 @@ struct margo_instance
     struct diag_data diag_progress_elapsed_zero_timeout;
     struct diag_data diag_progress_elapsed_nonzero_timeout;
     struct diag_data diag_progress_timeout_value;
+    struct diag_data diag_bulk_create_elapsed;
     struct diag_data *diag_rpc;
     ABT_mutex diag_rpc_mutex;
 };
@@ -1430,8 +1431,20 @@ hg_return_t margo_bulk_create(
     hg_uint8_t flags,
     hg_bulk_t *handle)
 {
-    return(HG_Bulk_create(mid->hg_class, count,
-        buf_ptrs, buf_sizes, flags, handle));
+    hg_return_t hret;
+    double tm1, tm2;
+    int diag_enabled = mid->diag_enabled;
+
+    if(diag_enabled) tm1 = ABT_get_wtime();
+    hret = HG_Bulk_create(mid->hg_class, count,
+        buf_ptrs, buf_sizes, flags, handle);
+    if(diag_enabled)
+    {
+        tm2 = ABT_get_wtime();
+        __DIAG_UPDATE(mid->diag_bulk_create_elapsed, (tm2-tm1));
+    }
+
+    return(hret);
 }
 
 hg_return_t margo_bulk_free(
@@ -2041,6 +2054,9 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
     print_diag_data(mid, outfile, "progress_elapsed_nonzero_timeout", 
         "Time consumed by HG_Progress() when called with timeout!=0", 
         &mid->diag_progress_elapsed_nonzero_timeout);
+    print_diag_data(mid, outfile, "bulk_create_elapsed",
+        "Time consumed by HG_Bulk_create()",
+        &mid->diag_bulk_create_elapsed);
 
     if(outfile != stdout)
         fclose(outfile);
