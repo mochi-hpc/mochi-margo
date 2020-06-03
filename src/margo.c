@@ -82,7 +82,7 @@ struct margo_handle_cache_el
 
 struct margo_finalize_cb
 {
-    void* owner;
+    const void* owner;
     void(*callback)(void*);
     void* uargs;
     struct margo_finalize_cb* next;
@@ -738,7 +738,7 @@ int margo_top_prefinalize_callback(
 
 void margo_provider_push_prefinalize_callback(
             margo_instance_id mid,
-            void* owner,
+            const void* owner,
             margo_finalize_callback_t cb,
             void* uargs)
 {
@@ -757,7 +757,7 @@ void margo_provider_push_prefinalize_callback(
 
 int margo_provider_top_prefinalize_callback(
             margo_instance_id mid,
-            void* owner,
+            const void* owner,
             margo_finalize_callback_t *cb,
             void** uargs)
 {
@@ -773,14 +773,14 @@ int margo_provider_top_prefinalize_callback(
     } else {
         prev->next = fcb->next;
     }
-    *cb = fcb->callback;
-    *uargs = fcb->uargs;
+    if(cb) *cb = fcb->callback;
+    if(uargs) *uargs = fcb->uargs;
     return 1;
 }
 
 int margo_provider_pop_prefinalize_callback(
             margo_instance_id mid,
-            void* owner)
+            const void* owner)
 {
     struct margo_finalize_cb* prev = NULL;
     struct margo_finalize_cb* fcb  =  mid->prefinalize_cb;
@@ -826,7 +826,7 @@ int margo_top_finalize_callback(
 
 void margo_provider_push_finalize_callback(
             margo_instance_id mid,
-            void* owner,
+            const void* owner,
             margo_finalize_callback_t cb,
             void* uargs)
 {
@@ -845,7 +845,7 @@ void margo_provider_push_finalize_callback(
 
 int margo_provider_pop_finalize_callback(
             margo_instance_id mid,
-            void* owner)
+            const void* owner)
 {
     struct margo_finalize_cb* prev = NULL;
     struct margo_finalize_cb* fcb  =  mid->finalize_cb;
@@ -865,7 +865,7 @@ int margo_provider_pop_finalize_callback(
 
 int margo_provider_top_finalize_callback(
             margo_instance_id mid,
-            void* owner,
+            const void* owner,
             margo_finalize_callback_t *cb,
             void** uargs)
 {
@@ -881,8 +881,8 @@ int margo_provider_top_finalize_callback(
     } else {
         prev->next = fcb->next;
     }
-    *cb = fcb->callback;
-    *uargs = fcb->uargs;
+    if(cb) *cb = fcb->callback;
+    if(uargs) *uargs = fcb->uargs;
     return 1;
 }
 

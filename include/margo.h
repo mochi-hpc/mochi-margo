@@ -179,7 +179,7 @@ hg_bool_t margo_is_listening(
  */
 void margo_push_prefinalize_callback(
     margo_instance_id mid,
-    void(*cb)(void*), 
+    margo_finalize_callback_t cb, 
     void* uargs);
 
 /**
@@ -225,7 +225,7 @@ int margo_top_prefinalize_callback(
  */
 void margo_provider_push_prefinalize_callback(
     margo_instance_id mid,
-    void* owner,
+    const void* owner,
     margo_finalize_callback_t cb,
     void* uargs);
 
@@ -239,7 +239,7 @@ void margo_provider_push_prefinalize_callback(
  */
 int margo_provider_pop_prefinalize_callback(
     margo_instance_id mid,
-    void* owner);
+    const void* owner);
 
 /**
  * @brief Get the last prefinalize callback that was pushed into the margo instance
@@ -253,7 +253,7 @@ int margo_provider_pop_prefinalize_callback(
  */
 int margo_provider_top_prefinalize_callback(
     margo_instance_id mid,
-    void* owner,
+    const void* owner,
     margo_finalize_callback_t *cb,
     void** uargs);
 
@@ -321,7 +321,7 @@ int margo_top_finalize_callback(
  */
 void margo_provider_push_finalize_callback(
     margo_instance_id mid,
-    void* owner,
+    const void* owner,
     margo_finalize_callback_t cb,
     void* uargs);
 
@@ -335,7 +335,7 @@ void margo_provider_push_finalize_callback(
  */
 int margo_provider_pop_finalize_callback(
     margo_instance_id mid,
-    void* owner);
+    const void* owner);
 
 /**
  * @brief Gets the last finalize callback that was pushed into the margo instance
@@ -351,7 +351,7 @@ int margo_provider_pop_finalize_callback(
  */
 int margo_provider_top_finalize_callback(
     margo_instance_id mid,
-    void* owner,
+    const void* owner,
     margo_finalize_callback_t *cb,
     void** uargs);
 
