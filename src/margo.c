@@ -712,7 +712,7 @@ hg_bool_t margo_is_listening(
 
 void margo_push_prefinalize_callback(
             margo_instance_id mid,
-            void(*cb)(void*),
+            margo_finalize_callback_t cb,
             void* uargs)
 {
     margo_provider_push_prefinalize_callback(
@@ -728,10 +728,18 @@ int margo_pop_prefinalize_callback(
     return margo_provider_pop_prefinalize_callback(mid, NULL);
 }
 
+int margo_top_prefinalize_callback(
+                    margo_instance_id mid,
+                    margo_finalize_callback_t *cb,
+                    void** uargs)
+{   
+    return margo_provider_top_prefinalize_callback(mid, NULL, cb, uargs);
+}
+
 void margo_provider_push_prefinalize_callback(
             margo_instance_id mid,
             void* owner,
-            void(*cb)(void*),                  
+            margo_finalize_callback_t cb,
             void* uargs)
 {
     if(cb == NULL) return;
@@ -745,6 +753,29 @@ void margo_provider_push_prefinalize_callback(
     struct margo_finalize_cb* next = mid->prefinalize_cb;
     fcb->next = next;
     mid->prefinalize_cb = fcb;
+}
+
+int margo_provider_top_prefinalize_callback(
+            margo_instance_id mid,
+            void* owner,
+            margo_finalize_callback_t *cb,
+            void** uargs)
+{
+    struct margo_finalize_cb* prev = NULL;
+    struct margo_finalize_cb* fcb  =  mid->prefinalize_cb;
+    while(fcb != NULL && fcb->owner != owner) {
+        prev = fcb;
+        fcb = fcb->next;
+    }
+    if(fcb == NULL) return 0;
+    if(prev == NULL) {
+        mid->prefinalize_cb = fcb->next;
+    } else {
+        prev->next = fcb->next;
+    }
+    *cb = fcb->callback;
+    *uargs = fcb->uargs;
+    return 1;
 }
 
 int margo_provider_pop_prefinalize_callback(
@@ -769,7 +800,7 @@ int margo_provider_pop_prefinalize_callback(
 
 void margo_push_finalize_callback(
             margo_instance_id mid,
-            void(*cb)(void*),
+            margo_finalize_callback_t cb,
             void* uargs)
 {
     margo_provider_push_finalize_callback(
@@ -785,10 +816,18 @@ int margo_pop_finalize_callback(
     return margo_provider_pop_finalize_callback(mid, NULL);
 }
 
+int margo_top_finalize_callback(
+                    margo_instance_id mid,
+                    margo_finalize_callback_t *cb,
+                    void** uargs)
+{   
+    return margo_provider_top_finalize_callback(mid, NULL, cb, uargs);
+}
+
 void margo_provider_push_finalize_callback(
             margo_instance_id mid,
             void* owner,
-            void(*cb)(void*),                  
+            margo_finalize_callback_t cb,
             void* uargs)
 {
     if(cb == NULL) return;
@@ -821,6 +860,29 @@ int margo_provider_pop_finalize_callback(
         prev->next = fcb->next;
     }
     free(fcb);
+    return 1;
+}
+
+int margo_provider_top_finalize_callback(
+            margo_instance_id mid,
+            void* owner,
+            margo_finalize_callback_t *cb,
+            void** uargs)
+{
+    struct margo_finalize_cb* prev = NULL;
+    struct margo_finalize_cb* fcb  =  mid->finalize_cb;
+    while(fcb != NULL && fcb->owner != owner) {
+        prev = fcb;
+        fcb = fcb->next;
+    }
+    if(fcb == NULL) return 0;
+    if(prev == NULL) {
+        mid->finalize_cb = fcb->next;
+    } else {
+        prev->next = fcb->next;
+    }
+    *cb = fcb->callback;
+    *uargs = fcb->uargs;
     return 1;
 }
 

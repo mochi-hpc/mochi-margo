@@ -34,6 +34,7 @@ struct margo_instance;
 typedef struct margo_instance* margo_instance_id;
 typedef struct margo_data* margo_data_ptr;
 typedef struct margo_request_struct* margo_request;
+typedef void(*margo_finalize_callback_t)(void*);
 
 #define MARGO_INSTANCE_NULL ((margo_instance_id)NULL)
 #define MARGO_REQUEST_NULL ((margo_request)NULL)
@@ -192,6 +193,20 @@ int margo_pop_prefinalize_callback(
     margo_instance_id mid);
 
 /**
+ * @brief Get the last pre-finalize callback that was pushed into the margo instance
+ * as well as its argument. If a callback is found, this function returns 1, otherwise
+ * it returns 0.
+ *
+ * @param mid Margo instance.
+ * @param cb Returned callback.
+ * @param uargs Uargs.
+ */
+int margo_top_prefinalize_callback(
+    margo_instance_id mid,
+    margo_finalize_callback_t *cb,
+    void** uargs);
+
+/**
  * @brief Installs a callback to be called before the margo instance is finalized,
  * and before the Mercury progress loop is terminated.
  * The owner pointer allows to identify callbacks installed by particular providers.
@@ -211,7 +226,7 @@ int margo_pop_prefinalize_callback(
 void margo_provider_push_prefinalize_callback(
     margo_instance_id mid,
     void* owner,
-    void(*cb)(void*),
+    margo_finalize_callback_t cb,
     void* uargs);
 
 /**
@@ -225,6 +240,22 @@ void margo_provider_push_prefinalize_callback(
 int margo_provider_pop_prefinalize_callback(
     margo_instance_id mid,
     void* owner);
+
+/**
+ * @brief Get the last prefinalize callback that was pushed into the margo instance
+ * by the specified owner. If a callback is found, this function returns 1, otherwise
+ * it returns 0.
+ *
+ * @param mid Margo instance.
+ * @param owner Owner of the callback.
+ * @param cb Returned callback.
+ * @param uargs Returned user arguments.
+ */
+int margo_provider_top_prefinalize_callback(
+    margo_instance_id mid,
+    void* owner,
+    margo_finalize_callback_t *cb,
+    void** uargs);
 
 /**
  * Installs a callback to be called before the margo instance is finalize.
@@ -244,7 +275,7 @@ int margo_provider_pop_prefinalize_callback(
  */
 void margo_push_finalize_callback(
     margo_instance_id mid,
-    void(*cb)(void*), 
+    margo_finalize_callback_t cb, 
     void* uargs);
 
 /**
@@ -256,6 +287,21 @@ void margo_push_finalize_callback(
  */
 int margo_pop_finalize_callback(
     margo_instance_id mid);
+
+/**
+ * @brief Returns the last finalize callback that was pushed into the margo instance,
+ * along with its argument. If successful, this function returns 1. Otherwise it returns 0.
+ *
+ * @param mid Margo instance
+ * @param cb Returned callback
+ * @param uargs Returned user arguments
+ *
+ * @return 1 if successful, 0 otherwise.
+ */
+int margo_top_finalize_callback(
+    margo_instance_id mid,
+    margo_finalize_callback_t *cb,
+    void** uargs);
 
 /**
  * @brief Installs a callback to be called before the margo instance is finalized.
@@ -276,7 +322,7 @@ int margo_pop_finalize_callback(
 void margo_provider_push_finalize_callback(
     margo_instance_id mid,
     void* owner,
-    void(*cb)(void*),
+    margo_finalize_callback_t cb,
     void* uargs);
 
 /**
@@ -290,6 +336,24 @@ void margo_provider_push_finalize_callback(
 int margo_provider_pop_finalize_callback(
     margo_instance_id mid,
     void* owner);
+
+/**
+ * @brief Gets the last finalize callback that was pushed into the margo instance
+ * by the specified owner. If successful, this function returns 1, otherwise it
+ * returns 0.
+ *
+ * @param mid Margo instance
+ * @param owner Owner of the callback.
+ * @param cb Returned callback.
+ * @param uargs Returned user agument.
+ *
+ * @return 1 if successful, 0 otherwise.
+ */
+int margo_provider_top_finalize_callback(
+    margo_instance_id mid,
+    void* owner,
+    margo_finalize_callback_t *cb,
+    void** uargs);
 
 /**
  * Allows the passed Margo instance to be shut down remotely
