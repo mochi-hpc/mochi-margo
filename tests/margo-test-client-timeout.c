@@ -186,10 +186,10 @@ static void run_my_rpc(void *_arg)
         printf("Got response ret: %d\n", out.ret);
         margo_free_output(handle, &out);
     }
+    else if(hret == HG_TIMEOUT)
+        printf("margo_forward returned HG_TIMEOUT\n");
     else
-    {
         printf("margo_forward returned %d\n", hret);
-    }
 
     /* clean up resources consumed by this rpc */
     margo_bulk_free(in.bulk_handle);
