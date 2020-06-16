@@ -31,7 +31,7 @@ fi
 
 # check output; look for four "returned 18" to indicate HG_TIMEOUT in the four
 # concurrent RPCs
-LINECOUNT=$(grep "returned 18" $TMPOUT | wc -l) 
+LINECOUNT=$(grep "returned HG_TIMEOUT" $TMPOUT | wc -l) 
 if [ $LINECOUNT -ne 4 ]; then
     rm -rf $TMPOUT
     exit 1
