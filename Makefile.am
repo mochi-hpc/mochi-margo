@@ -50,3 +50,10 @@ include $(top_srcdir)/examples/multiplex/Makefile.subdir
 include $(top_srcdir)/examples/composition/Makefile.subdir
 include $(top_srcdir)/tests/Makefile.subdir
 
+# Modify the .la file once installed to indicate that codes linking against
+# the Margo library should also set rpath to the specific Mercury library
+# that we compiled against to make sure that Mercury function calls from
+# margo.h are resolved correctly. This is only relevant for other packages
+# that use libtool.
+install-exec-hook:
+	sed -i -e "s+inherited_linker_flags=''+inherited_linker_flags='-Wl,-rpath=@MERCURY_LIB_PATH@'+" $(DESTDIR)$(libdir)/libmargo.la
