@@ -1058,6 +1058,14 @@ hg_return_t margo_addr_lookup(
     hg_addr_t    *addr)
 {
     hg_return_t hret;
+
+#ifdef HG_Addr_lookup
+    /* Mercury 2.x provides two versions of lookup (async and sync).  Choose the
+     * former if available to avoid context switch
+     */
+    hret = HG_Addr_lookup2(mid->hg_class, name, addr);
+
+#else /* !defined HG_Addr_lookup */
     struct lookup_cb_evt *evt;
     ABT_eventual eventual;
     int ret;
@@ -1065,7 +1073,7 @@ hg_return_t margo_addr_lookup(
     ret = ABT_eventual_create(sizeof(*evt), &eventual);
     if(ret != 0)
     {
-        return(HG_NOMEM_ERROR);        
+        return(HG_NOMEM_ERROR);
     }
 
     hret = HG_Addr_lookup(mid->hg_context, margo_addr_lookup_cb,
@@ -1078,6 +1086,7 @@ hg_return_t margo_addr_lookup(
     }
 
     ABT_eventual_free(&eventual);
+#endif
 
     return(hret);
 }
