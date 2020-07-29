@@ -15,6 +15,7 @@ extern "C" {
 #include <mercury_types.h>
 #include <mercury_bulk.h>
 #include <mercury_macros.h>
+#include <mercury_prof_interface.h>
 #include <abt.h>
 
 #include <margo-diag.h>

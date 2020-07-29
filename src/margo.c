@@ -35,6 +35,15 @@ static int g_num_margo_instances = 0; // how many margo instances exist
 static ABT_mutex g_num_margo_instances_mtx = ABT_MUTEX_NULL; // mutex for above global variable
 static int g_margo_abt_init = 0;
 
+
+/* Mercury Profiling Interface */
+static hg_prof_pvar_session_t pvar_session;
+static hg_prof_pvar_handle_t pvar_handle;
+static int pvar_count;
+static void margo_initialize_mercury_profiling_interface(hg_class_t *hg_class);
+static void margo_finalize_mercury_profiling_interface(hg_class_t *hg_class);
+static void margo_read_pvar_data();
+
 /* Structure to store timing information */
 struct diag_data
 {
@@ -409,6 +418,9 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
        if(ret != 0)
          fprintf(stderr, "MARGO_PROFILE: Failed to start sparkline data collection thread. Continuing to profile without sparkline data collection.\n");
 
+       /* Initialize the Mercury Profiling Interface */
+       margo_initialize_mercury_profiling_interface(hg_class);
+
     }
 
     /* start diagnostics if the variable MARGO_ENABLE_DIAGNOSTICS is set */
@@ -458,6 +470,49 @@ err:
         if(g_margo_abt_init) ABT_finalize();
     }
     return MARGO_INSTANCE_NULL;
+}
+
+/* Initialize the Mercury Profiling Interface */
+static void margo_initialize_mercury_profiling_interface(hg_class_t *hg_class) {
+
+       char name[128];
+       char desc[128];
+       int name_len, desc_len, continuous;
+       hg_prof_class_t pvar_class;
+       hg_prof_datatype_t pvar_datatype;
+       hg_prof_bind_t pvar_bind;
+       HG_Prof_init(hg_class);
+       HG_Prof_pvar_get_info(hg_class, 0, name, &name_len, &pvar_class, &pvar_datatype, desc, &desc_len, &pvar_bind, &continuous);
+       fprintf(stderr, "[MARGO] PVAR at index 0 has name: %s, name_len: %d, pvar_class: %d, pvar_datatype: %d, desc: %s, desc_len: %d, pvar_bind: %d, continuous_flag: %d\n", name, name_len, pvar_class, pvar_datatype, desc, desc_len, pvar_bind, continuous);
+       HG_Prof_pvar_session_create(hg_class, &pvar_session);
+       HG_Prof_pvar_handle_alloc(pvar_session, 0, NULL, &pvar_handle, &pvar_count);
+}
+
+/* Finalize the Mercury Profiling Interface */
+static void margo_finalize_mercury_profiling_interface(hg_class_t *hg_class) {
+       int ret;
+
+       ret = HG_Prof_pvar_handle_free(pvar_session, 0, &pvar_handle);
+       assert(ret == HG_SUCCESS);
+       ret = HG_Prof_pvar_session_destroy(hg_class, &pvar_session);
+       assert(ret == HG_SUCCESS);
+       ret = HG_Prof_finalize(hg_class);
+       assert(ret == HG_SUCCESS);
+
+       fprintf(stderr, "[MARGO] Successfully shutdown profiling interface \n");
+}
+
+/* As of now, there is only one PVAR that mercury exports. Read the value of that PVAR only. 
+   This function should ultimately be capable of sampling any/all of the PVARs exported by Mercury */
+static void margo_read_pvar_data() {
+   /* Allocate buffer space for the handle based on the type and pvar_count
+      Here, we know that the PVAR exported is of type unsigned int. But in reality, the type
+      should be queried from the interface */
+   unsigned int * buf;
+   buf = (unsigned int *)malloc(sizeof(unsigned int)*pvar_count);
+   HG_Prof_pvar_read(pvar_session, pvar_handle, (void*)buf);
+
+   fprintf(stderr, "[MARGO] PVAR at index 0 now has a value: %d\n", *(unsigned int *)buf);
 }
 
 margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
@@ -657,6 +712,7 @@ void margo_finalize(margo_instance_id mid)
     if(mid->profile_enabled) {
       ABT_thread_join(mid->sparkline_data_collection_tid);
       ABT_thread_free(&mid->sparkline_data_collection_tid);
+      margo_finalize_mercury_profiling_interface(mid->hg_class);
       margo_profile_dump(mid, "profile", 1);
     }
     
@@ -1197,6 +1253,10 @@ static hg_return_t margo_cb(const struct hg_cb_info *info)
         if(mid->profile_enabled) {
           /* 0 here indicates this is a origin-side call */
           margo_breadcrumb_measure(mid, req->rpc_breadcrumb, req->start_time, 0, req->provider_id, req->server_addr_hash, req->handle);
+   
+          /* Read the exported PVAR data from the Mercury Profiling Interface */
+	  /* As of now, Mercury only exports one PVAR: Number of times the HG_Forward call has been invoked */
+          margo_read_pvar_data();
         }
     }
 
