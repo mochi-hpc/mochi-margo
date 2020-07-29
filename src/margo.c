@@ -1408,8 +1408,9 @@ hg_return_t margo_wait_any(
     size_t i;
     int ret;
     int flag = 0;
-    int has_pending_requests = 0;
+    int has_pending_requests;
 try_again:
+    has_pending_requests = 0;
     for(i = 0; i < count; i++) {
         if(req[i] == MARGO_REQUEST_NULL)
             continue;
