@@ -1,5 +1,9 @@
+/*
+ * (C) 2020 The University of Chicago
+ *
+ * See COPYRIGHT in top-level directory.
+ */
 
-/* gcc -std=c99 example_prio.c -lpthread -labt */
 
 #include <abt.h>
 #include <pthread.h>
