@@ -166,22 +166,23 @@ static void pool_push(ABT_pool pool, ABT_unit unit)
     pool_t *p_pool;
     ABT_pool_get_data(pool, (void **)&p_pool);
     unit_t *p_unit = (unit_t *)unit;
-    ABT_thread_state state;
     int push_counter;
-
+#if 0
+    ABT_thread_state state;
     /* If it is a thread, look at state */
     if(p_unit->thread != ABT_THREAD_NULL) {
         if(ABT_thread_get_state(p_unit->thread, &state) == ABT_SUCCESS) {
             fprintf(stderr, "DBG: %p state on push: %d\n", p_unit->thread, state);
         }
     }
+#endif
 
     /* save incoming value of push counter, then increment */
     push_counter = p_unit->push_counter;
     if(p_unit->push_counter < PUSH_COUNTER_PRIORITY_LIMIT)
         p_unit->push_counter++;
 
-    fprintf(stderr, "DBG: looking at push_counter %d\n", push_counter);
+    // fprintf(stderr, "DBG: looking at push_counter %d\n", push_counter);
     pthread_mutex_lock(&p_pool->mutex);
     if (push_counter == 0 || push_counter >= PUSH_COUNTER_PRIORITY_LIMIT) {
         /* The first push or long-running ULT, so put it to the low-priority pool. */
@@ -209,23 +210,23 @@ static ABT_unit pool_pop(ABT_pool pool)
         if ((p_pool->cnt++ & 0xFF) != 0) {
             p_unit = queue_pop(&p_pool->high_prio_queue);
             if (p_unit) {
-                fprintf(stderr, "DBG: found high.\n");
+                // fprintf(stderr, "DBG: found high.\n");
                 break;
             }
             p_unit = queue_pop(&p_pool->low_prio_queue);
             if (p_unit) {
-                fprintf(stderr, "DBG: found low.\n");
+                // fprintf(stderr, "DBG: found low.\n");
                 break;
             }
         } else {
             p_unit = queue_pop(&p_pool->low_prio_queue);
             if (p_unit) {
-                fprintf(stderr, "DBG: found low.\n");
+                // fprintf(stderr, "DBG: found low.\n");
                 break;
             }
             p_unit = queue_pop(&p_pool->high_prio_queue);
             if (p_unit) {
-                fprintf(stderr, "DBG: found high.\n");
+                // fprintf(stderr, "DBG: found high.\n");
                 break;
             }
         }
