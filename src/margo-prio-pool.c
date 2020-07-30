@@ -191,7 +191,14 @@ static ABT_unit pool_pop(ABT_pool pool)
     return p_unit ? (ABT_unit)p_unit : ABT_UNIT_NULL;
 }
 
-static ABT_unit pool_pop_wait(ABT_pool pool, double waittime_secs)
+static inline void convert_double_sec_to_timespec(struct timespec *ts_out,
+                                                  double seconds)
+{
+    ts_out->tv_sec = (time_t)seconds;
+    ts_out->tv_nsec = (long)((seconds - ts_out->tv_sec) * 1000000000.0);
+}
+
+static ABT_unit pool_pop_timedwait(ABT_pool pool, double abstime_secs)
 {
     pool_t *p_pool;
     ABT_pool_get_data(pool, (void **)&p_pool);
@@ -200,13 +207,7 @@ static ABT_unit pool_pop_wait(ABT_pool pool, double waittime_secs)
     unit_t *p_unit = NULL;
     if (p_pool->num == 0) {
         struct timespec ts;
-        clock_gettime(CLOCK_REALTIME, &ts);
-        ts.tv_sec += (time_t)waittime_secs;
-        ts.tv_nsec += (long)((waittime_secs - (time_t)waittime_secs) * 1e9);
-        if (ts.tv_nsec > 1e9) {
-            ts.tv_sec += 1;
-            ts.tv_nsec -= 1e9;
-        }
+        convert_double_sec_to_timespec(&ts, abstime_secs);
         pthread_cond_timedwait(&p_pool->cond, &p_pool->mutex, &ts);
     }
     do {
@@ -230,12 +231,6 @@ static ABT_unit pool_pop_wait(ABT_pool pool, double waittime_secs)
         p_pool->num--;
     pthread_mutex_unlock(&p_pool->mutex);
     return p_unit ? (ABT_unit)p_unit : ABT_UNIT_NULL;
-}
-
-static ABT_unit pool_pop_timedwait(ABT_pool pool, double abstime_secs)
-{
-    /* Deprecated. Let's just use pool_pop_wait(). */
-    return pool_pop_wait(pool, abstime_secs - ABT_get_wtime());
 }
 
 static int pool_remove(ABT_pool pool, ABT_unit unit)
