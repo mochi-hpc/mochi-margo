@@ -29,11 +29,17 @@ typedef struct queue_t {
 static inline void queue_push(queue_t *p_queue, unit_t *p_unit)
 {
     if (p_queue->p_head == NULL) {
+        p_unit->p_next = p_unit;
+        p_unit->p_prev = p_unit;
         p_queue->p_head = p_unit;
         p_queue->p_tail = p_unit;
     } else {
-        p_unit->p_prev = p_queue->p_tail;
-        p_queue->p_tail->p_next = p_unit;
+        unit_t *p_head = p_queue->p_head;
+        unit_t *p_tail = p_queue->p_tail;
+        p_tail->p_next = p_unit;
+        p_head->p_prev = p_unit;
+        p_unit->p_prev = p_tail;
+        p_unit->p_next = p_head;
         p_queue->p_tail = p_unit;
     }
     p_unit->is_in_pool = ABT_TRUE;
@@ -45,11 +51,15 @@ static inline unit_t *queue_pop(queue_t *p_queue)
         return NULL;
     } else {
         unit_t *p_unit = p_queue->p_head;
-        p_queue->p_head = p_unit->p_next;
-        if (p_queue->p_head == NULL) {
+        if(p_queue->p_head == p_queue->p_tail) {
+            /* one item */
+            p_queue->p_head = NULL;
             p_queue->p_tail = NULL;
-        } else {
-            p_queue->p_head->p_prev = NULL;
+        }
+        else {
+            p_unit->p_prev->p_next = p_unit->p_next;
+            p_unit->p_next->p_prev = p_unit->p_prev;
+            p_queue->p_head = p_unit->p_next;
         }
         p_unit->p_next = NULL;
         p_unit->p_prev = NULL;
