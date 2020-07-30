@@ -7,12 +7,17 @@
 
 #include "margo-prio-pool.h"
 
+/* Once a unit has been pushed this many times, it no longer receives a
+ * priority boost, on the assumption that it is a long-running background ULT
+ */
+#define PUSH_COUNTER_PRIORITY_LIMIT 50
+
 typedef struct unit_t {
     ABT_thread thread;
     ABT_task task;
     struct unit_t *p_prev;
     struct unit_t *p_next;
-    int is_first_push;
+    int push_counter;
     ABT_bool is_in_pool;
 } unit_t;
 
@@ -97,7 +102,7 @@ static ABT_unit pool_unit_create_from_thread(ABT_thread thread)
     p_unit->task = ABT_TASK_NULL;
     p_unit->p_next = NULL;
     p_unit->p_prev = NULL;
-    p_unit->is_first_push = 1;
+    p_unit->push_counter = 0;
     p_unit->is_in_pool = ABT_FALSE;
     return (ABT_unit)p_unit;
 }
@@ -109,7 +114,7 @@ static ABT_unit pool_unit_create_from_task(ABT_task task)
     p_unit->task = task;
     p_unit->p_next = NULL;
     p_unit->p_prev = NULL;
-    p_unit->is_first_push = 1;
+    p_unit->push_counter = 0;
     p_unit->is_in_pool = ABT_FALSE;
     return (ABT_unit)p_unit;
 }
@@ -147,13 +152,30 @@ static void pool_push(ABT_pool pool, ABT_unit unit)
     pool_t *p_pool;
     ABT_pool_get_data(pool, (void **)&p_pool);
     unit_t *p_unit = (unit_t *)unit;
+    ABT_thread_state state;
+    int push_counter;
+
+    /* If it is a thread, look at state */
+    if(p_unit->thread != ABT_THREAD_NULL) {
+        if(ABT_thread_get_state(p_unit->thread, &state) == ABT_SUCCESS) {
+            fprintf(stderr, "DBG: %p state on push: %d\n", p_unit->thread, state);
+        }
+    }
+
+    /* save incoming value of push counter, then increment */
+    push_counter = p_unit->push_counter;
+    if(p_unit->push_counter < PUSH_COUNTER_PRIORITY_LIMIT)
+        p_unit->push_counter++;
+
+    fprintf(stderr, "DBG: looking at push_counter %d\n", push_counter);
     pthread_mutex_lock(&p_pool->mutex);
-    if (p_unit->is_first_push) {
-        /* The first push, so put it to the low-priority pool. */
-        p_unit->is_first_push = 0;
+    if (push_counter == 0 || push_counter >= PUSH_COUNTER_PRIORITY_LIMIT) {
+        /* The first push or long-running ULT, so put it to the low-priority pool. */
         queue_push(&p_pool->low_prio_queue, p_unit);
     } else {
-        /* Not the first push, so put it to the high-priority pool. */
+        /* high-priority pool, for ULTs that have been suspended more than
+         * once but not excessively
+         */
         queue_push(&p_pool->high_prio_queue, p_unit);
     }
     p_pool->num++;
@@ -165,24 +187,33 @@ static ABT_unit pool_pop(ABT_pool pool)
 {
     pool_t *p_pool;
     ABT_pool_get_data(pool, (void **)&p_pool);
+
     /* Sometimes it should pop from low_prio_queue to avoid a deadlock. */
     pthread_mutex_lock(&p_pool->mutex);
     unit_t *p_unit = NULL;
     do {
         if ((p_pool->cnt++ & 0xFF) != 0) {
             p_unit = queue_pop(&p_pool->high_prio_queue);
-            if (p_unit)
+            if (p_unit) {
+                fprintf(stderr, "DBG: found high.\n");
                 break;
+            }
             p_unit = queue_pop(&p_pool->low_prio_queue);
-            if (p_unit)
+            if (p_unit) {
+                fprintf(stderr, "DBG: found low.\n");
                 break;
+            }
         } else {
             p_unit = queue_pop(&p_pool->low_prio_queue);
-            if (p_unit)
+            if (p_unit) {
+                fprintf(stderr, "DBG: found low.\n");
                 break;
+            }
             p_unit = queue_pop(&p_pool->high_prio_queue);
-            if (p_unit)
+            if (p_unit) {
+                fprintf(stderr, "DBG: found high.\n");
                 break;
+            }
         }
     } while (0);
     if (p_unit)
