@@ -898,6 +898,10 @@ hg_return_t margo_registered_disabled_response(
     return HG_SUCCESS;
 }
 
+/* Mercury 2.x provides two versions of lookup (async and sync).  If a
+ * synchronous lookup call is available then we do not need this callback.
+ */
+#ifndef HG_Addr_lookup
 static hg_return_t margo_addr_lookup_cb(const struct hg_cb_info *info)
 {
     struct lookup_cb_evt evt;
@@ -910,6 +914,7 @@ static hg_return_t margo_addr_lookup_cb(const struct hg_cb_info *info)
 
     return(HG_SUCCESS);
 }
+#endif
 
 hg_return_t margo_addr_lookup(
     margo_instance_id mid,
@@ -2476,7 +2481,6 @@ void __margo_internal_pre_wrapper_hooks(margo_instance_id mid, hg_handle_t handl
     hg_return_t ret;
     uint64_t *rpc_breadcrumb;
     const struct hg_info* info;
-    char * name;
     struct margo_request_struct* req;
 
     ret = HG_Get_input_buf(handle, (void**)&rpc_breadcrumb, NULL);
