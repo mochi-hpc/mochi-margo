@@ -42,7 +42,6 @@ int main(int argc, char **argv)
     ABT_pool pool;
     margo_instance_id mid;
     hg_addr_t svr_addr = HG_ADDR_NULL;
-    hg_handle_t handle;
     char proto[12] = {0};
   
     if(argc != 2)
