@@ -1994,7 +1994,7 @@ void margo_profile_dump(margo_instance_id mid, const char* file, int uniquify)
     time_t ltime;
     char revised_file_name[256] = {0};
     struct diag_data *dd, *tmp;
-    char rpc_breadcrumb_str[24] = {0};
+    char rpc_breadcrumb_str[256] = {0};
     struct margo_registered_rpc *tmp_rpc;
     char * name;
     uint64_t hash;
