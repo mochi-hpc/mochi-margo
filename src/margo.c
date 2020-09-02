@@ -1923,7 +1923,8 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
     char * name;
     uint64_t hash;
 
-    assert(mid->diag_enabled);
+    if (!mid->diag_enabled)
+        return;
 
     if(uniquify)
     {
