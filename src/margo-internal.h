@@ -88,7 +88,7 @@ struct margo_instance
     int owns_progress_pool;
     ABT_xstream *rpc_xstreams;
     int num_handler_pool_threads;
-    unsigned int hg_progress_timeout_ub;
+    int hg_progress_timeout_ub;
     uint16_t num_registered_rpcs; 	   /* number of registered rpc's by all providers on this instance */
 
     /* list of rpcs registered on this instance for debugging and profiling purposes */
@@ -126,7 +126,7 @@ struct margo_instance
      * which will serialize access.
      */
     int diag_enabled;
-    unsigned int profile_enabled;
+    int profile_enabled;
     uint64_t self_addr_hash;
     double previous_sparkline_data_collection_time;
     uint16_t sparkline_index;
@@ -137,6 +137,8 @@ struct margo_instance
     struct diag_data diag_bulk_create_elapsed;
     struct diag_data *diag_rpc;
     ABT_mutex diag_rpc_mutex;
+
+    json_t *component_cfg;
 };
 
 struct margo_request_struct {

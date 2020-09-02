@@ -43,10 +43,6 @@ typedef void(*margo_finalize_callback_t)(void*);
 #define MARGO_DEFAULT_PROVIDER_ID 0
 #define MARGO_MAX_PROVIDER_ID ((1 << (8*__MARGO_PROVIDER_ID_SIZE))-1)
 
-#define MARGO_PARAM_PROGRESS_TIMEOUT_UB 1
-#define MARGO_PARAM_ENABLE_PROFILING 2
-#define MARGO_PARAM_ENABLE_DIAGNOSTICS 3
-
 /**
  * Initializes margo library.
  * @param [in] addr_str            Mercury host address with port number
@@ -73,6 +69,9 @@ typedef void(*margo_finalize_callback_t)(void*);
  */
 #define margo_init(_addr_str, _mode, _use_progress_thread, _rpc_thread_count)\
  margo_init_opt(_addr_str, _mode, NULL, _use_progress_thread, _rpc_thread_count)
+
+#define margo_init_json(_json_cfg_string)\
+ margo_init_opt_json(NULL, _json_cfg_string)
 
 /**
  * Initializes margo library with custom Mercury options.
@@ -107,6 +106,10 @@ margo_instance_id margo_init_opt(
     int use_progress_thread,
     int rpc_thread_count);
 
+/* same as above, but with configuration expressed via json */
+margo_instance_id margo_init_opt_json(
+    const struct hg_init_info *hg_init_info,
+    const char* json_cfg_string);
 
 /**
  * Initializes margo library from given argobots and Mercury instances.
@@ -129,6 +132,16 @@ margo_instance_id margo_init_pool(
     ABT_pool progress_pool,
     ABT_pool handler_pool,
     hg_context_t *hg_context);
+
+/**
+ * same as margo_init_pool() except that it has an additional argument to
+ * accept a json configuration string
+ */
+margo_instance_id margo_init_pool_json(
+    ABT_pool progress_pool,
+    ABT_pool handler_pool,
+    hg_context_t *hg_context,
+    const char* json_cfg_string);
 
 /**
  * Shuts down margo library and its underlying abt and mercury resources
@@ -1058,7 +1071,8 @@ margo_instance_id margo_hg_info_get_instance(const struct hg_info *info);
  * @param [in] mid Margo instance
  * @returns void
  */
-void margo_diag_start(margo_instance_id mid);
+#define margo_diag_start(__mid) \
+ margo_set_param(__mid, "enable_diagnostics", "1")
 
 /**
  * Enables profile data collection on specified Margo instance
@@ -1066,7 +1080,8 @@ void margo_diag_start(margo_instance_id mid);
  * @param [in] mid Margo instance
  * @returns void
  */
-void margo_profile_start(margo_instance_id mid);
+#define margo_profile_start(__mid) \
+ margo_set_param(__mid, "enable_profiling", "1")
 
 /**
  * Disables diagnostic collection on specified Margo instance
@@ -1074,7 +1089,8 @@ void margo_profile_start(margo_instance_id mid);
  * @param [in] mid Margo instance
  * @returns void
  */
-void margo_diag_stop(margo_instance_id mid);
+#define margo_diag_stop(__mid) \
+ margo_set_param(__mid, "enable_diagnostics", "0")
 
 /**
  * Disables profile data collection on specified Margo instance
@@ -1082,7 +1098,8 @@ void margo_diag_stop(margo_instance_id mid);
  * @param [in] mid Margo instance
  * @returns void
  */
-void margo_profile_stop(margo_instance_id mid);
+#define margo_profile_stop(__mid) \
+ margo_set_param(__mid, "enable_profiling", "0")
 
 /**
  * Appends diagnostic statistics (enabled via margo_diag_start()) to specified 
@@ -1121,22 +1138,19 @@ void margo_breadcrumb_snapshot(margo_instance_id mid, struct margo_breadcrumb_sn
  * Sets configurable parameters/hints
  *
  * @param [in] mid Margo instance
- * @param [in] option numerical option number
- * @param [out] inout_param used to pass in values
- * @returns void
+ * @param [in] key parameter name
+ * @param [in] value parameter value
+ * @returns 0 on success, -1 on failure
  */
-void margo_set_param(margo_instance_id mid, int option, const void *param);
+int margo_set_param(margo_instance_id mid, const char *key, const char *value);
 
 /**
- * Retrieves configurable parameters/hints
+ * Retrieves complete configuration of margo instance, incoded as json
  *
  * @param [in] mid Margo instance
- * @param [in] option numerical option number
- * @param [out] param used to pass out values
- * @returns void
+ * @returns null terminated string that must be free'd by caller
  */
-void margo_get_param(margo_instance_id mid, int option, void *param);
-
+char* margo_get_config(margo_instance_id mid);
 
 /**
  * @private
