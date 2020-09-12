@@ -62,6 +62,10 @@
 "              \"server_mode\": -999," \
 "              \"auto_sm\": -999," \
 "              \"na_no_block\": -999" \
+"         }," \
+"         \"argobots\": {" \
+"              \"abt_mem_max_num_stacks\": -999," \
+"              \"abt_thread_stacksize\": -999" \
 "         }" \
 "}}"
 
@@ -79,6 +83,10 @@
 "              \"server_mode\": 0," \
 "              \"auto_sm\": 0," \
 "              \"na_no_block\": 0" \
+"         }," \
+"         \"argobots\": {" \
+"              \"abt_mem_max_num_stacks\": 8," \
+"              \"abt_thread_stacksize\": 2097152" \
 "         }" \
 "}}"
 
@@ -163,15 +171,34 @@ static hg_return_t margo_handle_cache_put(margo_instance_id mid,
     hg_handle_t handle);
 static hg_id_t margo_register_internal(margo_instance_id mid, hg_id_t id,
     hg_proc_cb_t in_proc_cb, hg_proc_cb_t out_proc_cb, hg_rpc_cb_t rpc_cb, ABT_pool pool);
-static void set_argobots_tunables(void);
+static void set_argobots_tunables(json_t *margo_cfg);
 
 /* Set tunable parameters in Argobots to be more friendly to typical Margo
  * use cases.  No return value, this is a best-effort advisory function. It
  * also will (where possible) defer to any pre-existing explicit environment
  * variable settings.  We only override if the user has not specified yet.
  */
-static void set_argobots_tunables(void)
+static void set_argobots_tunables(json_t *margo_cfg)
 {
+    json_t* abt_cfg;
+    char env_str[64] = {0};
+    int value;
+    int ret;
+
+    ret = mochi_cfg_get_object(margo_cfg, "arogobots", &abt_cfg);
+    if(ret < 0)
+        return;
+
+    if (ABT_initialized() != ABT_ERR_UNINITIALIZED)
+    {
+        /* Argobots is already initialized, so we can no longer influence
+         * these settings.  Mark an invalid value in the json to note that
+         * the values are unknown.
+         */
+        mochi_cfg_set_value_int(abt_cfg, "abt_mem_max_num_stacks", -999);
+        mochi_cfg_set_value_int(abt_cfg, "abt_thread_stacksize", -999);
+        return;
+    }
 
     /* Rationale: Margo is very likely to create a single producer (the
      * progress function), multiple consumer usage pattern that
@@ -184,7 +211,11 @@ static void set_argobots_tunables(void)
      * structures.
      */
     if(!getenv("ABT_MEM_MAX_NUM_STACKS"))
-        putenv("ABT_MEM_MAX_NUM_STACKS=8");
+    {
+        mochi_cfg_get_value_int(abt_cfg, "abt_mem_max_num_stacks", &value);
+        sprintf(env_str, "ABT_MEM_MAX_NUM_STACKS=%d", value);
+        putenv(env_str);
+    }
 
     /* Rationale: the default stack size in Argobots (as of February 2019)
      * is 16K, but this is likely to be too small for Margo as it traverses
@@ -195,7 +226,11 @@ static void set_argobots_tunables(void)
      * https://lists.argobots.org/pipermail/discuss/2019-February/000039.html
      */
     if(!getenv("ABT_THREAD_STACKSIZE"))
-        putenv("ABT_THREAD_STACKSIZE=2097152");
+    {
+        mochi_cfg_get_value_int(abt_cfg, "abt_thread_stacksize", &value);
+        sprintf(env_str, "ABT_THREAD_STACKSIZE=%d", value);
+        putenv(env_str);
+    }
 
     return;
 }
@@ -294,7 +329,7 @@ margo_instance_id margo_init_opt_json(const struct hg_init_info *hg_init_info,
     }
 
     /* adjust argobots settings to suit Margo */
-    set_argobots_tunables();
+    set_argobots_tunables(margo_cfg);
 
     if (ABT_initialized() == ABT_ERR_UNINITIALIZED)
     {
