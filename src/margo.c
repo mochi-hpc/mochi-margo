@@ -38,7 +38,7 @@
 #define htole64(x) OSSwapHostToLittleInt64(x)
 #define be64toh(x) OSSwapBigToHostInt64(x)
 #define le64toh(x) OSSwapLittleToHostInt64(x)
-#endif
+#endif /* __APPLE__ */
 
 #define DEFAULT_MERCURY_PROGRESS_TIMEOUT_UB 100 /* 100 milliseconds */
 #define DEFAULT_MERCURY_HANDLE_CACHE_SIZE 32
