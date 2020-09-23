@@ -44,9 +44,8 @@
 
 /* there are two default json configurations; if the caller initializes
  * margo to use external pools and hg context (via init_pool() or
- * init_pool_json()), then margo has little visibility into the thread
- * and Mercury configuration. We set sentinal values for configuration
- * fields to denote that they are unknown.
+ * init_pool_json()), then margo does not control the argobots or mercury
+ * configuration.
  */
 # define MARGO_DEFAULT_CFG_EXT_POOLS \
 "{   \"margo\": {" \
@@ -56,17 +55,7 @@
 "         \"enable_profiling\": 0," \
 "         \"enable_diagnostics\": 0," \
 "         \"handle_cache_size\": 32," \
-"         \"profile_sparkline_timeslice_msec\": 1000," \
-"         \"mercury\": {" \
-"              \"addr_str\": \"UNKNOWN\"," \
-"              \"server_mode\": -999," \
-"              \"auto_sm\": -999," \
-"              \"na_no_block\": -999" \
-"         }," \
-"         \"argobots\": {" \
-"              \"abt_mem_max_num_stacks\": -999," \
-"              \"abt_thread_stacksize\": -999" \
-"         }" \
+"         \"profile_sparkline_timeslice_msec\": 1000" \
 "}}"
 
 # define MARGO_DEFAULT_CFG \
