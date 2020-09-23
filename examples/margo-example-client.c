@@ -77,7 +77,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "Error: margo_init()\n");
         return(-1);
     }
-    margo_diag_start(mid);
+    // margo_diag_start(mid);
 
     /* retrieve current pool to use for ULT creation */
     ret = ABT_xstream_self(&xstream);
@@ -152,7 +152,7 @@ int main(int argc, char **argv)
     margo_addr_free(mid, svr_addr);
 
     /* shut down everything */
-    margo_diag_dump(mid, "-", 0);
+    // margo_diag_dump(mid, "-", 0);
     margo_finalize(mid);
 
     return(0);
