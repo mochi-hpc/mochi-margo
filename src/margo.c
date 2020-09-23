@@ -1789,6 +1789,7 @@ static void hg_progress_fn(void* foo)
             {
                 /* TODO: error handling */
                 fprintf(stderr, "WARNING: unexpected return code (%d) from HG_Progress()\n", ret);
+                assert(0);
             }
         }
         else
@@ -1827,6 +1828,7 @@ static void hg_progress_fn(void* foo)
             {
                 /* TODO: error handling */
                 fprintf(stderr, "WARNING: unexpected return code (%d) from HG_Progress()\n", ret);
+                assert(0);
             }
         }
 
