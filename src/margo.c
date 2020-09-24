@@ -49,6 +49,7 @@
  */
 # define MARGO_DEFAULT_CFG_EXT_POOLS \
 "{   \"margo\": {" \
+"         \"version\": \"" PACKAGE_VERSION "\"," \
 "         \"use_progress_thread\": -999," \
 "         \"rpc_thread_count\": -999," \
 "         \"progress_timeout_ub_msec\": 100," \
