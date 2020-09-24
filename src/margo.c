@@ -69,6 +69,7 @@
 "         \"handle_cache_size\": 32," \
 "         \"profile_sparkline_timeslice_msec\": 1000," \
 "         \"mercury\": {" \
+"              \"version\": \"\"," \
 "              \"addr_str\": \"na+sm://\"," \
 "              \"server_mode\": 0," \
 "              \"auto_sm\": 0," \
@@ -262,6 +263,8 @@ margo_instance_id margo_init_opt_json(const struct hg_init_info *hg_init_info,
     char *init_pool_json_str;
     int use_progress_thread, rpc_thread_count;
     const char* addr_str;
+    unsigned int hg_major=0, hg_minor=0, hg_patch=0;
+    char hg_version_string[64] = {0};
 
     /* parse json configuration into a local variable; the permanent copy
      * will be stored in the margo_init_pool_json function
@@ -390,6 +393,10 @@ margo_instance_id margo_init_opt_json(const struct hg_init_info *hg_init_info,
 
     hg_class = HG_Init_opt(addr_str, listen_flag, hg_init_info);
     if(!hg_class) goto err;
+
+    HG_Version_get(&hg_major, &hg_minor, &hg_patch);
+    snprintf(hg_version_string, 64, "%u.%u.%u", hg_major, hg_minor, hg_patch);
+    mochi_cfg_set_value_string(hg_cfg, "version", hg_version_string);
 
     hg_context = HG_Context_create(hg_class);
     if(!hg_context) goto err;
