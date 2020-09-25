@@ -24,6 +24,7 @@ int main(int argc, char **argv)
     hg_addr_t addr_self;
     char addr_self_string[128];
     hg_size_t addr_self_string_sz = 128;
+    char *cfg_str;
 
     if(argc != 2)
     {
@@ -67,6 +68,10 @@ int main(int argc, char **argv)
     /* register RPC */
     MARGO_REGISTER(mid, "my_rpc", my_rpc_in_t, my_rpc_out_t, my_rpc_ult);
 	MARGO_REGISTER(mid, "my_shutdown_rpc", void, void, my_rpc_shutdown_ult);
+
+    cfg_str = margo_get_config(mid);
+    printf("%s\n", cfg_str);
+    free(cfg_str);
 
     /* NOTE: there isn't anything else for the server to do at this point
      * except wait for itself to be shut down.  The

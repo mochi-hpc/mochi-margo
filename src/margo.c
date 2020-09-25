@@ -1,6 +1,6 @@
 /*
  * (C) 2015 The University of Chicago
- * 
+ *
  * See COPYRIGHT in top-level directory.
  */
 
@@ -9,10 +9,12 @@
 #include <errno.h>
 #include <abt.h>
 #include <stdlib.h>
-
-#include <margo-config.h>
 #include <time.h>
 #include <math.h>
+#include <jansson.h>
+#include <mochi-cfg.h>
+
+#include <margo-config.h>
 
 #include "margo.h"
 #include "margo-internal.h"
@@ -40,10 +42,44 @@
 #define le64toh(x) OSSwapLittleToHostInt64(x)
 #endif /* __APPLE__ */
 
-#define DEFAULT_MERCURY_PROGRESS_TIMEOUT_UB 100 /* 100 milliseconds */
-#define DEFAULT_MERCURY_HANDLE_CACHE_SIZE 32
+/* there are two default json configurations; if the caller initializes
+ * margo to use external pools and hg context (via init_pool() or
+ * init_pool_json()), then margo does not control the argobots or mercury
+ * configuration.
+ */
+# define MARGO_DEFAULT_CFG_EXT_POOLS \
+"{   \"margo\": {" \
+"         \"version\": \"" PACKAGE_VERSION "\"," \
+"         \"use_progress_thread\": -999," \
+"         \"rpc_thread_count\": -999," \
+"         \"progress_timeout_ub_msec\": 100," \
+"         \"enable_profiling\": 0," \
+"         \"enable_diagnostics\": 0," \
+"         \"handle_cache_size\": 32," \
+"         \"profile_sparkline_timeslice_msec\": 1000" \
+"}}"
 
-#define MARGO_SPARKLINE_TIMESLICE 1
+# define MARGO_DEFAULT_CFG \
+"{   \"margo\": {" \
+"         \"use_progress_thread\": 0," \
+"         \"rpc_thread_count\": 0," \
+"         \"progress_timeout_ub_msec\": 100," \
+"         \"enable_profiling\": 0," \
+"         \"enable_diagnostics\": 0," \
+"         \"handle_cache_size\": 32," \
+"         \"profile_sparkline_timeslice_msec\": 1000," \
+"         \"mercury\": {" \
+"              \"version\": \"\"," \
+"              \"addr_str\": \"na+sm://\"," \
+"              \"server_mode\": 0," \
+"              \"auto_sm\": 0," \
+"              \"na_no_block\": 0" \
+"         }," \
+"         \"argobots\": {" \
+"              \"abt_mem_max_num_stacks\": 8," \
+"              \"abt_thread_stacksize\": 2097152" \
+"         }" \
+"}}"
 
 /* If margo is initializing ABT, we need to track how many instances of margo
  * are being created, so that the last one can call ABT_finalize.
@@ -126,15 +162,34 @@ static hg_return_t margo_handle_cache_put(margo_instance_id mid,
     hg_handle_t handle);
 static hg_id_t margo_register_internal(margo_instance_id mid, hg_id_t id,
     hg_proc_cb_t in_proc_cb, hg_proc_cb_t out_proc_cb, hg_rpc_cb_t rpc_cb, ABT_pool pool);
-static void set_argobots_tunables(void);
+static void set_argobots_tunables(json_t *margo_cfg);
 
 /* Set tunable parameters in Argobots to be more friendly to typical Margo
  * use cases.  No return value, this is a best-effort advisory function. It
  * also will (where possible) defer to any pre-existing explicit environment
  * variable settings.  We only override if the user has not specified yet.
  */
-static void set_argobots_tunables(void)
+static void set_argobots_tunables(json_t *margo_cfg)
 {
+    json_t* abt_cfg;
+    char env_str[64] = {0};
+    int value;
+    int ret;
+
+    ret = mochi_cfg_get_object(margo_cfg, "arogobots", &abt_cfg);
+    if(ret < 0)
+        return;
+
+    if (ABT_initialized() != ABT_ERR_UNINITIALIZED)
+    {
+        /* Argobots is already initialized, so we can no longer influence
+         * these settings.  Mark an invalid value in the json to note that
+         * the values are unknown.
+         */
+        mochi_cfg_set_value_int(abt_cfg, "abt_mem_max_num_stacks", -999);
+        mochi_cfg_set_value_int(abt_cfg, "abt_thread_stacksize", -999);
+        return;
+    }
 
     /* Rationale: Margo is very likely to create a single producer (the
      * progress function), multiple consumer usage pattern that
@@ -147,7 +202,11 @@ static void set_argobots_tunables(void)
      * structures.
      */
     if(!getenv("ABT_MEM_MAX_NUM_STACKS"))
-        putenv("ABT_MEM_MAX_NUM_STACKS=8");
+    {
+        mochi_cfg_get_value_int(abt_cfg, "abt_mem_max_num_stacks", &value);
+        sprintf(env_str, "ABT_MEM_MAX_NUM_STACKS=%d", value);
+        putenv(env_str);
+    }
 
     /* Rationale: the default stack size in Argobots (as of February 2019)
      * is 16K, but this is likely to be too small for Margo as it traverses
@@ -158,13 +217,31 @@ static void set_argobots_tunables(void)
      * https://lists.argobots.org/pipermail/discuss/2019-February/000039.html
      */
     if(!getenv("ABT_THREAD_STACKSIZE"))
-        putenv("ABT_THREAD_STACKSIZE=2097152");
+    {
+        mochi_cfg_get_value_int(abt_cfg, "abt_thread_stacksize", &value);
+        sprintf(env_str, "ABT_THREAD_STACKSIZE=%d", value);
+        putenv(env_str);
+    }
 
     return;
 }
 
-margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg_init_info *hg_init_info,
+margo_instance_id margo_init_opt(const char *addr_str, int mode,
+    const struct hg_init_info *hg_init_info,
     int use_progress_thread, int rpc_thread_count)
+{
+    char cfg_string[128];
+
+    /* NOTE: jansson could be used for more complex encodings, but this one
+     * is trivial enough to just do with snprintf()
+     */
+    snprintf(cfg_string, 128, "{\"margo\": {\"use_progress_thread\": %d, \"rpc_thread_count\": %d, \"mercury\": {\"addr_str\": \"%s\", \"server_mode\": %d}}}", use_progress_thread, rpc_thread_count, addr_str, mode);
+
+    return(margo_init_opt_json(hg_init_info, cfg_string));
+}
+
+margo_instance_id margo_init_opt_json(const struct hg_init_info *hg_init_info,
+    const char* json_cfg_string)
 {
     ABT_xstream progress_xstream = ABT_XSTREAM_NULL;
     ABT_pool progress_pool = ABT_POOL_NULL;
@@ -177,15 +254,75 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
     ABT_pool rpc_pool = ABT_POOL_NULL;
     hg_class_t *hg_class = NULL;
     hg_context_t *hg_context = NULL;
-    int listen_flag = (mode == MARGO_CLIENT_MODE) ? HG_FALSE : HG_TRUE;
+    int listen_flag = 0;
     int i;
     int ret;
     struct margo_instance *mid = MARGO_INSTANCE_NULL;
+    json_t *margo_cfg;
+    json_t *hg_cfg;
+    char *init_pool_json_str;
+    int use_progress_thread, rpc_thread_count;
+    const char* addr_str;
+    unsigned int hg_major=0, hg_minor=0, hg_patch=0;
+    char hg_version_string[64] = {0};
 
-    if(mode != MARGO_CLIENT_MODE && mode != MARGO_SERVER_MODE) goto err;
+    /* parse json configuration into a local variable; the permanent copy
+     * will be stored in the margo_init_pool_json function
+     */
+    margo_cfg = mochi_cfg_get_component(json_cfg_string, "margo", MARGO_DEFAULT_CFG);
+    if(!margo_cfg)
+        return(MARGO_INSTANCE_NULL);
+
+    ret = mochi_cfg_get_value_int(margo_cfg, "use_progress_thread", &use_progress_thread);
+    if(ret < 0 || use_progress_thread < 0 || use_progress_thread > 1)
+    {
+        fprintf(stderr, "Error: Margo use_progress_thread must be set to 0 or 1\n");
+        mochi_cfg_release_component(margo_cfg);
+        return(MARGO_INSTANCE_NULL);
+    }
+    ret = mochi_cfg_get_value_int(margo_cfg, "rpc_thread_count", &rpc_thread_count);
+    if(ret < 0 || rpc_thread_count < -1)
+    {
+        fprintf(stderr, "Error: Margo rpc_thread_count must be set to -1, 0, or a positive number\n");
+        mochi_cfg_release_component(margo_cfg);
+        return(MARGO_INSTANCE_NULL);
+    }
+
+    /* go into sub-object for Mercury-specific parameters */
+    ret = mochi_cfg_get_object(margo_cfg, "mercury", &hg_cfg);
+    if(ret < 0)
+    {
+        fprintf(stderr, "Error: Mercury configuration not set\n");
+        mochi_cfg_release_component(margo_cfg);
+        return(MARGO_INSTANCE_NULL);
+    }
+    ret = mochi_cfg_get_value_string(hg_cfg, "addr_str", &addr_str);
+    if(ret < 0)
+    {
+        fprintf(stderr, "Error: Margo addr_str not set\n");
+        mochi_cfg_release_component(margo_cfg);
+        return(MARGO_INSTANCE_NULL);
+    }
+    ret = mochi_cfg_get_value_int(hg_cfg, "server_mode", &listen_flag);
+    if(ret < 0 || listen_flag < 0 || listen_flag > 1)
+    {
+        fprintf(stderr, "Error: Margo mode must be set to 0 or 1 (MARGO_CLIENT_MODE or MARGO_SERVER_MODE)\n");
+        mochi_cfg_release_component(margo_cfg);
+        return(MARGO_INSTANCE_NULL);
+    }
+
+    /* did the caller provide an opt struct?  If so honor it for the
+     * json configuration
+     */
+    if(hg_init_info)
+    {
+        mochi_cfg_set_value_int(hg_cfg, "auto_sm", hg_init_info->auto_sm);
+        if(hg_init_info->na_init_info.progress_mode & NA_NO_BLOCK)
+            mochi_cfg_set_value_int(hg_cfg, "na_no_block", 1);
+    }
 
     /* adjust argobots settings to suit Margo */
-    set_argobots_tunables();
+    set_argobots_tunables(margo_cfg);
 
     if (ABT_initialized() == ABT_ERR_UNINITIALIZED)
     {
@@ -197,7 +334,7 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
     }
 
     /* set caller (self) ES to sleep when idle by using sched_wait */
-    ret = ABT_sched_create_basic(ABT_SCHED_BASIC_WAIT, 0, NULL, 
+    ret = ABT_sched_create_basic(ABT_SCHED_BASIC_WAIT, 0, NULL,
         ABT_SCHED_CONFIG_NULL, &self_sched);
     if(ret != ABT_SUCCESS) goto err;
     ret = ABT_xstream_self(&self_xstream);
@@ -257,11 +394,23 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
     hg_class = HG_Init_opt(addr_str, listen_flag, hg_init_info);
     if(!hg_class) goto err;
 
+    HG_Version_get(&hg_major, &hg_minor, &hg_patch);
+    snprintf(hg_version_string, 64, "%u.%u.%u", hg_major, hg_minor, hg_patch);
+    mochi_cfg_set_value_string(hg_cfg, "version", hg_version_string);
+
     hg_context = HG_Context_create(hg_class);
     if(!hg_context) goto err;
 
-    mid = margo_init_pool(progress_pool, rpc_pool, hg_context);
+    /* regenerate json string to pass through to init_pool_json() */
+    init_pool_json_str = mochi_cfg_emit(margo_cfg, "margo");
+    if(!init_pool_json_str) goto err;
+
+    mid = margo_init_pool_json(progress_pool, rpc_pool, hg_context,
+        init_pool_json_str);
     if (mid == MARGO_INSTANCE_NULL) goto err;
+
+    free(init_pool_json_str);
+    mochi_cfg_release_component(margo_cfg);
 
     mid->margo_init = 1;
     mid->owns_progress_pool = use_progress_thread;
@@ -270,42 +419,6 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
     mid->rpc_xstreams = rpc_xstreams;
     mid->num_registered_rpcs = 0;
 
-    /* start profiling if env variable MARGO_ENABLE_PROFILING is set */
-    unsigned int profile = 0;
-    mid->profile_enabled = 0;
-    mid->previous_sparkline_data_collection_time = ABT_get_wtime();
-    mid->sparkline_index = 0;
-
-    if(getenv("MARGO_ENABLE_PROFILING")) {
-      profile = (unsigned int)atoi(getenv("MARGO_ENABLE_PROFILING"));
-      margo_set_param(mid, MARGO_PARAM_ENABLE_PROFILING, &profile);
-    }
-
-    if(profile) {
-       char * name;
-       margo_profile_start(mid);
-
-       GET_SELF_ADDR_STR(mid, name);
-       HASH_JEN(name, strlen(name), mid->self_addr_hash); /*record own address in cache to be used in breadcrumb generation */
-
-       ret = ABT_thread_create(mid->progress_pool, sparkline_data_collection_fn, mid, 
-       ABT_THREAD_ATTR_NULL, &mid->sparkline_data_collection_tid);
-       if(ret != 0)
-         fprintf(stderr, "MARGO_PROFILE: Failed to start sparkline data collection thread. Continuing to profile without sparkline data collection.\n");
-
-    }
-
-    /* start diagnostics if the variable MARGO_ENABLE_DIAGNOSTICS is set */
-    unsigned int diag = 0;
-    mid->diag_enabled = 0;
-
-    if(getenv("MARGO_ENABLE_DIAGNOSTICS")) {
-      diag = (unsigned int)atoi(getenv("MARGO_ENABLE_DIAGNOSTICS"));
-      margo_set_param(mid, MARGO_PARAM_ENABLE_DIAGNOSTICS, &diag);
-    }
-
-    if(diag)
-      margo_diag_start(mid);
 
     return mid;
 
@@ -347,9 +460,22 @@ err:
 margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
     hg_context_t *hg_context)
 {
+    /* NOTE: settings from the existing pools and HG context will
+     * be queried to overrid whatever is in the cfg_string.  This function
+     * is a hybrid of typed and json configuration.
+     */
+    return(margo_init_pool_json(progress_pool, handler_pool, hg_context,
+        MARGO_DEFAULT_CFG_EXT_POOLS));
+}
+
+margo_instance_id margo_init_pool_json(ABT_pool progress_pool, ABT_pool handler_pool,
+    hg_context_t *hg_context, const char* json_cfg_string)
+{
     int ret;
     hg_return_t hret;
     struct margo_instance *mid;
+    char *runtime_addr_str;
+    json_t* hg_cfg;
 
     /* set input offset to include breadcrumb information in Mercury requests */
     hret = HG_Class_set_input_offset(HG_Context_get_class(hg_context), sizeof(uint64_t));
@@ -360,6 +486,13 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
     if(!mid) goto err;
     memset(mid, 0, sizeof(*mid));
 
+    mid->component_cfg = mochi_cfg_get_component(json_cfg_string, "margo", MARGO_DEFAULT_CFG_EXT_POOLS);
+    if(!mid->component_cfg)
+    {
+        fprintf(stderr, "Error: unable to set up margo config.\n");
+        goto err;
+    }
+
     ABT_mutex_create(&mid->finalize_mutex);
     ABT_cond_create(&mid->finalize_cond);
 
@@ -367,7 +500,8 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
     mid->handler_pool = handler_pool;
     mid->hg_class = HG_Context_get_class(hg_context);
     mid->hg_context = hg_context;
-    mid->hg_progress_timeout_ub = DEFAULT_MERCURY_PROGRESS_TIMEOUT_UB;
+    mochi_cfg_get_value_int(mid->component_cfg, "progress_timeout_ub_msec",
+        &mid->hg_progress_timeout_ub);
 
     mid->refcount = 1;
     mid->finalize_cb = NULL;
@@ -414,11 +548,53 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool handler_pool,
     g_num_margo_instances += 1;
     ABT_mutex_unlock(g_num_margo_instances_mtx);
 
+    /* Mercury must already be intialized at this point.  Overwrite the addr
+     * in the json to the actual self address we ended up with.
+     */
+    GET_SELF_ADDR_STR(mid, runtime_addr_str);
+    ret = mochi_cfg_get_object(mid->component_cfg, "mercury", &hg_cfg);
+    if(ret == 0)
+        mochi_cfg_set_value_string(hg_cfg, "addr_str", runtime_addr_str);
+
+    /* override json profiling setting with env var if present */
+    if(getenv("MARGO_ENABLE_PROFILING"))
+    {
+        mochi_cfg_set_value_int(mid->component_cfg,
+            "enable_profiling", atoi(getenv("MARGO_ENABLE_PROFILING")));
+        mid->profile_enabled = atoi(getenv("MARGO_ENABLE_PROFILING"));
+    }
+
+    /* did we end up with profiling enabled? */
+    if(mid->profile_enabled)
+    {
+        char * name;
+        mid->previous_sparkline_data_collection_time = ABT_get_wtime();
+
+        /*record own address in cache to be used in breadcrumb generation */
+        GET_SELF_ADDR_STR(mid, name);
+        HASH_JEN(name, strlen(name), mid->self_addr_hash);
+
+        ret = ABT_thread_create(mid->progress_pool,
+            sparkline_data_collection_fn, mid, ABT_THREAD_ATTR_NULL,
+            &mid->sparkline_data_collection_tid);
+        if(ret != 0)
+            fprintf(stderr, "MARGO_PROFILE: Failed to start sparkline data collection thread. Continuing to profile without sparkline data collection.\n");
+    }
+
+    /* override json diagnostics setting with env var if present */
+    if(getenv("MARGO_ENABLE_DIAGNOSTICS"))
+    {
+        mochi_cfg_set_value_int(mid->component_cfg,
+            "enable_diagnostics", atoi(getenv("MARGO_ENABLE_DIAGNOSTICS")));
+        mid->diag_enabled = atoi(getenv("MARGO_ENABLE_DIAGNOSTICS"));
+    }
+
     return mid;
 
 err:
     if(mid)
     {
+        mochi_cfg_release_component(mid->component_cfg);
         margo_handle_cache_destroy(mid);
         margo_timer_list_free(mid, mid->timer_list);
         ABT_mutex_free(&mid->finalize_mutex);
@@ -1658,6 +1834,7 @@ static void sparkline_data_collection_fn(void* foo)
 {
     struct margo_instance *mid = (struct margo_instance *)foo;
     struct diag_data *stat, *tmp;
+    int sleep_time_msec = 1000;
 
     /* double check that profile collection should run, else, close this ULT */
     if(!mid->profile_enabled) {
@@ -1667,7 +1844,8 @@ static void sparkline_data_collection_fn(void* foo)
 
     while(!mid->hg_progress_shutdown_flag)
     {
-        margo_thread_sleep(mid, MARGO_SPARKLINE_TIMESLICE*1000);
+        mochi_cfg_get_value_int(mid->component_cfg, "profile_sparkline_timeslice_msec", &sleep_time_msec);
+        margo_thread_sleep(mid, sleep_time_msec);
         HASH_ITER(hh, mid->diag_rpc, stat, tmp)
         {
 
@@ -1839,27 +2017,6 @@ static void hg_progress_fn(void* foo)
     return;
 }
 
-
-void margo_diag_start(margo_instance_id mid)
-{
-    mid->diag_enabled = 1;
-}
-
-void margo_profile_start(margo_instance_id mid)
-{
-    mid->profile_enabled = 1;
-}
-
-void margo_diag_stop(margo_instance_id mid)
-{
-    mid->diag_enabled = 0;
-}
-
-void margo_profile_stop(margo_instance_id mid)
-{
-    mid->profile_enabled = 0;
-}
-
 static void print_diag_data(margo_instance_id mid, FILE *file, const char* name, const char *description, struct diag_data *data)
 {
     double avg;
@@ -1977,11 +2134,9 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
         }
     }
 
-    /* TODO: retrieve self addr and include in output */
     /* TODO: support pattern substitution in file name to create unique
      * output files per process
      */
-
     time(&ltime);
 
     fprintf(outfile, "# Margo diagnostics\n");
@@ -2053,11 +2208,9 @@ void margo_profile_dump(margo_instance_id mid, const char* file, int uniquify)
         }
     }
 
-    /* TODO: retrieve self addr and include in output */
     /* TODO: support pattern substitution in file name to create unique
      * output files per process
      */
-
     time(&ltime);
 
     fprintf(outfile, "%u\n", mid->num_registered_rpcs);
@@ -2099,35 +2252,26 @@ void margo_profile_dump(margo_instance_id mid, const char* file, int uniquify)
     return;
 }
 
-void margo_set_param(margo_instance_id mid, int option, const void *param)
+int margo_set_param(margo_instance_id mid, const char *key, const char *value)
 {
-    switch(option)
+    if(strcmp(key, "progress_timeout_ub_msecs") == 0)
     {
-        case MARGO_PARAM_PROGRESS_TIMEOUT_UB:
-            mid->hg_progress_timeout_ub = (*((const unsigned int*)param));
-            break;
-        case MARGO_PARAM_ENABLE_PROFILING:
-            mid->profile_enabled = (*((const unsigned int*)param));
-            break;
-        case MARGO_PARAM_ENABLE_DIAGNOSTICS:
-            mid->diag_enabled = (*((const unsigned int*)param));
-            break;
+        mochi_cfg_set_value_int(mid->component_cfg,
+            "progress_timeout_ub_msecs", atoi(value));
+        mid->hg_progress_timeout_ub = atoi(value);
+        return(0);
     }
 
-    return;
-}
-
-void margo_get_param(margo_instance_id mid, int option, void *param)
-{
-
-    switch(option)
+    if(strcmp(key, "enable_diagnostics") == 0)
     {
-        case MARGO_PARAM_PROGRESS_TIMEOUT_UB:
-            (*((unsigned int*)param)) = mid->hg_progress_timeout_ub;
-            break;
+        mochi_cfg_set_value_int(mid->component_cfg,
+            "enable_diagnostics", atoi(value));
+        mid->diag_enabled = atoi(value);
+        return(0);
     }
 
-    return;
+    /* unknown key, or at least one that cannot be modified at runtime */
+    return(-1);
 }
 
 static hg_return_t margo_handle_cache_init(margo_instance_id mid)
@@ -2135,10 +2279,12 @@ static hg_return_t margo_handle_cache_init(margo_instance_id mid)
     int i;
     struct margo_handle_cache_el *el;
     hg_return_t hret = HG_SUCCESS;
+    int handle_cache_size = 0;
 
+    mochi_cfg_get_value_int(mid->component_cfg, "handle_cache_size", &handle_cache_size);
     ABT_mutex_create(&(mid->handle_cache_mtx));
 
-    for(i = 0; i < DEFAULT_MERCURY_HANDLE_CACHE_SIZE; i++)
+    for(i = 0; i < handle_cache_size; i++)
     {
         el = malloc(sizeof(*el));
         if(!el)
@@ -2508,7 +2654,7 @@ void __margo_internal_pre_wrapper_hooks(margo_instance_id mid, hg_handle_t handl
     ret = HG_Get_input_buf(handle, (void**)&rpc_breadcrumb, NULL);
     assert(ret == HG_SUCCESS);
     *rpc_breadcrumb = le64toh(*rpc_breadcrumb);
-  
+
     /* add the incoming breadcrumb info to a ULT-local key if profiling is enabled */
     if(mid->profile_enabled) {
 
@@ -2546,4 +2692,9 @@ void __margo_internal_post_wrapper_hooks(margo_instance_id mid)
     if(__margo_internal_finalize_requested(mid)) {
         margo_finalize(mid);
     }
+}
+
+char* margo_get_config(margo_instance_id mid)
+{
+    return(mochi_cfg_emit(mid->component_cfg, "margo"));
 }
