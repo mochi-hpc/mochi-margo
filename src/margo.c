@@ -18,6 +18,7 @@
 #include "margo-internal.h"
 #include "margo-bulk-util.h"
 #include "margo-timer.h"
+#include "margo-prio-pool.h"
 #include "utlist.h"
 #include "uthash.h"
 
@@ -171,6 +172,8 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
     ABT_sched progress_sched;
     ABT_sched self_sched;
     ABT_xstream self_xstream;
+    ABT_pool self_pool = ABT_POOL_NULL;
+    ABT_pool_def prio_pool_def;
     ABT_xstream *rpc_xstreams = NULL;
     ABT_sched *rpc_scheds = NULL;
     ABT_xstream rpc_xstream = ABT_XSTREAM_NULL;
@@ -183,6 +186,9 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
     struct margo_instance *mid = MARGO_INSTANCE_NULL;
 
     if(mode != MARGO_CLIENT_MODE && mode != MARGO_SERVER_MODE) goto err;
+
+    /* sets implementation pointers for custom pool */
+    margo_create_prio_pool_def(&prio_pool_def);
 
     /* adjust argobots settings to suit Margo */
     set_argobots_tunables();
@@ -197,7 +203,10 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
     }
 
     /* set caller (self) ES to sleep when idle by using sched_wait */
-    ret = ABT_sched_create_basic(ABT_SCHED_BASIC_WAIT, 0, NULL, 
+    /* TODO: make configurable whether to use this pool or not */
+    ret = ABT_pool_create(&prio_pool_def, ABT_POOL_CONFIG_NULL, &self_pool);
+    if(ret != ABT_SUCCESS) goto err;
+    ret = ABT_sched_create_basic(ABT_SCHED_BASIC_WAIT, 1, &self_pool,
         ABT_SCHED_CONFIG_NULL, &self_sched);
     if(ret != ABT_SUCCESS) goto err;
     ret = ABT_xstream_self(&self_xstream);
@@ -231,9 +240,9 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode, const struct hg
         if (rpc_xstreams == NULL) goto err;
         rpc_scheds = calloc(rpc_thread_count, sizeof(*rpc_scheds));
         if (rpc_scheds == NULL) goto err;
-        ret = ABT_pool_create_basic(ABT_POOL_FIFO_WAIT, ABT_POOL_ACCESS_MPMC, ABT_TRUE, &rpc_pool);
+        ret = ABT_pool_create(&prio_pool_def, ABT_POOL_CONFIG_NULL, &rpc_pool);
         if (ret != ABT_SUCCESS) goto err;
-        for(i=0; i<rpc_thread_count; i++) 
+        for(i=0; i<rpc_thread_count; i++)
         {
             ret = ABT_sched_create_basic(ABT_SCHED_BASIC_WAIT, 1, &rpc_pool,
                ABT_SCHED_CONFIG_NULL, &rpc_scheds[i]);
