@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.63])
-AC_INIT([margo], [0.7], [],[],[]) 
+AC_INIT([margo], [0.8], [],[],[])
 AC_CONFIG_MACRO_DIR([m4])
 LT_INIT
 
@@ -76,7 +76,13 @@ LIBS="$ARGOBOTS_LIBS $LIBS"
 CPPFLAGS="$ARGOBOTS_CFLAGS $CPPFLAGS"
 CFLAGS="$ARGOBOTS_CFLAGS $CFLAGS"
 
-PC_REQUIRES="mercury argobots"
+PKG_CHECK_MODULES([MOCHICFG],[mochi-cfg],[],
+   [AC_MSG_ERROR([Could not find working mochi-cfg installation!])])
+LIBS="$MOCHICFG_LIBS $LIBS"
+CPPFLAGS="$MOCHICFG_CFLAGS $CPPFLAGS"
+CFLAGS="$MOCHICFG_CFLAGS $CFLAGS"
+
+PC_REQUIRES="mercury argobots jansson"
 AC_SUBST([PC_REQUIRES], ["$PC_REQUIRES"])
 
 # turn off a warning that is tripping up our use of utlist at the moment
