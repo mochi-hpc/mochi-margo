@@ -678,6 +678,7 @@ static void margo_cleanup(margo_instance_id mid)
         mid->registered_rpcs = next_rpc;
     }
 
+    mochi_cfg_release_component(mid->component_cfg);
     free(mid);
 }
 
