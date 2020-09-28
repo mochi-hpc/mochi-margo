@@ -176,18 +176,15 @@ static void set_argobots_tunables(json_t *margo_cfg)
     int value;
     int ret;
 
-    ret = mochi_cfg_get_object(margo_cfg, "arogobots", &abt_cfg);
+    ret = mochi_cfg_get_object(margo_cfg, "argobots", &abt_cfg);
     if(ret < 0)
         return;
 
     if (ABT_initialized() != ABT_ERR_UNINITIALIZED)
     {
         /* Argobots is already initialized, so we can no longer influence
-         * these settings.  Mark an invalid value in the json to note that
-         * the values are unknown.
+         * these settings.
          */
-        mochi_cfg_set_value_int(abt_cfg, "abt_mem_max_num_stacks", -999);
-        mochi_cfg_set_value_int(abt_cfg, "abt_thread_stacksize", -999);
         return;
     }
 
@@ -196,9 +193,9 @@ static void set_argobots_tunables(json_t *margo_cfg)
      * causes excess memory consumption in some versions of
      * Argobots.  See
      * https://xgitlab.cels.anl.gov/sds/margo/issues/40 for details.
-     * We therefore set the ABT_MEM_MAX_NUM_STACKS parameter 
+     * We therefore set the ABT_MEM_MAX_NUM_STACKS parameter
      * for Argobots to a low value so that RPC handler threads do not
-     * queue large numbers of stacks for reuse in per-ES data 
+     * queue large numbers of stacks for reuse in per-ES data
      * structures.
      */
     if(!getenv("ABT_MEM_MAX_NUM_STACKS"))
@@ -223,6 +220,7 @@ static void set_argobots_tunables(json_t *margo_cfg)
         putenv(env_str);
     }
 
+    mochi_cfg_release_component(abt_cfg);
     return;
 }
 
@@ -300,6 +298,7 @@ margo_instance_id margo_init_opt_json(const struct hg_init_info *hg_init_info,
     if(ret < 0)
     {
         fprintf(stderr, "Error: Margo addr_str not set\n");
+        mochi_cfg_release_component(hg_cfg);
         mochi_cfg_release_component(margo_cfg);
         return(MARGO_INSTANCE_NULL);
     }
@@ -307,6 +306,7 @@ margo_instance_id margo_init_opt_json(const struct hg_init_info *hg_init_info,
     if(ret < 0 || listen_flag < 0 || listen_flag > 1)
     {
         fprintf(stderr, "Error: Margo mode must be set to 0 or 1 (MARGO_CLIENT_MODE or MARGO_SERVER_MODE)\n");
+        mochi_cfg_release_component(hg_cfg);
         mochi_cfg_release_component(margo_cfg);
         return(MARGO_INSTANCE_NULL);
     }
@@ -419,6 +419,7 @@ margo_instance_id margo_init_opt_json(const struct hg_init_info *hg_init_info,
     mid->rpc_xstreams = rpc_xstreams;
     mid->num_registered_rpcs = 0;
 
+    mochi_cfg_release_component(hg_cfg);
 
     return mid;
 
@@ -454,6 +455,8 @@ err:
         g_num_margo_instances_mtx = ABT_MUTEX_NULL;
         if(g_margo_abt_init) ABT_finalize();
     }
+    if(hg_cfg)
+        mochi_cfg_release_component(hg_cfg);
     return MARGO_INSTANCE_NULL;
 }
 
