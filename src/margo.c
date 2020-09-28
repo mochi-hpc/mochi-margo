@@ -555,6 +555,7 @@ margo_instance_id margo_init_pool_json(ABT_pool progress_pool, ABT_pool handler_
     ret = mochi_cfg_get_object(mid->component_cfg, "mercury", &hg_cfg);
     if(ret == 0)
         mochi_cfg_set_value_string(hg_cfg, "addr_str", runtime_addr_str);
+    free(runtime_addr_str);
 
     /* override json profiling setting with env var if present */
     if(getenv("MARGO_ENABLE_PROFILING"))
