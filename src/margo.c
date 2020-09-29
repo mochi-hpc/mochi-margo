@@ -228,14 +228,24 @@ margo_instance_id margo_init_opt(const char *addr_str, int mode,
     const struct hg_init_info *hg_init_info,
     int use_progress_thread, int rpc_thread_count)
 {
-    char cfg_string[128];
+    int cfg_string_len = 512;
+    int ret;
+    char *cfg_string = NULL;
+    margo_instance_id mid;
+
+    cfg_string = malloc(cfg_string_len);
+    if(!cfg_string)
+        return NULL;
 
     /* NOTE: jansson could be used for more complex encodings, but this one
      * is trivial enough to just do with snprintf()
      */
-    snprintf(cfg_string, 128, "{\"margo\": {\"use_progress_thread\": %d, \"rpc_thread_count\": %d, \"mercury\": {\"addr_str\": \"%s\", \"server_mode\": %d}}}", use_progress_thread, rpc_thread_count, addr_str, mode);
+    ret = snprintf(cfg_string, cfg_string_len, "{\"margo\": {\"use_progress_thread\": %d, \"rpc_thread_count\": %d, \"mercury\": {\"addr_str\": \"%s\", \"server_mode\": %d}}}", use_progress_thread, rpc_thread_count, addr_str, mode);
+    assert(ret < cfg_string_len);
 
-    return(margo_init_opt_json(hg_init_info, cfg_string));
+    mid = margo_init_opt_json(hg_init_info, cfg_string);
+    free(cfg_string);
+    return(mid);
 }
 
 margo_instance_id margo_init_opt_json(const struct hg_init_info *hg_init_info,
