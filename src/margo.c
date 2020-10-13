@@ -220,7 +220,6 @@ static void set_argobots_tunables(json_t *margo_cfg)
         putenv(env_str);
     }
 
-    mochi_cfg_release_component(abt_cfg);
     return;
 }
 
@@ -266,9 +265,9 @@ margo_instance_id margo_init_opt_json(const struct hg_init_info *hg_init_info,
     int i;
     int ret;
     struct margo_instance *mid = MARGO_INSTANCE_NULL;
-    json_t *margo_cfg;
-    json_t *hg_cfg;
-    char *init_pool_json_str;
+    json_t *margo_cfg = NULL;
+    json_t *hg_cfg = NULL;
+    char *init_pool_json_str = NULL;
     int use_progress_thread, rpc_thread_count;
     const char* addr_str;
     unsigned int hg_major=0, hg_minor=0, hg_patch=0;
@@ -308,7 +307,6 @@ margo_instance_id margo_init_opt_json(const struct hg_init_info *hg_init_info,
     if(ret < 0)
     {
         fprintf(stderr, "Error: Margo addr_str not set\n");
-        mochi_cfg_release_component(hg_cfg);
         mochi_cfg_release_component(margo_cfg);
         return(MARGO_INSTANCE_NULL);
     }
@@ -316,7 +314,6 @@ margo_instance_id margo_init_opt_json(const struct hg_init_info *hg_init_info,
     if(ret < 0 || listen_flag < 0 || listen_flag > 1)
     {
         fprintf(stderr, "Error: Margo mode must be set to 0 or 1 (MARGO_CLIENT_MODE or MARGO_SERVER_MODE)\n");
-        mochi_cfg_release_component(hg_cfg);
         mochi_cfg_release_component(margo_cfg);
         return(MARGO_INSTANCE_NULL);
     }
@@ -420,7 +417,9 @@ margo_instance_id margo_init_opt_json(const struct hg_init_info *hg_init_info,
     if (mid == MARGO_INSTANCE_NULL) goto err;
 
     free(init_pool_json_str);
+    init_pool_json_str = NULL;
     mochi_cfg_release_component(margo_cfg);
+    margo_cfg = NULL;
 
     mid->margo_init = 1;
     mid->owns_progress_pool = use_progress_thread;
@@ -429,11 +428,13 @@ margo_instance_id margo_init_opt_json(const struct hg_init_info *hg_init_info,
     mid->rpc_xstreams = rpc_xstreams;
     mid->num_registered_rpcs = 0;
 
-    mochi_cfg_release_component(hg_cfg);
-
     return mid;
 
 err:
+    if(init_pool_json_str)
+        free(init_pool_json_str);
+    if(margo_cfg)
+        mochi_cfg_release_component(margo_cfg);
     if(mid)
     {
         margo_timer_list_free(mid, mid->timer_list);
@@ -465,8 +466,6 @@ err:
         g_num_margo_instances_mtx = ABT_MUTEX_NULL;
         if(g_margo_abt_init) ABT_finalize();
     }
-    if(hg_cfg)
-        mochi_cfg_release_component(hg_cfg);
     return MARGO_INSTANCE_NULL;
 }
 
