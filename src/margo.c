@@ -172,7 +172,7 @@ static void set_argobots_tunables(json_t *margo_cfg);
 static void set_argobots_tunables(json_t *margo_cfg)
 {
     json_t* abt_cfg;
-    char env_str[64] = {0};
+    char *env_str;
     int value;
     int ret;
 
@@ -201,8 +201,15 @@ static void set_argobots_tunables(json_t *margo_cfg)
     if(!getenv("ABT_MEM_MAX_NUM_STACKS"))
     {
         mochi_cfg_get_value_int(abt_cfg, "abt_mem_max_num_stacks", &value);
-        sprintf(env_str, "ABT_MEM_MAX_NUM_STACKS=%d", value);
-        putenv(env_str);
+        env_str = malloc(64);
+        if(env_str)
+        {
+            sprintf(env_str, "ABT_MEM_MAX_NUM_STACKS=%d", value);
+            putenv(env_str);
+        }
+        /* NOTE: do not free env_str; see putenv() man page.  This pointer is
+         * retained in char **environ after putenv() completes.
+         */
     }
 
     /* Rationale: the default stack size in Argobots (as of February 2019)
@@ -216,8 +223,15 @@ static void set_argobots_tunables(json_t *margo_cfg)
     if(!getenv("ABT_THREAD_STACKSIZE"))
     {
         mochi_cfg_get_value_int(abt_cfg, "abt_thread_stacksize", &value);
-        sprintf(env_str, "ABT_THREAD_STACKSIZE=%d", value);
-        putenv(env_str);
+        env_str = malloc(64);
+        if(env_str)
+        {
+            sprintf(env_str, "ABT_THREAD_STACKSIZE=%d", value);
+            putenv(env_str);
+        }
+        /* NOTE: do not free env_str; see putenv() man page.  This pointer is
+         * retained in char **environ after putenv() completes.
+         */
     }
 
     return;
@@ -328,11 +342,12 @@ margo_instance_id margo_init_opt_json(const struct hg_init_info *hg_init_info,
             mochi_cfg_set_value_int(hg_cfg, "na_no_block", 1);
     }
 
-    /* adjust argobots settings to suit Margo */
-    set_argobots_tunables(margo_cfg);
-
+    /* initialize argobots if caller has not done so already */
     if (ABT_initialized() == ABT_ERR_UNINITIALIZED)
     {
+        /* adjust argobots settings to suit Margo */
+        set_argobots_tunables(margo_cfg);
+
         ret = ABT_init(0, NULL); /* XXX: argc/argv not currently used by ABT ... */
         if(ret != 0) goto err;
         g_margo_abt_init = 1;
