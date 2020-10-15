@@ -17,6 +17,7 @@
 #include <margo-config.h>
 
 #include "margo.h"
+#include "margo-logging.h"
 #include "margo-internal.h"
 #include "margo-bulk-util.h"
 #include "margo-timer.h"
@@ -511,7 +512,9 @@ margo_instance_id margo_init_pool_json(ABT_pool progress_pool, ABT_pool handler_
 
     mid = calloc(1,sizeof(*mid));
     if(!mid) goto err;
-    memset(mid, 0, sizeof(*mid));
+    
+    /* setting logger to default */
+    margo_set_logger(mid, NULL);
 
     mid->component_cfg = mochi_cfg_get_component(json_cfg_string, "margo", MARGO_DEFAULT_CFG_EXT_POOLS);
     if(!mid->component_cfg)

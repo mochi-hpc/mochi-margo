@@ -191,19 +191,19 @@ typedef struct
         do { if(mid->logger.debug && mid->log_level <= MARGO_LOG_DEBUG) \
             (mid->logger.debug)(mid->logger.uargs, fmt, ##__VA_ARGS__); } while(0)
 
-#define MARGO_INFO(fmt, ...) \
+#define MARGO_INFO(mid, fmt, ...) \
         do { if(mid->logger.info && mid->log_level <= MARGO_LOG_INFO) \
             (mid->logger.info)(mid->logger.uargs, fmt, ##__VA_ARGS__); } while(0)
 
-#define MARGO_WARNING(fmt, ...) \
+#define MARGO_WARNING(mid, fmt, ...) \
         do { if(mid->logger.warning && mid->log_level <= MARGO_LOG_WARNING) \
             (mid->logger.warning)(mid->logger.uargs, fmt, ##__VA_ARGS__); } while(0)
 
-#define MARGO_ERROR(fmt, ...) \
+#define MARGO_ERROR(mid, fmt, ...) \
         do { if(mid->logger.error && mid->log_level <= MARGO_LOG_ERROR) \
             (mid->logger.error)(mid->logger.uargs, fmt, ##__VA_ARGS__); } while(0)
 
-#define MARGO_CRITICAL(fmt, ...) \
+#define MARGO_CRITICAL(mid, fmt, ...) \
         do { if(mid->logger.criticali && mid->log_level <= MARGO_LOG_CRITICAL) \
             (mid->logger.critical)(mid->logger.uargs, fmt, ##__VA_ARGS__); } while(0)
 
