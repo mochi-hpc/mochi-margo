@@ -11,11 +11,13 @@
 #include <abt.h>
 #include <stdlib.h>
 
+#include <jansson.h>
 #include <margo-config.h>
 #include <time.h>
 #include <math.h>
 
 #include "margo.h"
+#include "margo-logging.h"
 #include "margo-bulk-util.h"
 #include "margo-timer.h"
 #include "utlist.h"
@@ -139,6 +141,10 @@ struct margo_instance
     ABT_mutex diag_rpc_mutex;
 
     json_t *component_cfg;
+
+    /* logging */
+    struct margo_logger logger;
+    margo_log_level     log_level;
 };
 
 struct margo_request_struct {
@@ -176,5 +182,29 @@ typedef struct
     ABT_cond cond;
     char is_asleep;
 } margo_thread_sleep_cb_dat;
+
+#define MARGO_TRACE(mid, fmt, ...) \
+        do { if(mid->logger.trace && mid->log_level <= MARGO_LOG_TRACE) \
+            (mid->logger.trace)(mid->logger.uargs, fmt, ##__VA_ARGS__); } while(0)
+
+#define MARGO_DEBUG(mid, fmt, ...) \
+        do { if(mid->logger.debug && mid->log_level <= MARGO_LOG_DEBUG) \
+            (mid->logger.debug)(mid->logger.uargs, fmt, ##__VA_ARGS__); } while(0)
+
+#define MARGO_INFO(fmt, ...) \
+        do { if(mid->logger.info && mid->log_level <= MARGO_LOG_INFO) \
+            (mid->logger.info)(mid->logger.uargs, fmt, ##__VA_ARGS__); } while(0)
+
+#define MARGO_WARNING(fmt, ...) \
+        do { if(mid->logger.warning && mid->log_level <= MARGO_LOG_WARNING) \
+            (mid->logger.warning)(mid->logger.uargs, fmt, ##__VA_ARGS__); } while(0)
+
+#define MARGO_ERROR(fmt, ...) \
+        do { if(mid->logger.error && mid->log_level <= MARGO_LOG_ERROR) \
+            (mid->logger.error)(mid->logger.uargs, fmt, ##__VA_ARGS__); } while(0)
+
+#define MARGO_CRITICAL(fmt, ...) \
+        do { if(mid->logger.criticali && mid->log_level <= MARGO_LOG_CRITICAL) \
+            (mid->logger.critical)(mid->logger.uargs, fmt, ##__VA_ARGS__); } while(0)
 
 #endif

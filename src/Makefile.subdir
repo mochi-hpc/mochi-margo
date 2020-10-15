@@ -1,5 +1,6 @@
 src_libmargo_la_SOURCES += \
  src/margo.c \
+ src/margo-logging.c \
  src/margo-timer.h \
  src/margo-timer.c \
  src/margo-bulk-pool.c
