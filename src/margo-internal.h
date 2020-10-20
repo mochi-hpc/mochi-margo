@@ -183,28 +183,11 @@ typedef struct
     char is_asleep;
 } margo_thread_sleep_cb_dat;
 
-#define MARGO_TRACE(mid, fmt, ...) \
-        do { if(mid->logger.trace && mid->log_level <= MARGO_LOG_TRACE) \
-            (mid->logger.trace)(mid->logger.uargs, fmt, ##__VA_ARGS__); } while(0)
-
-#define MARGO_DEBUG(mid, fmt, ...) \
-        do { if(mid->logger.debug && mid->log_level <= MARGO_LOG_DEBUG) \
-            (mid->logger.debug)(mid->logger.uargs, fmt, ##__VA_ARGS__); } while(0)
-
-#define MARGO_INFO(mid, fmt, ...) \
-        do { if(mid->logger.info && mid->log_level <= MARGO_LOG_INFO) \
-            (mid->logger.info)(mid->logger.uargs, fmt, ##__VA_ARGS__); } while(0)
-
-#define MARGO_WARNING(mid, fmt, ...) \
-        do { if(mid->logger.warning && mid->log_level <= MARGO_LOG_WARNING) \
-            (mid->logger.warning)(mid->logger.uargs, fmt, ##__VA_ARGS__); } while(0)
-
-#define MARGO_ERROR(mid, fmt, ...) \
-        do { if(mid->logger.error && mid->log_level <= MARGO_LOG_ERROR) \
-            (mid->logger.error)(mid->logger.uargs, fmt, ##__VA_ARGS__); } while(0)
-
-#define MARGO_CRITICAL(mid, fmt, ...) \
-        do { if(mid->logger.criticali && mid->log_level <= MARGO_LOG_CRITICAL) \
-            (mid->logger.critical)(mid->logger.uargs, fmt, ##__VA_ARGS__); } while(0)
+#define MARGO_TRACE margo_trace 
+#define MARGO_DEBUG margo_debug
+#define MARGO_INFO margo_info
+#define MARGO_WARNING margo_warning
+#define MARGO_ERROR margo_error
+#define MARGO_CRITICAL margo_critical
 
 #endif
