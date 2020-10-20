@@ -11,6 +11,7 @@
 #include <ctype.h>
 #include <abt.h>
 #include <margo.h>
+#include <margo-logging.h>
 
 static int use_abt_sleep = 0;
 static int sleep_seconds = 2;
@@ -55,6 +56,8 @@ int main(int argc, char **argv)
     /* NOTE: we don't use RPC handlers, so no need for an RPC pool */
     /***************************************/
     mid = margo_init("tcp", MARGO_CLIENT_MODE, 0, 0);
+//    margo_set_log_level(mid, MARGO_LOG_TRACE);
+
     if(mid == MARGO_INSTANCE_NULL)
     {
         /* if tcp didn't work, try sm */

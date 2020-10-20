@@ -519,7 +519,7 @@ margo_instance_id margo_init_pool_json(ABT_pool progress_pool, ABT_pool handler_
     mid->component_cfg = mochi_cfg_get_component(json_cfg_string, "margo", MARGO_DEFAULT_CFG_EXT_POOLS);
     if(!mid->component_cfg)
     {
-        fprintf(stderr, "Error: unable to set up margo config.\n");
+        MARGO_ERROR(MARGO_INSTANCE_NULL, "Unable to set up margo config");
         goto err;
     }
 
@@ -608,8 +608,11 @@ margo_instance_id margo_init_pool_json(ABT_pool progress_pool, ABT_pool handler_
         ret = ABT_thread_create(mid->progress_pool,
             sparkline_data_collection_fn, mid, ABT_THREAD_ATTR_NULL,
             &mid->sparkline_data_collection_tid);
-        if(ret != 0)
-            fprintf(stderr, "MARGO_PROFILE: Failed to start sparkline data collection thread. Continuing to profile without sparkline data collection.\n");
+        if(ret != 0) {
+            MARGO_WARNING(MARGO_INSTANCE_NULL,
+                "Failed to start sparkline data collection thread, "
+                "continuing to profile without sparkline data collection");
+        }
     }
 
     /* override json diagnostics setting with env var if present */
@@ -639,10 +642,12 @@ err:
 
 static void margo_cleanup(margo_instance_id mid)
 {
+    MARGO_TRACE(mid, "Entering margo_cleanup");
     int i;
     struct margo_registered_rpc *next_rpc;
 
     /* call finalize callbacks */
+    MARGO_TRACE(mid, "Calling finalize callbacks");
     struct margo_finalize_cb* fcb = mid->finalize_cb;
     while(fcb) {
         mid->finalize_cb = fcb->next;
@@ -659,12 +664,14 @@ static void margo_cleanup(margo_instance_id mid)
 
     if (mid->owns_progress_pool)
     {
+        MARGO_TRACE(mid, "Joining progress xstream");
         ABT_xstream_join(mid->progress_xstream);
         ABT_xstream_free(&mid->progress_xstream);
     }
 
     if (mid->num_handler_pool_threads > 0)
     {
+        MARGO_TRACE(mid, "Joining rpc xstreams");
         for (i = 0; i < mid->num_handler_pool_threads; i++)
         {
             ABT_xstream_join(mid->rpc_xstreams[i]);
@@ -682,10 +689,14 @@ static void margo_cleanup(margo_instance_id mid)
 
     if (mid->margo_init)
     {
-        if (mid->hg_context)
+        if (mid->hg_context) {
+            MARGO_TRACE(mid, "Destroying mercury context");
             HG_Context_destroy(mid->hg_context);
-        if (mid->hg_class)
+        }
+        if (mid->hg_class) {
+            MARGO_TRACE(mid, "Destroying mercury class");
             HG_Finalize(mid->hg_class);
+        }
 
         if(g_num_margo_instances_mtx != ABT_MUTEX_NULL) {
             ABT_mutex_lock(g_num_margo_instances_mtx);
@@ -696,7 +707,10 @@ static void margo_cleanup(margo_instance_id mid)
                 ABT_mutex_unlock(g_num_margo_instances_mtx);
                 ABT_mutex_free(&g_num_margo_instances_mtx);
                 g_num_margo_instances_mtx = ABT_MUTEX_NULL;
-                if(g_margo_abt_init) ABT_finalize();
+                if(g_margo_abt_init) {
+                    MARGO_TRACE(mid, "Finalizing argobots");
+                    ABT_finalize();
+                }
             }
         }
     }
@@ -709,11 +723,13 @@ static void margo_cleanup(margo_instance_id mid)
     }
 
     mochi_cfg_release_component(mid->component_cfg);
+    MARGO_TRACE(mid, "Completed margo_cleanup");
     free(mid);
 }
 
 void margo_finalize(margo_instance_id mid)
 {
+    MARGO_TRACE(mid, "Calling margo_finalize");
     int do_cleanup;
 
     /* check if there are pending operations */
@@ -722,10 +738,12 @@ void margo_finalize(margo_instance_id mid)
     pending = mid->pending_operations;
     ABT_mutex_unlock(mid->pending_operations_mtx);
     if(pending) {
+        MARGO_TRACE(mid, "Pending operations, exiting margo_finalize");
         mid->finalize_requested = 1;
         return;
     }
 
+    MARGO_TRACE(mid, "Executing pre-finalize callbacks");
     /* before exiting the progress loop, pre-finalize callbacks need to be called */
     struct margo_finalize_cb* fcb = mid->prefinalize_cb;
     while(fcb) {
@@ -740,20 +758,26 @@ void margo_finalize(margo_instance_id mid)
     mid->hg_progress_shutdown_flag = 1;
 
     /* wait for it to shutdown cleanly */
+    MARGO_TRACE(mid, "Waiting for progress thread to complete");
     ABT_thread_join(mid->hg_progress_tid);
     ABT_thread_free(&mid->hg_progress_tid);
 
     /* shut down pending timers */
+    MARGO_TRACE(mid, "Cleaning up pending timers");
     margo_timer_list_free(mid, mid->timer_list);
 
     if(mid->profile_enabled) {
-      ABT_thread_join(mid->sparkline_data_collection_tid);
-      ABT_thread_free(&mid->sparkline_data_collection_tid);
-      margo_profile_dump(mid, "profile", 1);
+        MARGO_TRACE(mid, "Waiting for sparkline data collection thread to complete");
+        ABT_thread_join(mid->sparkline_data_collection_tid);
+        ABT_thread_free(&mid->sparkline_data_collection_tid);
+        MARGO_TRACE(mid, "Dumping profile");
+        margo_profile_dump(mid, "profile", 1);
     }
     
-    if(mid->diag_enabled) 
-      margo_diag_dump(mid, "profile", 1);
+    if(mid->diag_enabled) {
+        MARGO_TRACE(mid, "Dumping diagnostics");
+        margo_diag_dump(mid, "profile", 1);
+    }
 
     ABT_mutex_lock(mid->finalize_mutex);
     mid->finalize_flag = 1;
@@ -770,11 +794,13 @@ void margo_finalize(margo_instance_id mid)
     if (do_cleanup)
         margo_cleanup(mid);
 
+    MARGO_TRACE(mid, "Finalize completed");
     return;
 }
 
 void margo_wait_for_finalize(margo_instance_id mid)
 {
+    MARGO_TRACE(mid, "Start waiting for finalize");
     int do_cleanup;
 
     ABT_mutex_lock(mid->finalize_mutex);
@@ -792,6 +818,7 @@ void margo_wait_for_finalize(margo_instance_id mid)
     if (do_cleanup)
         margo_cleanup(mid);
 
+    MARGO_TRACE(mid, "Done waiting for finalize");
     return;
 }
 
@@ -1998,7 +2025,7 @@ static void hg_progress_fn(void* foo)
             else
             {
                 /* TODO: error handling */
-                fprintf(stderr, "WARNING: unexpected return code (%d) from HG_Progress()\n", ret);
+                MARGO_CRITICAL(mid, "unexpected return code (%d) from HG_Progress()", ret);
                 assert(0);
             }
         }
@@ -2037,7 +2064,7 @@ static void hg_progress_fn(void* foo)
             if(ret != HG_SUCCESS && ret != HG_TIMEOUT)
             {
                 /* TODO: error handling */
-                fprintf(stderr, "WARNING: unexpected return code (%d) from HG_Progress()\n", ret);
+                MARGO_CRITICAL(mid, "unexpected return code (%d) from HG_Progress()\n", ret);
                 assert(0);
             }
         }
