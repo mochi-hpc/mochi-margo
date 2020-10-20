@@ -9,7 +9,7 @@
 static margo_log_level global_log_level = MARGO_LOG_ERROR;
 
 static void _margo_log(void* uargs, const char* str) {
-    fprintf(stderr, "%s", str);
+    fprintf(stderr, "%s\n", str);
 }
 
 static struct margo_logger global_logger = {
@@ -32,11 +32,11 @@ static struct margo_logger global_logger = {
         va_list args2; \
         va_copy(args2, args1); \
         size_t msg_size = vsnprintf(NULL, 0, fmt, args1); \
-        const size_t header_size = sizeof(#__level__)+3; \
+        const size_t header_size = sizeof(#__level__)+2; \
         char buf[msg_size+header_size+1]; \
         va_end(args1); \
-        snprintf(buf, header_size, "[%s] ", #__level__); \
-        vsnprintf(buf+header_size, msg_size, fmt, args2); \
+        snprintf(buf, header_size+1, "[%s] ", #__level__); \
+        vsnprintf(buf+header_size, msg_size+1, fmt, args2); \
         if(mid && mid->logger.__level__) mid->logger.__level__(mid->logger.uargs, buf); \
         else if(global_logger.__level__) global_logger.__level__(global_logger.uargs, buf); \
         va_end(args2); \
