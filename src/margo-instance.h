@@ -6,6 +6,7 @@
 #ifndef __MARGO_INTERNAL_H
 #define __MARGO_INTERNAL_H
 #include <assert.h>
+#include <stdbool.h>
 #include <unistd.h>
 #include <errno.h>
 #include <abt.h>
@@ -23,17 +24,20 @@
 #include "utlist.h"
 #include "uthash.h"
 
+#define MARGO_OWNS_HG_CLASS   0x1
+#define MARGO_OWNS_HG_CONTEXT 0x2
+
 /* Structure to store timing information */
 struct diag_data
 {
     /* breadcrumb stats */
-    breadcrumb_stats stats;
+    margo_breadcrumb_stats stats;
     
     /* origin or target */
-    breadcrumb_type type;
+    margo_breadcrumb_type type;
 
     uint64_t rpc_breadcrumb;  /* identifier for rpc and it's ancestors */
-    struct global_breadcrumb_key key;
+    struct margo_global_breadcrumb_key key;
 
     /* used to combine rpc_breadcrumb, addr_hash and provider_id to create a unique key for HASH_ADD inside margo_breadcrumb_measure */
     __uint128_t x;
@@ -70,44 +74,59 @@ struct margo_registered_rpc
 
 struct margo_instance
 {
+    /* json config */
+    json_t *json_cfg;
+
     /* mercury/argobots state */
-    hg_context_t *hg_context;
-    hg_class_t *hg_class;
-    ABT_pool handler_pool;
-    ABT_pool progress_pool;
+    hg_class_t   *hg_class; // keep
+    hg_context_t *hg_context; // keep
+    uint8_t       hg_ownership; // added
+//    ABT_pool      handler_pool; // remove (replaced with rpc_pool) bellow
+    ABT_pool      progress_pool; // keep
+    ABT_pool      rpc_pool; // added
+
+    /* xstreams and pools built from argobots config */
+    ABT_pool*     abt_pools; // added
+    ABT_xstream*  abt_xstreams; // added
+    unsigned      num_abt_pools; // added
+    unsigned      num_abt_xstreams; // added
+    bool*         owns_abt_xstream; // added
 
     /* internal to margo for this particular instance */
-    int margo_init;
-    ABT_thread hg_progress_tid;
-    ABT_thread sparkline_data_collection_tid;
-    int hg_progress_shutdown_flag;
-    ABT_xstream progress_xstream;
-    int owns_progress_pool;
-    ABT_xstream *rpc_xstreams;
-    int num_handler_pool_threads;
-    int hg_progress_timeout_ub;
-    uint16_t num_registered_rpcs;  /* number of registered rpc's by all providers on this instance */
+//    int margo_init; // remove
+    ABT_thread hg_progress_tid; // keep
+    int hg_progress_shutdown_flag; // keep
+    int hg_progress_timeout_ub; // keep
 
+    /*
+    ABT_xstream progress_xstream; // remove
+    int owns_progress_pool; // remove
+    ABT_xstream *rpc_xstreams; // remove
+    int num_handler_pool_threads; // remove
+*/
+
+    uint16_t num_registered_rpcs;  // keep /* number of registered rpc's by all providers on this instance */
     /* list of rpcs registered on this instance for debugging and profiling purposes */
     struct margo_registered_rpc *registered_rpcs;
 
+
     /* control logic for callers waiting on margo to be finalized */
-    int finalize_flag;
-    int refcount;
-    ABT_mutex finalize_mutex;
-    ABT_cond finalize_cond;
-    struct margo_finalize_cb* finalize_cb;
-    struct margo_finalize_cb* prefinalize_cb;
+    int finalize_flag; // keep
+    int refcount; // keep
+    ABT_mutex finalize_mutex; // keep
+    ABT_cond finalize_cond; // keep
+    struct margo_finalize_cb* finalize_cb; // keep
+    struct margo_finalize_cb* prefinalize_cb; // keep
 
     /* control logic to prevent margo_finalize from destroying
        the instance when some operations are pending */
-    unsigned pending_operations;
-    ABT_mutex pending_operations_mtx;
-    int finalize_requested;
+    unsigned pending_operations; // keep
+    ABT_mutex pending_operations_mtx; // keep
+    int finalize_requested; // keep
 
     /* control logic for shutting down */
     hg_id_t shutdown_rpc_id;
-    int enable_remote_shutdown;
+    bool enable_remote_shutdown;
 
     /* timer data */
     struct margo_timer_list* timer_list;
@@ -116,12 +135,17 @@ struct margo_instance
     struct margo_handle_cache_el *used_handle_hash;
     ABT_mutex handle_cache_mtx; /* mutex protecting access to above caches */
 
+    /* logging */
+    struct margo_logger logger;
+    margo_log_level     log_level;
+
     /* optional diagnostics data tracking */
     /* NOTE: technically the following fields are subject to races if they
      * are updated from more than one thread at a time.  We will be careful
      * to only update the counters from the progress_fn,
      * which will serialize access.
      */
+    ABT_thread sparkline_data_collection_tid;
     int diag_enabled;
     int profile_enabled;
     uint64_t self_addr_hash;
@@ -134,12 +158,6 @@ struct margo_instance
     struct diag_data diag_bulk_create_elapsed;
     struct diag_data *diag_rpc;
     ABT_mutex diag_rpc_mutex;
-
-    json_t *json_cfg;
-
-    /* logging */
-    struct margo_logger logger;
-    margo_log_level     log_level;
 };
 
 struct margo_request_struct {
@@ -165,6 +183,8 @@ struct lookup_cb_evt
     hg_return_t hret;
     hg_addr_t addr;
 };
+
+MERCURY_GEN_PROC(margo_shutdown_out_t, ((int32_t)(ret)))
 
 typedef struct
 {

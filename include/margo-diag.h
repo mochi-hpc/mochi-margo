@@ -19,46 +19,22 @@
 extern "C" {
 #endif
 
-#define GET_SELF_ADDR_STR(__mid, __addr_str) do { \
-     hg_addr_t __self_addr; \
-     hg_size_t __size; \
-     __addr_str = NULL; \
-     if (margo_addr_self(__mid, &__self_addr) != HG_SUCCESS) break; \
-     if (margo_addr_to_string(__mid, NULL, &__size, __self_addr) != HG_SUCCESS) { \
-         margo_addr_free(__mid, __self_addr); \
-         break; \
-     } \
-     if ((__addr_str = malloc(__size)) == NULL) { \
-         margo_addr_free(__mid, __self_addr); \
-         break; \
-     } \
-     if (margo_addr_to_string(__mid, __addr_str, &__size, __self_addr) != HG_SUCCESS) { \
-         free(__addr_str); \
-         __addr_str = NULL; \
-         margo_addr_free(__mid, __self_addr); \
-         break; \
-     } \
-     margo_addr_free(__mid, __self_addr); \
-} while(0)
-
-/******************************************************************************************************/
-
 /* used to identify a globally unique breadcrumb */
-struct global_breadcrumb_key
+struct margo_global_breadcrumb_key
 {
-  uint64_t rpc_breadcrumb; /* a.k.a RPC callpath */
-  uint64_t addr_hash; /* hash of server addr */
-  uint16_t provider_id; /* provider_id within a server. NOT a globally unique identifier */
+    uint64_t rpc_breadcrumb; /* a.k.a RPC callpath */
+    uint64_t addr_hash; /* hash of server addr */
+    uint16_t provider_id; /* provider_id within a server. NOT a globally unique identifier */
 };
 
-enum breadcrumb_type
+enum margo_breadcrumb_type
 {
-  origin, target
+    origin, target
 };
 
-typedef enum breadcrumb_type breadcrumb_type;
+typedef enum margo_breadcrumb_type margo_breadcrumb_type;
 
-struct breadcrumb_stats
+struct margo_breadcrumb_stats
 {
     /* stats for breadcrumb call times */
     double min;
@@ -79,17 +55,17 @@ struct breadcrumb_stats
     unsigned long count;
 };
 
-typedef struct breadcrumb_stats breadcrumb_stats;
+typedef struct margo_breadcrumb_stats margo_breadcrumb_stats;
 
 /* structure to store breadcrumb snapshot, for consumption outside of margo.
    reflects the margo-internal structure used to hold diagnostic data */
 struct margo_breadcrumb
 {
-    breadcrumb_stats stats;
+    margo_breadcrumb_stats stats;
     /* 0 is this is a origin-side breadcrumb, 1 if this is a target-side breadcrumb */
-    breadcrumb_type type;
+    margo_breadcrumb_type type;
 
-    struct global_breadcrumb_key key;
+    struct margo_global_breadcrumb_key key;
 
     struct margo_breadcrumb* next;
 };
@@ -97,7 +73,7 @@ struct margo_breadcrumb
 /* snapshot contains linked list of breadcrumb data */
 struct margo_breadcrumb_snapshot
 {
-  struct margo_breadcrumb* ptr;
+    struct margo_breadcrumb* ptr;
 };
 
 

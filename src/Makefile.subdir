@@ -1,5 +1,6 @@
 src_libmargo_la_SOURCES += \
- src/margo.c \
+ src/margo-core.c \
+ src/margo-diag.c \
  src/margo-bulk-pool.c \
  src/margo-globals.c \
  src/margo-handle-cache.c \

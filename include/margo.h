@@ -16,7 +16,6 @@ extern "C" {
 #include <mercury_bulk.h>
 #include <mercury_macros.h>
 #include <abt.h>
-
 #include <margo-diag.h>
 
 #define DEPRECATED(msg) __attribute__((deprecated(msg)))
@@ -165,6 +164,30 @@ margo_instance_id margo_init(
     int rpc_thread_count);
 
 /**
+ * Initializes a margo instance using a margo_init_info struct to provide arguments.
+ *
+ * @param args Arguments
+ * @param address Address or protocol
+ * @param mode MARGO_CLIENT_MODE or MARGO_SERVER_MODE
+ *
+ * @return a margo_instance_id or MARGO_INSTANCE_NULL in case of failure.
+ * 
+ * NOTE: if you are configuring Argobots pools yourself before
+ * passing them into this function, please consider setting
+ * ABT_MEM_MAX_NUM_STACKS to a low value (like 8) either in your
+ * environment or programmatically with putenv() in your code before
+ * creating the pools to prevent excess memory consumption under
+ * load from producer/consumer patterns across execution streams that
+ * fail to utilize per-execution stream stack caches.  See
+ * https://xgitlab.cels.anl.gov/sds/margo/issues/40 for details.
+ * The margo_init() function does this automatically.
+ */
+margo_instance_id margo_init_ext(
+        const char* address,
+        int mode,
+        const struct margo_init_info* args);
+
+/**
  * Initializes margo library with custom Mercury options.
  * @param [in] addr_str            Mercury host address with port number
  * @param [in] mode                Mode to run Margo in:
@@ -197,11 +220,6 @@ margo_instance_id margo_init_opt(
     int use_progress_thread,
     int rpc_thread_count) DEPRECATED("use margo_init_ext instead");
 
-/* same as above, but with configuration expressed via json */
-margo_instance_id margo_init_opt_json(
-    const struct hg_init_info *hg_init_info,
-    const char* json_cfg_string);
-
 /**
  * Initializes margo library from given argobots and Mercury instances.
  * @param [in] progress_pool Argobots pool to drive communication
@@ -223,40 +241,6 @@ margo_instance_id margo_init_pool(
     ABT_pool progress_pool,
     ABT_pool handler_pool,
     hg_context_t *hg_context) DEPRECATED("use margo_init_ext instead");
-
-/**
- * same as margo_init_pool() except that it has an additional argument to
- * accept a json configuration string
- */
-margo_instance_id margo_init_pool_json(
-    ABT_pool progress_pool,
-    ABT_pool handler_pool,
-    hg_context_t *hg_context,
-    const char* json_cfg_string);
-
-/**
- * Initializes a margo instance using a margo_init_info struct to provide arguments.
- *
- * @param args Arguments
- * @param address Address or protocol
- * @param mode MARGO_CLIENT_MODE or MARGO_SERVER_MODE
- *
- * @return a margo_instance_id or MARGO_INSTANCE_NULL in case of failure.
- * 
- * NOTE: if you are configuring Argobots pools yourself before
- * passing them into this function, please consider setting
- * ABT_MEM_MAX_NUM_STACKS to a low value (like 8) either in your
- * environment or programmatically with putenv() in your code before
- * creating the pools to prevent excess memory consumption under
- * load from producer/consumer patterns across execution streams that
- * fail to utilize per-execution stream stack caches.  See
- * https://xgitlab.cels.anl.gov/sds/margo/issues/40 for details.
- * The margo_init() function does this automatically.
- */
-margo_instance_id margo_init_ext(
-        const char* address,
-        int mode,
-        const struct margo_init_info* args);
 
 /**
  * Shuts down margo library and its underlying abt and mercury resources

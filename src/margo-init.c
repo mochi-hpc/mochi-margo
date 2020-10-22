@@ -9,6 +9,10 @@
 #include <margo-logging.h>
 #include <jansson.h>
 #include "margo-instance.h"
+#include "margo-progress.h"
+#include "margo-timer.h"
+#include "margo-diag-internal.h"
+#include "margo-handle-cache.h"
 #include "margo-globals.h"
 #include "margo-macros.h"
 
@@ -49,6 +53,10 @@ static int create_xstream_from_config(
 static void set_argobots_environment_variables(
         json_t* config);
 
+// Shutdown logic for a margo instance
+static void remote_shutdown_ult(hg_handle_t handle);
+static DECLARE_MARGO_RPC_HANDLER(remote_shutdown_ult);
+
 
 margo_instance_id margo_init_ext(
         const char* address,
@@ -64,17 +72,18 @@ margo_instance_id margo_init_ext(
     hg_return_t hret;
     margo_instance_id mid = MARGO_INSTANCE_NULL;
 
-    hg_class_t* hg_class             = NULL;
-    hg_context_t* hg_context         = NULL;
-    struct hg_init_info hg_init_info = { 0 };
-    hg_addr_t self_addr              = HG_ADDR_NULL;
-    ABT_pool* pools                  = NULL;
-    size_t num_pools                 = 0;
-    ABT_xstream* xstreams            = NULL;
-    bool* owns_xstream               = NULL;
-    size_t num_xstreams              = 0;
-    ABT_pool progress_pool           = ABT_POOL_NULL;
-    ABT_pool rpc_pool                = ABT_POOL_NULL;
+    hg_class_t*         hg_class      = NULL;
+    hg_context_t*       hg_context    = NULL;
+    uint8_t             hg_ownership  = 0;
+    struct hg_init_info hg_init_info  = { 0 };
+    hg_addr_t           self_addr     = HG_ADDR_NULL;
+    ABT_pool*           pools         = NULL;
+    size_t              num_pools     = 0;
+    ABT_xstream*        xstreams      = NULL;
+    bool*               owns_xstream  = NULL;
+    size_t              num_xstreams  = 0;
+    ABT_pool            progress_pool = ABT_POOL_NULL;
+    ABT_pool            rpc_pool      = ABT_POOL_NULL;
 
     if(args.json_config) {
         // read JSON config from provided string argument
@@ -120,6 +129,7 @@ margo_instance_id margo_init_ext(
             MARGO_ERROR(0, "Could not initialize hg_class");
             goto error;
         }
+        hg_ownership |= MARGO_OWNS_HG_CLASS;
     }
 
     // handle hg_context
@@ -133,6 +143,7 @@ margo_instance_id margo_init_ext(
             MARGO_ERROR(0, "Could not initialize hg_context");
             goto error;
         }
+        hg_ownership |= MARGO_OWNS_HG_CONTEXT;
     }
 
     // updating config with address and listening fields
@@ -223,13 +234,130 @@ margo_instance_id margo_init_ext(
         goto error;
     }
 
-    // XXX
+    // allocate margo instance
+    MARGO_TRACE(0, "Allocating margo instance");
+    mid = calloc(1, sizeof(*mid));
+    if(!mid) {
+        MARGO_ERROR(0, "Could not allocate margo instance");
+        goto error;
+    }
+
+    int progress_timeout_ub = json_integer_value(json_object_get(config, "progress_timeout_ub_msec"));
+    int handle_cache_size = json_integer_value(json_object_get(config, "handle_cache_size"));
+    int diag_enabled = json_boolean_value(json_object_get(config, "enable_diagnostics"));
+    int profile_enabled = json_boolean_value(json_object_get(config, "enable_profiling"));
+
+    mid->hg_class               = hg_class;
+    mid->hg_context             = hg_context;
+    mid->hg_ownership           = hg_ownership;
+    mid->progress_pool          = progress_pool;
+    mid->rpc_pool               = rpc_pool;
+
+    mid->abt_pools              = pools;
+    mid->abt_xstreams           = xstreams;
+    mid->num_abt_pools          = num_pools;
+    mid->num_abt_xstreams       = num_xstreams;
+    mid->owns_abt_xstream       = owns_xstream;
+
+    mid->hg_progress_tid        = ABT_THREAD_NULL;
+    mid->hg_progress_shutdown_flag = 0;
+    mid->hg_progress_timeout_ub = progress_timeout_ub;
+
+    mid->num_registered_rpcs    = 0;
+    mid->registered_rpcs        = NULL;
+
+    mid->finalize_flag          = 0;
+    mid->refcount               = 1;
+    ABT_mutex_create(&mid->finalize_mutex);
+    ABT_cond_create(&mid->finalize_cond);
+    mid->finalize_cb            = NULL;
+    mid->prefinalize_cb         = NULL;
+
+    mid->pending_operations     = 0;
+    ABT_mutex_create(&mid->pending_operations_mtx);
+    mid->finalize_requested     = 0;
+
+    mid->shutdown_rpc_id        = 0;
+    mid->enable_remote_shutdown = 0;
+
+    mid->timer_list             = __margo_timer_list_create();
+
+    mid->free_handle_list       = NULL;
+    mid->used_handle_hash       = NULL;
+    ABT_mutex_create(&mid->handle_cache_mtx);
+    hret = __margo_handle_cache_init(mid, handle_cache_size);
+    if(hret != HG_SUCCESS) goto error;
+
+    margo_set_logger(mid, NULL);
+
+    mid->shutdown_rpc_id = MARGO_REGISTER(mid, "__shutdown__",
+            void, margo_shutdown_out_t, remote_shutdown_ult);
+
+    MARGO_TRACE(0, "Starting progress loop");
+    ret = ABT_thread_create(mid->progress_pool, __margo_hg_progress_fn, mid,
+            ABT_THREAD_ATTR_NULL, &mid->hg_progress_tid);
+    if(ret != ABT_SUCCESS) goto error;
+
+    /* TODO the initialization code bellow (until END) should probably be put in a
+     * separate module that deals with diagnostics and profiling */
+
+    /* register thread local key to track RPC breadcrumbs across threads */
+    /* NOTE: we are registering a global key, even though init could be called
+     * multiple times for different margo instances.  As of May 2019 this doesn't
+     * seem to be a problem to call ABT_key_create() multiple times.
+     */
+    ret = ABT_key_create(free, &g_margo_rpc_breadcrumb_key);
+    if(ret != ABT_SUCCESS) goto error;
+
+    ret = ABT_key_create(free, &g_margo_target_timing_key);
+    if(ret != ABT_SUCCESS) goto error;
+
+    mid->sparkline_data_collection_tid = ABT_THREAD_NULL;
+    mid->diag_enabled                  = diag_enabled;
+    mid->profile_enabled               = profile_enabled;
+    ABT_mutex_create(&mid->diag_rpc_mutex);
+
+    if(profile_enabled) {
+        char * name;
+        mid->previous_sparkline_data_collection_time = ABT_get_wtime();
+
+        // record own address in cache to be used in breadcrumb generation
+        GET_SELF_ADDR_STR(mid, name);
+        HASH_JEN(name, strlen(name), mid->self_addr_hash);
+
+        ret = ABT_thread_create(mid->progress_pool,
+            __margo_sparkline_data_collection_fn, mid, ABT_THREAD_ATTR_NULL,
+            &mid->sparkline_data_collection_tid);
+        if(ret != ABT_SUCCESS) {
+            MARGO_WARNING(0,
+                "Failed to start sparkline data collection thread, "
+                "continuing to profile without sparkline data collection");
+        }
+    }
+
+    /* END diagnostics/profiling initialization */
+
+    // increment the number of margo instances
+    if(g_margo_num_instances_mtx == ABT_MUTEX_NULL)
+        ABT_mutex_create(&g_margo_num_instances_mtx);
+    ABT_mutex_lock(g_margo_num_instances_mtx);
+    g_margo_num_instances += 1;
+    ABT_mutex_unlock(g_margo_num_instances_mtx);
 
 finish:
     if(self_addr != HG_ADDR_NULL) HG_Addr_free(hg_class, self_addr);
     return mid;
 
 error:
+    if(mid) {
+        __margo_handle_cache_destroy(mid);
+        __margo_timer_list_free(mid, mid->timer_list);
+        ABT_mutex_free(&mid->finalize_mutex);
+        ABT_cond_free(&mid->finalize_cond);
+        ABT_mutex_free(&mid->pending_operations_mtx);
+        ABT_mutex_free(&mid->diag_rpc_mutex);
+        free(mid);
+    }
     for(unsigned i = 0; i < num_xstreams; i++) {
         if(xstreams[i] && owns_xstream[i]) {
             ABT_xstream_join(xstreams[i]);
@@ -237,6 +365,7 @@ error:
         }
     }
     free(xstreams);
+    free(owns_xstream);
     free(pools);
     if(config) json_decref(config);
     if(self_addr != HG_ADDR_NULL) HG_Addr_free(hg_class, self_addr);
@@ -895,3 +1024,19 @@ static void set_argobots_environment_variables(json_t* config)
     setenv("ABT_THREAD_STACKSIZE", env_str, 1);
 }
 
+static void remote_shutdown_ult(hg_handle_t handle)
+{
+    margo_instance_id mid = margo_hg_handle_get_instance(handle);
+    margo_shutdown_out_t out;
+    if(!(mid->enable_remote_shutdown)) {
+        out.ret = -1;
+    } else {
+        out.ret = 0;
+    }
+    margo_respond(handle, &out);
+    margo_destroy(handle);
+    if(mid->enable_remote_shutdown) {
+        margo_finalize(mid);
+    }
+}
+static DEFINE_MARGO_RPC_HANDLER(remote_shutdown_ult)
