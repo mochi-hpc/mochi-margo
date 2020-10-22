@@ -13,6 +13,7 @@
 
 #include <abt.h>
 #include "margo.h"
+#include "margo-instance.h"
 #include "margo-timer.h"
 #include "utlist.h"
 
@@ -24,12 +25,12 @@ struct margo_timer_list
     margo_timer_t *queue_head;
 };
 
-static void margo_timer_queue(
+static void __margo_timer_queue(
     struct margo_timer_list *timer_lst,
     margo_timer_t *timer);
 
 
-struct margo_timer_list* margo_timer_list_create()
+struct margo_timer_list* __margo_timer_list_create()
 {
     struct margo_timer_list *timer_lst;
 
@@ -43,7 +44,7 @@ struct margo_timer_list* margo_timer_list_create()
     return timer_lst;
 }
 
-void margo_timer_list_free(margo_instance_id mid, struct margo_timer_list* timer_lst)
+void __margo_timer_list_free(margo_instance_id mid, struct margo_timer_list* timer_lst)
 {
     margo_timer_t *cur;
     ABT_pool handler_pool;
@@ -82,7 +83,7 @@ void margo_timer_list_free(margo_instance_id mid, struct margo_timer_list* timer
     return;
 }
 
-void margo_timer_init(
+void __margo_timer_init(
     margo_instance_id mid,
     margo_timer_t *timer,
     margo_timer_cb_fn cb_fn,
@@ -91,7 +92,7 @@ void margo_timer_init(
 {
     struct margo_timer_list *timer_lst;
 
-    timer_lst = margo_get_timer_list(mid);
+    timer_lst = __margo_get_timer_list(mid);
     assert(timer_lst);
     assert(timer);
 
@@ -101,18 +102,18 @@ void margo_timer_init(
     timer->expiration = ABT_get_wtime() + (timeout_ms/1000);
     timer->prev = timer->next = NULL;
 
-    margo_timer_queue(timer_lst, timer);
+    __margo_timer_queue(timer_lst, timer);
 
     return;
 }
 
-void margo_timer_destroy(
+void __margo_timer_destroy(
     margo_instance_id mid,
     margo_timer_t *timer)
 {
     struct margo_timer_list *timer_lst;
 
-    timer_lst = margo_get_timer_list(mid);
+    timer_lst = __margo_get_timer_list(mid);
     assert(timer_lst);
     assert(timer);
 
@@ -124,7 +125,7 @@ void margo_timer_destroy(
     return;
 }
 
-void margo_check_timers(
+void __margo_check_timers(
     margo_instance_id mid)
 {
     int ret;
@@ -133,7 +134,7 @@ void margo_check_timers(
     ABT_pool handler_pool;
     double now;
 
-    timer_lst = margo_get_timer_list(mid);
+    timer_lst = __margo_get_timer_list(mid);
     assert(timer_lst);
 
     ABT_mutex_lock(timer_lst->mutex);
@@ -171,7 +172,7 @@ void margo_check_timers(
 /* returns 0 and sets 'next_timer_exp' if the timer instance
  * has timers queued up, -1 otherwise
  */
-int margo_timer_get_next_expiration(
+int __margo_timer_get_next_expiration(
     margo_instance_id mid,
     double *next_timer_exp)
 {
@@ -179,7 +180,7 @@ int margo_timer_get_next_expiration(
     double now;
     int ret;
 
-    timer_lst = margo_get_timer_list(mid);
+    timer_lst = __margo_get_timer_list(mid);
     assert(timer_lst);
 
     ABT_mutex_lock(timer_lst->mutex);
@@ -198,7 +199,7 @@ int margo_timer_get_next_expiration(
     return(ret);
 }
 
-static void margo_timer_queue(
+static void __margo_timer_queue(
     struct margo_timer_list *timer_lst,
     margo_timer_t *timer)
 {
@@ -240,4 +241,9 @@ static void margo_timer_queue(
     ABT_mutex_unlock(timer_lst->mutex);
 
     return;
+}
+
+struct margo_timer_list* __margo_get_timer_list(margo_instance_id mid)
+{
+    return mid->timer_list;
 }

@@ -17,8 +17,10 @@
 #include <margo-config.h>
 
 #include "margo.h"
+#include "margo-globals.h"
+#include "margo-handle-cache.h"
 #include "margo-logging.h"
-#include "margo-internal.h"
+#include "margo-instance.h"
 #include "margo-bulk-util.h"
 #include "margo-timer.h"
 #include "utlist.h"
@@ -82,24 +84,6 @@
 "         }" \
 "}}"
 
-/* If margo is initializing ABT, we need to track how many instances of margo
- * are being created, so that the last one can call ABT_finalize.
- * If margo initializes ABT, g_num_margo_instances_mtx will be created, so
- * in later calls and in margo_cleanup we can check for g_num_margo_instances_mtx != ABT_MUTEX_NULL
- * to know if we should do something to cleanup ABT as well.
- */
-static int g_num_margo_instances = 0; // how many margo instances exist
-static ABT_mutex g_num_margo_instances_mtx = ABT_MUTEX_NULL; // mutex for above global variable
-static int g_margo_abt_init = 0;
-
-/* key for Argobots thread-local storage to track RPC breadcrumbs across thread
- * execution
- */
-static ABT_key rpc_breadcrumb_key = ABT_KEY_NULL;
-
-/* ULT-local key to hold breadcrumb timing data on the target */
-static ABT_key target_timing_key = ABT_KEY_NULL;
-
 #define __DIAG_UPDATE(__data, __time)\
 do {\
     __data.stats.count++; \
@@ -155,12 +139,6 @@ static inline hg_id_t gen_id(const char* func_name, uint16_t provider_id)
     return id;
 }
 
-static hg_return_t margo_handle_cache_init(margo_instance_id mid);
-static void margo_handle_cache_destroy(margo_instance_id mid);
-static hg_return_t margo_handle_cache_get(margo_instance_id mid,
-    hg_addr_t addr, hg_id_t id, hg_handle_t *handle);
-static hg_return_t margo_handle_cache_put(margo_instance_id mid,
-    hg_handle_t handle);
 static hg_id_t margo_register_internal(margo_instance_id mid, hg_id_t id,
     hg_proc_cb_t in_proc_cb, hg_proc_cb_t out_proc_cb, hg_rpc_cb_t rpc_cb, ABT_pool pool);
 static void set_argobots_tunables(json_t *margo_cfg);
@@ -236,6 +214,12 @@ static void set_argobots_tunables(json_t *margo_cfg)
     }
 
     return;
+}
+
+margo_instance_id margo_init(const char *addr_str, int mode,
+        int use_progress_thread, int rpc_thread_count)
+{
+    return margo_init_opt(addr_str, mode, NULL, use_progress_thread, rpc_thread_count);
 }
 
 margo_instance_id margo_init_opt(const char *addr_str, int mode,
@@ -352,7 +336,7 @@ margo_instance_id margo_init_opt_json(const struct hg_init_info *hg_init_info,
         ret = ABT_init(0, NULL); /* XXX: argc/argv not currently used by ABT ... */
         if(ret != 0) goto err;
         g_margo_abt_init = 1;
-        ret = ABT_mutex_create(&g_num_margo_instances_mtx);
+        ret = ABT_mutex_create(&g_margo_num_instances_mtx);
         if(ret != 0) goto err;
     }
 
@@ -453,7 +437,7 @@ err:
         mochi_cfg_release_component(margo_cfg);
     if(mid)
     {
-        margo_timer_list_free(mid, mid->timer_list);
+        __margo_timer_list_free(mid, mid->timer_list);
         ABT_mutex_free(&mid->finalize_mutex);
         ABT_cond_free(&mid->finalize_cond);
         free(mid);
@@ -477,9 +461,9 @@ err:
         HG_Context_destroy(hg_context);
     if(hg_class)
         HG_Finalize(hg_class);
-    if(g_num_margo_instances_mtx != ABT_MUTEX_NULL && g_num_margo_instances == 0) {
-        ABT_mutex_free(&g_num_margo_instances_mtx);
-        g_num_margo_instances_mtx = ABT_MUTEX_NULL;
+    if(g_margo_num_instances_mtx != ABT_MUTEX_NULL && g_margo_num_instances == 0) {
+        ABT_mutex_free(&g_margo_num_instances_mtx);
+        g_margo_num_instances_mtx = ABT_MUTEX_NULL;
         if(g_margo_abt_init) ABT_finalize();
     }
     return MARGO_INSTANCE_NULL;
@@ -516,8 +500,8 @@ margo_instance_id margo_init_pool_json(ABT_pool progress_pool, ABT_pool handler_
     /* setting logger to default */
     margo_set_logger(mid, NULL);
 
-    mid->component_cfg = mochi_cfg_get_component(json_cfg_string, "margo", MARGO_DEFAULT_CFG_EXT_POOLS);
-    if(!mid->component_cfg)
+    mid->json_cfg = mochi_cfg_get_component(json_cfg_string, "margo", MARGO_DEFAULT_CFG_EXT_POOLS);
+    if(!mid->json_cfg)
     {
         MARGO_ERROR(MARGO_INSTANCE_NULL, "Unable to set up margo config");
         goto err;
@@ -530,7 +514,7 @@ margo_instance_id margo_init_pool_json(ABT_pool progress_pool, ABT_pool handler_
     mid->handler_pool = handler_pool;
     mid->hg_class = HG_Context_get_class(hg_context);
     mid->hg_context = hg_context;
-    mochi_cfg_get_value_int(mid->component_cfg, "progress_timeout_ub_msec",
+    mochi_cfg_get_value_int(mid->json_cfg, "progress_timeout_ub_msec",
         &mid->hg_progress_timeout_ub);
 
     mid->refcount = 1;
@@ -544,11 +528,12 @@ margo_instance_id margo_init_pool_json(ABT_pool progress_pool, ABT_pool handler_
 
     ABT_mutex_create(&mid->diag_rpc_mutex);
 
-    mid->timer_list = margo_timer_list_create();
+    mid->timer_list = __margo_timer_list_create();
     if(mid->timer_list == NULL) goto err;
 
     /* initialize the handle cache */
-    hret = margo_handle_cache_init(mid);
+    size_t handle_cache_size = 32; // TODO take that from config
+    hret = __margo_handle_cache_init(mid, handle_cache_size);
     if(hret != HG_SUCCESS) goto err;
 
     /* register thread local key to track RPC breadcrumbs across threads */
@@ -556,11 +541,11 @@ margo_instance_id margo_init_pool_json(ABT_pool progress_pool, ABT_pool handler_
      * multiple times for different margo instances.  As of May 2019 this doesn't
      * seem to be a problem to call ABT_key_create() multiple times.
      */
-    ret = ABT_key_create(free, &rpc_breadcrumb_key);
+    ret = ABT_key_create(free, &g_margo_rpc_breadcrumb_key);
     if(ret != 0)
         goto err;
 
-    ret = ABT_key_create(free, &target_timing_key);
+    ret = ABT_key_create(free, &g_margo_target_timing_key);
     if(ret != 0)
         goto err;
 
@@ -572,17 +557,17 @@ margo_instance_id margo_init_pool_json(ABT_pool progress_pool, ABT_pool handler_
             void, margo_shutdown_out_t, remote_shutdown_ult);
 
     /* increment the number of margo instances */
-    if(g_num_margo_instances_mtx == ABT_MUTEX_NULL)
-        ABT_mutex_create(&g_num_margo_instances_mtx);
-    ABT_mutex_lock(g_num_margo_instances_mtx);
-    g_num_margo_instances += 1;
-    ABT_mutex_unlock(g_num_margo_instances_mtx);
+    if(g_margo_num_instances_mtx == ABT_MUTEX_NULL)
+        ABT_mutex_create(&g_margo_num_instances_mtx);
+    ABT_mutex_lock(g_margo_num_instances_mtx);
+    g_margo_num_instances += 1;
+    ABT_mutex_unlock(g_margo_num_instances_mtx);
 
     /* Mercury must already be intialized at this point.  Overwrite the addr
      * in the json to the actual self address we ended up with.
      */
     GET_SELF_ADDR_STR(mid, runtime_addr_str);
-    ret = mochi_cfg_get_object(mid->component_cfg, "mercury", &hg_cfg);
+    ret = mochi_cfg_get_object(mid->json_cfg, "mercury", &hg_cfg);
     if(ret == 0)
         mochi_cfg_set_value_string(hg_cfg, "addr_str", runtime_addr_str);
     free(runtime_addr_str);
@@ -590,7 +575,7 @@ margo_instance_id margo_init_pool_json(ABT_pool progress_pool, ABT_pool handler_
     /* override json profiling setting with env var if present */
     if(getenv("MARGO_ENABLE_PROFILING"))
     {
-        mochi_cfg_set_value_int(mid->component_cfg,
+        mochi_cfg_set_value_int(mid->json_cfg,
             "enable_profiling", atoi(getenv("MARGO_ENABLE_PROFILING")));
         mid->profile_enabled = atoi(getenv("MARGO_ENABLE_PROFILING"));
     }
@@ -618,7 +603,7 @@ margo_instance_id margo_init_pool_json(ABT_pool progress_pool, ABT_pool handler_
     /* override json diagnostics setting with env var if present */
     if(getenv("MARGO_ENABLE_DIAGNOSTICS"))
     {
-        mochi_cfg_set_value_int(mid->component_cfg,
+        mochi_cfg_set_value_int(mid->json_cfg,
             "enable_diagnostics", atoi(getenv("MARGO_ENABLE_DIAGNOSTICS")));
         mid->diag_enabled = atoi(getenv("MARGO_ENABLE_DIAGNOSTICS"));
     }
@@ -628,9 +613,9 @@ margo_instance_id margo_init_pool_json(ABT_pool progress_pool, ABT_pool handler_
 err:
     if(mid)
     {
-        mochi_cfg_release_component(mid->component_cfg);
-        margo_handle_cache_destroy(mid);
-        margo_timer_list_free(mid, mid->timer_list);
+        mochi_cfg_release_component(mid->json_cfg);
+        __margo_handle_cache_destroy(mid);
+        __margo_timer_list_free(mid, mid->timer_list);
         ABT_mutex_free(&mid->finalize_mutex);
         ABT_cond_free(&mid->finalize_cond);
         ABT_mutex_free(&mid->pending_operations_mtx);
@@ -680,10 +665,10 @@ static void margo_cleanup(margo_instance_id mid)
         free(mid->rpc_xstreams);
     }
 
-    margo_handle_cache_destroy(mid);
+    __margo_handle_cache_destroy(mid);
 
     /* TODO: technically we could/should call ABT_key_free() for
-     * rpc_breadcrumb_key.  We can't do that here, though, because the key is
+     * g_margo_rpc_breadcrumb_key.  We can't do that here, though, because the key is
      * global, not local to this mid.
      */
 
@@ -698,15 +683,15 @@ static void margo_cleanup(margo_instance_id mid)
             HG_Finalize(mid->hg_class);
         }
 
-        if(g_num_margo_instances_mtx != ABT_MUTEX_NULL) {
-            ABT_mutex_lock(g_num_margo_instances_mtx);
-            g_num_margo_instances -= 1;
-            if(g_num_margo_instances > 0) {
-                ABT_mutex_unlock(g_num_margo_instances_mtx);
+        if(g_margo_num_instances_mtx != ABT_MUTEX_NULL) {
+            ABT_mutex_lock(g_margo_num_instances_mtx);
+            g_margo_num_instances -= 1;
+            if(g_margo_num_instances > 0) {
+                ABT_mutex_unlock(g_margo_num_instances_mtx);
             } else {
-                ABT_mutex_unlock(g_num_margo_instances_mtx);
-                ABT_mutex_free(&g_num_margo_instances_mtx);
-                g_num_margo_instances_mtx = ABT_MUTEX_NULL;
+                ABT_mutex_unlock(g_margo_num_instances_mtx);
+                ABT_mutex_free(&g_margo_num_instances_mtx);
+                g_margo_num_instances_mtx = ABT_MUTEX_NULL;
                 if(g_margo_abt_init) {
                     MARGO_TRACE(mid, "Finalizing argobots");
                     ABT_finalize();
@@ -722,7 +707,7 @@ static void margo_cleanup(margo_instance_id mid)
         mid->registered_rpcs = next_rpc;
     }
 
-    mochi_cfg_release_component(mid->component_cfg);
+    mochi_cfg_release_component(mid->json_cfg);
     MARGO_TRACE(mid, "Completed margo_cleanup");
     free(mid);
 }
@@ -764,7 +749,7 @@ void margo_finalize(margo_instance_id mid)
 
     /* shut down pending timers */
     MARGO_TRACE(mid, "Cleaning up pending timers");
-    margo_timer_list_free(mid, mid->timer_list);
+    __margo_timer_list_free(mid, mid->timer_list);
 
     if(mid->profile_enabled) {
         MARGO_TRACE(mid, "Waiting for sparkline data collection thread to complete");
@@ -1246,7 +1231,7 @@ hg_return_t margo_create(margo_instance_id mid, hg_addr_t addr,
     hg_return_t hret = HG_OTHER_ERROR;
 
     /* look for a handle to reuse */
-    hret = margo_handle_cache_get(mid, addr, id, handle);
+    hret = __margo_handle_cache_get(mid, addr, id, handle);
     if(hret != HG_SUCCESS)
     {
         /* else try creating a new handle */
@@ -1275,7 +1260,7 @@ hg_return_t margo_destroy(hg_handle_t handle)
     mid = margo_hg_handle_get_instance(handle);
 
     /* recycle this handle if it came from the handle cache */
-    hret = margo_handle_cache_put(mid, handle);
+    hret = __margo_handle_cache_put(mid, handle);
     if(hret != HG_SUCCESS)
     {
         /* else destroy the handle manually */
@@ -1298,7 +1283,7 @@ static hg_return_t margo_cb(const struct hg_cb_info *info)
     /* remove timer if there is one and it is still in place (i.e., not timed out) */
     if(hret != HG_TIMEOUT && req->timer && req->handle) {
         margo_instance_id mid = margo_hg_handle_get_instance(req->handle);
-        margo_timer_destroy(mid, req->timer);
+        __margo_timer_destroy(mid, req->timer);
     }
     if(req->timer) {
         free(req->timer);
@@ -1420,7 +1405,7 @@ static hg_return_t margo_provider_iforward_internal(
             ABT_eventual_free(&eventual);
             return(HG_NOMEM_ERROR);
         }
-        margo_timer_init(mid, req->timer, margo_forward_timeout_cb,
+        __margo_timer_init(mid, req->timer, margo_forward_timeout_cb,
                          req, timeout_ms);
     }
 
@@ -1574,7 +1559,7 @@ hg_return_t margo_respond(
     struct margo_request_struct* treq;
     margo_instance_id mid = margo_hg_handle_get_instance(handle);
     if(mid->profile_enabled) {
-      ABT_key_get(target_timing_key, (void**)(&treq));
+      ABT_key_get(g_margo_target_timing_key, (void**)(&treq));
       assert(treq != NULL);
     
       /* the "1" indicates that this a target-side breadcrumb */
@@ -1802,7 +1787,7 @@ void margo_thread_sleep(
     sleep_cb_dat.is_asleep = 1;
 
     /* initialize the sleep timer */
-    margo_timer_init(mid, &sleep_timer, margo_thread_sleep_cb,
+    __margo_timer_init(mid, &sleep_timer, margo_thread_sleep_cb,
         &sleep_cb_dat, timeout_ms);
 
     /* yield thread for specified timeout */
@@ -1903,7 +1888,7 @@ static void sparkline_data_collection_fn(void* foo)
 
     while(!mid->hg_progress_shutdown_flag)
     {
-        mochi_cfg_get_value_int(mid->component_cfg, "profile_sparkline_timeslice_msec", &sleep_time_msec);
+        mochi_cfg_get_value_int(mid->json_cfg, "profile_sparkline_timeslice_msec", &sleep_time_msec);
         margo_thread_sleep(mid, sleep_time_msec);
         HASH_ITER(hh, mid->diag_rpc, stat, tmp)
         {
@@ -2032,7 +2017,7 @@ static void hg_progress_fn(void* foo)
         else
         {
             hg_progress_timeout = mid->hg_progress_timeout_ub;
-            ret = margo_timer_get_next_expiration(mid, &next_timer_exp);
+            ret = __margo_timer_get_next_expiration(mid, &next_timer_exp);
             if(ret == 0)
             {
                 /* there is a queued timer, don't block long enough
@@ -2070,7 +2055,7 @@ static void hg_progress_fn(void* foo)
         }
 
         /* check for any expired timers */
-        margo_check_timers(mid);
+        __margo_check_timers(mid);
     }
 
     return;
@@ -2315,7 +2300,7 @@ int margo_set_param(margo_instance_id mid, const char *key, const char *value)
 {
     if(strcmp(key, "progress_timeout_ub_msecs") == 0)
     {
-        mochi_cfg_set_value_int(mid->component_cfg,
+        mochi_cfg_set_value_int(mid->json_cfg,
             "progress_timeout_ub_msecs", atoi(value));
         mid->hg_progress_timeout_ub = atoi(value);
         return(0);
@@ -2323,7 +2308,7 @@ int margo_set_param(margo_instance_id mid, const char *key, const char *value)
 
     if(strcmp(key, "enable_diagnostics") == 0)
     {
-        mochi_cfg_set_value_int(mid->component_cfg,
+        mochi_cfg_set_value_int(mid->json_cfg,
             "enable_diagnostics", atoi(value));
         mid->diag_enabled = atoi(value);
         return(0);
@@ -2331,130 +2316,6 @@ int margo_set_param(margo_instance_id mid, const char *key, const char *value)
 
     /* unknown key, or at least one that cannot be modified at runtime */
     return(-1);
-}
-
-static hg_return_t margo_handle_cache_init(margo_instance_id mid)
-{
-    int i;
-    struct margo_handle_cache_el *el;
-    hg_return_t hret = HG_SUCCESS;
-    int handle_cache_size = 0;
-
-    mochi_cfg_get_value_int(mid->component_cfg, "handle_cache_size", &handle_cache_size);
-    ABT_mutex_create(&(mid->handle_cache_mtx));
-
-    for(i = 0; i < handle_cache_size; i++)
-    {
-        el = malloc(sizeof(*el));
-        if(!el)
-        {
-            hret = HG_NOMEM_ERROR;
-            margo_handle_cache_destroy(mid);
-            break;
-        }
-
-        /* create handle with NULL_ADDRs, we will reset later to valid addrs */
-        hret = HG_Create(mid->hg_context, HG_ADDR_NULL, 0, &el->handle);
-        if(hret != HG_SUCCESS)
-        {
-            free(el);
-            margo_handle_cache_destroy(mid);
-            break;
-        }
-
-        /* add to the free list */
-        LL_PREPEND(mid->free_handle_list, el);
-    }
-
-    return hret;
-}
-
-static void margo_handle_cache_destroy(margo_instance_id mid)
-{
-    struct margo_handle_cache_el *el, *tmp;
-
-    /* only free handle list elements -- handles in hash are still in use */
-    LL_FOREACH_SAFE(mid->free_handle_list, el, tmp)
-    {
-        LL_DELETE(mid->free_handle_list, el);
-        HG_Destroy(el->handle);
-        free(el);
-    }
-
-    ABT_mutex_free(&mid->handle_cache_mtx);
-
-    return;
-}
-
-static hg_return_t margo_handle_cache_get(margo_instance_id mid,
-    hg_addr_t addr, hg_id_t id, hg_handle_t *handle)
-{
-    struct margo_handle_cache_el *el;
-    hg_return_t hret = HG_SUCCESS;
-
-    ABT_mutex_lock(mid->handle_cache_mtx);
-
-    if(!mid->free_handle_list)
-    {
-        /* if no available handles, just fall through */
-        hret = HG_OTHER_ERROR;
-        goto finish;
-    }
-
-    /* pop first element from the free handle list */
-    el = mid->free_handle_list;
-    LL_DELETE(mid->free_handle_list, el);
-
-    /* reset handle */
-    hret = HG_Reset(el->handle, addr, id);
-    if(hret == HG_SUCCESS)
-    {
-        /* put on in-use list and pass back handle */
-        HASH_ADD(hh, mid->used_handle_hash, handle, sizeof(hg_handle_t), el);
-        *handle = el->handle;
-    }
-    else
-    {
-        /* reset failed, add handle back to the free list */
-        LL_APPEND(mid->free_handle_list, el);
-    }
-
-finish:
-    ABT_mutex_unlock(mid->handle_cache_mtx);
-    return hret;
-}
-
-static hg_return_t margo_handle_cache_put(margo_instance_id mid,
-    hg_handle_t handle)
-{
-    struct margo_handle_cache_el *el;
-    hg_return_t hret = HG_SUCCESS;
-
-    ABT_mutex_lock(mid->handle_cache_mtx);
-
-    /* look for handle in the in-use hash */
-    HASH_FIND(hh, mid->used_handle_hash, &handle, sizeof(hg_handle_t), el);
-    if(!el)
-    {
-        /* this handle was manually allocated -- just fall through */
-        hret = HG_OTHER_ERROR;
-        goto finish;
-    }
-
-    /* remove from the in-use hash */
-    HASH_DELETE(hh, mid->used_handle_hash, el);
-
-    /* add to the tail of the free handle list */
-    LL_APPEND(mid->free_handle_list, el);
-
-finish:
-    ABT_mutex_unlock(mid->handle_cache_mtx);
-    return hret;
-}
-
-struct margo_timer_list *margo_get_timer_list(margo_instance_id mid)
-{
-        return mid->timer_list;
 }
 
 static void remote_shutdown_ult(hg_handle_t handle)
@@ -2535,7 +2396,7 @@ static uint64_t margo_breadcrumb_set(hg_id_t rpc_id)
     uint64_t *val;
     uint64_t tmp;
 
-    ABT_key_get(rpc_breadcrumb_key, (void**)(&val));
+    ABT_key_get(g_margo_rpc_breadcrumb_key, (void**)(&val));
     if(val == NULL)
     {
         /* key not set yet on this ULT; we need to allocate a new one
@@ -2564,7 +2425,7 @@ static uint64_t margo_breadcrumb_set(hg_id_t rpc_id)
      * bits of previous breadcrumb */
     *val |= tmp;
 
-    ABT_key_set(rpc_breadcrumb_key, val);
+    ABT_key_set(g_margo_rpc_breadcrumb_key, val);
 
     return *val;
 }
@@ -2686,7 +2547,7 @@ static void margo_internal_breadcrumb_handler_set(uint64_t rpc_breadcrumb)
 {
     uint64_t *val;
 
-    ABT_key_get(rpc_breadcrumb_key, (void**)(&val));
+    ABT_key_get(g_margo_rpc_breadcrumb_key, (void**)(&val));
 
     if(val == NULL)
     {
@@ -2698,7 +2559,7 @@ static void margo_internal_breadcrumb_handler_set(uint64_t rpc_breadcrumb)
     }
     *val = rpc_breadcrumb;
 
-    ABT_key_set(rpc_breadcrumb_key, val);
+    ABT_key_set(g_margo_rpc_breadcrumb_key, val);
 
     return;
 }
@@ -2717,7 +2578,7 @@ void __margo_internal_pre_wrapper_hooks(margo_instance_id mid, hg_handle_t handl
     /* add the incoming breadcrumb info to a ULT-local key if profiling is enabled */
     if(mid->profile_enabled) {
 
-        ABT_key_get(target_timing_key, (void**)(&req));
+        ABT_key_get(g_margo_target_timing_key, (void**)(&req));
 
         if(req == NULL)
         {
@@ -2740,7 +2601,7 @@ void __margo_internal_pre_wrapper_hooks(margo_instance_id mid, hg_handle_t handl
          * RPCs, there will be a stack showing the ancestry of RPC calls that
          * led to that point.
          */
-        ABT_key_set(target_timing_key, req);
+        ABT_key_set(g_margo_target_timing_key, req);
         margo_internal_breadcrumb_handler_set((*rpc_breadcrumb) << 16);
     }
 }
@@ -2755,5 +2616,5 @@ void __margo_internal_post_wrapper_hooks(margo_instance_id mid)
 
 char* margo_get_config(margo_instance_id mid)
 {
-    return(mochi_cfg_emit(mid->component_cfg, "margo"));
+    return json_dumps(mid->json_cfg, JSON_INDENT(4));
 }

@@ -1,0 +1,11 @@
+spack:
+  specs:
+  - mochi-cfg
+  - autoconf
+  - m4
+  - automake
+  - libtool
+  - pkg-config
+  - argobots
+  - mercury
+  concretization: together

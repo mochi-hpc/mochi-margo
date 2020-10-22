@@ -19,6 +19,8 @@ extern "C" {
 
 #include <margo-diag.h>
 
+#define DEPRECATED(msg) __attribute__((deprecated(msg)))
+
 /* determine how much of the Mercury ID space to use for Margo provider IDs */
 #define __MARGO_PROVIDER_ID_SIZE (sizeof(hg_id_t)/4)
 #define __MARGO_RPC_HASH_SIZE (__MARGO_PROVIDER_ID_SIZE * 3)
@@ -44,6 +46,95 @@ typedef void(*margo_finalize_callback_t)(void*);
 #define MARGO_MAX_PROVIDER_ID ((1 << (8*__MARGO_PROVIDER_ID_SIZE))-1)
 
 /**
+ * The margo_init_info structure should be passed to margo_init_ext
+ * to finely configure Margo. The structure can be memset to 0 to have
+ * margo use default values (no progress thread, no rpc thread, default
+ * initialization of mercury, etc.). For any field that is not NULL,
+ * margo_init_ext will first look for a configuration in the json_config
+ * string. If no configuration is found or of json_config is NULL, margo
+ * will fall back to default.
+ */
+struct margo_init_info {
+    const char*          json_config;   /* JSON-formatted string */
+    ABT_pool             progress_pool; /* Progress pool */
+    ABT_pool             rpc_pool;      /* RPC handler pool */
+    hg_class_t*          hg_class;      /* Mercury class */
+    hg_context_t*        hg_context;    /* Mercury context */
+    struct hg_init_info* hg_init_info;  /* Mercury init info */
+};
+
+/**
+ * Example JSON configuration:
+ * ------------------------------------------------
+{
+    "mercury" : {
+        "address" : "na+sm://",
+        "listening" : false,
+        "auto_sm" : true,
+        "version" : "2.0.0",
+        "stats" : false,
+        "na_no_block" : false,
+        "na_no_retry" : false,
+        "max_contexts" : 1,
+        "ip_subnet" : "",
+        "auth_key" : ""
+    },
+    "argobots" : {
+        "abt_mem_max_num_stacks" : 8,
+        "abt_thread_stacksize" : 2097152,
+        "version" : "1.0.0",
+        "pools" : [
+            {
+                "name" : "my_progress_pool",
+                "kind" : "fifo_wait",
+                "access" : "mpmc"
+            },
+            {
+                "name" : "my_rpc_pool",
+                "kind" : "fifo_wait",
+                "access" : "mpmc"
+            }
+        ],
+        "xstreams" : [
+            {
+                "name" : "my_progress_xstream",
+                "cpubind" : 0,
+                "affinity" : [ 0, 1 ],
+                "scheduler" : {
+                    "type" : "basic_wait",
+                    "pools" : [ "my_progress_pool" ]
+                }
+            },
+            {
+                "name" : "my_rpc_xstream_0",
+                "cpubind" : 2,
+                "affinity" : [ 2, 3, 4, 5 ],
+                "scheduler" : {
+                    "type" : "basic_wait",
+                    "pools" : [ "my_rpc_pool" ]
+                }
+            },
+            {
+                "name" : "my_rpc_xstream_1",
+                "cpubind" : 6,
+                "affinity" : [ 6, 7 ],
+                "scheduler" : {
+                    "type" : "basic_wait",
+                    "pools" : [ "my_rpc_pool" ]
+                }
+            }
+        ]
+    },
+    "handle_cache_size" : 32,
+    "profile_sparkline_timeslice_msec" : 1000,
+    "progress_timeout_ub_msec" : 100,
+    "enable_profiling" : false,
+    "enable_diagnostics" : false
+}
+ * ------------------------------------------------
+ */
+
+/**
  * Initializes margo library.
  * @param [in] addr_str            Mercury host address with port number
  * @param [in] mode                Mode to run Margo in:
@@ -67,11 +158,11 @@ typedef void(*margo_finalize_callback_t)(void*);
  * call margo_wait_for_finalize() after margo_init() to relinguish control to 
  * Margo.
  */
-#define margo_init(_addr_str, _mode, _use_progress_thread, _rpc_thread_count)\
- margo_init_opt(_addr_str, _mode, NULL, _use_progress_thread, _rpc_thread_count)
-
-#define margo_init_json(_json_cfg_string)\
- margo_init_opt_json(NULL, _json_cfg_string)
+margo_instance_id margo_init(
+    const char *addr_str,
+    int mode,
+    int use_progress_thread,
+    int rpc_thread_count);
 
 /**
  * Initializes margo library with custom Mercury options.
@@ -104,7 +195,7 @@ margo_instance_id margo_init_opt(
     int mode,
     const struct hg_init_info *hg_init_info,
     int use_progress_thread,
-    int rpc_thread_count);
+    int rpc_thread_count) DEPRECATED("use margo_init_ext instead");
 
 /* same as above, but with configuration expressed via json */
 margo_instance_id margo_init_opt_json(
@@ -131,7 +222,7 @@ margo_instance_id margo_init_opt_json(
 margo_instance_id margo_init_pool(
     ABT_pool progress_pool,
     ABT_pool handler_pool,
-    hg_context_t *hg_context);
+    hg_context_t *hg_context) DEPRECATED("use margo_init_ext instead");
 
 /**
  * same as margo_init_pool() except that it has an additional argument to
@@ -142,6 +233,30 @@ margo_instance_id margo_init_pool_json(
     ABT_pool handler_pool,
     hg_context_t *hg_context,
     const char* json_cfg_string);
+
+/**
+ * Initializes a margo instance using a margo_init_info struct to provide arguments.
+ *
+ * @param args Arguments
+ * @param address Address or protocol
+ * @param mode MARGO_CLIENT_MODE or MARGO_SERVER_MODE
+ *
+ * @return a margo_instance_id or MARGO_INSTANCE_NULL in case of failure.
+ * 
+ * NOTE: if you are configuring Argobots pools yourself before
+ * passing them into this function, please consider setting
+ * ABT_MEM_MAX_NUM_STACKS to a low value (like 8) either in your
+ * environment or programmatically with putenv() in your code before
+ * creating the pools to prevent excess memory consumption under
+ * load from producer/consumer patterns across execution streams that
+ * fail to utilize per-execution stream stack caches.  See
+ * https://xgitlab.cels.anl.gov/sds/margo/issues/40 for details.
+ * The margo_init() function does this automatically.
+ */
+margo_instance_id margo_init_ext(
+        const char* address,
+        int mode,
+        const struct margo_init_info* args);
 
 /**
  * Shuts down margo library and its underlying abt and mercury resources

@@ -8,66 +8,263 @@
 #include <margo.h>
 #include <margo-logging.h>
 #include <jansson.h>
-#include "margo-internal.h"
+#include "margo-instance.h"
+#include "margo-globals.h"
 #include "margo-macros.h"
 
 // Validates the format of the configuration and
 // fill default values if they are note provided
-static int validate_and_fill_config(
+static int validate_and_complete_config(
         json_t* _config,
         ABT_pool _progress_pool,
         ABT_pool _rpc_pool,
+        hg_class_t* _hg_class,
         hg_context_t* _hg_context,
         const struct hg_init_info* _hg_init_info);
 
-// Considers a string of the form "key1/key2/ ... /keyN"
-// and recursively search for the JSON fields.
-// The separator (here /) should be specified by the caller.
-static json_t* search_json_fields(
-        json_t* root,
-        const char* hierarchy,
-        char separator);
-
-margo_instance_id margo_init_internal(
+// Reads values from configuration to set the
+// various fields in the hg_init_info structure
+static void fill_hg_init_info_from_config(
         json_t* _config,
-        ABT_pool _progress_pool,
-        ABT_pool _rpc_pool,
-        hg_context_t* _hg_context,
-        const struct hg_init_info* _hg_init_info)
-{
-    if(!validate_and_fill_config(_config, _progress_pool, _rpc_pool, _hg_context, _hg_init_info))
-        return MARGO_INSTANCE_NULL;
-}
+        struct hg_init_info* _hg_init_info);
 
-static json_t* search_json_fields(
-        json_t* root,
-        const char* hierarchy,
-        char separator)
-{
-    char* fields = strdup(hierarchy);
-    char* remaining_fields = fields;
-    json_t* current_root = root;
+// Reads a pool configuration and instantiate the
+// corresponding ABT_pool, returning ABT_SUCCESS
+// or other ABT error codes
+static int create_pool_from_config(
+        json_t* pool_config,
+        ABT_pool* pool);
 
-    while(remaining_fields && current_root) {
-        char* dot = strchr(remaining_fields, separator);
-        char* current_field = remaining_fields;
-        if(dot != NULL) *dot = '\0';
-        remaining_fields = dot + 1;
-        current_root = json_object_get(current_root, current_field);
+// Reads an xstream configuration and instantiate
+// the corresponding ABT_xstream, returning ABT_SUCCESS
+// or other ABT error codes
+static int create_xstream_from_config(
+        json_t* es_config,
+        ABT_xstream* es,
+        bool* own_xstream,
+        const ABT_pool* pools,
+        size_t num_pools);
+
+// Sets environment variables for Argobots
+static void set_argobots_environment_variables(
+        json_t* config);
+
+
+margo_instance_id margo_init_ext(
+        const char* address,
+        int mode,
+        const struct margo_init_info* uargs)
+{
+    struct margo_init_info args = { 0 };
+    if(uargs) args = *uargs;
+
+    json_t* config = NULL;
+    json_error_t error;
+    int ret;
+    hg_return_t hret;
+    margo_instance_id mid = MARGO_INSTANCE_NULL;
+
+    hg_class_t* hg_class             = NULL;
+    hg_context_t* hg_context         = NULL;
+    struct hg_init_info hg_init_info = { 0 };
+    hg_addr_t self_addr              = HG_ADDR_NULL;
+    ABT_pool* pools                  = NULL;
+    size_t num_pools                 = 0;
+    ABT_xstream* xstreams            = NULL;
+    bool* owns_xstream               = NULL;
+    size_t num_xstreams              = 0;
+    ABT_pool progress_pool           = ABT_POOL_NULL;
+    ABT_pool rpc_pool                = ABT_POOL_NULL;
+
+    if(args.json_config) {
+        // read JSON config from provided string argument
+        config = json_loads(args.json_config, 0, &error);
+        if(!config) {
+            MARGO_ERROR(0, "JSON parse error line %d: %s", error.line, error.text);
+            return MARGO_INSTANCE_NULL;
+        }
+    } else {
+        // create default JSON config
+        config = json_object();
     }
 
-    free(fields);
-    return current_root;
+    // validate and complete configuration
+    MARGO_TRACE(0, "Validating and completing configuration");
+    ret = validate_and_complete_config(config,
+            args.progress_pool,
+            args.rpc_pool,
+            args.hg_class,
+            args.hg_context,
+            args.hg_init_info);
+    if(ret != 0) {
+        MARGO_ERROR(0, "Could not validate and complete configuration");
+        goto error;
+    }
+
+    // handle hg_init_info
+    MARGO_TRACE(0, "Instantating hg_init_info structure");
+    fill_hg_init_info_from_config(config, &hg_init_info);
+
+    // handle hg_class
+    if(args.hg_class) {
+        MARGO_TRACE(0, "Using user-provided hg_class");
+        hg_class = args.hg_class;
+    } else if(args.hg_context) {
+        MARGO_TRACE(0, "Using hg_class from provided hg_context");
+        hg_class = HG_Context_get_class(hg_context);
+    } else {
+        MARGO_TRACE(0, "Initializing hg_class from address \"%s\" and mode \"%s\"",
+                    address, mode == 0 ? "client" : "server");
+        hg_class = HG_Init_opt(address, mode, &hg_init_info);
+        if(!hg_class) {
+            MARGO_ERROR(0, "Could not initialize hg_class");
+            goto error;
+        }
+    }
+
+    // handle hg_context
+    if(args.hg_context) {
+        MARGO_TRACE(0, "Using user-provided hg_context");
+        hg_context = args.hg_context;
+    } else {
+        MARGO_TRACE(0, "Initializing hg_context");
+        hg_context = HG_Context_create(hg_class);
+        if(!hg_context) {
+            MARGO_ERROR(0, "Could not initialize hg_context");
+            goto error;
+        }
+    }
+
+    // updating config with address and listening fields
+    MARGO_TRACE(0, "Updating configuration with mercury address");
+    hret = HG_Addr_self(hg_class, &self_addr);
+    if(hret != HG_SUCCESS) {
+        MARGO_ERROR(0, "Could not get self address from hg_class (hret = %d)", hret);
+        goto error;
+    }
+    char self_addr_str[1024];
+    hg_size_t self_addr_str_size = 1024;
+    hret = HG_Addr_to_string(hg_class, self_addr_str, &self_addr_str_size, self_addr);
+    if(hret != HG_SUCCESS) {
+        MARGO_ERROR(0, "Could not convert self address to string (hret = %d)", hret);
+        goto error;
+    }
+    json_t* hg_config = json_object_get(config, "mercury");
+    json_object_set_new(hg_config, "address", json_string(self_addr_str));
+    json_object_set_new(hg_config, "listening", json_boolean(mode));
+
+    // initialize Argobots if needed
+    if(ABT_initialized() == ABT_ERR_UNINITIALIZED) {
+        set_argobots_environment_variables(config);
+        MARGO_TRACE(0, "Initializing Argobots");
+        ret = ABT_init(0, NULL);
+        if(ret != 0) goto error;
+        g_margo_abt_init = 1;
+        ret = ABT_mutex_create(&g_margo_num_instances_mtx);
+        if(ret != 0) goto error;
+    } else {
+        MARGO_WARNING(0, "Argobots was initialized externally, so margo_init_ext could not set Argobots environment variables");
+    }
+
+    // instantiate pools
+    json_t* argobots_config = json_object_get(config, "argobots");
+    MARGO_TRACE(0, "Instantiating pools from configuration");
+    json_t* pools_config = json_object_get(argobots_config, "pools");
+    num_pools = json_array_size(pools_config);
+    pools = calloc(sizeof(ABT_pool), num_pools);
+    if(!pools) {
+        MARGO_ERROR(0, "Could not allocate pools array");
+        goto error;
+    }
+    for(unsigned i = 0; i < num_pools; i++) {
+        json_t* p = json_array_get(pools_config, i);
+        if(create_pool_from_config(p, &pools[i]) != ABT_SUCCESS) {
+            goto error;
+        }
+    }
+
+    // instantiate xstreams
+    json_t* es_config = json_object_get(argobots_config, "xstreams");
+    num_xstreams = json_array_size(es_config);
+    xstreams = calloc(sizeof(ABT_xstream), num_xstreams);
+    owns_xstream = calloc(sizeof(*owns_xstream), num_xstreams);
+    if(!xstreams || !owns_xstream) {
+        MARGO_ERROR(0, "Could not allocate xstreams array or ownership array");
+        goto error;
+    }
+    for(unsigned i = 0; i < num_xstreams; i++) {
+        json_t* es = json_array_get(es_config, i);
+        if(create_xstream_from_config(es, &xstreams[i], &owns_xstream[i], pools, num_pools) != ABT_SUCCESS) {
+            goto error;
+        }
+    }
+
+    // find progress pool
+    MARGO_TRACE(0, "Finding progress pool");
+    int progress_pool_index = json_integer_value(json_object_get(config, "progress_pool"));
+    if(progress_pool_index == -1)
+        progress_pool = args.progress_pool;
+    else
+        progress_pool = pools[progress_pool_index];
+
+    // find rpc pool
+    MARGO_TRACE(0, "Finding RPC pool");
+    int rpc_pool_index = json_integer_value(json_object_get(config, "rpc_pool"));
+    if(rpc_pool_index == -1)
+        rpc_pool = args.rpc_pool;
+    else
+        rpc_pool = pools[rpc_pool_index];
+
+    // set input offset to include breadcrumb information in Mercury requests
+    MARGO_TRACE(0, "Setting input offset in hg_class as %d", sizeof(uint64_t));
+    hret = HG_Class_set_input_offset(hg_class, sizeof(uint64_t));
+    if(hret != HG_SUCCESS) {
+        MARGO_ERROR(0, "Could not set input offset in hg_class");
+        goto error;
+    }
+
+    // XXX
+
+finish:
+    if(self_addr != HG_ADDR_NULL) HG_Addr_free(hg_class, self_addr);
+    return mid;
+
+error:
+    for(unsigned i = 0; i < num_xstreams; i++) {
+        if(xstreams[i] && owns_xstream[i]) {
+            ABT_xstream_join(xstreams[i]);
+            ABT_xstream_free(&xstreams[i]);
+        }
+    }
+    free(xstreams);
+    free(pools);
+    if(config) json_decref(config);
+    if(self_addr != HG_ADDR_NULL) HG_Addr_free(hg_class, self_addr);
+    self_addr = HG_ADDR_NULL;
+    if(hg_context) HG_Context_destroy(hg_context);
+    if(hg_class) HG_Finalize(hg_class);
+    goto finish;
 }
 
-static int validate_and_fill_config(
+/**
+ * This function takes a margo configuration (parsed JSON tree), validates its content,
+ * and complete/replace the content so that it can be used by initialization functions
+ * with the knowledge that it contains correct and complete information.
+ */
+static int validate_and_complete_config(
         json_t* _margo,
-        ABT_pool _progress_pool,
-        ABT_pool _rpc_pool,
+        ABT_pool _custom_progress_pool,
+        ABT_pool _custom_rpc_pool,
+        hg_class_t* _hg_class,
         hg_context_t* _hg_context,
         const struct hg_init_info* _hg_init_info)
 {
     json_t* ignore; // to pass as output to macros when we don't care ouput the output
+    json_t* val;
+
+    // for convenience later
+    if(_hg_context && !_hg_class)
+        _hg_class = HG_Context_get_class(_hg_context);
 
     /* ------- Margo configuration ------ */
     /* Fields:
@@ -82,32 +279,37 @@ static int validate_and_fill_config(
        - [optional] rpc_thread_count: integer (default 0)
     */
     {   // add or override progress_timeout_ub_msec
-        CONFIG_HAS_OR_CREATE(_margo, integer, "progress_timeout_ub_msec", 100, "progress_timeout_ub_msec", ignore);
+        CONFIG_HAS_OR_CREATE(_margo, integer, "progress_timeout_ub_msec", 100, "progress_timeout_ub_msec", val);
         CONFIG_INTEGER_MUST_BE_POSITIVE(_margo, "progress_timeout_ub_msec", "progress_timeout_ub_msec");
+        MARGO_TRACE(0, "progress_timeout_ub_msec = %d", json_integer_value(val));
     }
 
     {   // add or override enable_profiling
-        CONFIG_HAS_OR_CREATE(_margo, boolean, "enable_profiling", 0, "enable_profiling", ignore);
+        CONFIG_HAS_OR_CREATE(_margo, boolean, "enable_profiling", 0, "enable_profiling", val);
+        MARGO_TRACE(0, "enable_profiling = %s", json_is_true(val) ? "true" : "false");
     }
 
     {   // add or override enable_diagnostics
-        CONFIG_HAS_OR_CREATE(_margo, boolean, "enable_diagnostics", 0, "enable_diagnostics", ignore);
+        CONFIG_HAS_OR_CREATE(_margo, boolean, "enable_diagnostics", 0, "enable_diagnostics", val);
+        MARGO_TRACE(0, "enable_diagnostics = %s", json_is_true(val) ? "true" : "false");
     }
 
     {   // add or override handle_cache_size
-        CONFIG_HAS_OR_CREATE(_margo, integer, "handle_cache_size", 32, "handle_cache_size", ignore);
+        CONFIG_HAS_OR_CREATE(_margo, integer, "handle_cache_size", 32, "handle_cache_size", val);
         CONFIG_INTEGER_MUST_BE_POSITIVE(_margo, "handle_cache_size", "handle_cache_size");
+        MARGO_TRACE(0, "handle_cache_size = %d", json_integer_value(val));
     }
 
     {   // add or override profile_sparkline_timeslice_msec
-        CONFIG_HAS_OR_CREATE(_margo, integer, "profile_sparkline_timeslice_msec", 32, "profile_sparkline_timeslice_msec", ignore);
+        CONFIG_HAS_OR_CREATE(_margo, integer, "profile_sparkline_timeslice_msec", 1000, "profile_sparkline_timeslice_msec", val);
         CONFIG_INTEGER_MUST_BE_POSITIVE(_margo, "profile_sparkline_timeslice_msec", "profile_sparkline_timeslice_msec");
+        MARGO_TRACE(0, "profile_sparkline_timeslice_msec = %d", json_integer_value(val));
     }
 
     /* ------- Mercury configuration ------ */
     /* Fields:
-       - [required] address: string
-       - [required] listening: bool (optional if hg_context provided)
+       - [added] address: string
+       - [added] listening: bool (optional if hg_context provided)
        - [optional] auto_sm: bool (default false)
        - [optional] stats: bool (default false)
        - [optional] na_no_block: bool (default false)
@@ -120,21 +322,7 @@ static int validate_and_fill_config(
 
     /* find the "mercury" object in the configuration */
     json_t* _mercury = NULL;
-    CONFIG_MUST_HAVE(_margo, object, "mercury", "mercury", _mercury);
-
-    {   // must have an "address" field if hg_context is NULL
-        if(!_hg_context)
-            CONFIG_MUST_HAVE(_mercury, string, "address", "mercury.address", ignore);
-    }
-
-    {   // must have an "listening" boolean field if hg_context is NULL
-        if(!_hg_context) {
-            CONFIG_MUST_HAVE(_mercury, boolean, "listening", "mercury.listening", ignore);
-        } else {
-            bool is_listening = HG_Class_is_listening(_hg_context->hg_class);
-            CONFIG_HAS_OR_CREATE(_mercury, boolean, "listening", is_listening, "mercury.listening", ignore);
-        }
-    }
+    CONFIG_HAS_OR_CREATE_OBJECT(_margo, "mercury", "mercury", _mercury);
 
     {   // add or override Mercury version
         char hg_version_string[64];
@@ -142,54 +330,62 @@ static int validate_and_fill_config(
         HG_Version_get(&hg_major, &hg_minor, &hg_patch);
         snprintf(hg_version_string, 64, "%u.%u.%u", hg_major, hg_minor, hg_patch);
         CONFIG_OVERRIDE_STRING(_mercury, "version", hg_version_string, "mercury.version", 1);
+        MARGO_TRACE(0, "mercury.version = %s", hg_version_string);
     }
 
     {   // add mercury.auto_sm or set it as default
         if(_hg_init_info)
             CONFIG_OVERRIDE_BOOL(_mercury, "auto_sm", _hg_init_info->auto_sm, "mercury.auto_sm", 1);
-        else
-            CONFIG_HAS_OR_CREATE(_mercury, boolean, "auto_sm", 0, "mercury.auto_sm", ignore);
+        CONFIG_HAS_OR_CREATE(_mercury, boolean, "auto_sm", 0, "mercury.auto_sm", val);
+        MARGO_TRACE(0, "mercury.auto_sm = %s", json_is_true(val) ? "true" : "false");
     }
 
     {   // add mercury.stats or set it as default
         if(_hg_init_info)
             CONFIG_OVERRIDE_BOOL(_mercury, "stats", _hg_init_info->stats, "mercury.stats", 1);
-        else
-            CONFIG_HAS_OR_CREATE(_mercury, boolean, "stats", 0, "mercury.stats", ignore);
+        CONFIG_HAS_OR_CREATE(_mercury, boolean, "stats", 0, "mercury.stats", val);
+        MARGO_TRACE(0, "mercury.stats = %s", json_is_true(val) ? "true" : "false");
     }
     
     {   // add mercury.na_no_block or set it as default
         if(_hg_init_info) {
             bool na_no_block = _hg_init_info->na_init_info.progress_mode & NA_NO_BLOCK;
             CONFIG_OVERRIDE_BOOL(_mercury, "na_no_block", na_no_block, "mercury.na_no_block", 1);
-        } else
-            CONFIG_HAS_OR_CREATE(_mercury, boolean, "na_no_block", 0, "mercury.na_no_block", ignore);
+        }
+        CONFIG_HAS_OR_CREATE(_mercury, boolean, "na_no_block", 0, "mercury.na_no_block", val);
+        MARGO_TRACE(0, "mercury.na_no_block = %s", json_is_true(val) ? "true" : "false");
     }
 
     {   // add mercury.na_no_retry or set it as default
         if(_hg_init_info) {
             bool na_no_retry = _hg_init_info->na_init_info.progress_mode & NA_NO_RETRY;
             CONFIG_OVERRIDE_BOOL(_mercury, "na_no_retry", na_no_retry, "mercury.na_no_retry", 1);
-        } else
-            CONFIG_HAS_OR_CREATE(_mercury, boolean, "na_no_retry", 0, "mercury.na_no_retry", ignore);
+        }
+        CONFIG_HAS_OR_CREATE(_mercury, boolean, "na_no_retry", 0, "mercury.na_no_retry", val);
+        MARGO_TRACE(0, "mercury.na_no_retry = %s", json_is_true(val) ? "true" : "false");
     }
 
     {   // add mercury.max_contexts or set it as default
         if(_hg_init_info) {
             na_uint8_t max_contexts = _hg_init_info->na_init_info.max_contexts;
             CONFIG_OVERRIDE_INTEGER(_mercury, "max_contexts", max_contexts, "mercury.max_contexts", 1);
-        } else
-            CONFIG_HAS_OR_CREATE(_mercury, boolean, "max_contexts", 1, "mercury.max_contexts", ignore);
+        }
+        CONFIG_HAS_OR_CREATE(_mercury, integer, "max_contexts", 1, "mercury.max_contexts", val);
+        MARGO_TRACE(0, "mercury.max_contexts = %d", json_integer_value(val));
     }
 
     {   // add mercury.ip_subnet to configuration if present _hg_init_info
-        if(_hg_init_info && _hg_init_info->na_init_info.ip_subnet)
+        if(_hg_init_info && _hg_init_info->na_init_info.ip_subnet) {
             CONFIG_OVERRIDE_STRING(_mercury, "ip_subnet", _hg_init_info->na_init_info.ip_subnet, "mercury.ip_subnet", 1);
+            MARGO_TRACE(0, "mercury.ip_subnet = %s", _hg_init_info->na_init_info.ip_subnet);
+        }
     }
 
     {   // add mercury.auth_key to configuration if present in _hg_init_info
-        if(_hg_init_info && _hg_init_info->na_init_info.auth_key)
+        if(_hg_init_info && _hg_init_info->na_init_info.auth_key) {
             CONFIG_OVERRIDE_STRING(_mercury, "auth_key", _hg_init_info->na_init_info.auth_key, "mercury.auth_key", 1);
+            MARGO_TRACE(0, "mercury.auth_key = %s", _hg_init_info->na_init_info.auth_key);
+        }
     }
 
     /* ------- Argobots configuration ------ */
@@ -208,23 +404,28 @@ static int validate_and_fill_config(
         int abt_mem_max_num_stacks = abt_mem_max_num_stacks_str ? atoi(abt_mem_max_num_stacks_str) : 8;
         if(abt_mem_max_num_stacks_str) {
             CONFIG_OVERRIDE_INTEGER(_argobots, "abt_mem_max_num_stacks", abt_mem_max_num_stacks, "argobots.abt_mem_max_num_stacks", 1);
+            MARGO_TRACE(0, "argobots.abt_mem_max_num_stacks = %d", abt_mem_max_num_stacks);
         } else {
-            CONFIG_HAS_OR_CREATE(_argobots, integer, "abt_mem_max_num_stacks", abt_mem_max_num_stacks, "argobots.abt_mem_max_num_stacks", ignore);
+            CONFIG_HAS_OR_CREATE(_argobots, integer, "abt_mem_max_num_stacks", abt_mem_max_num_stacks, "argobots.abt_mem_max_num_stacks", val);
+            MARGO_TRACE(0, "argobots.abt_mem_max_num_stacks = %d", json_integer_value(val));
         }
     }
 
     {   // handle abt_thread_stacksize
         const char* abt_thread_stacksize_str = getenv("ABT_THREAD_STACKSIZE");
-        int abt_thread_stacksize = abt_thread_stacksize_str ? atoi(abt_thread_stacksize_str) : 8;
+        int abt_thread_stacksize = abt_thread_stacksize_str ? atoi(abt_thread_stacksize_str) : 2097152;
         if(abt_thread_stacksize_str) {
             CONFIG_OVERRIDE_INTEGER(_argobots, "abt_thread_stacksize", abt_thread_stacksize, "argobots.abt_thread_stacksize", 1);
+            MARGO_TRACE(0, "argobots.abt_thread_stacksize = %d", abt_thread_stacksize);
         } else {
-            CONFIG_HAS_OR_CREATE(_argobots, integer, "abt_thread_stacksize", abt_thread_stacksize, "argobots.abt_thread_stacksize", ignore);
+            CONFIG_HAS_OR_CREATE(_argobots, integer, "abt_thread_stacksize", abt_thread_stacksize, "argobots.abt_thread_stacksize", val);
+            MARGO_TRACE(0, "argobots.abt_thread_stacksize = %d", json_integer_value(val));
         }
     }
 
     {   // handle version
         CONFIG_OVERRIDE_STRING(_argobots, "version", ABT_VERSION, "argobots.version", 1);
+        MARGO_TRACE(0, "argobots.version = " ABT_VERSION);
     }
 
     /* ------- Argobots pools configuration ------- */
@@ -243,17 +444,18 @@ static int validate_and_fill_config(
             // handle "name" field
             char default_name[64];
             snprintf(default_name, 64, "__pool_%d__", i);
-            CONFIG_HAS_OR_CREATE(_pool, string, "name", default_name, "argobots.pools[?].name", ignore);
+            CONFIG_HAS_OR_CREATE(_pool, string, "name", default_name, "argobots.pools[?].name", val);
             // check that the name is authorized
             CONFIG_NAME_IS_VALID(_pool);
+            MARGO_TRACE(0, "argobots.pools[%d].name = \"%s\"", i, json_string_value(val));
             // handle "kind" field
-            CONFIG_HAS_OR_CREATE(_pool, string, "kind", "fifo_wait", "argobots.pools[?].kind", ignore);
-            json_t* _kind = json_object_get(_pool, "kind");
-            CONFIG_IS_IN_ENUM_STRING(_kind, "argobots.pools[?].kind", "fifo", "fifo_wait");
+            CONFIG_HAS_OR_CREATE(_pool, string, "kind", "fifo_wait", "argobots.pools[?].kind", val);
+            CONFIG_IS_IN_ENUM_STRING(val, "argobots.pools[?].kind", "fifo", "fifo_wait");
+            MARGO_TRACE(0, "argobots.pools[%d].kind = %s", i, json_string_value(val));
             // handle "access" field
-            CONFIG_HAS_OR_CREATE(_pool, string, "access", "mpmc", "argobots.pools[?].access", ignore);
-            json_t* _access = json_object_get(_pool, "access");
-            CONFIG_IS_IN_ENUM_STRING(_access, "argobots.pools[?].access", "private", "spsc", "mpsc", "spmc", "mpmc");
+            CONFIG_HAS_OR_CREATE(_pool, string, "access", "mpmc", "argobots.pools[?].access", val);
+            CONFIG_IS_IN_ENUM_STRING(val, "argobots.pools[?].access", "private", "spsc", "mpsc", "spmc", "mpmc");
+            MARGO_TRACE(0, "argobots.pools[%d].access = %s", i, json_string_value(val));
         }
         // check that the names aren't repeated
         CONFIG_NAMES_MUST_BE_UNIQUE(_pools, "argobots.pools");
@@ -265,7 +467,7 @@ static int validate_and_fill_config(
        - [optional] cpubind: integer
        - [optional] affinity: array of integers
        - [required] scheduler: object with fields
-                    [required] sched_predef: string
+                    [required] type: string
                     [required] pools: array of integers os trings
     */
     json_t* _xstreams = NULL;
@@ -278,25 +480,29 @@ static int validate_and_fill_config(
             // handle "name" field
             char default_name[64];
             snprintf(default_name, 64, "__xstream_%d__", i);
-            CONFIG_HAS_OR_CREATE(_xstream, string, "name", default_name, "argobots.xstreams[?].name", ignore);
+            CONFIG_HAS_OR_CREATE(_xstream, string, "name", default_name, "argobots.xstreams[?].name", val);
             // check that the name is authorized
             CONFIG_NAME_IS_VALID(_xstream);
+            MARGO_TRACE(0, "argobots.xstreams[%d].name = \"%s\"", i, json_string_value(val));
             // handle cpubind entry
-            CONFIG_HAS_OR_CREATE(_xstream, integer, "cpubind", -1, "argobots.xstreams[?].cpubind", ignore);
+            CONFIG_HAS_OR_CREATE(_xstream, integer, "cpubind", -1, "argobots.xstreams[?].cpubind", val);
+            MARGO_TRACE(0, "argobots.xstreams[%d].cpubind = %d", i, json_integer_value(val));
             // handle affinity
             json_t* _affinity = json_object_get(_xstream, "affinity");
             if(!_affinity) {
                 json_object_set_new(_xstream, "affinity", json_array());
             } else if(json_is_array(_affinity)) {
                 for(unsigned j = 0; j < json_array_size(_affinity); j++) {
-                    if(!json_is_integer(json_array_get(_affinity, j))) {
-                        fprintf(stderr, "ERROR: invalid element type found in affinity array (should be integers) "
-                                "in argobots.xstreams[?].affinity\n");
+                    val = json_array_get(_affinity, j);
+                    if(!json_is_integer(val)) {
+                        MARGO_ERROR(0, "Invalid element type found in affinity array (should be integers)");
                         return -1;
                     }
+                    MARGO_TRACE(0, "argobots.xstreams[%d].affinity[%d] = %d",
+                                i, j, json_integer_value(val));
                 }
             } else {
-                fprintf(stderr, "ERROR: invalid type for argobots.xstreams[?].affinity (should be array of integers)\n");
+                MARGO_ERROR(0, "Invalid type for affinity field (should be array of integers)");
                 return -1;
             }
             // find "scheduler" entry
@@ -306,37 +512,39 @@ static int validate_and_fill_config(
             CONFIG_MUST_HAVE(_xstream, object, "scheduler", "argobots.xstreams[?].scheduler", _sched);
             CONFIG_MUST_HAVE(_sched, string, "type", "argobots.xstreams[?].scheduler.type", _sched_type);
             CONFIG_IS_IN_ENUM_STRING(_sched_type, "argobots.xstreams[?].scheduler.type", "default", "basic", "prio", "randws", "basic_wait");
+            MARGO_TRACE(0, "argobots.xstreams[%d].scheduler.type = %s", i, json_string_value(_sched_type)); 
             CONFIG_MUST_HAVE(_sched, array, "pools", "argobots.xstreams[?].scheduler.pools", _pool_refs);
             // pools array must not be empty
             size_t num_pool_refs = json_array_size(_pool_refs);
             if(num_pool_refs == 0) {
-                fprintf(stderr, "ERROR: argobots.schedulers[?].pools should not be an empty array\n");
+                MARGO_ERROR(0,"In scheduler definition, pools should not be an empty array");
                 return -1;
             }
             // check that all the pool references refer to a known pool
             unsigned j;
             json_t* _pool_ref = NULL;
+            int _pool_ref_index;
             json_array_foreach(_pool_refs, j, _pool_ref) {
                 if(json_is_integer(_pool_ref)) {
-                    int _pool_ref_index = json_integer_value(_pool_ref);
+                    _pool_ref_index = json_integer_value(_pool_ref);
                     if(_pool_ref_index < 0 || _pool_ref_index >= num_custom_pools) {
-                        fprintf(stderr, "ERROR: invalid pool index %d in argobots.schedulers[?].pools\n", _pool_ref_index);
+                        MARGO_ERROR(0, "Invalid pool index %d in scheduler definition", _pool_ref_index);
                         return -1;
                     }
                 } else if(json_is_string(_pool_ref)) {
-                    int _pool_ref_index;
                     const char* _pool_ref_name = json_string_value(_pool_ref);
                     CONFIG_FIND_BY_NAME(_pools, _pool_ref_name, _pool_ref_index, ignore);
                     if(_pool_ref_index == -1) {
-                        fprintf(stderr, "ERROR: invalid pool name \"%s\" in argobots.schedulers[?].pools\n", _pool_ref_name);
+                        MARGO_ERROR(0, "Invalid pool name \"%s\" in scheduler definition", _pool_ref_name);
                         return -1;
                     }
                     // replace the name with the index
                     json_array_set_new(_pool_refs, j, json_integer(_pool_ref_index));
                 } else {
-                    fprintf(stderr, "ERROR: in argobots.schedulers[?].pools, pool reference should be an integer or a string\n");
+                    MARGO_ERROR(0, "Reference to pool should be an integer or a string");
                     return -1;
                 }
+                MARGO_TRACE(0, "argobots.xstreams[%d].scheduler.pools[%d] = %d", i, j, _pool_ref_index);
             }
         }
         // check that the names of xstreams are unique
@@ -348,9 +556,11 @@ static int validate_and_fill_config(
             if(xstream_index == -1) { // need to create __primary__ xstream entry
                 CONFIG_FIND_BY_NAME(_pools, "__primary__", pool_index, ignore);
                 if(pool_index == -1) { // need to create __primary__ pool entry
+                    MARGO_TRACE(0, "__primary__ pool not found, will be created");
                     CONFIG_ADD_NEW_POOL(_pools, "__primary__", "fifo_wait", "mpmc");
                 }
                 pool_index = json_array_size(_pools)-1;
+                MARGO_TRACE(0, "__primary__ xstream not found, will be created");
                 CONFIG_ADD_NEW_XSTREAM(_xstreams, "__primary__", "basic_wait", pool_index);
             }
         }
@@ -360,12 +570,12 @@ static int validate_and_fill_config(
 
     {   // handle progress_pool and use_progress_thread fields and _progress_pool argument
        
-        if(_progress_pool != ABT_POOL_NULL) { // custom pool provided as argument
+        if(_custom_progress_pool != ABT_POOL_NULL && _custom_progress_pool != NULL) { // custom pool provided as argument
 
             // -1 is used to indicate that progress_pool is provided by the user
             CONFIG_OVERRIDE_INTEGER(_margo, "progress_pool", -1, "progress_pool", 1);
             if(CONFIG_HAS(_margo, "use_progress_thread", ignore)) {
-                fprintf(stderr, "WARNING: ignoring \"use_progress_thread\" because custom progress pool was provided\n");
+                MARGO_WARNING(0, "Ignoring \"use_progress_thread\" because custom progress pool was provided\n");
             }
 
         } else { // no custom pool provided as argument
@@ -374,7 +584,7 @@ static int validate_and_fill_config(
             if(CONFIG_HAS(_margo, "progress_pool", _progress_pool)) {
 
                 if(CONFIG_HAS(_margo, "use_progress_thread", ignore)) { // progress_pool and use_progress_thread both specified
-                    fprintf(stderr, "WARNING: \"use_progress_thread\" ignored because \"progress_pool\" is specified\n");
+                     MARGO_WARNING(0,"Ignoring \"use_progress_thread\" because \"progress_pool\" is specified\n");
                 }
                 int progress_pool_index = -1;
                 if(json_is_string(_progress_pool)) {
@@ -383,31 +593,35 @@ static int validate_and_fill_config(
                     CONFIG_FIND_BY_NAME(_pools, progress_pool_name, progress_pool_index, ignore);
                 } else if(json_is_integer(_progress_pool)) {
                     progress_pool_index = json_integer_value(_progress_pool);
-                    if(progress_pool_index < 0 || progress_pool_index >= json_array_size(_pools)) {
-                        fprintf(stderr, "ERROR: \"progress_pool\" value out of range\n");
+                    if((progress_pool_index < -1) || (progress_pool_index >= (int)json_array_size(_pools))) {
+                        MARGO_ERROR(0, "\"progress_pool\" value (%d) out of range", progress_pool_index);
                         return -1;
                     }
                 } else {
-                    fprintf(stderr, "ERROR: \"progress_pool\" should be of type integer or string\n");
+                    MARGO_ERROR(0, "\"progress_pool\" should be of type integer or string");
                     return -1;
                 }
                 // update the progress_pool to an integer index
                 json_object_set(_margo, "progress_pool", json_integer(progress_pool_index));
+                MARGO_TRACE(0, "progress_pool = %d", progress_pool_index);
             } else {
                 bool use_progress_thread = 0;
                 if(CONFIG_HAS(_margo, "use_progress_thread", ignore)) { // use_progress_thread specified, progress_pool not specified
                     if(!json_is_boolean(json_object_get(_margo, "use_progress_thread"))) {
-                        fprintf(stderr,"ERROR: \"use_progress_thread\" should be an boolean\n");
+                        MARGO_ERROR(0, "\"use_progress_thread\" should be a boolean");
                         return -1;
                     }
                     use_progress_thread = json_boolean_value(json_object_get(_margo, "use_progress_thread"));
                 }
                 if(use_progress_thread) {
                     // create a specific pool, scheduler, and xstream for the progress loop
+                    MARGO_TRACE(0, "Creating __progress__ pool");
                     CONFIG_ADD_NEW_POOL(_pools, "__progress__", "fifo_wait", "mpmc");
                     int pool_index = json_array_size(_pools)-1;
+                    MARGO_TRACE(0, "Creating __progress__ xstream");
                     CONFIG_ADD_NEW_XSTREAM(_xstreams, "__progress__", "basic_wait", pool_index);
-                    json_object_set_new(_margo, "progress_pool", json_string("__progress__"));
+                    json_object_set_new(_margo, "progress_pool", json_integer(pool_index));
+                    MARGO_TRACE(0, "progress_pool = %d", pool_index);
                 } else {
                     // use primary xstream's scheduler's first pool for the progress loop
                     json_t* _primary_xstream = NULL;
@@ -422,6 +636,7 @@ static int validate_and_fill_config(
                     json_t* _first_pool_ref = json_array_get(_primary_pool_refs, 0);
                     // set "progress_pool" to the pool's reference 
                     json_object_set_new(_margo, "progress_pool", json_copy(_first_pool_ref));
+                    MARGO_TRACE(0, "progress_pool = %d", json_integer_value(_first_pool_ref));
                 }
             }
         }
@@ -430,11 +645,11 @@ static int validate_and_fill_config(
 
     {   // handle rpc_thread_count and rpc_pool
         
-        if(_rpc_pool != ABT_POOL_NULL) { // custom pool provided as argument
+        if(_custom_rpc_pool != ABT_POOL_NULL && _custom_rpc_pool != NULL) { // custom pool provided as argument
             // -1 means user-provided pool
             CONFIG_OVERRIDE_INTEGER(_margo, "rpc_pool", -1, "rpc_pool", 1);
             if(CONFIG_HAS(_margo, "rpc_thread_count", ignore)) {
-                fprintf(stderr, "WARNING: ignoring \"rpc_thread_count\" because custom RPC pool was provided\n");
+                MARGO_WARNING(0, "Ignoring \"rpc_thread_count\" because custom RPC pool was provided");
             }
 
         } else { // no custom pool provided as argument
@@ -442,7 +657,7 @@ static int validate_and_fill_config(
             json_t* _rpc_pool = NULL;
             if(CONFIG_HAS(_margo, "rpc_pool", _rpc_pool)) {
                 if(CONFIG_HAS(_margo, "rpc_thread_count", ignore)) { // rpc_pool and rpc_thread_count both specified
-                    fprintf(stderr, "WARNING: \"rpc_thread_count\" ignored because \"rpc_pool\" is specified\n");
+                    MARGO_WARNING(0, "Ignoring \"rpc_thread_count\" ignored because \"rpc_pool\" is specified");
                 }
                 int rpc_pool_index = -1;
                 if(json_is_string(_rpc_pool)) {
@@ -451,21 +666,22 @@ static int validate_and_fill_config(
                     CONFIG_FIND_BY_NAME(_pools, rpc_pool_name, rpc_pool_index, ignore);
                 } else if(json_is_integer(_rpc_pool)) {
                     rpc_pool_index = json_integer_value(_rpc_pool);
-                    if(rpc_pool_index < 0 || rpc_pool_index >= json_array_size(_pools)) {
-                        fprintf(stderr, "ERROR: \"rpc_pool\" value out of range\n");
+                    if(rpc_pool_index < -1 || rpc_pool_index >= (int)json_array_size(_pools)) {
+                        MARGO_ERROR(0, "\"rpc_pool\" value (%d) out of range", rpc_pool_index);
                         return -1;
                     }
                 } else {
-                    fprintf(stderr, "ERROR: \"rpc_pool\" should be of type integer or string\n");
+                    MARGO_ERROR(0, "\"rpc_pool\" should be of type integer or string");
                     return -1;
                 }
                 // update the rpc_pool to an integer index
                 json_object_set(_margo, "rpc_pool", json_integer(rpc_pool_index));
+                MARGO_TRACE(0, "rpc_pool = %d", rpc_pool_index);
             } else { // rpc_pool not specified, use rpc_thread_count instead
                 int rpc_thread_count = 0;
                 if(CONFIG_HAS(_margo, "rpc_thread_count", ignore)) { // rpc_thread_count specified
                     if(!json_is_integer(json_object_get(_margo, "rpc_thread_count"))) {
-                        fprintf(stderr,"ERROR: \"rpc_thread_count\" should be an integer\n");
+                        MARGO_ERROR(0,"\"rpc_thread_count\" should be an integer");
                         return -1;
                     }
                     rpc_thread_count = json_integer_value(json_object_get(_margo, "rpc_thread_count"));
@@ -474,6 +690,7 @@ static int validate_and_fill_config(
                     json_t* _progress_pool = json_object_get(_margo, "progress_pool");
                     json_t* _rpc_pool = json_copy(_progress_pool);
                     json_object_set_new(_margo, "rpc_pool", _rpc_pool);
+                    MARGO_TRACE(0, "rpc_pool = %d", json_integer_value(_rpc_pool));
                 } else if(rpc_thread_count == 0) { // use primary pool
                     // use primary xstream's scheduler's first pool for the RPC loop
                     json_t* _primary_xstream = NULL;
@@ -490,16 +707,19 @@ static int validate_and_fill_config(
                     json_t* _first_pool_ref = json_array_get(_primary_pool_refs, 0);
                     // set "rpc_pool"
                     json_object_set_new(_margo, "rpc_pool", json_copy(_first_pool_ref));
-
+                    MARGO_TRACE(0, "rpc_pool = %d", json_integer_value(_first_pool_ref));
                 } else { // define a new pool and some new xstreams
+                    MARGO_TRACE(0, "Creating new __rpc__ pool");
                     CONFIG_ADD_NEW_POOL(_pools, "__rpc__", "fifo_wait", "mpmc");
                     int pool_index = json_array_size(_pools)-1;
                     for(unsigned i = 0; i < rpc_thread_count; i++) {
                         char name[64];
                         snprintf(name, 64, "__rpc_%d__", i);
+                        MARGO_TRACE(0, "Creating new __rpc_%d__ xstream", i);
                         CONFIG_ADD_NEW_XSTREAM(_xstreams, name, "basic_wait", pool_index);
                     }
                     json_object_set_new(_margo, "rpc_pool", json_integer(pool_index));
+                    MARGO_TRACE(0, "rpc_pool = %d", pool_index);
                 }
             }
         }
@@ -508,3 +728,170 @@ static int validate_and_fill_config(
 
     return 0;
 }
+
+static void fill_hg_init_info_from_config(
+        json_t* config,
+        struct hg_init_info* info)
+{
+    json_t* hg = json_object_get(config, "mercury");
+    info->na_class = NULL;
+    info->auto_sm  = json_boolean_value(json_object_get(hg, "auto_sm"));
+    info->stats    = json_boolean_value(json_object_get(hg, "stats"));
+    json_t* ip_subnet = json_object_get(hg, "ip_subnet");
+    info->na_init_info.ip_subnet = ip_subnet ? json_string_value(ip_subnet) : NULL;
+    json_t* auth_key = json_object_get(hg, "auth_key");
+    info->na_init_info.auth_key  = auth_key ? json_string_value(auth_key) : NULL;
+    info->na_init_info.progress_mode = 0;
+    if(json_is_true(json_object_get(hg, "na_no_block")))
+            info->na_init_info.progress_mode |= NA_NO_BLOCK;
+    if(json_is_true(json_object_get(hg, "na_no_retry")))
+            info->na_init_info.progress_mode |= NA_NO_RETRY;
+    info->na_init_info.max_contexts = json_integer_value(json_object_get(hg, "max_contexts"));
+}
+
+static int create_pool_from_config(
+        json_t* pool_config,
+        ABT_pool* pool)
+{
+    const char* jname   = json_string_value(json_object_get(pool_config, "name"));
+    const char* jkind   = json_string_value(json_object_get(pool_config, "kind"));
+    const char* jaccess = json_string_value(json_object_get(pool_config, "access"));
+
+    ABT_pool_kind kind;
+    ABT_pool_access access;
+
+    if(strcmp(jkind, "fifo") == 0) kind = ABT_POOL_FIFO;
+    else if(strcmp(jkind, "fifo_wait") == 0) kind = ABT_POOL_FIFO_WAIT;
+
+    if(strcmp(jaccess, "private") == 0)   access = ABT_POOL_ACCESS_PRIV;
+    else if(strcmp(jaccess, "spsc") == 0) access = ABT_POOL_ACCESS_SPSC;
+    else if(strcmp(jaccess, "mpsc") == 0) access = ABT_POOL_ACCESS_MPSC;
+    else if(strcmp(jaccess, "spmc") == 0) access = ABT_POOL_ACCESS_SPMC;
+    else if(strcmp(jaccess, "mpmc") == 0) access = ABT_POOL_ACCESS_MPMC;
+
+    MARGO_TRACE(0, "Instantiating pool \"%s\"", jname);
+
+    int ret = ABT_pool_create_basic(kind, access, ABT_TRUE, pool);
+    if(ret != ABT_SUCCESS) {
+        MARGO_ERROR(0, "ABT_pool_create_basic failed to create pool (ret = %d)", ret);
+    }
+    return ret;
+}
+
+static int create_xstream_from_config(
+        json_t* es_config,
+        ABT_xstream* es,
+        bool* owns_xstream,
+        const ABT_pool* pools,
+        size_t total_num_pools)
+{
+    int ret = ABT_SUCCESS;
+    const char* es_name = json_string_value(json_object_get(es_config, "name"));
+    json_t* sched = json_object_get(es_config, "scheduler");
+    const char* es_sched_type  = json_string_value(json_object_get(sched, "type"));
+    json_t*     es_pools_array = json_object_get(sched, "pools");
+    int         es_num_pools   = json_array_size(es_pools_array);
+    int         es_cpubind     = json_integer_value(json_object_get(es_config, "cpubind"));
+    json_t*     es_affinity    = json_object_get(es_config, "affinity");
+
+    ABT_sched_predef predef;
+    if(strcmp(es_sched_type, "default") == 0)         predef = ABT_SCHED_DEFAULT;
+    else if(strcmp(es_sched_type, "basic") == 0)      predef = ABT_SCHED_BASIC;
+    else if(strcmp(es_sched_type, "prio") == 0)       predef = ABT_SCHED_PRIO;
+    else if(strcmp(es_sched_type, "randws") == 0)     predef = ABT_SCHED_RANDWS;
+    else if(strcmp(es_sched_type, "basic_wait") == 0) predef = ABT_SCHED_BASIC_WAIT;
+
+    ABT_pool es_pools[es_num_pools];
+    for(unsigned i = 0; i < es_num_pools; i++) {
+        int pool_ref = json_integer_value(json_array_get(es_pools_array, i));
+        es_pools[i] = pools[pool_ref];
+    }
+
+    if(strcmp(es_name, "__primary__") == 0) {
+
+        ret = ABT_xstream_self(es);
+        if(ret != ABT_SUCCESS) {
+            MARGO_ERROR(0, "ABT_xstream_self failed (ret = %d)", ret);
+            return ret;
+        }
+        ABT_bool is_primary;
+        ABT_xstream_is_primary(*es, &is_primary);
+        if(!is_primary) {
+            MARGO_WARNING(0, "margo_init_ext called from non-primary ES");
+        }
+        *owns_xstream = 0;
+        ret = ABT_xstream_set_main_sched_basic(*es, predef, es_num_pools, es_pools);
+        if(ret != ABT_SUCCESS) {
+            MARGO_ERROR(0, "ABT_xstream_set_main_sched_basic failed to set scheduler (ret = %d)", ret);
+            return ret;
+        }
+
+    } else {
+
+        ret = ABT_xstream_create_basic(predef, es_num_pools, es_pools, ABT_SCHED_CONFIG_NULL, es);
+        if(ret != ABT_SUCCESS) {
+            MARGO_ERROR(0, "ABT_xstream_create_basic failed to create pool (ref = %d)", ret);
+            return ret;
+        }
+        *owns_xstream = 1;
+    }
+    
+    // get/set cpubind
+    if(es_cpubind == -1) {
+        ret = ABT_xstream_get_cpubind(*es, &es_cpubind);
+        if(ret != ABT_SUCCESS) {
+            MARGO_WARNING(0, "ABT_xstream_get_cpubind failed to get cpubind (ret = %d)", ret);
+        } else {
+            json_object_set_new(es_config, "cpubind", json_integer(es_cpubind));
+        }
+    } else {
+        ret = ABT_xstream_set_cpubind(*es, es_cpubind);
+        if(ret != ABT_SUCCESS) {
+             MARGO_WARNING(0, "ABT_xstream_set_cpubind failed to set cpubind (ret = %d)", ret);
+        }
+    }
+
+    // get/set affinity
+    if(json_array_size(es_affinity) == 0) {
+        // get affinity
+        int num_cpus;
+        ret = ABT_xstream_get_affinity(*es, 0, NULL, &num_cpus);
+        if(ret != ABT_SUCCESS) {
+            MARGO_WARNING(0, "ABT_xstream_get_affinity failed to get affinity (ret = %d)", ret);
+        } else
+        if(num_cpus) {
+            int cpuids[num_cpus];
+            ABT_xstream_get_affinity(*es, num_cpus, cpuids, &num_cpus);
+            for(unsigned i = 0; i < num_cpus; i++) {
+                json_array_set_new(es_affinity, i, json_integer(cpuids[i]));
+            }
+        }
+    } else {
+        // set affinity
+        int num_cpus = json_array_size(es_affinity);
+        int cpuids[num_cpus];
+        for(unsigned i = 0; i < num_cpus; i++) {
+            cpuids[i] = json_integer_value(json_array_get(es_affinity, i));
+        }
+        ret = ABT_xstream_set_affinity(*es, num_cpus, cpuids);
+        if(ret != ABT_SUCCESS) {
+            MARGO_WARNING(0, "ABT_xtsream_set_affinity failed to set affinity (ret = %d)", ret);
+        }
+    }
+    
+    return ABT_SUCCESS;
+}
+
+static void set_argobots_environment_variables(json_t* config)
+{
+    json_t* argobots = json_object_get(config, "argobots");
+    int abt_mem_max_num_stacks = json_integer_value(json_object_get(argobots, "abt_mem_max_num_stacks"));
+    int abt_thread_stacksize = json_integer_value(json_object_get(argobots, "abt_thread_stacksize"));
+
+    char env_str[64];
+    sprintf(env_str, "%d", abt_mem_max_num_stacks);
+    setenv("ABT_MEM_MAX_NUM_STACKS", env_str, 1);
+    sprintf(env_str, "%d", abt_thread_stacksize);
+    setenv("ABT_THREAD_STACKSIZE", env_str, 1);
+}
+

@@ -45,12 +45,7 @@ struct diag_data
     UT_hash_handle hh;        /* hash table link */
 };
 
-struct margo_handle_cache_el
-{
-    hg_handle_t handle;
-    UT_hash_handle hh; /* in-use hash link */
-    struct margo_handle_cache_el *next; /* free list link */
-};
+struct margo_handle_cache_el; /* defined in margo-handle-cache.c */
 
 struct margo_finalize_cb
 {
@@ -91,7 +86,7 @@ struct margo_instance
     ABT_xstream *rpc_xstreams;
     int num_handler_pool_threads;
     int hg_progress_timeout_ub;
-    uint16_t num_registered_rpcs; 	   /* number of registered rpc's by all providers on this instance */
+    uint16_t num_registered_rpcs;  /* number of registered rpc's by all providers on this instance */
 
     /* list of rpcs registered on this instance for debugging and profiling purposes */
     struct margo_registered_rpc *registered_rpcs;
@@ -140,7 +135,7 @@ struct margo_instance
     struct diag_data *diag_rpc;
     ABT_mutex diag_rpc_mutex;
 
-    json_t *component_cfg;
+    json_t *json_cfg;
 
     /* logging */
     struct margo_logger logger;

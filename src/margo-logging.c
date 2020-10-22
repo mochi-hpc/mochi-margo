@@ -3,7 +3,7 @@
  * 
  * See COPYRIGHT in top-level directory.
  */
-#include "margo-internal.h"
+#include "margo-instance.h"
 #include <margo-logging.h>
 
 static margo_log_level global_log_level = MARGO_LOG_ERROR;

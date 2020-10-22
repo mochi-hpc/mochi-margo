@@ -14,8 +14,8 @@
 // After a call to this macro, __out is set to the ceated/found field.
 #define CONFIG_HAS_OR_CREATE_OBJECT(__config, __key, __fullname, __out) do { \
     __out = json_object_get(__config, __key); \
-    if(__out && json_is_object(__out)) { \
-        fprintf(stderr, "ERROR: %s is in configuration but is not an object type\n", __fullname); \
+    if(__out && !json_is_object(__out)) { \
+        MARGO_ERROR(0, "\"%s\" is in configuration but is not an object", __fullname); \
         return -1; \
     } \
     if(!__out) { \
@@ -30,8 +30,8 @@
 // After a call to this macro, __out is set to the ceated/found field.
 #define CONFIG_HAS_OR_CREATE_ARRAY(__config, __key, __fullname, __out) do { \
     __out = json_object_get(__config, __key); \
-    if(__out && json_is_array(__out)) { \
-        fprintf(stderr, "ERROR: %s is in configuration but is not an array type\n", __fullname); \
+    if(__out && !json_is_array(__out)) { \
+        MARGO_ERROR(0, "\"%s\" is in configuration but is not an array", __fullname); \
         return -1; \
     } \
     if(!__out) { \
@@ -47,8 +47,8 @@
 // After a call to this macro, __out is set to the ceated/found field.
 #define CONFIG_HAS_OR_CREATE(__config, __type, __key, __value, __fullname, __out) do { \
     __out = json_object_get(__config, __key); \
-    if(__out && json_is_##__type(__out)) { \
-        fprintf(stderr, "ERROR: %s in configuration but has an incorrect type\n", __fullname); \
+    if(__out && !json_is_##__type(__out)) { \
+        MARGO_ERROR(0, "\"%s\" in configuration but has an incorrect type (expected %s)", __fullname, #__type); \
         return -1; \
     } \
     if(!__out) { \
@@ -63,11 +63,11 @@
 #define CONFIG_MUST_HAVE(__config, __type, __key, __fullname, __out) do { \
     __out = json_object_get(__config, __key); \
     if(!__out) { \
-        fprintf(stderr, "ERROR: %s not found in configuration\n", __fullname); \
+        MARGO_ERROR(0, "\"%s\" not found in configuration", __fullname); \
         return -1; \
     } \
     if(!json_is_##__type(__out)) { \
-        fprintf(stderr, "ERROR: %s in configuration has incorrect type (should be %s)\n", __fullname, #__type); \
+        MARGO_ERROR(0, "\"%s\" in configuration has incorrect type (expected %s)", __fullname, #__type); \
         return -1; \
     } \
 } while(0)
@@ -78,10 +78,10 @@
     json_t* _tmp = json_object_get(__config, __key); \
     if(_tmp && __warning) { \
         if(!json_is_string(_tmp)) \
-            fprintf(stderr, "WARNING: overriding field %s with value %s\n", \
+            MARGO_WARNING(0, "Overriding field \"%s\" with value \"%s\"", \
                     __fullname, __value); \
         else if(strcmp(json_string_value(_tmp), __value) != 0) \
-            fprintf(stderr, "WARNING: overriding field %s (%s) with value %s\n", \
+            MARGO_WARNING(0, "Overriding field \"%s\" (\"%s\") with value \"%s\"", \
                     __fullname, json_string_value(_tmp), __value); \
     } \
     _tmp = json_string(__value); \
@@ -94,10 +94,10 @@
     json_t* _tmp = json_object_get(__config, __key); \
     if(_tmp && __warning) { \
         if(!json_is_boolean(_tmp)) \
-            fprintf(stderr, "WARNING: overriding field %s with value %s\n", \
+            MARGO_WARNING(0, "Overriding field \"%s\" with value \"%s\"", \
                     __field_name, __value ? "true" : "false"); \
         else if(json_boolean_value(_tmp) != !!__value) \
-            fprintf(stderr, "WARNING: overriding field %s (%s) with value %s\n", \
+            MARGO_WARNING(0, "Overriding field \"%s\" (\"%s\") with value \"%s\"", \
                     __field_name, json_boolean_value(_tmp) ? "true" : "false", \
                     __value ? "true" : "false"); \
     } \
@@ -110,10 +110,10 @@
     json_t* _tmp = json_object_get(__config, __key); \
     if(_tmp && __warning) { \
         if(!json_is_integer(_tmp)) \
-            fprintf(stderr, "WARNING: overriding field %s with value %d\n", \
+            MARGO_WARNING(0, "Overriding field \"%s\" with value %d", \
                     __field_name, (int)__value); \
         else if(json_integer_value(_tmp) != __value) \
-            fprintf(stderr, "WARNING: overriding field %s (%d) with value %d\n", \
+            MARGO_WARNING(0, "Overriding field \"%s\" (%d) with value %d", \
                     __field_name, json_integer_value(_tmp), __value); \
     } \
     json_object_set_new(__config, __key, json_integer(__value)); \
@@ -123,7 +123,7 @@
 #define CONFIG_INTEGER_MUST_BE_POSITIVE(__config, __key, __fullname) do { \
     int _tmp = json_integer_value(json_object_get(__config, __key)); \
     if(_tmp < 0) { \
-        fprintf(stderr, "ERROR: %s must not be negative\n", __fullname); \
+        MARGO_ERROR(0, "\"%s\" must not be negative", __fullname); \
         return -1; \
     } \
 } while(0)
@@ -167,7 +167,7 @@
         } \
     } \
     if(!_found) { \
-        fprintf(stderr, "ERROR: could not find element named \"%s\" in %s array\n", \
+        MARGO_ERROR(0, "Could not find element named \"%s\" in \"%s\" array", \
                 __name, __array_name); \
         return -1; \
     } \
@@ -178,9 +178,9 @@
 #define CONFIG_IS_IN_ENUM_STRING(__config, __field_name, ...) do { \
     unsigned _i = 0; \
     const char* _vals[] = { __VA_ARGS__, NULL }; \
-    while(_vals[i] && strcmp(_vals[i], json_string_value(__config))) _i++; \
-    if(!_vals[i]) { \
-        fprintf(stderr, "ERROR: invalid enum value for %s\n (%s)", __field_name, json_string_value(__config)); \
+    while(_vals[_i] && strcmp(_vals[_i], json_string_value(__config))) _i++; \
+    if(!_vals[_i]) { \
+        MARGO_ERROR(0, "Invalid enum value for \"%s\" (\"%s\")", __field_name, json_string_value(__config)); \
         return -1; \
     } \
 } while(0)
@@ -196,7 +196,7 @@
             json_t* _a_name = json_object_get(_a, "name"); \
             json_t* _b_name = json_object_get(_b, "name"); \
             if(json_equal(_a_name, _b_name)) { \
-                fprintf(stderr, "ERROR: found two elements with the same name (%s) in %s", \
+                MARGO_ERROR(0, "Found two elements with the same name (\"%s\") in \"%s\"", \
                         json_string_value(_a_name), __container_name); \
                 return -1; \
             } \
@@ -211,16 +211,16 @@
     const char* _name = json_string_value(_name_json); \
     unsigned _len = strlen(_name); \
     if(_len == 0) { \
-        fprintf(stderr, "ERROR: empty name field found\n"); \
+        MARGO_ERROR(0, "Empty \"name\" field"); \
         return -1; \
     } \
     if(isdigit(_name[0])) { \
-        fprintf(stderr, "ERROR: first character of a name cannot be a digit\n"); \
+        MARGO_ERROR(0, "First character of a name cannot be a digit"); \
         return -1; \
     } \
-    for(unsigned _i=0; i < _len; i++) { \
-        if(!(isalnum(_name[_i]) || _name[i] == '_')) { \
-            fprintf(stderr, "ERROR: invalid character \"%c\" found in name\n", _name[i]); \
+    for(unsigned _i=0; _i < _len; _i++) { \
+        if(!(isalnum(_name[_i]) || _name[_i] == '_')) { \
+            MARGO_ERROR(0, "Invalid character \"%c\" found in name \"%s\"", _name[_i], _name); \
             return -1; \
         } \
     } \
@@ -244,7 +244,7 @@
     json_object_set_new(_x, "affinity", json_array()); \
     int _pool_index[] = { __VA_ARGS__, -1 }; \
     json_t* _s = json_object(); \
-    json_object_set_new(_s, "sched_predef", json_string(__sched_predef)); \
+    json_object_set_new(_s, "type", json_string(__sched_predef)); \
     json_t* _s_pools = json_array(); \
     unsigned _i = 0; \
     while(_pool_index[_i] != -1) { \

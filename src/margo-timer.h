@@ -26,13 +26,13 @@ typedef struct margo_timed_element
  * Creates a margo_timer_list.
  * @returns a new margo_timer_list, or NULL if failed 
  */
-struct margo_timer_list* margo_timer_list_create();
+struct margo_timer_list* __margo_timer_list_create();
 
 /**
  * Frees the timer list
  * @param [in] timer_lst timer list to free
  */
-void margo_timer_list_free(margo_instance_id mid, struct margo_timer_list* timer_lst);
+void __margo_timer_list_free(margo_instance_id mid, struct margo_timer_list* timer_lst);
 
 /**
  * Initializes a margo timer object which will perform some action
@@ -43,7 +43,7 @@ void margo_timer_list_free(margo_instance_id mid, struct margo_timer_list* timer
  * @param [in] cb_dat callback data passed to the callback function
  * @param [in] timeout_ms timeout duration in milliseconds
  */
-void margo_timer_init(
+void __margo_timer_init(
     margo_instance_id mid,
     margo_timer_t *timer,
     margo_timer_cb_fn cb_fn,
@@ -55,7 +55,7 @@ void margo_timer_init(
  * @param [in] mid Margo instance
  * @param [in] timer pointer to margo timer object to be destroyed
  */
-void margo_timer_destroy(
+void __margo_timer_destroy(
     margo_instance_id mid,
     margo_timer_t *timer);
 
@@ -63,7 +63,7 @@ void margo_timer_destroy(
  * Checks for expired timers and performs specified timeout action
  * @param [in] mid Margo instance
  */
-void margo_check_timers(
+void __margo_check_timers(
     margo_instance_id mid);
 
 /**
@@ -73,15 +73,14 @@ void margo_check_timers(
  * @param [out] time until next timer expiration
  * @returns 0 when there is a queued timer which will expire, -1 otherwise
  */
-int margo_timer_get_next_expiration(
+int __margo_timer_get_next_expiration(
     margo_instance_id mid,
     double *next_timer_exp);
 
 /**
  * Gets the margo_timer_list from the margo instance.
- * This function is defined in margo.c.
  */
-struct margo_timer_list *margo_get_timer_list(margo_instance_id mid);
+struct margo_timer_list *__margo_get_timer_list(margo_instance_id mid);
 
 #ifdef __cplusplus
 }
