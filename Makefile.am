@@ -19,6 +19,7 @@ BUILT_SOURCES =
 include_HEADERS = \
  include/margo.h \
  include/margo-logging.h \
+ include/margo-diag.h \
  include/margo-bulk-pool.h
  
 TESTS_ENVIRONMENT =
