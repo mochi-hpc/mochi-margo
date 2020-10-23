@@ -3,6 +3,7 @@
  * 
  * See COPYRIGHT in top-level directory.
  */
+#include <stdarg.h>
 #include "margo-instance.h"
 #include <margo-logging.h>
 

@@ -11,10 +11,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
-#include <jansson.h>
-#include <mochi-cfg.h>
-
-#include <margo-config.h>
+#include <json-c/json.h>
 
 #include "margo.h"
 #include "margo-globals.h"
@@ -217,7 +214,7 @@ static void margo_cleanup(margo_instance_id mid)
     }
 
     MARGO_TRACE(mid, "Destroying JSON configuration");
-    json_decref(mid->json_cfg);
+    json_object_put(mid->json_cfg);
 
     MARGO_TRACE(mid, "Cleaning up margo instance");
     free(mid);
@@ -1541,17 +1538,19 @@ int margo_set_param(margo_instance_id mid, const char *key, const char *value)
 {
     if(strcmp(key, "progress_timeout_ub_msecs") == 0)
     {
-        mochi_cfg_set_value_int(mid->json_cfg,
-            "progress_timeout_ub_msecs", atoi(value));
-        mid->hg_progress_timeout_ub = atoi(value);
+        int progress_timeout_ub_msecs = atoi(value);
+        mid->hg_progress_timeout_ub = progress_timeout_ub_msecs;
+        json_object_object_add(mid->json_cfg, "progress_timeout_ub_msecs", 
+                json_object_new_int64(progress_timeout_ub_msecs));
         return(0);
     }
 
     if(strcmp(key, "enable_diagnostics") == 0)
     {
-        mochi_cfg_set_value_int(mid->json_cfg,
-            "enable_diagnostics", atoi(value));
-        mid->diag_enabled = atoi(value);
+        bool enable_diagnostics = atoi(value);
+        mid->diag_enabled = enable_diagnostics;
+        json_object_object_add(mid->json_cfg, "enable_diagnostics",
+                json_object_new_boolean(enable_diagnostics));
         return(0);
     }
 
@@ -1847,5 +1846,6 @@ void __margo_internal_post_wrapper_hooks(margo_instance_id mid)
 
 char* margo_get_config(margo_instance_id mid)
 {
-    return json_dumps(mid->json_cfg, JSON_INDENT(4));
+    const char* content =  json_object_to_json_string_ext(mid->json_cfg, JSON_C_TO_STRING_PRETTY);
+    return strdup(content);
 }

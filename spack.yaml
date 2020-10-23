@@ -1,6 +1,6 @@
 spack:
   specs:
-  - mochi-cfg
+  - json-c
   - autoconf
   - m4
   - automake

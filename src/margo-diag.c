@@ -18,7 +18,8 @@ void __margo_sparkline_data_collection_fn(void* foo)
         ABT_thread_free(&mid->sparkline_data_collection_tid);
     }
 
-    int sleep_time_msec = json_integer_value(json_object_get(mid->json_cfg, "profile_sparkline_timeslice_msec"));
+    int sleep_time_msec = json_object_get_int64(
+            json_object_object_get(mid->json_cfg, "profile_sparkline_timeslice_msec"));
 
     while(!mid->hg_progress_shutdown_flag)
     {

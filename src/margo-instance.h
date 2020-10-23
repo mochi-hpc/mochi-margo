@@ -11,8 +11,8 @@
 #include <errno.h>
 #include <abt.h>
 #include <stdlib.h>
+#include <json-c/json.h>
 
-#include <jansson.h>
 #include <margo-config.h>
 #include <time.h>
 #include <math.h>
@@ -75,54 +75,44 @@ struct margo_registered_rpc
 struct margo_instance
 {
     /* json config */
-    json_t *json_cfg;
+    struct json_object *json_cfg;
 
     /* mercury/argobots state */
-    hg_class_t   *hg_class; // keep
-    hg_context_t *hg_context; // keep
-    uint8_t       hg_ownership; // added
-//    ABT_pool      handler_pool; // remove (replaced with rpc_pool) bellow
-    ABT_pool      progress_pool; // keep
-    ABT_pool      rpc_pool; // added
+    hg_class_t   *hg_class;
+    hg_context_t *hg_context;
+    uint8_t       hg_ownership;
+    ABT_pool      progress_pool;
+    ABT_pool      rpc_pool;
 
     /* xstreams and pools built from argobots config */
-    ABT_pool*     abt_pools; // added
-    ABT_xstream*  abt_xstreams; // added
-    unsigned      num_abt_pools; // added
-    unsigned      num_abt_xstreams; // added
-    bool*         owns_abt_xstream; // added
+    ABT_pool*     abt_pools;
+    ABT_xstream*  abt_xstreams;
+    unsigned      num_abt_pools;
+    unsigned      num_abt_xstreams;
+    bool*         owns_abt_xstream;
 
     /* internal to margo for this particular instance */
-//    int margo_init; // remove
-    ABT_thread hg_progress_tid; // keep
-    int hg_progress_shutdown_flag; // keep
-    int hg_progress_timeout_ub; // keep
+    ABT_thread hg_progress_tid;
+    int hg_progress_shutdown_flag;
+    int hg_progress_timeout_ub;
 
-    /*
-    ABT_xstream progress_xstream; // remove
-    int owns_progress_pool; // remove
-    ABT_xstream *rpc_xstreams; // remove
-    int num_handler_pool_threads; // remove
-*/
-
-    uint16_t num_registered_rpcs;  // keep /* number of registered rpc's by all providers on this instance */
+    uint16_t num_registered_rpcs; /* number of registered rpc's by all providers on this instance */
     /* list of rpcs registered on this instance for debugging and profiling purposes */
     struct margo_registered_rpc *registered_rpcs;
 
-
     /* control logic for callers waiting on margo to be finalized */
-    int finalize_flag; // keep
-    int refcount; // keep
-    ABT_mutex finalize_mutex; // keep
-    ABT_cond finalize_cond; // keep
-    struct margo_finalize_cb* finalize_cb; // keep
-    struct margo_finalize_cb* prefinalize_cb; // keep
+    int finalize_flag;
+    int refcount;
+    ABT_mutex finalize_mutex;
+    ABT_cond finalize_cond;
+    struct margo_finalize_cb* finalize_cb;
+    struct margo_finalize_cb* prefinalize_cb;
 
     /* control logic to prevent margo_finalize from destroying
        the instance when some operations are pending */
-    unsigned pending_operations; // keep
-    ABT_mutex pending_operations_mtx; // keep
-    int finalize_requested; // keep
+    unsigned pending_operations;
+    ABT_mutex pending_operations_mtx;
+    int finalize_requested;
 
     /* control logic for shutting down */
     hg_id_t shutdown_rpc_id;
