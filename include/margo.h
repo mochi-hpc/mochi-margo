@@ -43,6 +43,7 @@ typedef void(*margo_finalize_callback_t)(void*);
 #define MARGO_DEFAULT_PROVIDER_ID 0
 #define MARGO_MAX_PROVIDER_ID ((1 << (8*__MARGO_PROVIDER_ID_SIZE))-1)
 
+
 /**
  * The margo_init_info structure should be passed to margo_init_ext
  * to finely configure Margo. The structure can be memset to 0 to have
@@ -60,6 +61,9 @@ struct margo_init_info {
     hg_context_t*        hg_context;    /* Mercury context */
     struct hg_init_info* hg_init_info;  /* Mercury init info */
 };
+
+#define MARGO_INIT_INFO_INITIALIZER { 0 }
+
 
 /**
  * Example JSON configuration:
