@@ -202,13 +202,14 @@ int margo_bulk_pool_release(
     if (bulk == HG_BULK_NULL) return -1;
     if (pool->size != margo_bulk_get_size(bulk)) return -1;
 
-    void* buf_ptr = NULL;
+    char* buf_ptr = NULL;
     hg_size_t buf_size = 0;
     hg_uint32_t actual_count = 0;
     hg_return_t hret = margo_bulk_access(bulk, 0, pool->size, pool->flag, 1,
-            &buf_ptr, &buf_size, &actual_count);
+            (void**)&buf_ptr, &buf_size, &actual_count);
     if(hret != HG_SUCCESS) return -1;
-    if(buf_ptr < pool->buf || buf_ptr + buf_size > pool->buf + pool->size*pool->count) return -1;
+    if(buf_ptr < (char*)pool->buf
+    || buf_ptr + buf_size > (char*)pool->buf + pool->size*pool->count) return -1;
 
     ABT_mutex_lock(pool->mutex);
     margo_bp_release(pool, bulk);

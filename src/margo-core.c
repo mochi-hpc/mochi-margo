@@ -142,7 +142,6 @@ margo_instance_id margo_init_pool(ABT_pool progress_pool, ABT_pool rpc_pool,
 static void margo_cleanup(margo_instance_id mid)
 {
     MARGO_TRACE(mid, "Entering margo_cleanup");
-    int i;
     struct margo_registered_rpc *next_rpc;
 
     /* call finalize callbacks */
@@ -545,8 +544,6 @@ hg_id_t margo_provider_register_name(margo_instance_id mid, const char *func_nam
     int ret;
     struct margo_registered_rpc * tmp_rpc;
 
-    assert(provider_id <= MARGO_MAX_PROVIDER_ID);
-    
     id = gen_id(func_name, provider_id);
 
     if(mid->profile_enabled)
@@ -857,8 +854,6 @@ static hg_return_t margo_provider_iforward_internal(
     uint64_t *rpc_breadcrumb;
     char addr_string[128];
     hg_size_t addr_string_sz = 128;
-
-    assert(provider_id <= MARGO_MAX_PROVIDER_ID);
 
     hgi = HG_Get_info(handle);
     id = mux_id(hgi->id, provider_id);

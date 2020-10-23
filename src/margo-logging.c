@@ -10,6 +10,7 @@
 static margo_log_level global_log_level = MARGO_LOG_ERROR;
 
 static void _margo_log(void* uargs, const char* str) {
+    (void)uargs;
     fprintf(stderr, "%s\n", str);
 }
 

@@ -54,7 +54,7 @@ static void set_argobots_environment_variables(
 
 // Shutdown logic for a margo instance
 static void remote_shutdown_ult(hg_handle_t handle);
-static DECLARE_MARGO_RPC_HANDLER(remote_shutdown_ult);
+static DECLARE_MARGO_RPC_HANDLER(remote_shutdown_ult)
 
 
 margo_instance_id margo_init_ext(
@@ -609,7 +609,6 @@ static int validate_and_complete_config(
     struct json_object* _xstreams = NULL;
     CONFIG_HAS_OR_CREATE_ARRAY(_argobots, "xstreams", "argobots.xstreams", _xstreams);
     {
-        bool primary_found = 0;
         struct json_object* _xstream = NULL;
         unsigned i = 0;
         json_array_foreach(_xstreams, i, _xstream) {
@@ -663,7 +662,7 @@ static int validate_and_complete_config(
             json_array_foreach(_pool_refs, j, _pool_ref) {
                 if(json_object_is_type(_pool_ref, json_type_int)) {
                     _pool_ref_index = json_object_get_int64(_pool_ref);
-                    if(_pool_ref_index < 0 || _pool_ref_index >= num_custom_pools) {
+                    if(_pool_ref_index < 0 || _pool_ref_index >= (int)num_custom_pools) {
                         MARGO_ERROR(0, "Invalid pool index %d in scheduler definition", _pool_ref_index);
                         return -1;
                     }
@@ -765,6 +764,7 @@ static int validate_and_complete_config(
                     int _primary_xstream_index = -1;
                     // find __primary__ xstream
                     CONFIG_FIND_BY_NAME(_xstreams, "__primary__", _primary_xstream_index, _primary_xstream);
+                    (void)_primary_xstream_index; // silence warnings because we are not using it
                     // find its scheduler
                     _primary_sched = json_object_object_get(_primary_xstream, "scheduler");
                     // find the scheduler's first pool
@@ -831,11 +831,12 @@ static int validate_and_complete_config(
                     // use primary xstream's scheduler's first pool for the RPC loop
                     struct json_object* _primary_xstream = NULL;
                     struct json_object* _primary_sched = NULL;
-                    struct json_object* _primary_pool = NULL;
                     int _primary_xstream_index = -1;
                     int _primary_pool_index = -1;
                     // find __primary__ xstream
                     CONFIG_FIND_BY_NAME(_xstreams, "__primary__", _primary_xstream_index, _primary_xstream);
+                    (void)_primary_xstream_index; // silence warning because we are not using it
+                    (void)_primary_pool_index; // silence warning because we are not using it
                     // find its scheduler
                     _primary_sched = json_object_object_get(_primary_xstream, "scheduler");
                     // find the scheduler's first pool
@@ -848,7 +849,7 @@ static int validate_and_complete_config(
                     MARGO_TRACE(0, "Creating new __rpc__ pool");
                     CONFIG_ADD_NEW_POOL(_pools, "__rpc__", "fifo_wait", "mpmc");
                     int pool_index = json_object_array_length(_pools)-1;
-                    for(unsigned i = 0; i < rpc_thread_count; i++) {
+                    for(int i = 0; i < rpc_thread_count; i++) {
                         char name[64];
                         snprintf(name, 64, "__rpc_%d__", i);
                         MARGO_TRACE(0, "Creating new __rpc_%d__ xstream", i);
@@ -921,12 +922,14 @@ static int create_xstream_from_config(
         const ABT_pool* pools,
         size_t total_num_pools)
 {
+    (void)total_num_pools; // silence warning about unused variable
+
     int ret = ABT_SUCCESS;
     const char* es_name = json_object_get_string(json_object_object_get(es_config, "name"));
     struct json_object* sched = json_object_object_get(es_config, "scheduler");
     const char* es_sched_type  = json_object_get_string(json_object_object_get(sched, "type"));
     struct json_object*     es_pools_array = json_object_object_get(sched, "pools");
-    int         es_num_pools   = json_object_array_length(es_pools_array);
+    size_t es_num_pools     = json_object_array_length(es_pools_array);
     int         es_cpubind     = json_object_get_int64(json_object_object_get(es_config, "cpubind"));
     struct json_object*     es_affinity    = json_object_object_get(es_config, "affinity");
 
@@ -998,7 +1001,7 @@ static int create_xstream_from_config(
         if(num_cpus) {
             int cpuids[num_cpus];
             ABT_xstream_get_affinity(*es, num_cpus, cpuids, &num_cpus);
-            for(unsigned i = 0; i < num_cpus; i++) {
+            for(int i = 0; i < num_cpus; i++) {
                 json_object_array_put_idx(es_affinity, i, json_object_new_int64(cpuids[i]));
             }
         }
@@ -1006,7 +1009,7 @@ static int create_xstream_from_config(
         // set affinity
         int num_cpus = json_object_array_length(es_affinity);
         int cpuids[num_cpus];
-        for(unsigned i = 0; i < num_cpus; i++) {
+        for(int i = 0; i < num_cpus; i++) {
             cpuids[i] = json_object_get_int64(json_object_array_get_idx(es_affinity, i));
         }
         ret = ABT_xstream_set_affinity(*es, num_cpus, cpuids);
@@ -1055,6 +1058,7 @@ int margo_get_pool_by_name(margo_instance_id mid, const char* name, ABT_pool* po
     struct json_object* argobots = json_object_object_get(mid->json_cfg, "argobots");
     struct json_object* pool_array = json_object_object_get(argobots, "pools");
     CONFIG_FIND_BY_NAME(pool_array, name, index, p);
+    (void)p; // silence warning about variable not used
     if(index >= 0) {
         return margo_get_pool_by_index(mid, index, pool);
     } else {
@@ -1064,12 +1068,13 @@ int margo_get_pool_by_name(margo_instance_id mid, const char* name, ABT_pool* po
 
 int margo_get_pool_by_index(margo_instance_id mid, unsigned index, ABT_pool* pool)
 {
-    if(index < 0 || index >= mid->num_abt_pools) {
+    if(index >= mid->num_abt_pools) {
         *pool = ABT_POOL_NULL;
         return -1;
     } else {
         *pool = mid->abt_pools[index];
     }
+    return 0;
 }
 
 int margo_get_xstream_by_name(margo_instance_id mid, const char* name, ABT_xstream* es)
@@ -1079,6 +1084,7 @@ int margo_get_xstream_by_name(margo_instance_id mid, const char* name, ABT_xstre
     struct json_object* argobots = json_object_object_get(mid->json_cfg, "argobots");
     struct json_object* es_array = json_object_object_get(argobots, "xstreams");
     CONFIG_FIND_BY_NAME(es_array, name, index, e);
+    (void)e; // silence warning about variable not used
     if(index >= 0) {
         return margo_get_xstream_by_index(mid, index, es);
     } else {
@@ -1088,11 +1094,12 @@ int margo_get_xstream_by_name(margo_instance_id mid, const char* name, ABT_xstre
 
 int margo_get_xstream_by_index(margo_instance_id mid, unsigned index, ABT_xstream* es)
 {
-    if(index < 0 || index >= mid->num_abt_xstreams) {
+    if(index >= mid->num_abt_xstreams) {
         *es = ABT_XSTREAM_NULL;
         return -1;
     }
     else {
         *es = mid->abt_xstreams[index];
     }
+    return 0;
 }

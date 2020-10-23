@@ -51,6 +51,9 @@ void __margo_print_diag_data(
         const char *description,
         struct diag_data *data)
 {
+    (void)mid;
+    (void)description; // TODO was this supposed to be used?
+
     double avg;
 
     if(data->stats.count != 0)
@@ -76,6 +79,7 @@ void __margo_print_profile_data(
         const char *description,
         struct diag_data *data)
 {
+    (void)description; // TODO was this supposed to be used?
     double avg;
     int i;
 

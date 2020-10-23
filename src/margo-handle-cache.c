@@ -15,13 +15,12 @@ struct margo_handle_cache_el
 
 hg_return_t __margo_handle_cache_init(margo_instance_id mid, size_t handle_cache_size)
 {
-    int i;
     struct margo_handle_cache_el *el;
     hg_return_t hret = HG_SUCCESS;
 
     ABT_mutex_create(&(mid->handle_cache_mtx));
 
-    for(i = 0; i < handle_cache_size; i++)
+    for(unsigned i = 0; i < handle_cache_size; i++)
     {
         el = malloc(sizeof(*el));
         if(!el)
