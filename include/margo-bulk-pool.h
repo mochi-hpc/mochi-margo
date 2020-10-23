@@ -1,9 +1,8 @@
 /*
  * (C) 2015 The University of Chicago
- * 
+ *
  * See COPYRIGHT in top-level directory.
  */
-
 #ifndef __MARGO_BULK_POOL
 #define __MARGO_BULK_POOL
 
@@ -53,7 +52,7 @@ hg_return_t margo_bulk_pool_create(
  * internal buffers should be in use) when this call happens.
  *
  * @param pool margo_bulk_pool_t object to destroy.
- * 
+ *
  * @return 0 in case of success, -1 in case of failure.
  */
 int margo_bulk_pool_destroy(
@@ -92,7 +91,7 @@ int margo_bulk_pool_tryget(
  *
  * @param pool margo_bulk_pool_t object to which to return the bulk handle.
  * @param bulk Bulk handle to release.
- * 
+ *
  * @return 0 in case of success, -1 in case of failure.
  */
 int margo_bulk_pool_release(

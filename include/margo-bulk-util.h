@@ -1,6 +1,6 @@
 /*
  * (C) 2020 The University of Chicago
- * 
+ *
  * See COPYRIGHT in top-level directory.
  */
 
@@ -13,7 +13,7 @@ extern "C" {
 
 #include <margo.h>
 
-/** 
+/**
  * Perform a bulk transfer by submitting multiple margo_bulk_transfer
  * in parallel.
  *

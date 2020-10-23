@@ -1,6 +1,6 @@
 /*
  * (C) 2020 The University of Chicago
- * 
+ *
  * See COPYRIGHT in top-level directory.
  */
 #ifndef __MARGO_INTERNAL_H
@@ -32,7 +32,7 @@ struct diag_data
 {
     /* breadcrumb stats */
     margo_breadcrumb_stats stats;
-    
+
     /* origin or target */
     margo_breadcrumb_type type;
 
@@ -188,7 +188,7 @@ typedef struct
     char is_asleep;
 } margo_thread_sleep_cb_dat;
 
-#define MARGO_TRACE margo_trace 
+#define MARGO_TRACE margo_trace
 #define MARGO_DEBUG margo_debug
 #define MARGO_INFO margo_info
 #define MARGO_WARNING margo_warning

@@ -1,9 +1,8 @@
 /*
  * (C) 2015 The University of Chicago
- * 
+ *
  * See COPYRIGHT in top-level directory.
  */
-
 #ifndef __MARGO
 #define __MARGO
 
@@ -145,16 +144,16 @@ struct margo_init_info {
  * @param [in] rpc_thread_count    Number of threads to use for running RPC
  *                                 calls. A value of 0 directs Margo to execute
  *                                 RPCs in the caller's thread context.
- *                                 Clients (i.e processes that will *not* 
- *                                 service incoming RPCs) should use a value 
- *                                 of 0. A value of -1 directs Margo to use 
- *                                 the same execution context as that used 
+ *                                 Clients (i.e processes that will *not*
+ *                                 service incoming RPCs) should use a value
+ *                                 of 0. A value of -1 directs Margo to use
+ *                                 the same execution context as that used
  *                                 for Mercury progress.
  * @returns margo instance id on success, MARGO_INSTANCE_NULL upon error
  *
  * NOTE: Servers (processes expecting to service incoming RPC requests) must
  * specify non-zero values for use_progress_thread and rpc_thread_count *or*
- * call margo_wait_for_finalize() after margo_init() to relinguish control to 
+ * call margo_wait_for_finalize() after margo_init() to relinguish control to
  * Margo.
  */
 margo_instance_id margo_init(
@@ -171,7 +170,7 @@ margo_instance_id margo_init(
  * @param mode MARGO_CLIENT_MODE or MARGO_SERVER_MODE
  *
  * @return a margo_instance_id or MARGO_INSTANCE_NULL in case of failure.
- * 
+ *
  * NOTE: if you are configuring Argobots pools yourself before
  * passing them into this function, please consider setting
  * ABT_MEM_MAX_NUM_STACKS to a low value (like 8) either in your
@@ -201,16 +200,16 @@ margo_instance_id margo_init_ext(
  * @param [in] rpc_thread_count    Number of threads to use for running RPC
  *                                 calls. A value of 0 directs Margo to execute
  *                                 RPCs in the caller's thread context.
- *                                 Clients (i.e processes that will *not* 
- *                                 service incoming RPCs) should use a value 
- *                                 of 0. A value of -1 directs Margo to use 
- *                                 the same execution context as that used 
+ *                                 Clients (i.e processes that will *not*
+ *                                 service incoming RPCs) should use a value
+ *                                 of 0. A value of -1 directs Margo to use
+ *                                 the same execution context as that used
  *                                 for Mercury progress.
  * @returns margo instance id on success, MARGO_INSTANCE_NULL upon error
  *
  * NOTE: Servers (processes expecting to service incoming RPC requests) must
  * specify non-zero values for use_progress_thread and rpc_thread_count *or*
- * call margo_wait_for_finalize() after margo_init() to relinguish control to 
+ * call margo_wait_for_finalize() after margo_init() to relinguish control to
  * Margo.
  */
 margo_instance_id margo_init_opt(
@@ -253,7 +252,7 @@ void margo_finalize(
  * Suspends the caller until some other entity (e.g. an RPC, thread, or
  * signal handler) invokes margo_finalize().
  *
- * NOTE: This informs Margo that the calling thread no longer needs to be 
+ * NOTE: This informs Margo that the calling thread no longer needs to be
  * scheduled for execution if it is sharing an Argobots pool with the
  * progress engine.
  *
@@ -280,7 +279,7 @@ hg_bool_t margo_is_listening(
  *
  * Note that callbacks may not be called within margo_finalize. They are called
  * when the margo instance is cleaned up, which may happen in margo_wait_for_finalize.
- * 
+ *
  * Callbacks installed using this function may call RPCs or margo_thread_sleep,
  * but do not guarantee that the process isn't itself going to receive RPCs in
  * the mean time.
@@ -291,7 +290,7 @@ hg_bool_t margo_is_listening(
  */
 void margo_push_prefinalize_callback(
     margo_instance_id mid,
-    margo_finalize_callback_t cb, 
+    margo_finalize_callback_t cb,
     void* uargs);
 
 /**
@@ -387,7 +386,7 @@ int margo_provider_top_prefinalize_callback(
  */
 void margo_push_finalize_callback(
     margo_instance_id mid,
-    margo_finalize_callback_t cb, 
+    margo_finalize_callback_t cb,
     void* uargs);
 
 /**
@@ -470,7 +469,7 @@ int margo_provider_top_finalize_callback(
 /**
  * Allows the passed Margo instance to be shut down remotely
  * using margo_shutdown_remote_instance().
- * 
+ *
  * @param mid Margo instance
  */
 void margo_enable_remote_shutdown(margo_instance_id mid);
@@ -485,11 +484,11 @@ void margo_enable_remote_shutdown(margo_instance_id mid);
  * @return 0 on success, -1 on failure.
  */
 int margo_shutdown_remote_instance(
-        margo_instance_id mid, 
+        margo_instance_id mid,
         hg_addr_t remote_addr);
 
 
-/** 
+/**
  * Registers an RPC with margo that is associated with a provider instance
  *
  * \param [in] mid Margo instance
@@ -511,7 +510,7 @@ hg_id_t margo_provider_register_name(
     uint16_t provider_id,
     ABT_pool pool);
 
-/** 
+/**
  * Registers an RPC with margo
  *
  * \param [in] mid Margo instance
@@ -582,7 +581,7 @@ hg_return_t margo_provider_registered_name(
 
 /**
  * Register and associate user data to registered function.
- * When HG_Finalize() is called free_callback (if defined) is called 
+ * When HG_Finalize() is called free_callback (if defined) is called
  * to free the registered data.
  *
  * \param [in] mid            Margo instance
@@ -602,7 +601,7 @@ hg_return_t margo_register_data(
  * Indicate whether margo_register_data() has been called and return associated
  * data.
  *
- * \param [in] mid        Margo instance 
+ * \param [in] mid        Margo instance
  * \param [in] id         registered function ID
  *
  * \return Pointer to data or NULL
@@ -615,7 +614,7 @@ void* margo_registered_data(
 /**
  * Disable response for a given RPC ID.
  *
- * \param [in] mid          Margo instance 
+ * \param [in] mid          Margo instance
  * \param [in] id           registered function ID
  * \param [in] disable_flag flag to disable (1) or re-enable (0) responses
  *
@@ -655,7 +654,7 @@ hg_return_t margo_addr_lookup(
 /**
  * Free the given Mercury addr.
  *
- * \param [in] mid  Margo instance 
+ * \param [in] mid  Margo instance
  * \param [in] addr Mercury address
  *
  * \return HG_SUCCESS or corresponding HG error code
@@ -667,7 +666,7 @@ hg_return_t margo_addr_free(
 /**
  * Access self address. Address must be freed with margo_addr_free().
  *
- * \param [in] mid  Margo instance 
+ * \param [in] mid  Margo instance
  * \param [in] addr pointer to abstract Mercury address
  *
  * \return HG_SUCCESS or corresponding HG error code
@@ -677,9 +676,9 @@ hg_return_t margo_addr_self(
     hg_addr_t *addr);
 
 /**
- * Duplicate an existing Mercury address. 
+ * Duplicate an existing Mercury address.
  *
- * \param [in] mid      Margo instance 
+ * \param [in] mid      Margo instance
  * \param [in] addr     abstract Mercury address to duplicate
  * \param [in] new_addr pointer to newly allocated abstract Mercury address
  *
@@ -697,7 +696,7 @@ hg_return_t margo_addr_dup(
  * If the input value passed through buf_size is too small, HG_SIZE_ERROR
  * is returned and the buf_size output is set to the minimum size required.
  *
- * \param [in] mid          Margo instance 
+ * \param [in] mid          Margo instance
  * \param [in/out] buf      pointer to destination buffer
  * \param [in/out] buf_size pointer to buffer size
  * \param [in] addr         abstract Mercury address
@@ -716,7 +715,7 @@ hg_return_t margo_addr_to_string(
  * query input and output, as well as issuing the RPC by calling
  * HG_Forward(). After completion the handle must be freed using HG_Destroy().
  *
- * \param [in] mid      Margo instance 
+ * \param [in] mid      Margo instance
  * \param [in] addr     abstract Mercury address of destination
  * \param [in] id       registered function ID
  * \param [out] handle  pointer to HG handle
@@ -941,7 +940,7 @@ hg_return_t margo_irespond(
  * \verbatim margo_bulk_create(mid, count, NULL, buf_sizes, flags, &handle) \endverbatim
  * memory for the missing buf_ptrs array will be internally allocated.
  *
- * \param [in] mid          Margo instance 
+ * \param [in] mid          Margo instance
  * \param [in] count        number of segments
  * \param [in] buf_ptrs     array of pointers
  * \param [in] buf_sizes    array of sizes
@@ -1046,7 +1045,7 @@ hg_return_t margo_bulk_free(
 /**
  * Deserialize bulk handle from an existing buffer.
  *
- * \param [in] mid      Margo instance 
+ * \param [in] mid      Margo instance
  * \param [out] handle  abstract bulk handle
  * \param [in] buf      pointer to buffer
  * \param [in] buf_size buffer size
@@ -1081,7 +1080,7 @@ hg_return_t margo_bulk_transfer(
     size_t local_offset,
     size_t size);
 
-/** 
+/**
  * Asynchronously performs a bulk transfer
  * @param [in] mid Margo instance
  * @param [in] op type of operation to perform
@@ -1115,7 +1114,7 @@ void margo_thread_sleep(
     double timeout_ms);
 
 /**
- * Retrieve the abt_handler pool that was associated with the instance at 
+ * Retrieve the abt_handler pool that was associated with the instance at
  *    initialization time
  * @param [in] mid Margo instance
  * @param [out] pool handler pool
@@ -1150,16 +1149,16 @@ hg_class_t* margo_get_class(margo_instance_id mid);
  * Get the margo_instance_id from a received RPC handle.
  *
  * \param [in] h          RPC handle
- * 
+ *
  * \return Margo instance
  */
 margo_instance_id margo_hg_handle_get_instance(hg_handle_t h);
 
 /**
- * Get the margo_instance_id from an hg_info struct 
+ * Get the margo_instance_id from an hg_info struct
  *
- * \param [in] info       hg_info struct 
- * 
+ * \param [in] info       hg_info struct
+ *
  * \return Margo instance
  */
 margo_instance_id margo_hg_info_get_instance(const struct hg_info *info);
@@ -1201,7 +1200,7 @@ margo_instance_id margo_hg_info_get_instance(const struct hg_info *info);
  margo_set_param(__mid, "enable_profiling", "0")
 
 /**
- * Appends diagnostic statistics (enabled via margo_diag_start()) to specified 
+ * Appends diagnostic statistics (enabled via margo_diag_start()) to specified
  * output file.
  *
  * @param [in] mid Margo instance
@@ -1213,7 +1212,7 @@ margo_instance_id margo_hg_info_get_instance(const struct hg_info *info);
 void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify);
 
 /**
- * Appends profile statistics (enabled via margo_profile_start()) to specified 
+ * Appends profile statistics (enabled via margo_profile_start()) to specified
  * output file.
  *
  * @param [in] mid Margo instance
@@ -1225,13 +1224,13 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify);
 void margo_profile_dump(margo_instance_id mid, const char* file, int uniquify);
 
 /**
- * Grabs a snapshot of the current state of diagnostics within the margo instance 
+ * Grabs a snapshot of the current state of diagnostics within the margo instance
  *
  * @param [in] mid Margo instance
  * @param [out] snap Margo diagnostics snapshot
  * @returns void
  */
-void margo_breadcrumb_snapshot(margo_instance_id mid, struct margo_breadcrumb_snapshot* snap); 
+void margo_breadcrumb_snapshot(margo_instance_id mid, struct margo_breadcrumb_snapshot* snap);
 
 /**
  * Sets configurable parameters/hints
@@ -1406,7 +1405,7 @@ hg_return_t _handler_for_##__name(hg_handle_t handle) { \
     __MARGO_INTERNAL_RPC_HANDLER(__name)
 
 /**
- * macro that declares the prototype for a function to glue an RPC 
+ * macro that declares the prototype for a function to glue an RPC
  * handler to a ult
  * @param [in] __name name of handler function
  */

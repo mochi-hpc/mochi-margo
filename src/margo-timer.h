@@ -1,6 +1,6 @@
 /*
  * (C) 2016 The University of Chicago
- * 
+ *
  * See COPYRIGHT in top-level directory.
  */
 
@@ -24,7 +24,7 @@ typedef struct margo_timed_element
 
 /**
  * Creates a margo_timer_list.
- * @returns a new margo_timer_list, or NULL if failed 
+ * @returns a new margo_timer_list, or NULL if failed
  */
 struct margo_timer_list* __margo_timer_list_create();
 

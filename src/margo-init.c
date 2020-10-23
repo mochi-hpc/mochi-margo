@@ -482,7 +482,7 @@ static int validate_and_complete_config(
         CONFIG_HAS_OR_CREATE(_mercury, boolean, "stats", 0, "mercury.stats", val);
         MARGO_TRACE(0, "mercury.stats = %s", json_object_get_boolean(val) ? "true" : "false");
     }
-    
+
     {   // add mercury.na_no_block or set it as default
         if(_hg_init_info) {
             bool na_no_block = _hg_init_info->na_init_info.progress_mode & NA_NO_BLOCK;
@@ -647,7 +647,7 @@ static int validate_and_complete_config(
             CONFIG_MUST_HAVE(_xstream, object, "scheduler", "argobots.xstreams[?].scheduler", _sched);
             CONFIG_MUST_HAVE(_sched, string, "type", "argobots.xstreams[?].scheduler.type", _sched_type);
             CONFIG_IS_IN_ENUM_STRING(_sched_type, "argobots.xstreams[?].scheduler.type", "default", "basic", "prio", "randws", "basic_wait");
-            MARGO_TRACE(0, "argobots.xstreams[%d].scheduler.type = %s", i, json_object_get_string(_sched_type)); 
+            MARGO_TRACE(0, "argobots.xstreams[%d].scheduler.type = %s", i, json_object_get_string(_sched_type));
             CONFIG_MUST_HAVE(_sched, array, "pools", "argobots.xstreams[?].scheduler.pools", _pool_refs);
             // pools array must not be empty
             size_t num_pool_refs = json_object_array_length(_pool_refs);
@@ -704,7 +704,7 @@ static int validate_and_complete_config(
     /* ------- Margo configuration (cont'd) ------ */
 
     {   // handle progress_pool and use_progress_thread fields and _progress_pool argument
-       
+
         if(_custom_progress_pool != ABT_POOL_NULL && _custom_progress_pool != NULL) { // custom pool provided as argument
 
             // -1 is used to indicate that progress_pool is provided by the user
@@ -770,7 +770,7 @@ static int validate_and_complete_config(
                     // find the scheduler's first pool
                     struct json_object* _primary_pool_refs = json_object_object_get(_primary_sched, "pools");
                     struct json_object* _first_pool_ref = json_object_array_get_idx(_primary_pool_refs, 0);
-                    // set "progress_pool" to the pool's reference 
+                    // set "progress_pool" to the pool's reference
                     json_object_object_add(_margo, "progress_pool", json_object_copy(_first_pool_ref));
                     MARGO_TRACE(0, "progress_pool = %d", json_object_get_int64(_first_pool_ref));
                 }
@@ -780,7 +780,7 @@ static int validate_and_complete_config(
     json_object_object_del(_margo, "use_progress_thread");
 
     {   // handle rpc_thread_count and rpc_pool
-        
+
         if(_custom_rpc_pool != ABT_POOL_NULL && _custom_rpc_pool != NULL) { // custom pool provided as argument
             // -1 means user-provided pool
             CONFIG_OVERRIDE_INTEGER(_margo, "rpc_pool", -1, "rpc_pool", 1);
@@ -789,7 +789,7 @@ static int validate_and_complete_config(
             }
 
         } else { // no custom pool provided as argument
-            
+
             struct json_object* _rpc_pool = NULL;
             if(CONFIG_HAS(_margo, "rpc_pool", _rpc_pool)) {
                 if(CONFIG_HAS(_margo, "rpc_thread_count", ignore)) { // rpc_pool and rpc_thread_count both specified
@@ -974,7 +974,7 @@ static int create_xstream_from_config(
         }
         *owns_xstream = 1;
     }
-    
+
     // get/set cpubind
     if(es_cpubind == -1) {
         ret = ABT_xstream_get_cpubind(*es, &es_cpubind);
@@ -1017,7 +1017,7 @@ static int create_xstream_from_config(
             MARGO_WARNING(0, "ABT_xtsream_set_affinity failed to set affinity (ret = %d)", ret);
         }
     }
-    
+
     return ABT_SUCCESS;
 }
 

@@ -1,6 +1,6 @@
 /*
  * (C) 2020 The University of Chicago
- * 
+ *
  * See COPYRIGHT in top-level directory.
  */
 #ifndef __MARGO_LOGGING_H
@@ -61,7 +61,7 @@ int margo_set_log_level(margo_instance_id mid, margo_log_level level);
 /**
  * @brief Set a logger structure for Margo to use in functions that don't take a
  * margo_instance_id (such as margo_init and its variants).
- * 
+ *
  * The structure will be internally copied and the user may free the input argument
  * after the call. Passing NULL as logger will reset the global logger to a logger
  * that only prints errors and critical messages on stderr.

@@ -1,6 +1,6 @@
 /*
  * (C) 2015 The University of Chicago
- * 
+ *
  * See COPYRIGHT in top-level directory.
  */
 
@@ -46,7 +46,7 @@ hg_return_t margo_bulk_pool_create(
     margo_bulk_pool_t p;
     hg_size_t i;
 
-    p = malloc(sizeof(*p)); 
+    p = malloc(sizeof(*p));
     if (p == NULL)
     {
         hret = HG_NOMEM_ERROR;
@@ -74,7 +74,7 @@ hg_return_t margo_bulk_pool_create(
     for (i = 0; i < count; i++)
     {
         unsigned char *tmp = p->buf;
-        void *bulk_buf = tmp + i*size; 
+        void *bulk_buf = tmp + i*size;
         hret = margo_bulk_create(mid, 1, &bulk_buf, &size, flag,
             &p->bulks[i]);
         if (hret != HG_SUCCESS)
@@ -232,7 +232,7 @@ hg_return_t margo_bulk_poolset_create(
     hg_size_t i  = 0, j, size;
     hg_return_t hret;
 
-    assert(npools > 0 && nbufs > 0 && first_size > 0 && size_multiple > 1); 
+    assert(npools > 0 && nbufs > 0 && first_size > 0 && size_multiple > 1);
 
     s = calloc(1, sizeof(*s));
     if (s == NULL)

@@ -267,7 +267,7 @@ void margo_finalize(margo_instance_id mid)
         MARGO_TRACE(mid, "Dumping profile");
         margo_profile_dump(mid, "profile", 1);
     }
-    
+
     if(mid->diag_enabled) {
         MARGO_TRACE(mid, "Dumping diagnostics");
         margo_diag_dump(mid, "profile", 1);
@@ -300,7 +300,7 @@ void margo_wait_for_finalize(margo_instance_id mid)
     ABT_mutex_lock(mid->finalize_mutex);
 
         mid->refcount++;
-            
+
         while(!mid->finalize_flag)
             ABT_cond_wait(mid->finalize_cond, mid->finalize_mutex);
 
@@ -337,7 +337,7 @@ void margo_push_prefinalize_callback(
 
 int margo_pop_prefinalize_callback(
                     margo_instance_id mid)
-{   
+{
     return margo_provider_pop_prefinalize_callback(mid, NULL);
 }
 
@@ -345,7 +345,7 @@ int margo_top_prefinalize_callback(
                     margo_instance_id mid,
                     margo_finalize_callback_t *cb,
                     void** uargs)
-{   
+{
     return margo_provider_top_prefinalize_callback(mid, NULL, cb, uargs);
 }
 
@@ -357,7 +357,7 @@ void margo_provider_push_prefinalize_callback(
 {
     if(cb == NULL) return;
 
-    struct margo_finalize_cb* fcb = 
+    struct margo_finalize_cb* fcb =
         (struct margo_finalize_cb*)malloc(sizeof(*fcb));
     fcb->owner    = owner;
     fcb->callback = cb;
@@ -425,7 +425,7 @@ void margo_push_finalize_callback(
 
 int margo_pop_finalize_callback(
                     margo_instance_id mid)
-{   
+{
     return margo_provider_pop_finalize_callback(mid, NULL);
 }
 
@@ -433,7 +433,7 @@ int margo_top_finalize_callback(
                     margo_instance_id mid,
                     margo_finalize_callback_t *cb,
                     void** uargs)
-{   
+{
     return margo_provider_top_finalize_callback(mid, NULL, cb, uargs);
 }
 
@@ -445,7 +445,7 @@ void margo_provider_push_finalize_callback(
 {
     if(cb == NULL) return;
 
-    struct margo_finalize_cb* fcb = 
+    struct margo_finalize_cb* fcb =
         (struct margo_finalize_cb*)malloc(sizeof(*fcb));
     fcb->owner    = owner;
     fcb->callback = cb;
@@ -603,9 +603,9 @@ hg_return_t margo_register_data(
     margo_instance_id mid,
     hg_id_t id,
     void *data,
-    void (*free_callback)(void *)) 
+    void (*free_callback)(void *))
 {
-    struct margo_rpc_data* margo_data 
+    struct margo_rpc_data* margo_data
         = (struct margo_rpc_data*) HG_Registered_data(mid->hg_class, id);
     if(!margo_data) return HG_OTHER_ERROR;
     if(margo_data->user_data && margo_data->user_free_callback) {
@@ -812,7 +812,7 @@ static hg_return_t margo_cb(const struct hg_cb_info *info)
 
     /* propagate return code out through eventual */
     ABT_eventual_set(req->eventual, &hret, sizeof(hret));
-    
+
     return(HG_SUCCESS);
 }
 
@@ -846,7 +846,7 @@ static hg_return_t margo_provider_iforward_internal(
     hg_return_t hret = HG_TIMEOUT;
     ABT_eventual eventual;
     int ret;
-    const struct hg_info* hgi; 
+    const struct hg_info* hgi;
     hg_id_t id;
     hg_proc_cb_t in_cb, out_cb;
     hg_bool_t flag;
@@ -881,7 +881,7 @@ static hg_return_t margo_provider_iforward_internal(
             return(ret);
 
         /* register new ID that includes provider id */
-        ret = margo_register_internal(margo_hg_info_get_instance(hgi), 
+        ret = margo_register_internal(margo_hg_info_get_instance(hgi),
             id, in_cb, out_cb, NULL, ABT_POOL_NULL);
         if(ret == 0)
             return(HG_OTHER_ERROR);
@@ -896,9 +896,9 @@ static hg_return_t margo_provider_iforward_internal(
     ret = ABT_eventual_create(sizeof(hret), &eventual);
     if(ret != 0)
     {
-        return(HG_NOMEM_ERROR);        
+        return(HG_NOMEM_ERROR);
     }
-    
+
     req->timer = NULL;
     req->eventual = eventual;
     req->handle = handle;
@@ -928,7 +928,7 @@ static hg_return_t margo_provider_iforward_internal(
         *rpc_breadcrumb = htole64(req->rpc_breadcrumb);
 
         req->start_time = ABT_get_wtime();
-    
+
        /* add information about the server and provider servicing the request */
         req->provider_id = provider_id; /*store id of provider servicing the request */
         const struct hg_info * inf = HG_Get_info(req->handle);
@@ -1066,7 +1066,7 @@ hg_return_t margo_respond(
     if(mid->profile_enabled) {
       ABT_key_get(g_margo_target_timing_key, (void**)(&treq));
       assert(treq != NULL);
-    
+
       /* the "1" indicates that this a target-side breadcrumb */
       margo_breadcrumb_measure(mid, treq->rpc_breadcrumb, treq->start_time, 1, treq->provider_id, treq->server_addr_hash, handle);
     }
@@ -1154,7 +1154,7 @@ static hg_return_t margo_bulk_itransfer_internal(
     ret = ABT_eventual_create(sizeof(hret), &(req->eventual));
     if(ret != 0)
     {
-        return(HG_NOMEM_ERROR);        
+        return(HG_NOMEM_ERROR);
     }
     req->timer = NULL;
     req->handle = HG_HANDLE_NULL;
@@ -1177,7 +1177,7 @@ hg_return_t margo_bulk_transfer(
     hg_bulk_t local_handle,
     size_t local_offset,
     size_t size)
-{  
+{
     struct margo_request_struct reqs;
     hg_return_t hret = margo_bulk_itransfer_internal(mid,op,origin_addr,
                           origin_handle, origin_offset, local_handle,
@@ -1197,7 +1197,7 @@ hg_return_t margo_bulk_parallel_transfer(
     size_t local_offset,
     size_t size,
     size_t chunk_size)
-{  
+{
     unsigned i, j;
     hg_return_t hret      = HG_SUCCESS;
     hg_return_t hret_wait = HG_SUCCESS;
@@ -1333,7 +1333,7 @@ ABT_pool margo_hg_handle_get_handler_pool(hg_handle_t h)
     struct margo_rpc_data* data;
     const struct hg_info* info;
     ABT_pool pool;
-    
+
     info = HG_Get_info(h);
     if(!info) return ABT_POOL_NULL;
 
@@ -1349,7 +1349,7 @@ ABT_pool margo_hg_handle_get_handler_pool(hg_handle_t h)
 
 margo_instance_id margo_hg_info_get_instance(const struct hg_info *info)
 {
-    struct margo_rpc_data* data = 
+    struct margo_rpc_data* data =
         (struct margo_rpc_data*) HG_Registered_data(info->hg_class, info->id);
     if(!data) return MARGO_INSTANCE_NULL;
     return data->mid;
@@ -1359,7 +1359,7 @@ margo_instance_id margo_hg_handle_get_instance(hg_handle_t h)
 {
     struct margo_rpc_data* data;
     const struct hg_info* info;
-    
+
     info = HG_Get_info(h);
     if(!info) return MARGO_INSTANCE_NULL;
 
@@ -1395,7 +1395,7 @@ void __margo_hg_progress_fn(void* foo)
     {
         do {
             /* save value of instance diag variable, in case it is modified
-             * while we are in loop 
+             * while we are in loop
              */
             diag_enabled = mid->diag_enabled;
 
@@ -1409,20 +1409,20 @@ void __margo_hg_progress_fn(void* foo)
         } while((ret == HG_SUCCESS) && actual_count && !mid->hg_progress_shutdown_flag);
 
         /* Check to see if there are any runnable ULTs in the pool now.  If
-         * so, then we yield here to allow them a chance to execute.  
+         * so, then we yield here to allow them a chance to execute.
          * We check here because new ULTs may now be elegible as a result of
          * being spawned by the trigger, but existing ones also may have been
          * activated by an external event.
          *
-         * NOTE: the output size value does not count the calling ULT itself, 
-         * because it is not technically in the pool as a runnable thread at 
+         * NOTE: the output size value does not count the calling ULT itself,
+         * because it is not technically in the pool as a runnable thread at
          * the moment.
          */
         ABT_pool_get_size(mid->progress_pool, &size);
         if(size)
             ABT_thread_yield();
 
-        /* Are there any other threads in this pool that *might* need to 
+        /* Are there any other threads in this pool that *might* need to
          * execute at some point in the future?  If so, then it's not
          * necessarily safe for Mercury to sleep here in progress.  It
          * doesn't matter whether they are runnable now or not, because an
@@ -1467,7 +1467,7 @@ void __margo_hg_progress_fn(void* foo)
             if(ret == HG_SUCCESS)
             {
                 /* Mercury completed something; loop around to trigger
-                 * callbacks 
+                 * callbacks
                  */
             }
             else if(ret == HG_TIMEOUT)
@@ -1511,7 +1511,7 @@ void __margo_hg_progress_fn(void* foo)
                     __DIAG_UPDATE(mid->diag_progress_elapsed_zero_timeout, (tm2-tm1));
                 else
                     __DIAG_UPDATE(mid->diag_progress_elapsed_nonzero_timeout, (tm2-tm1));
-                    
+
                 __DIAG_UPDATE(mid->diag_progress_timeout_value, hg_progress_timeout);
             }
             if(ret != HG_SUCCESS && ret != HG_TIMEOUT)
@@ -1561,7 +1561,7 @@ static hg_id_t margo_register_internal(margo_instance_id mid, hg_id_t id,
 {
     struct margo_rpc_data* margo_data;
     hg_return_t hret;
-    
+
     hret = HG_Register(mid->hg_class, id, in_proc_cb, out_proc_cb, rpc_cb);
     if(hret != HG_SUCCESS)
         return(hret);
@@ -1676,10 +1676,10 @@ static void margo_breadcrumb_measure(
     hash_ = hash;
     hash_ = (hash_ >> 16) << 16;
     hash_ |= t;
-  
+
     /* add in the server address */
     x = hash_;
-    x = x << 64; 
+    x = x << 64;
     x |= rpc_breadcrumb;
 
     if(!mid->profile_enabled)
@@ -1721,11 +1721,11 @@ static void margo_breadcrumb_measure(
         stat->stats.abt_pool_total_size_lwm = 0x11111111; // Some high value
         stat->stats.abt_pool_total_size_cumulative = 0;
         stat->stats.abt_pool_total_size_hwm = -1;
-   
+
         /* initialize sparkline data */
         memset(stat->sparkline_time, 0.0, 100*sizeof(double));
         memset(stat->sparkline_count, 0.0, 100*sizeof(double));
- 
+
         HASH_ADD(hh, mid->diag_rpc, x,
             sizeof(x), stat);
     }
@@ -1811,7 +1811,7 @@ void __margo_internal_pre_wrapper_hooks(margo_instance_id mid, hg_handle_t handl
         {
             req = calloc(1, sizeof(*req));
         }
-    
+
         req->rpc_breadcrumb = *rpc_breadcrumb;
 
         req->timer = NULL;
@@ -1821,7 +1821,7 @@ void __margo_internal_pre_wrapper_hooks(margo_instance_id mid, hg_handle_t handl
         req->provider_id = 0;
         req->provider_id += ((info->id) & (((1<<(__MARGO_PROVIDER_ID_SIZE*8))-1)));
         req->server_addr_hash = mid->self_addr_hash;
- 
+
         /* Note: we use this opportunity to retrieve the incoming RPC
          * breadcrumb and put it in a thread-local argobots key.  It is
          * shifted down 16 bits so that if this handler in turn issues more
@@ -1843,7 +1843,7 @@ void __margo_internal_post_wrapper_hooks(margo_instance_id mid)
 
 char* margo_get_config(margo_instance_id mid)
 {
-    const char* content =  json_object_to_json_string_ext(mid->json_cfg, 
+    const char* content =  json_object_to_json_string_ext(mid->json_cfg,
             JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_NOSLASHESCAPE);
     return strdup(content);
 }

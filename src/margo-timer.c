@@ -1,10 +1,8 @@
-
 /*
  * (C) 2016 The University of Chicago
- * 
+ *
  * See COPYRIGHT in top-level directory.
  */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -222,7 +220,7 @@ static void __margo_timer_queue(
         {
             /* walk backwards through queue */
             cur = cur->prev;
-            /* as soon as we find an element that expires before this one, 
+            /* as soon as we find an element that expires before this one,
              * then we add ours after it
              */
             if(cur->expiration < timer->expiration)
