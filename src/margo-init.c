@@ -14,6 +14,7 @@
 #include "margo-handle-cache.h"
 #include "margo-globals.h"
 #include "margo-macros.h"
+#include "margo-util.h"
 
 // Validates the format of the configuration and
 // fill default values if they are note provided
@@ -1027,11 +1028,8 @@ static void set_argobots_environment_variables(struct json_object* config)
     int abt_mem_max_num_stacks = json_object_get_int64(json_object_object_get(argobots, "abt_mem_max_num_stacks"));
     int abt_thread_stacksize = json_object_get_int64(json_object_object_get(argobots, "abt_thread_stacksize"));
 
-    char env_str[64];
-    sprintf(env_str, "%d", abt_mem_max_num_stacks);
-    setenv("ABT_MEM_MAX_NUM_STACKS", env_str, 1);
-    sprintf(env_str, "%d", abt_thread_stacksize);
-    setenv("ABT_THREAD_STACKSIZE", env_str, 1);
+    margo_set_abt_mem_max_num_stacks(abt_mem_max_num_stacks);
+    margo_set_abt_thread_stacksize(abt_thread_stacksize);
 }
 
 static void remote_shutdown_ult(hg_handle_t handle)

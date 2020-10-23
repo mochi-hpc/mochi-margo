@@ -20,8 +20,9 @@ include_HEADERS = \
  include/margo.h \
  include/margo-logging.h \
  include/margo-diag.h \
- include/margo-bulk-pool.h
- 
+ include/margo-bulk-pool.h \
+ include/margo-util.h
+
 TESTS_ENVIRONMENT =
 
 EXTRA_DIST += \
