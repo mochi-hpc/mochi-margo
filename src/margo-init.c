@@ -250,6 +250,8 @@ margo_instance_id margo_init_ext(
     int diag_enabled = json_object_get_boolean(json_object_object_get(config, "enable_diagnostics"));
     int profile_enabled = json_object_get_boolean(json_object_object_get(config, "enable_profiling"));
 
+    mid->json_cfg               = config;
+
     mid->hg_class               = hg_class;
     mid->hg_context             = hg_context;
     mid->hg_ownership           = hg_ownership;
@@ -309,6 +311,7 @@ margo_instance_id margo_init_ext(
      * multiple times for different margo instances.  As of May 2019 this doesn't
      * seem to be a problem to call ABT_key_create() multiple times.
      */
+    MARGO_TRACE(0, "Creating ABT keys for profiling");
     ret = ABT_key_create(free, &g_margo_rpc_breadcrumb_key);
     if(ret != ABT_SUCCESS) goto error;
 
@@ -321,6 +324,7 @@ margo_instance_id margo_init_ext(
     ABT_mutex_create(&mid->diag_rpc_mutex);
 
     if(profile_enabled) {
+        MARGO_TRACE(0, "Profiling is enabled, starting profiling thread");
         char * name;
         mid->previous_sparkline_data_collection_time = ABT_get_wtime();
 

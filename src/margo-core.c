@@ -1538,6 +1538,7 @@ int margo_set_param(margo_instance_id mid, const char *key, const char *value)
 {
     if(strcmp(key, "progress_timeout_ub_msecs") == 0)
     {
+        MARGO_TRACE(0, "Setting progress_timeout_ub_msecs to %s", value);
         int progress_timeout_ub_msecs = atoi(value);
         mid->hg_progress_timeout_ub = progress_timeout_ub_msecs;
         json_object_object_add(mid->json_cfg, "progress_timeout_ub_msecs", 
@@ -1547,6 +1548,7 @@ int margo_set_param(margo_instance_id mid, const char *key, const char *value)
 
     if(strcmp(key, "enable_diagnostics") == 0)
     {
+        MARGO_TRACE(0, "Setting enable_diagnistics to %s", value);
         bool enable_diagnostics = atoi(value);
         mid->diag_enabled = enable_diagnostics;
         json_object_object_add(mid->json_cfg, "enable_diagnostics",
@@ -1846,6 +1848,7 @@ void __margo_internal_post_wrapper_hooks(margo_instance_id mid)
 
 char* margo_get_config(margo_instance_id mid)
 {
-    const char* content =  json_object_to_json_string_ext(mid->json_cfg, JSON_C_TO_STRING_PRETTY);
+    const char* content =  json_object_to_json_string_ext(mid->json_cfg, 
+            JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_NOSLASHESCAPE);
     return strdup(content);
 }
