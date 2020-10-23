@@ -14,6 +14,7 @@
 # include <endian.h>    /* attempt to define endianness */
 #endif
 #include "margo-instance.h"
+#include "margo-globals.h"
 
 void __margo_sparkline_data_collection_fn(void* foo);
 
@@ -30,6 +31,17 @@ void __margo_print_profile_data(
         const char* name,
         const char *description,
         struct diag_data *data);
+
+uint64_t __margo_breadcrumb_set(hg_id_t rpc_id);
+
+void __margo_breadcrumb_measure(
+        margo_instance_id mid,
+        uint64_t rpc_breadcrumb,
+        double start,
+        margo_breadcrumb_type type,
+        uint16_t provider_id,
+        uint64_t hash,
+        hg_handle_t h);
 
 #define GET_SELF_ADDR_STR(__mid, __addr_str) do { \
     hg_addr_t __self_addr; \

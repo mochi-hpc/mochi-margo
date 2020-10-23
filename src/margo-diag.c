@@ -115,6 +115,165 @@ void __margo_print_profile_data(
     return;
 }
 
+/* records statistics for a breadcrumb, to be used after completion of an
+ * RPC, both on the origin as well as on the target */
+void __margo_breadcrumb_measure(
+        margo_instance_id mid,
+        uint64_t rpc_breadcrumb,
+        double start,
+        margo_breadcrumb_type type,
+        uint16_t provider_id,
+        uint64_t hash,
+        hg_handle_t h)
+{
+    struct diag_data *stat;
+    double end, elapsed;
+    uint16_t t = (type == origin) ? 2: 1;
+    uint64_t hash_;
+
+    __uint128_t x = 0;
+
+    /* IMPT NOTE: presently not adding provider_id to the breadcrumb,
+       thus, the breadcrumb represents cumulative information for all providers
+       offering or making a certain RPC call on this Margo instance */
+
+    /* Bake in information about whether or not this was an origin or target-side breadcrumb */
+    hash_ = hash;
+    hash_ = (hash_ >> 16) << 16;
+    hash_ |= t;
+
+    /* add in the server address */
+    x = hash_;
+    x = x << 64;
+    x |= rpc_breadcrumb;
+
+    if(!mid->profile_enabled)
+        return;
+
+    end = ABT_get_wtime();
+    elapsed = end-start;
+
+    ABT_mutex_lock(mid->diag_rpc_mutex);
+
+    HASH_FIND(hh, mid->diag_rpc, &x,
+        sizeof(uint64_t)*2, stat);
+
+    if(!stat)
+    {
+        /* we aren't tracking this breadcrumb yet; add it */
+        stat = calloc(1, sizeof(*stat));
+        if(!stat)
+        {
+            /* best effort; we return gracefully without recording stats if this
+             * happens.
+             */
+            ABT_mutex_unlock(mid->diag_rpc_mutex);
+            return;
+        }
+
+        stat->rpc_breadcrumb = rpc_breadcrumb;
+        stat->type = type;
+        stat->key.rpc_breadcrumb = rpc_breadcrumb;
+        stat->key.addr_hash = hash;
+        stat->key.provider_id = provider_id;
+        stat->x = x;
+
+        /* initialize pool stats for breadcrumb */
+        stat->stats.abt_pool_size_lwm = 0x11111111; // Some high value
+        stat->stats.abt_pool_size_cumulative = 0;
+        stat->stats.abt_pool_size_hwm = -1;
+
+        stat->stats.abt_pool_total_size_lwm = 0x11111111; // Some high value
+        stat->stats.abt_pool_total_size_cumulative = 0;
+        stat->stats.abt_pool_total_size_hwm = -1;
+
+        /* initialize sparkline data */
+        memset(stat->sparkline_time, 0.0, 100*sizeof(double));
+        memset(stat->sparkline_count, 0.0, 100*sizeof(double));
+
+        HASH_ADD(hh, mid->diag_rpc, x,
+            sizeof(x), stat);
+    }
+
+    /* Argobots pool info */
+    size_t s, s1;
+    struct margo_rpc_data * margo_data;
+    if(type) {
+      const struct hg_info * info;
+      info = HG_Get_info(h);
+      margo_data = (struct margo_rpc_data*)HG_Registered_data(mid->hg_class, info->id);
+      if(margo_data && margo_data->pool != ABT_POOL_NULL) {
+        ABT_pool_get_total_size(margo_data->pool, &s);
+        ABT_pool_get_size(margo_data->pool, &s1);
+      }
+      else {
+        ABT_pool_get_total_size(mid->rpc_pool, &s);
+        ABT_pool_get_size(mid->rpc_pool, &s1);
+      }
+
+      stat->stats.abt_pool_size_hwm = stat->stats.abt_pool_size_hwm > (double)s1 ? stat->stats.abt_pool_size_hwm : s1;
+      stat->stats.abt_pool_size_lwm = stat->stats.abt_pool_size_lwm < (double)s1 ? stat->stats.abt_pool_size_lwm : s1;
+      stat->stats.abt_pool_size_cumulative += s1;
+
+      stat->stats.abt_pool_total_size_hwm = stat->stats.abt_pool_total_size_hwm > (double)s ? stat->stats.abt_pool_total_size_hwm : s;
+      stat->stats.abt_pool_total_size_lwm = stat->stats.abt_pool_total_size_lwm < (double)s ? stat->stats.abt_pool_total_size_lwm : s;
+      stat->stats.abt_pool_total_size_cumulative += s;
+
+    }
+    /* Argobots pool info */
+
+    stat->stats.count++;
+    stat->stats.cumulative += elapsed;
+    if(elapsed > stat->stats.max)
+        stat->stats.max = elapsed;
+    if(stat->stats.min == 0 || elapsed < stat->stats.min)
+        stat->stats.min = elapsed;
+
+    ABT_mutex_unlock(mid->diag_rpc_mutex);
+
+    return;
+}
+
+/* sets the value of a breadcrumb, to be called just before issuing an RPC */
+uint64_t __margo_breadcrumb_set(hg_id_t rpc_id)
+{
+    uint64_t *val;
+    uint64_t tmp;
+
+    ABT_key_get(g_margo_rpc_breadcrumb_key, (void**)(&val));
+    if(val == NULL)
+    {
+        /* key not set yet on this ULT; we need to allocate a new one
+         * with all zeroes for initial value of breadcrumb and idx
+         */
+        /* NOTE: treating this as best effort; just return 0 if it fails */
+        val = calloc(1, sizeof(*val));
+        if(!val)
+            return(0);
+    }
+
+    /* NOTE: an rpc_id (after mux'ing) has provider in low order bits and
+     * base rpc_id in high order bits.  After demuxing, a base_id has zeroed
+     * out low bits.  So regardless of whether the rpc_id is a base_id or a
+     * mux'd id, either way we need to shift right to get either the
+     * provider id (or the space reserved for it) out of the way, then mask
+     * off 16 bits for use as a breadcrumb.
+     */
+    tmp = rpc_id >> (__MARGO_PROVIDER_ID_SIZE*8);
+    tmp &= 0xffff;
+
+    /* clear low 16 bits of breadcrumb */
+    *val = (*val >> 16) << 16;
+
+    /* combine them, so that we have low order 16 of rpc id and high order
+     * bits of previous breadcrumb */
+    *val |= tmp;
+
+    ABT_key_set(g_margo_rpc_breadcrumb_key, val);
+
+    return *val;
+}
+
 /* copy out the entire list of breadcrumbs on this margo instance */
 void margo_breadcrumb_snapshot(margo_instance_id mid, struct margo_breadcrumb_snapshot* snap)
 {
