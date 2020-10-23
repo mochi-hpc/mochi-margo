@@ -1043,3 +1043,52 @@ static void remote_shutdown_ult(hg_handle_t handle)
     }
 }
 static DEFINE_MARGO_RPC_HANDLER(remote_shutdown_ult)
+
+int margo_get_pool_by_name(margo_instance_id mid, const char* name, ABT_pool* pool)
+{
+    int index;
+    struct json_object* p = NULL;
+    struct json_object* argobots = json_object_object_get(mid->json_cfg, "argobots");
+    struct json_object* pool_array = json_object_object_get(argobots, "pools");
+    CONFIG_FIND_BY_NAME(pool_array, name, index, p);
+    if(index >= 0) {
+        return margo_get_pool_by_index(mid, index, pool);
+    } else {
+        return -1;
+    }
+}
+
+int margo_get_pool_by_index(margo_instance_id mid, unsigned index, ABT_pool* pool)
+{
+    if(index < 0 || index >= mid->num_abt_pools) {
+        *pool = ABT_POOL_NULL;
+        return -1;
+    } else {
+        *pool = mid->abt_pools[index];
+    }
+}
+
+int margo_get_xstream_by_name(margo_instance_id mid, const char* name, ABT_xstream* es)
+{
+    int index;
+    struct json_object* e = NULL;
+    struct json_object* argobots = json_object_object_get(mid->json_cfg, "argobots");
+    struct json_object* es_array = json_object_object_get(argobots, "xstreams");
+    CONFIG_FIND_BY_NAME(es_array, name, index, e);
+    if(index >= 0) {
+        return margo_get_xstream_by_index(mid, index, es);
+    } else {
+        return -1;
+    }
+}
+
+int margo_get_xstream_by_index(margo_instance_id mid, unsigned index, ABT_xstream* es)
+{
+    if(index < 0 || index >= mid->num_abt_xstreams) {
+        *es = ABT_XSTREAM_NULL;
+        return -1;
+    }
+    else {
+        *es = mid->abt_xstreams[index];
+    }
+}

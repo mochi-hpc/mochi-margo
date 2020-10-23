@@ -1252,6 +1252,50 @@ int margo_set_param(margo_instance_id mid, const char *key, const char *value);
 char* margo_get_config(margo_instance_id mid);
 
 /**
+ * @brief Get a pool from the configuration.
+ *
+ * @param [in] mid Margo instance
+ * @param [in] name Name of the pool
+ * @param [out] pool Pool
+ *
+ * @return 0 on success, -1 on failure
+ */
+int margo_get_pool_by_name(margo_instance_id mid, const char* name, ABT_pool* pool);
+
+/**
+ * @brief Get a pool from the configuration.
+ *
+ * @param [in] mid Margo instance
+ * @param [in] index Index of the pool
+ * @param [out] pool Pool
+ *
+ * @return 0 on success, -1 on failure
+ */
+int margo_get_pool_by_index(margo_instance_id mid, unsigned index, ABT_pool* pool);
+
+/**
+ * @brief Get an xstream from the configuration.
+ *
+ * @param [in] mid Margo instance
+ * @param [in] name Name of the ES
+ * @param [out] es ES
+ *
+ * @return 0 on success, -1 on failure
+ */
+int margo_get_xstream_by_name(margo_instance_id mid, const char* name, ABT_xstream* es);
+
+/**
+ * @brief Get an xstream from the configuration.
+ *
+ * @param [in] mid Margo instance
+ * @param [in] name Index of the ES
+ * @param [out] es ES
+ *
+ * @return 0 on success, -1 on failure
+ */
+int margo_get_xstream_by_index(margo_instance_id mid, unsigned index, ABT_xstream* es);
+
+/**
  * @private
  * Internal function used by MARGO_REGISTER, not
  * supposed to be called by users!
