@@ -247,9 +247,9 @@ margo_instance_id margo_init_ext(
     }
 
     int progress_timeout_ub = json_object_get_int64(json_object_object_get(config, "progress_timeout_ub_msec"));
-    int handle_cache_size = json_object_get_int64(json_object_object_get(config, "handle_cache_size"));
-    int diag_enabled = json_object_get_boolean(json_object_object_get(config, "enable_diagnostics"));
-    int profile_enabled = json_object_get_boolean(json_object_object_get(config, "enable_profiling"));
+    int handle_cache_size   = json_object_get_int64(json_object_object_get(config, "handle_cache_size"));
+    int diag_enabled        = json_object_get_boolean(json_object_object_get(config, "enable_diagnostics"));
+    int profile_enabled     = json_object_get_boolean(json_object_object_get(config, "enable_profiling"));
 
     mid->json_cfg               = config;
 
@@ -926,13 +926,13 @@ static int create_xstream_from_config(
     (void)total_num_pools; // silence warning about unused variable
 
     int ret = ABT_SUCCESS;
-    const char* es_name = json_object_get_string(json_object_object_get(es_config, "name"));
-    struct json_object* sched = json_object_object_get(es_config, "scheduler");
-    const char* es_sched_type  = json_object_get_string(json_object_object_get(sched, "type"));
-    struct json_object*     es_pools_array = json_object_object_get(sched, "pools");
-    size_t es_num_pools     = json_object_array_length(es_pools_array);
-    int         es_cpubind     = json_object_get_int64(json_object_object_get(es_config, "cpubind"));
-    struct json_object*     es_affinity    = json_object_object_get(es_config, "affinity");
+    const char*         es_name = json_object_get_string(json_object_object_get(es_config, "name"));
+    struct json_object* sched   = json_object_object_get(es_config, "scheduler");
+    const char* es_sched_type   = json_object_get_string(json_object_object_get(sched, "type"));
+    struct json_object* es_pools_array = json_object_object_get(sched, "pools");
+    size_t es_num_pools         = json_object_array_length(es_pools_array);
+    int         es_cpubind      = json_object_get_int64(json_object_object_get(es_config, "cpubind"));
+    struct json_object* es_affinity  = json_object_object_get(es_config, "affinity");
 
     ABT_sched_predef predef;
     if(strcmp(es_sched_type, "default") == 0)         predef = ABT_SCHED_DEFAULT;
@@ -1025,8 +1025,8 @@ static int create_xstream_from_config(
 static void set_argobots_environment_variables(struct json_object* config)
 {
     struct json_object* argobots = json_object_object_get(config, "argobots");
-    int abt_mem_max_num_stacks = json_object_get_int64(json_object_object_get(argobots, "abt_mem_max_num_stacks"));
-    int abt_thread_stacksize = json_object_get_int64(json_object_object_get(argobots, "abt_thread_stacksize"));
+    int abt_mem_max_num_stacks   = json_object_get_int64(json_object_object_get(argobots, "abt_mem_max_num_stacks"));
+    int abt_thread_stacksize     = json_object_get_int64(json_object_object_get(argobots, "abt_thread_stacksize"));
 
     margo_set_abt_mem_max_num_stacks(abt_mem_max_num_stacks);
     margo_set_abt_thread_stacksize(abt_thread_stacksize);
