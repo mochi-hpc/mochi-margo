@@ -1,6 +1,6 @@
 /*
  * (C) 2015 The University of Chicago
- * 
+ *
  * See COPYRIGHT in top-level directory.
  */
 
@@ -23,15 +23,20 @@ char* readfile(const char* filename) {
     return string;
 }
 
-int main(int argc, char **argv) 
+int main(int argc, char **argv)
 {
     margo_set_global_log_level(MARGO_LOG_TRACE);
 
     margo_instance_id mid;
     struct margo_init_info args = { 0 };
-    args.json_config = argc >= 1 ? readfile(argv[1]) : NULL;
+    args.json_config = argc > 1 ? readfile(argv[1]) : NULL;
 
     mid = margo_init_ext("na+sm", MARGO_CLIENT_MODE, &args);
+
+    char* config = margo_get_config(mid);
+    fprintf(stderr, "----------------------------\n");
+    fprintf(stderr, "%s\n", config);
+    free(config);
 
     free((char*)args.json_config);
 
