@@ -279,7 +279,7 @@ void margo_finalize(margo_instance_id mid)
     if(do_cleanup)
         margo_cleanup(mid);
 
-    MARGO_TRACE(mid, "Finalize completed");
+    MARGO_TRACE(NULL, "Finalize completed");
     return;
 }
 
@@ -303,7 +303,7 @@ void margo_wait_for_finalize(margo_instance_id mid)
     if(do_cleanup)
         margo_cleanup(mid);
 
-    MARGO_TRACE(mid, "Done waiting for finalize");
+    MARGO_TRACE(NULL, "Done waiting for finalize");
     return;
 }
 
