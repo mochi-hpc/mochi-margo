@@ -290,7 +290,6 @@ margo_instance_id margo_init_ext(
 
     mid->free_handle_list       = NULL;
     mid->used_handle_hash       = NULL;
-    ABT_mutex_create(&mid->handle_cache_mtx);
     hret = __margo_handle_cache_init(mid, handle_cache_size);
     if(hret != HG_SUCCESS) goto error;
 

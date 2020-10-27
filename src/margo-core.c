@@ -207,6 +207,9 @@ static void margo_cleanup(margo_instance_id mid)
     json_object_put(mid->json_cfg);
 
     MARGO_TRACE(mid, "Cleaning up margo instance");
+    free(mid->abt_pools);
+    free(mid->abt_xstreams);
+    free(mid->owns_abt_xstream);
     free(mid);
 
     MARGO_TRACE(0, "Completed margo_cleanup");
