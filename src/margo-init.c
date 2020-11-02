@@ -68,7 +68,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     hg_class_t*         hg_class      = NULL;
     hg_context_t*       hg_context    = NULL;
     uint8_t             hg_ownership  = 0;
-    struct hg_init_info hg_init_info  = {0};
+    struct hg_init_info hg_init_info  = HG_INIT_INFO_INITIALIZER;
     hg_addr_t           self_addr     = HG_ADDR_NULL;
     ABT_pool*           pools         = NULL;
     size_t              num_pools     = 0;
@@ -475,7 +475,11 @@ validate_and_complete_config(struct json_object*        _margo,
     /* Fields:
        - [added] address: string
        - [added] listening: bool (optional if hg_context provided)
+       - [optional] request_post_init: int (default 256)
+       - [optional] request_post_incr: int (default 256)
        - [optional] auto_sm: bool (default false)
+       - [optional] no_bulk_eager: bool (default false)
+       - [optional] no_loopback: bool (default false)
        - [optional] stats: bool (default false)
        - [optional] na_no_block: bool (default false)
        - [optional] na_no_retry: bool (default false)
@@ -502,6 +506,32 @@ validate_and_complete_config(struct json_object*        _margo,
         MARGO_TRACE(0, "mercury.version = %s", hg_version_string);
     }
 
+    { // add mercury.request_post_incr or set it as default
+        if (_hg_init_info) {
+            hg_uint32_t request_post_incr = _hg_init_info->request_post_incr;
+            CONFIG_OVERRIDE_INTEGER(_mercury, "request_post_incr",
+                                    request_post_incr,
+                                    "mercury.request_post_incr", 256);
+        }
+        CONFIG_HAS_OR_CREATE(_mercury, int, "request_post_incr", 256,
+                             "mercury.request_post_incr", val);
+        MARGO_TRACE(0, "mercury.request_post_incr = %d",
+                    json_object_get_int(val));
+    }
+
+    { // add mercury.request_post_init or set it as default
+        if (_hg_init_info) {
+            hg_uint32_t request_post_init = _hg_init_info->request_post_init;
+            CONFIG_OVERRIDE_INTEGER(_mercury, "request_post_init",
+                                    request_post_init,
+                                    "mercury.request_post_init", 256);
+        }
+        CONFIG_HAS_OR_CREATE(_mercury, int, "request_post_init", 256,
+                             "mercury.request_post_init", val);
+        MARGO_TRACE(0, "mercury.request_post_init = %d",
+                    json_object_get_int(val));
+    }
+
     { // add mercury.auto_sm or set it as default
         if (_hg_init_info)
             CONFIG_OVERRIDE_BOOL(_mercury, "auto_sm", _hg_init_info->auto_sm,
@@ -509,6 +539,28 @@ validate_and_complete_config(struct json_object*        _margo,
         CONFIG_HAS_OR_CREATE(_mercury, boolean, "auto_sm", 0, "mercury.auto_sm",
                              val);
         MARGO_TRACE(0, "mercury.auto_sm = %s",
+                    json_object_get_boolean(val) ? "true" : "false");
+    }
+
+    { // add mercury.no_bulk_eager or set it as default
+        if (_hg_init_info)
+            CONFIG_OVERRIDE_BOOL(_mercury, "no_bulk_eager",
+                                 _hg_init_info->no_bulk_eager,
+                                 "mercury.no_bulk_eager", 1);
+        CONFIG_HAS_OR_CREATE(_mercury, boolean, "no_bulk_eager", 0,
+                             "mercury.no_bulk_eager", val);
+        MARGO_TRACE(0, "mercury.no_bulk_eager = %s",
+                    json_object_get_boolean(val) ? "true" : "false");
+    }
+
+    { // add mercury.no_loopback or set it as default
+        if (_hg_init_info)
+            CONFIG_OVERRIDE_BOOL(_mercury, "no_loopback",
+                                 _hg_init_info->no_loopback,
+                                 "mercury.no_loopback", 1);
+        CONFIG_HAS_OR_CREATE(_mercury, boolean, "no_loopback", 0,
+                             "mercury.no_loopback", val);
+        MARGO_TRACE(0, "mercury.no_loopback = %s",
                     json_object_get_boolean(val) ? "true" : "false");
     }
 
@@ -1070,8 +1122,16 @@ static void fill_hg_init_info_from_config(struct json_object*  config,
 {
     struct json_object* hg = json_object_object_get(config, "mercury");
     info->na_class         = NULL;
+    info->request_post_init
+        = json_object_get_int(json_object_object_get(hg, "request_post_init"));
+    info->request_post_incr
+        = json_object_get_int(json_object_object_get(hg, "request_post_incr"));
     info->auto_sm
         = json_object_get_boolean(json_object_object_get(hg, "auto_sm"));
+    info->no_bulk_eager
+        = json_object_get_boolean(json_object_object_get(hg, "no_bulk_eager"));
+    info->no_loopback
+        = json_object_get_boolean(json_object_object_get(hg, "no_loopback"));
     info->stats = json_object_get_boolean(json_object_object_get(hg, "stats"));
     struct json_object* ip_subnet = json_object_object_get(hg, "ip_subnet");
     info->na_init_info.ip_subnet
