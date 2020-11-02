@@ -9,8 +9,7 @@
 
 int margo_set_abt_mem_max_num_stacks(unsigned max_num_stacks)
 {
-    if(ABT_initialized() != ABT_ERR_UNINITIALIZED)
-        return -1;
+    if (ABT_initialized() != ABT_ERR_UNINITIALIZED) return -1;
     char env_str[64];
     sprintf(env_str, "%d", max_num_stacks);
     setenv("ABT_MEM_MAX_NUM_STACKS", env_str, 1);
@@ -29,8 +28,7 @@ int margo_set_abt_mem_max_num_stacks(unsigned max_num_stacks)
  */
 int margo_set_abt_thread_stacksize(unsigned stacksize)
 {
-    if(ABT_initialized() != ABT_ERR_UNINITIALIZED)
-        return -1;
+    if (ABT_initialized() != ABT_ERR_UNINITIALIZED) return -1;
     char env_str[64];
     sprintf(env_str, "%d", stacksize);
     setenv("ABT_THREAD_STACKSIZE", env_str, 1);

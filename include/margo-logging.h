@@ -15,8 +15,10 @@ typedef struct margo_instance* margo_instance_id;
 
 typedef void (*margo_log_fn_t)(void* uargs, const char* message);
 
-typedef enum margo_log_level {
-    MARGO_LOG_EXTERNAL, /* level management is handled by the underlying implementation */
+typedef enum margo_log_level
+{
+    MARGO_LOG_EXTERNAL, /* level management is handled by the underlying
+                           implementation */
     MARGO_LOG_TRACE,
     MARGO_LOG_DEBUG,
     MARGO_LOG_INFO,
@@ -36,10 +38,10 @@ struct margo_logger {
 };
 
 /**
- * @brief Set a logger structure for Margo to use. The structure will be internally copied
- * and the user may free the input argument after the call. Passing NULL as logger will
- * reset the logger to an internal logger that only prints errors and critical messages
- * on stderr.
+ * @brief Set a logger structure for Margo to use. The structure will be
+ * internally copied and the user may free the input argument after the call.
+ * Passing NULL as logger will reset the logger to an internal logger that only
+ * prints errors and critical messages on stderr.
  *
  * @param mid Margo instance
  * @param logger Logger structure
@@ -62,9 +64,9 @@ int margo_set_log_level(margo_instance_id mid, margo_log_level level);
  * @brief Set a logger structure for Margo to use in functions that don't take a
  * margo_instance_id (such as margo_init and its variants).
  *
- * The structure will be internally copied and the user may free the input argument
- * after the call. Passing NULL as logger will reset the global logger to a logger
- * that only prints errors and critical messages on stderr.
+ * The structure will be internally copied and the user may free the input
+ * argument after the call. Passing NULL as logger will reset the global logger
+ * to a logger that only prints errors and critical messages on stderr.
  *
  * @param logger Logger structure
  *
@@ -100,6 +102,5 @@ void margo_critical(margo_instance_id mid, const char* fmt, ...);
 #ifdef __cplusplus
 }
 #endif
-
 
 #endif

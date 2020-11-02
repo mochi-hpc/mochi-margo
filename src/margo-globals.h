@@ -18,13 +18,13 @@
 // in later calls and in margo_cleanup we can check for
 // g_margo_num_instances_mtx != ABT_MUTEX_NULL
 // to know if we should do something to cleanup ABT as well.
-extern int         g_margo_num_instances;
-extern ABT_mutex   g_margo_num_instances_mtx;
-extern bool        g_margo_abt_init;
+extern int       g_margo_num_instances;
+extern ABT_mutex g_margo_num_instances_mtx;
+extern bool      g_margo_abt_init;
 
 // Keys for Argobots thread-local storage to track RPC breadcrumbs
 // across thread execution.
-extern ABT_key     g_margo_rpc_breadcrumb_key;
-extern ABT_key     g_margo_target_timing_key;
+extern ABT_key g_margo_rpc_breadcrumb_key;
+extern ABT_key g_margo_target_timing_key;
 
 #endif
