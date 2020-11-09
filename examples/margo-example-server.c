@@ -10,6 +10,7 @@
 #include <mercury.h>
 #include <abt.h>
 #include <margo.h>
+#include <margo-logging.h>
 
 #include "my-rpc.h"
 
@@ -37,6 +38,7 @@ int main(int argc, char **argv)
      * Argobots initialization and must precede their use */
     /* Use the calling xstream to drive progress and execute handlers. */
     /***************************************/
+    margo_set_global_log_level(MARGO_LOG_TRACE);
     mid = margo_init(argv[1], MARGO_SERVER_MODE, 0, -1);
     if(mid == MARGO_INSTANCE_NULL)
     {
@@ -67,7 +69,7 @@ int main(int argc, char **argv)
 
     /* register RPC */
     MARGO_REGISTER(mid, "my_rpc", my_rpc_in_t, my_rpc_out_t, my_rpc_ult);
-	MARGO_REGISTER(mid, "my_shutdown_rpc", void, void, my_rpc_shutdown_ult);
+    MARGO_REGISTER(mid, "my_shutdown_rpc", void, void, my_rpc_shutdown_ult);
 
     cfg_str = margo_get_config(mid);
     printf("%s\n", cfg_str);

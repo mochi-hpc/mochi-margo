@@ -1,6 +1,6 @@
 /*
  * (C) 2020 The University of Chicago
- * 
+ *
  * See COPYRIGHT in top-level directory.
  */
 
@@ -13,7 +13,7 @@ extern "C" {
 
 #include <margo.h>
 
-/** 
+/**
  * Perform a bulk transfer by submitting multiple margo_bulk_transfer
  * in parallel.
  *
@@ -28,16 +28,15 @@ extern "C" {
  * @param [in] chunk_size size to by transferred by each operation
  * @returns 0 on success, hg_return_t values on error
  */
-hg_return_t margo_bulk_parallel_transfer(
-    margo_instance_id mid,
-    hg_bulk_op_t op,
-    hg_addr_t origin_addr,
-    hg_bulk_t origin_handle,
-    size_t origin_offset,
-    hg_bulk_t local_handle,
-    size_t local_offset,
-    size_t size,
-    size_t chunk_size);
+hg_return_t margo_bulk_parallel_transfer(margo_instance_id mid,
+                                         hg_bulk_op_t      op,
+                                         hg_addr_t         origin_addr,
+                                         hg_bulk_t         origin_handle,
+                                         size_t            origin_offset,
+                                         hg_bulk_t         local_handle,
+                                         size_t            local_offset,
+                                         size_t            size,
+                                         size_t            chunk_size);
 
 #ifdef __cplusplus
 }

@@ -5,6 +5,7 @@ TESTS_ENVIRONMENT += \
 # disable tests if there is no timeout command
 if BUILD_TESTS
 check_PROGRAMS += \
+ tests/margo-test-init-ext \
  tests/margo-test-sleep \
  tests/margo-test-server \
  tests/margo-test-client \

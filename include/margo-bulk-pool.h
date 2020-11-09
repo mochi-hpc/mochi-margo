@@ -1,9 +1,8 @@
 /*
  * (C) 2015 The University of Chicago
- * 
+ *
  * See COPYRIGHT in top-level directory.
  */
-
 #ifndef __MARGO_BULK_POOL
 #define __MARGO_BULK_POOL
 
@@ -40,12 +39,11 @@ typedef struct margo_bulk_poolset* margo_bulk_poolset_t;
  *
  * @return HG_SUCCESS in case of success, or HG error codes in case of failure.
  */
-hg_return_t margo_bulk_pool_create(
-    margo_instance_id mid,
-    hg_size_t count,
-    hg_size_t size,
-    hg_uint8_t flag,
-    margo_bulk_pool_t *pool);
+hg_return_t margo_bulk_pool_create(margo_instance_id  mid,
+                                   hg_size_t          count,
+                                   hg_size_t          size,
+                                   hg_uint8_t         flag,
+                                   margo_bulk_pool_t* pool);
 
 /**
  * @brief Destroys a margo_bulk_pool_t object, clearing all bulk handles and
@@ -53,24 +51,22 @@ hg_return_t margo_bulk_pool_create(
  * internal buffers should be in use) when this call happens.
  *
  * @param pool margo_bulk_pool_t object to destroy.
- * 
+ *
  * @return 0 in case of success, -1 in case of failure.
  */
-int margo_bulk_pool_destroy(
-    margo_bulk_pool_t pool);
+int margo_bulk_pool_destroy(margo_bulk_pool_t pool);
 
 /**
  * @brief Gets a free hg_bulk_t object from the pool. This function will block
  * until a bulk object is available.
  *
  * @param[in] pool margo_bulk_pool_t object from which to take the hg_bulk_t.
- * @param[out] bulk hg_bulk_t object (guaranteed not to be HG_BULK_NULL if the returned value is 0).
+ * @param[out] bulk hg_bulk_t object (guaranteed not to be HG_BULK_NULL if the
+ * returned value is 0).
  *
  * @return 0 in case of success, -1 in case of failure.
  */
-int margo_bulk_pool_get(
-    margo_bulk_pool_t pool,
-    hg_bulk_t* bulk);
+int margo_bulk_pool_get(margo_bulk_pool_t pool, hg_bulk_t* bulk);
 
 /**
  * @brief Gets a free hg_bulk_t object from the pool. This function will return
@@ -81,56 +77,54 @@ int margo_bulk_pool_get(
  *
  * @return 0 in case of success, -1 in case of failure..
  */
-int margo_bulk_pool_tryget(
-    margo_bulk_pool_t pool,
-    hg_bulk_t* bulk);
+int margo_bulk_pool_tryget(margo_bulk_pool_t pool, hg_bulk_t* bulk);
 
 /**
- * @brief Puts a bulk handle back in the pool. Note that the function is expecting
- * the bulk handle to have been taken from the pool in the first place. The function
- * will return -1 if the bulk was not associated with this pool to begin with.
+ * @brief Puts a bulk handle back in the pool. Note that the function is
+ * expecting the bulk handle to have been taken from the pool in the first
+ * place. The function will return -1 if the bulk was not associated with this
+ * pool to begin with.
  *
  * @param pool margo_bulk_pool_t object to which to return the bulk handle.
  * @param bulk Bulk handle to release.
- * 
+ *
  * @return 0 in case of success, -1 in case of failure.
  */
-int margo_bulk_pool_release(
-    margo_bulk_pool_t pool,
-    hg_bulk_t bulk);
+int margo_bulk_pool_release(margo_bulk_pool_t pool, hg_bulk_t bulk);
 
 /**
  * @brief Creates a poolset. A poolset is a set of pools with the same number of
- * buffers in each pool, and buffer sizes increasing exponentially with the pool number.
+ * buffers in each pool, and buffer sizes increasing exponentially with the pool
+ * number.
  *
  * @param[in] mid Margo instance
  * @param[in] npools Number of pools in the poolset.
  * @param[in] nbufs Number of buffers in each pool.
  * @param[in] first_size Size of buffers in the first pool.
- * @param[in] size_multiple Factor by which to multiply the size of the previous pool to get the size of the next.
+ * @param[in] size_multiple Factor by which to multiply the size of the previous
+ * pool to get the size of the next.
  * @param[in] flag HG_BULK_READ_ONLY, HG_BULK_WRITE_ONLY, or HG_BULK_READWRITE.
  * @param[out] poolset Resulting poolset.
  *
  * @return HG_SUCCESS of other HG error codes.
  */
-hg_return_t margo_bulk_poolset_create(
-    margo_instance_id mid,
-    hg_size_t npools,
-    hg_size_t nbufs,
-    hg_size_t first_size,
-    hg_size_t size_multiple,
-    hg_uint8_t flag,
-    margo_bulk_poolset_t *poolset);
+hg_return_t margo_bulk_poolset_create(margo_instance_id     mid,
+                                      hg_size_t             npools,
+                                      hg_size_t             nbufs,
+                                      hg_size_t             first_size,
+                                      hg_size_t             size_multiple,
+                                      hg_uint8_t            flag,
+                                      margo_bulk_poolset_t* poolset);
 
 /**
- * @brief Destroy a poolset. The poolset must not be in use when this function is called.
+ * @brief Destroy a poolset. The poolset must not be in use when this function
+ * is called.
  *
  * @param poolset Poolset to destroy.
  *
  * @return 0 in case of success, -1 in case of failure.
  */
-int margo_bulk_poolset_destroy(
-    margo_bulk_poolset_t poolset);
+int margo_bulk_poolset_destroy(margo_bulk_poolset_t poolset);
 
 /**
  * @brief Get maximum size supported by a pool set
@@ -139,13 +133,13 @@ int margo_bulk_poolset_destroy(
  * @param max_size Maximum supported buffer size
  *
  */
-void margo_bulk_poolset_get_max(
-    margo_bulk_poolset_t poolset,
-    hg_size_t *max_size);
+void margo_bulk_poolset_get_max(margo_bulk_poolset_t poolset,
+                                hg_size_t*           max_size);
 
 /**
- * @brief Gets a bulk handle from the pool with the minimum size required to satisfy
- * the provided size. May block until the pool has a bulk handle available.
+ * @brief Gets a bulk handle from the pool with the minimum size required to
+ * satisfy the provided size. May block until the pool has a bulk handle
+ * available.
  *
  * @param poolset Poolset from which to get the bulk handle.
  * @param size Size of the buffer needed.
@@ -153,10 +147,9 @@ void margo_bulk_poolset_get_max(
  *
  * @return 0 in case of success, -1 in case of failure.
  */
-int margo_bulk_poolset_get(
-    margo_bulk_poolset_t poolset,
-    hg_size_t size,
-    hg_bulk_t* bulk);
+int margo_bulk_poolset_get(margo_bulk_poolset_t poolset,
+                           hg_size_t            size,
+                           hg_bulk_t*           bulk);
 
 /**
  * @brief Try getting a bulk handle from the poolset. If any_flag is HG_TRUE,
@@ -169,14 +162,13 @@ int margo_bulk_poolset_get(
  * @param any_flag Whether to look in increasingly larger pools or not.
  * @param bulk Resulting bulk handle.
  *
- * @return 0 in case of success (bulk = HG_BULK_NULL is also considered success),
- *        -1 in case of failure.
+ * @return 0 in case of success (bulk = HG_BULK_NULL is also considered
+ * success), -1 in case of failure.
  */
-int margo_bulk_poolset_tryget(
-    margo_bulk_poolset_t poolset,
-    hg_size_t size,
-    hg_bool_t any_flag,
-    hg_bulk_t* bulk);
+int margo_bulk_poolset_tryget(margo_bulk_poolset_t poolset,
+                              hg_size_t            size,
+                              hg_bool_t            any_flag,
+                              hg_bulk_t*           bulk);
 
 /**
  * @brief Puts a bulk handle back in its pool.
@@ -186,9 +178,7 @@ int margo_bulk_poolset_tryget(
  *
  * @return 0 in case of success, -1 in case of success.
  */
-int margo_bulk_poolset_release(
-    margo_bulk_poolset_t poolset,
-    hg_bulk_t bulk);
+int margo_bulk_poolset_release(margo_bulk_poolset_t poolset, hg_bulk_t bulk);
 
 #ifdef __cplusplus
 }
