@@ -1,0 +1,11 @@
+spack:
+  specs:
+  - json-c
+  - autoconf
+  - m4
+  - automake
+  - libtool
+  - pkg-config
+  - argobots
+  - mercury
+  concretization: together
