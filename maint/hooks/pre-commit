@@ -11,6 +11,47 @@
 #
 # To enable this hook, rename this file to "pre-commit".
 
+# If we have a STDIN, use it, otherwise get one
+if tty >/dev/null 2>&1; then
+    TTY=$(tty)
+else
+    TTY=/dev/tty
+fi
+
+ask() {
+    while true; do
+
+        if [ "${2:-}" = "Y" ]; then
+            prompt="Y/n"
+            default=Y
+        elif [ "${2:-}" = "N" ]; then
+            prompt="y/N"
+            default=N
+        else
+            prompt="y/n"
+            default=
+        fi
+
+        # Ask the question (not using "read -p" as it uses stderr not stdout)
+        echo -n "$1 [$prompt] "
+
+        # Read the answer
+        read REPLY < "$TTY"
+
+        # Default?
+        if [ -z "$REPLY" ]; then
+            REPLY=$default
+        fi
+
+        # Check if the reply is valid
+        case "$REPLY" in
+            Y*|y*) return 0 ;;
+            N*|n*) return 1 ;;
+        esac
+
+    done
+}
+
 if git rev-parse --verify HEAD >/dev/null 2>&1
 then
     against=HEAD
@@ -77,7 +118,9 @@ do
         clang-format ${file} > ${TMP_FILENAME}
         git --no-pager diff ${file} ${TMP_FILENAME}
         if [ $? != 0 ] ; then
-            ret=1
+            if ! ask "${file} does not satisfy clang-format, commit anyway?" "N" ; then
+                ret=1
+            fi
         fi
     fi
 done
