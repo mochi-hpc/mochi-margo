@@ -9,19 +9,49 @@
 
 static margo_log_level global_log_level = MARGO_LOG_ERROR;
 
-static void _margo_log(void* uargs, const char* str)
+static void _margo_log_trace(void* uargs, const char* str)
 {
     (void)uargs;
-    fprintf(stderr, "%s\n", str);
+    fprintf(stderr, "[trace] %s\n", str);
+}
+
+static void _margo_log_debug(void* uargs, const char* str)
+{
+    (void)uargs;
+    fprintf(stderr, "[debug] %s\n", str);
+}
+
+static void _margo_log_info(void* uargs, const char* str)
+{
+    (void)uargs;
+    fprintf(stderr, "[info] %s\n", str);
+}
+
+static void _margo_log_warning(void* uargs, const char* str)
+{
+    (void)uargs;
+    fprintf(stderr, "[warning] %s\n", str);
+}
+
+static void _margo_log_error(void* uargs, const char* str)
+{
+    (void)uargs;
+    fprintf(stderr, "[error] %s\n", str);
+}
+
+static void _margo_log_critical(void* uargs, const char* str)
+{
+    (void)uargs;
+    fprintf(stderr, "[critical] %s\n", str);
 }
 
 static struct margo_logger global_logger = {.uargs    = NULL,
-                                            .trace    = _margo_log,
-                                            .debug    = _margo_log,
-                                            .info     = _margo_log,
-                                            .warning  = _margo_log,
-                                            .error    = _margo_log,
-                                            .critical = _margo_log};
+                                            .trace    = _margo_log_trace,
+                                            .debug    = _margo_log_debug,
+                                            .info     = _margo_log_info,
+                                            .warning  = _margo_log_warning,
+                                            .error    = _margo_log_error,
+                                            .critical = _margo_log_critical};
 
 #define DEFINE_LOG_FN(__name__, __level__, __LEVEL__)                        \
     void __name__(margo_instance_id mid, const char* fmt, ...)               \
@@ -34,12 +64,10 @@ static struct margo_logger global_logger = {.uargs    = NULL,
         va_start(args1, fmt);                                                \
         va_list args2;                                                       \
         va_copy(args2, args1);                                               \
-        size_t       msg_size    = vsnprintf(NULL, 0, fmt, args1);           \
-        const size_t header_size = sizeof(#__level__) + 2;                   \
-        char         buf[msg_size + header_size + 1];                        \
+        size_t msg_size = vsnprintf(NULL, 0, fmt, args1);                    \
+        char   buf[msg_size + 1];                                            \
         va_end(args1);                                                       \
-        snprintf(buf, header_size + 1, "[%s] ", #__level__);                 \
-        vsnprintf(buf + header_size, msg_size + 1, fmt, args2);              \
+        vsnprintf(buf, msg_size + 1, fmt, args2);                            \
         if (mid && mid->logger.__level__)                                    \
             mid->logger.__level__(mid->logger.uargs, buf);                   \
         else if (global_logger.__level__)                                    \
@@ -58,12 +86,12 @@ int margo_set_logger(margo_instance_id mid, const struct margo_logger* logger)
 {
     if (!logger) {
         mid->logger.uargs    = NULL;
-        mid->logger.trace    = _margo_log;
-        mid->logger.debug    = _margo_log;
-        mid->logger.info     = _margo_log;
-        mid->logger.warning  = _margo_log;
-        mid->logger.error    = _margo_log;
-        mid->logger.critical = _margo_log;
+        mid->logger.trace    = _margo_log_trace;
+        mid->logger.debug    = _margo_log_debug;
+        mid->logger.info     = _margo_log_info;
+        mid->logger.warning  = _margo_log_warning;
+        mid->logger.error    = _margo_log_error;
+        mid->logger.critical = _margo_log_critical;
         mid->log_level       = MARGO_LOG_WARNING;
     } else {
         mid->logger = *logger;
@@ -82,12 +110,12 @@ int margo_set_global_logger(const struct margo_logger* logger)
 {
     if (!logger) {
         global_logger.uargs    = NULL;
-        global_logger.trace    = _margo_log;
-        global_logger.debug    = _margo_log;
-        global_logger.info     = _margo_log;
-        global_logger.warning  = _margo_log;
-        global_logger.error    = _margo_log;
-        global_logger.critical = _margo_log;
+        global_logger.trace    = _margo_log_trace;
+        global_logger.debug    = _margo_log_debug;
+        global_logger.info     = _margo_log_info;
+        global_logger.warning  = _margo_log_warning;
+        global_logger.error    = _margo_log_error;
+        global_logger.critical = _margo_log_critical;
         global_log_level       = MARGO_LOG_WARNING;
     } else {
         global_logger = *logger;
