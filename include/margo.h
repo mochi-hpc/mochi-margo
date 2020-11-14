@@ -16,6 +16,7 @@ extern "C" {
 #include <mercury_macros.h>
 #include <abt.h>
 #include <margo-diag.h>
+#include <margo-logging.h>
 
 #define DEPRECATED(msg) __attribute__((deprecated(msg)))
 
@@ -1324,11 +1325,15 @@ void __margo_internal_post_wrapper_hooks(margo_instance_id mid);
 
 #define _handler_for_NULL NULL
 
-#define __MARGO_INTERNAL_RPC_WRAPPER_BODY(__name)      \
-    margo_instance_id __mid;                           \
-    __mid = margo_hg_handle_get_instance(handle);      \
-    __margo_internal_pre_wrapper_hooks(__mid, handle); \
-    __name(handle);                                    \
+#define __MARGO_INTERNAL_RPC_WRAPPER_BODY(__name)                 \
+    margo_instance_id __mid;                                      \
+    __mid = margo_hg_handle_get_instance(handle);                 \
+    __margo_internal_pre_wrapper_hooks(__mid, handle);            \
+    margo_trace(__mid, "Starting RPC " #__name " (handle = %p)",  \
+                (void*)handle);                                   \
+    __name(handle);                                               \
+    margo_trace(__mid, "RPC " #__name " completed (handle = %p)", \
+                (void*)handle);                                   \
     __margo_internal_post_wrapper_hooks(__mid);
 
 #define __MARGO_INTERNAL_RPC_WRAPPER(__name)       \
@@ -1337,28 +1342,40 @@ void __margo_internal_post_wrapper_hooks(margo_instance_id mid);
         __MARGO_INTERNAL_RPC_WRAPPER_BODY(__name)  \
     }
 
-#define __MARGO_INTERNAL_RPC_HANDLER_BODY(__name)                             \
-    int               __ret;                                                  \
-    ABT_pool          __pool;                                                 \
-    margo_instance_id __mid;                                                  \
-    __mid = margo_hg_handle_get_instance(handle);                             \
-    if (__mid == MARGO_INSTANCE_NULL) {                                       \
-        margo_destroy(handle);                                                \
-        return (HG_OTHER_ERROR);                                              \
-    }                                                                         \
-    if (__margo_internal_finalize_requested(__mid)) {                         \
-        margo_destroy(handle);                                                \
-        return (HG_CANCELED);                                                 \
-    }                                                                         \
-    __pool = margo_hg_handle_get_handler_pool(handle);                        \
-    __margo_internal_incr_pending(__mid);                                     \
-    __ret = ABT_thread_create(__pool, (void (*)(void*))_wrapper_for_##__name, \
-                              handle, ABT_THREAD_ATTR_NULL, NULL);            \
-    if (__ret != 0) {                                                         \
-        margo_destroy(handle);                                                \
-        __margo_internal_decr_pending(__mid);                                 \
-        return (HG_NOMEM_ERROR);                                              \
-    }                                                                         \
+#define __MARGO_INTERNAL_RPC_HANDLER_BODY(__name)                              \
+    int               __ret;                                                   \
+    ABT_pool          __pool;                                                  \
+    margo_instance_id __mid;                                                   \
+    __mid = margo_hg_handle_get_instance(handle);                              \
+    if (__mid == MARGO_INSTANCE_NULL) {                                        \
+        margo_error(                                                           \
+            __mid, "Could not get margo instance when entering RPC " #__name); \
+        margo_destroy(handle);                                                 \
+        return (HG_OTHER_ERROR);                                               \
+    }                                                                          \
+    if (__margo_internal_finalize_requested(__mid)) {                          \
+        margo_warning(__mid,                                                   \
+                      "Ignoring " #__name " RPC because margo is finalizing"); \
+        margo_destroy(handle);                                                 \
+        return (HG_CANCELED);                                                  \
+    }                                                                          \
+    __pool = margo_hg_handle_get_handler_pool(handle);                         \
+    __margo_internal_incr_pending(__mid);                                      \
+    margo_trace(__mid,                                                         \
+                "Spawning ULT for " #__name                                    \
+                " RPC "                                                        \
+                "(handle = %p)",                                               \
+                (void*)handle);                                                \
+    __ret = ABT_thread_create(__pool, (void (*)(void*))_wrapper_for_##__name,  \
+                              handle, ABT_THREAD_ATTR_NULL, NULL);             \
+    if (__ret != 0) {                                                          \
+        margo_error(__mid,                                                     \
+                    "Could not create ULT for " #__name " RPC (ret = %d)",     \
+                    __ret);                                                    \
+        margo_destroy(handle);                                                 \
+        __margo_internal_decr_pending(__mid);                                  \
+        return (HG_NOMEM_ERROR);                                               \
+    }                                                                          \
     return (HG_SUCCESS);
 
 #define __MARGO_INTERNAL_RPC_HANDLER(__name)              \

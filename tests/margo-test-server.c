@@ -51,6 +51,8 @@ int main(int argc, char **argv)
         return(-1);
     }
 
+    margo_set_log_level(mid, MARGO_LOG_TRACE);
+
     if(opts.hostfile)
     {
         FILE *fp;
