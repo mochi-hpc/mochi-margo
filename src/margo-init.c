@@ -1350,13 +1350,7 @@ int margo_get_pool_by_name(margo_instance_id mid,
                            const char*       name,
                            ABT_pool*         pool)
 {
-    int                 index;
-    struct json_object* p = NULL;
-    struct json_object* argobots
-        = json_object_object_get(mid->json_cfg, "argobots");
-    struct json_object* pool_array = json_object_object_get(argobots, "pools");
-    CONFIG_FIND_BY_NAME(pool_array, name, index, p);
-    (void)p; // silence warning about variable not used
+    int index = margo_get_pool_index(mid, name);
     if (index >= 0) {
         return margo_get_pool_by_index(mid, index, pool);
     } else {
@@ -1377,17 +1371,47 @@ int margo_get_pool_by_index(margo_instance_id mid,
     return 0;
 }
 
+const char* margo_get_pool_name(margo_instance_id mid, unsigned index)
+{
+    if (index >= mid->num_abt_pools) {
+        return NULL;
+    } else {
+        struct json_object* argobots
+            = json_object_object_get(mid->json_cfg, "argobots");
+        struct json_object* pool_array
+            = json_object_object_get(argobots, "pools");
+        struct json_object* pool = json_object_array_get_idx(pool_array, index);
+        if (pool) {
+            return json_object_get_string(json_object_object_get(pool, "name"));
+        } else {
+            return NULL;
+        }
+    }
+}
+
+int margo_get_pool_index(margo_instance_id mid, const char* name)
+{
+    int                 index;
+    struct json_object* p = NULL;
+    struct json_object* argobots
+        = json_object_object_get(mid->json_cfg, "argobots");
+    struct json_object* pool_array = json_object_object_get(argobots, "pools");
+    CONFIG_FIND_BY_NAME(pool_array, name, index, p);
+    (void)p; // silence warning about variable not used
+    if (index >= 0) {
+        return index;
+    } else {
+        return -1;
+    }
+}
+
+size_t margo_get_num_pools(margo_instance_id mid) { return mid->num_abt_pools; }
+
 int margo_get_xstream_by_name(margo_instance_id mid,
                               const char*       name,
                               ABT_xstream*      es)
 {
-    int                 index;
-    struct json_object* e = NULL;
-    struct json_object* argobots
-        = json_object_object_get(mid->json_cfg, "argobots");
-    struct json_object* es_array = json_object_object_get(argobots, "xstreams");
-    CONFIG_FIND_BY_NAME(es_array, name, index, e);
-    (void)e; // silence warning about variable not used
+    int index = margo_get_xstream_index(mid, name);
     if (index >= 0) {
         return margo_get_xstream_by_index(mid, index, es);
     } else {
@@ -1406,4 +1430,39 @@ int margo_get_xstream_by_index(margo_instance_id mid,
         *es = mid->abt_xstreams[index];
     }
     return 0;
+}
+
+const char* margo_get_xstream_name(margo_instance_id mid, unsigned index)
+{
+    if (index >= mid->num_abt_xstreams) {
+        return NULL;
+    } else {
+        struct json_object* argobots
+            = json_object_object_get(mid->json_cfg, "argobots");
+        struct json_object* es_array
+            = json_object_object_get(argobots, "xstreams");
+        struct json_object* es = json_object_array_get_idx(es_array, index);
+        if (es) {
+            return json_object_get_string(json_object_object_get(es, "name"));
+        } else {
+            return NULL;
+        }
+    }
+}
+
+int margo_get_xstream_index(margo_instance_id mid, const char* name)
+{
+    int                 index;
+    struct json_object* e = NULL;
+    struct json_object* argobots
+        = json_object_object_get(mid->json_cfg, "argobots");
+    struct json_object* es_array = json_object_object_get(argobots, "xstreams");
+    CONFIG_FIND_BY_NAME(es_array, name, index, e);
+    (void)e; // silence warning about variable not used
+    return index;
+}
+
+size_t margo_get_num_xstreams(margo_instance_id mid)
+{
+    return mid->num_abt_xstreams;
 }

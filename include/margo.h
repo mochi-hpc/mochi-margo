@@ -1238,6 +1238,35 @@ int margo_get_pool_by_index(margo_instance_id mid,
                             ABT_pool*         pool);
 
 /**
+ * @brief Get the name of a pool at a given index.
+ *
+ * @param mid Margo instance
+ * @param index Index of the pool
+ *
+ * @return the null-terminated name, or NULL if index is invalid
+ */
+const char* margo_get_pool_name(margo_instance_id mid, unsigned index);
+
+/**
+ * @brief Get the index of a pool from a given name.
+ *
+ * @param mid Margo instance
+ * @param name Name of the pool
+ *
+ * @return the index of the pool, or -1 if the name is invalid
+ */
+int margo_get_pool_index(margo_instance_id mid, const char* name);
+
+/**
+ * @brief Get the number of pools defined in the margo instance.
+ *
+ * @param mid Margo instance
+ *
+ * @return the number of pools
+ */
+size_t margo_get_num_pools(margo_instance_id mid);
+
+/**
  * @brief Get an xstream from the configuration.
  *
  * @param [in] mid Margo instance
@@ -1262,6 +1291,35 @@ int margo_get_xstream_by_name(margo_instance_id mid,
 int margo_get_xstream_by_index(margo_instance_id mid,
                                unsigned          index,
                                ABT_xstream*      es);
+
+/**
+ * @brief Get the name of a xstream at a given index.
+ *
+ * @param mid Margo instance
+ * @param index Index of the xstream
+ *
+ * @return the null-terminated name, or NULL if index is invalid
+ */
+const char* margo_get_xstream_name(margo_instance_id mid, unsigned index);
+
+/**
+ * @brief Get the index of an xstream from a given name.
+ *
+ * @param mid Margo instance
+ * @param name Name of the xstream
+ *
+ * @return the index of the xstream, or -1 if the name is invalid
+ */
+int margo_get_xstream_index(margo_instance_id mid, const char* name);
+
+/**
+ * @brief Get the number of xstreams defined in the margo instance.
+ *
+ * @param mid Margo instance
+ *
+ * @return the number of xstreams
+ */
+size_t margo_get_num_xstreams(margo_instance_id mid);
 
 /**
  * @private
