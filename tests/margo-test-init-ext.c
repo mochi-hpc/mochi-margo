@@ -13,6 +13,11 @@
 
 char* readfile(const char* filename) {
     FILE *f = fopen(filename, "r");
+    if(!f) {
+        perror("fopen");
+        fprintf(stderr, "\tCould not open json file \"%s\"\n", filename);
+        exit(EXIT_FAILURE);
+    }
     fseek(f, 0, SEEK_END);
     long fsize = ftell(f);
     fseek(f, 0, SEEK_SET);
