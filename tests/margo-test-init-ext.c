@@ -45,5 +45,7 @@ int main(int argc, char **argv)
 
     free((char*)args.json_config);
 
+    margo_finalize(mid);
+
     return 0;
 }
