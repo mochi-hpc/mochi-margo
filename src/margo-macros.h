@@ -4,6 +4,9 @@
  * See COPYRIGHT in top-level directory.
  */
 
+#ifndef __MARGO_MACROS
+#define __MARGO_MACROS
+
 static const int json_type_int64 = json_type_int;
 
 inline static struct json_object* json_object_copy(struct json_object* in)
@@ -327,3 +330,5 @@ inline static struct json_object* json_object_copy(struct json_object* in)
         json_object_object_add(_x, "scheduler", _s);                        \
         json_object_array_add(__xstreams, _x);                              \
     } while (0)
+
+#endif /* __MARGO_MACROS */
