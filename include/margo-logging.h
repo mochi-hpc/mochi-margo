@@ -15,6 +15,19 @@ typedef struct margo_instance* margo_instance_id;
 
 typedef void (*margo_log_fn_t)(void* uargs, const char* message);
 
+/* trace:    for entering/exiting function or providing additional
+ *           detail about what code path was taken
+ * debug:    reserve for when you want to actually debug some function;
+ *           not meant to remain in the code after the bug is found
+ * info:     information you expect users will want to know by default
+ *           (e.g. a server address, etc.)
+ * warning:  any warning (e.g. if a CPU affinity request in the configuration
+ *           cannot be satisfied, but the code will execute anyway)
+ * error:    something went wrong, but not wrong enough that the server
+ *           should stop
+ * critical: right before you force the program to stop because of an
+ *           unrecoverable problem
+ */
 typedef enum margo_log_level
 {
     MARGO_LOG_EXTERNAL, /* level management is handled by the underlying
