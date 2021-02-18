@@ -135,6 +135,14 @@ struct margo_init_info {
     "enable_profiling" : false,
     "enable_diagnostics" : false
 }
+
+* The margo json configuration also supports the following convenience
+* parameters at input time (the resulting runtime json will contain a fully
+* resolved pool configuration):
+
+use_progress_thread: bool (default false)
+rpc_thread_count: integer (default 0)
+
  * ------------------------------------------------
  */
 
