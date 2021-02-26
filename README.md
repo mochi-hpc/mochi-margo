@@ -1,9 +1,18 @@
 # Margo
 
-Margo provides Argobots-aware wrappers to common Mercury library functions.
-It simplifies service development by expressing Mercury operations as
-conventional blocking functions so that the caller does not need to manage
-progress loops or callback functions.
+Margo provides Argobots-aware bindings to the Mercury RPC library.
+
+Mercury (https://mercury-hpc.github.io/) is a remote procedure call
+library optimized for use in HPC environments.  Its native API presents a
+callback-oriented interface to manage asynchronous operation.  Argobots
+(https://www.argobots.org/) is a user-level threading package.
+
+Margo combines Mercury and Argobots to simplify development of distributed
+services.  Mercury operations are presented as conventional blocking
+operations, and RPC handlers are presented as sequential threads.  This
+configuration enables high degree of concurrency while hiding the
+complexity associated with asynchronous communication progress and callback
+management.
 
 Internally, Margo suspends callers after issuing a Mercury operation, and
 automatically resumes them when the operation completes.  This allows
@@ -13,15 +22,25 @@ The goal of this design is to combine the performance advantages of
 Mercury's native event-driven execution model with the progamming
 simplicity of a multi-threaded execution model.
 
-See the following for more details about Mercury and Argobots: 
+See the following for more details about Mercury and Argobots:
 
 * https://mercury-hpc.github.io/
 * https://collab.mcs.anl.gov/display/ARGOBOTS/Argobots+Home
 
 A companion library called abt-io provides similar wrappers for POSIX I/O
-functions: https://xgitlab.cels.anl.gov/sds/abt-io
+functions: https://github.com/mochi-hpc/mochi-abt-io
 
-Note that Margo should be compatible with any Mercury transport (NA plugin).  The documentation assumes the use of the NA SM (shared memory) plugin that is built into Mercury for simplicity.  This plugin is only valid for communication between processes on a single node.  See [Using Margo with other Mercury NA plugins](##using-margo-with-other-mercury-na-plugins) for information on other configuration options.
+Note that Margo should be compatible with any Mercury transport (NA plugin).
+The documentation assumes the use of the NA SM (shared memory) plugin that
+is built into Mercury for simplicity.  This plugin is only valid for
+communication between processes on a single node.  See [Using Margo with
+other Mercury NA plugins](##using-margo-with-other-mercury-na-plugins) for
+information on other configuration options.
+
+##  Spack
+
+The simplest way to install Margo is by installing the "mochi-margo" package
+in spack (https://spack.io/).
 
 ##  Dependencies
 
@@ -99,35 +118,10 @@ complete.
 
 ## Using Margo with the other NA plugins
 
-You can use either the CCI NA plugin or BMI NA plugin to use either the CCI or BMI library for remote communication.  See the [Mercury documentation](http://mercury-hpc.github.io/documentation/) for details and status.
-
-### CCI
-
-Add the -DNA_USE_CCI:BOOL=ON option to the Mercury configuration.
-
-You must then use addresses appropriate for your transport at run time when
-executing Margo examples.  Examples for server "listening" addresses:
-
-* cci+tcp://3344 # for TCP/IP, listening on port 3344
-* cci+verbs://3344 # for InfiniBand, listening on port 3344
-* cci+sm://1/1 # for shared memory, listening on CCI SM address 1/1
-
-Examples for clients to specify to attach to the above:
-
-* cci+tcp://localhost:3344 # for TCP/IP, assuming localhost use
-* cci+verbs://192.168.1.78:3344 # for InfiniBand, note that you *must* use IP
-  address rather than hostname
-* cci+sm:///tmp/cci/sm/`hostname`/1/1 # note that this is a full path to local
-  connection information.  The last portion of the path should match the
-  address specified above
-
-### BMI
-
-Add the -DNA_USE_BMI:BOOL=ON option to the Mercury configuration.  You may
-also need to specify
--DBMI_INCLUDE_DIR:PATH=/home/pcarns/working/install/include and -DBMI_LIBRARY:FILEPATH=/home/pcarns/working/install/lib/libbmi.a (adjusting the paths as appropriate for your system).
-
-We do not recommend using any BMI methods besides TCP.  It's usage is very similar to the CCI/TCP examples above, except that "bmi+" should be substituted for "cci+".
+See the [Mercury
+documentation](http://mercury-hpc.github.io/documentation/) for details.
+Margo is compatible with any Mercury transport and uses the same address
+format.
 
 ## Instrumentation
 
@@ -141,7 +135,7 @@ information on how to extract diagnostic instrumentation from Margo.
 Margo provides Argobots-aware wrappers to common Mercury library functions
 like HG_Forward(), HG_Addr_lookup(), and HG_Bulk_transfer().  The wrappers
 have the same arguments as their native Mercury counterparts except that no
-callback function is specified.  Each function blocks until the operation 
+callback function is specified.  Each function blocks until the operation
 is complete.  The above diagram illustrates a typical control flow.
 
 Margo launches a long-running user-level thread internally to drive
@@ -157,47 +151,7 @@ threads while Mercury operations are in flight.
 
 Margo allows several different threading/multicore configurations:
 * The progress loop can run on a dedicated operating system thread or not
-* Multiple Margo instances (and thus progress loops) can be 
+* Multiple Margo instances (and thus progress loops) can be
   executed on different operating system threads
 * (for servers) a single Margo instance can launch RPC handlers
   on different operating system threads
-
-## V0.2 API changes
-
-The following list provides details on new changes to the Margo API starting in
-version 0.2:
-
-* `margo_init()` is much more simplified and initializes Mercury and Argobots on behalf of
-  the user (with `margo_finalize()` finalizing them in that case)
-    * the prototype is `margo_init(addr_string, MARGO_CLIENT_MODE | MARGO_SERVER_MODE, use_progress_thread, num_rpc_handler_threads)`
-    * `margo_init_pool()` is still available as an advanced initialize routine, where the
-      user must initialize Mercury/Argobots and pass in an `HG_Context` and `ABT_pools` for
-      RPC handlers and the progress loop
-* Margo now has its own RPC registration functions that should be used for registering
-  RPCs (as Margo is now attaching internal state to RPCs)
-    * `MARGO_REGISTER` is basically equivalent to `MERCURY_REGISTER`, except it takes a
-      `margo_instance_id` rather than a Mercury class
-    * `MARGO_REGISTER_MPLEX` is mostly the same as above, but allows a user to specify
-      an `ABT_pool` to use for a given RPC type
-* relatedly, Margo users should now use `margo_register_data()` (rather than `HG_Register_data()`)
-  for associating user data with an RPC type
-    * like Mercury, there is a corresponding `margo_registered_data()` call to retrieve the user pointer
-* the following Mercury-like functions are now defined within Margo, although it is
-  still safe to just use the Mercury calls directly (most are just `#define`s to the
-  corresponding Mercury call, anyway):
-    * `margo_registered_disable_response()`
-    * `margo_addr_free()`
-    * `margo_addr_self()`
-    * `margo_addr_dup()`
-    * `margo_addr_to_string()`
-    * `margo_create()`
-    * `margo_destroy()`
-        * Note that `margo_create()`/`margo_destroy()` are enhancing `HG_Create()`/`HG_Destroy()` with a
-          cache of reusable handles, so they may be preferable to the Mercury calls
-    * `margo_bulk_create()`
-    * `margo_bulk_free()`
-    * `margo_bulk_deserialize()`
-* `margo_hg_handle_get_instance()` and `margo_hg_info_get_instance()` calls have been added for
-  retrieving a `margo_instance_id` given a received handle or the HG info structure associated
-  with the handle
-
