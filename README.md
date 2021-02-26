@@ -22,20 +22,16 @@ The goal of this design is to combine the performance advantages of
 Mercury's native event-driven execution model with the progamming
 simplicity of a multi-threaded execution model.
 
-See the following for more details about Mercury and Argobots:
-
-* https://mercury-hpc.github.io/
-* https://collab.mcs.anl.gov/display/ARGOBOTS/Argobots+Home
-
 A companion library called abt-io provides similar wrappers for POSIX I/O
 functions: https://github.com/mochi-hpc/mochi-abt-io
 
-Note that Margo should be compatible with any Mercury transport (NA plugin).
-The documentation assumes the use of the NA SM (shared memory) plugin that
-is built into Mercury for simplicity.  This plugin is only valid for
-communication between processes on a single node.  See [Using Margo with
-other Mercury NA plugins](##using-margo-with-other-mercury-na-plugins) for
-information on other configuration options.
+Note that Margo should be compatible with any Mercury network
+transport (NA plugin).  The documentation assumes the use of
+the NA SM (shared memory) plugin that is built into Mercury for
+simplicity.  This plugin is only valid for communication between
+processes on a single node.  See [Using Margo with other Mercury NA
+plugins](##using-margo-with-other-mercury-na-plugins) for information
+on other configuration options.
 
 ##  Spack
 
