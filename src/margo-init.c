@@ -78,7 +78,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     ABT_pool            progress_pool = ABT_POOL_NULL;
     ABT_pool            rpc_pool      = ABT_POOL_NULL;
 
-    if (args.json_config) {
+    if (args.json_config && strlen(args.json_config) > 0) {
         // read JSON config from provided string argument
         struct json_tokener*    tokener = json_tokener_new();
         enum json_tokener_error jerr;
