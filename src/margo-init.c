@@ -430,6 +430,10 @@ validate_and_complete_config(struct json_object*        _margo,
        - [optional] use_progress_thread: bool (default false)
        - [optional] rpc_thread_count: integer (default 0)
     */
+
+    /* report version number for this component */
+    CONFIG_OVERRIDE_STRING(_margo, "version", PACKAGE_VERSION, "version", 1);
+
     { // add or override progress_timeout_ub_msec
         CONFIG_HAS_OR_CREATE(_margo, int64, "progress_timeout_ub_msec", 100,
                              "progress_timeout_ub_msec", val);
