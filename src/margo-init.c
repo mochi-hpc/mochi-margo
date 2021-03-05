@@ -78,7 +78,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     ABT_pool            progress_pool = ABT_POOL_NULL;
     ABT_pool            rpc_pool      = ABT_POOL_NULL;
 
-    if (args.json_config) {
+    if (args.json_config && strlen(args.json_config) > 0) {
         // read JSON config from provided string argument
         struct json_tokener*    tokener = json_tokener_new();
         enum json_tokener_error jerr;
@@ -430,6 +430,10 @@ validate_and_complete_config(struct json_object*        _margo,
        - [optional] use_progress_thread: bool (default false)
        - [optional] rpc_thread_count: integer (default 0)
     */
+
+    /* report version number for this component */
+    CONFIG_OVERRIDE_STRING(_margo, "version", PACKAGE_VERSION, "version", 1);
+
     { // add or override progress_timeout_ub_msec
         CONFIG_HAS_OR_CREATE(_margo, int64, "progress_timeout_ub_msec", 100,
                              "progress_timeout_ub_msec", val);
