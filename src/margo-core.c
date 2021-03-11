@@ -278,12 +278,11 @@ void margo_finalize(margo_instance_id mid)
 
     ABT_mutex_lock(mid->finalize_mutex);
     mid->finalize_flag = 1;
-    ABT_cond_broadcast(mid->finalize_cond);
-
     mid->refcount--;
     do_cleanup = mid->refcount == 0;
 
     ABT_mutex_unlock(mid->finalize_mutex);
+    ABT_cond_broadcast(mid->finalize_cond);
 
     /* if there was noone waiting on the finalize at the time of the finalize
      * broadcast, then we're safe to clean up. Otherwise, let the finalizer do
