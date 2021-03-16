@@ -19,14 +19,14 @@ function test_start_servers ()
     nservers=${1:-4}
     startwait=${2:-15}
     maxtime=${3:-120}s
-    repfactor=${4:-0}
+    poolkind=${4:-fifo_wait}
     pid=$$
 
     # start daemons
     for i in `seq 1 $nservers`
     do
         hostfile=`mktemp`
-        $TIMEOUT --signal=9 ${maxtime} tests/margo-test-server na+sm:// -f $hostfile &
+        $TIMEOUT --signal=9 ${maxtime} tests/margo-test-server na+sm:// -f $hostfile -p $poolkind &
         if [ $? -ne 0 ]; then
             # TODO: this doesn't actually work; can't check return code of
             # something executing in background.  We have to rely on the

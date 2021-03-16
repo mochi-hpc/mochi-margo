@@ -143,6 +143,11 @@ struct margo_init_info {
 use_progress_thread: bool (default false)
 rpc_thread_count: integer (default 0)
 
+* Note that supported kinds of pools are fifo_wait (default) fifo (for use
+* with basic scheduler; will busy spin when idle) and prio_wait (custom pool
+* implementation for Margo that favors existing ULTs over newly created ULTs
+* when possible)
+*
  * ------------------------------------------------
  */
 

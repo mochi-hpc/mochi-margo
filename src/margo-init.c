@@ -15,6 +15,7 @@
 #include "margo-globals.h"
 #include "margo-macros.h"
 #include "margo-util.h"
+#include "margo-prio-pool.h"
 
 // Validates the format of the configuration and
 // fill default values if they are note provided
@@ -386,6 +387,9 @@ error:
     }
     free(xstreams);
     free(owns_xstream);
+    for (unsigned i = 0; i < num_pools; i++) {
+        if (pools[i] != ABT_POOL_NULL) ABT_pool_free(&pools[i]);
+    }
     free(pools);
     if (config) json_object_put(config);
     if (self_addr != HG_ADDR_NULL) HG_Addr_free(hg_class, self_addr);
@@ -719,7 +723,7 @@ validate_and_complete_config(struct json_object*        _margo,
             CONFIG_HAS_OR_CREATE(_pool, string, "kind", "fifo_wait",
                                  "argobots.pools[?].kind", val);
             CONFIG_IS_IN_ENUM_STRING(val, "argobots.pools[?].kind", "fifo",
-                                     "fifo_wait");
+                                     "fifo_wait", "prio_wait");
             MARGO_TRACE(0, "argobots.pools[%d].kind = %s", i,
                         json_object_get_string(val));
             // handle "access" field
@@ -1155,6 +1159,9 @@ static void fill_hg_init_info_from_config(struct json_object*  config,
 static int create_pool_from_config(struct json_object* pool_config,
                                    ABT_pool*           pool)
 {
+    int          ret;
+    ABT_pool_def prio_pool_def;
+
     const char* jname
         = json_object_get_string(json_object_object_get(pool_config, "name"));
     const char* jkind
@@ -1183,10 +1190,22 @@ static int create_pool_from_config(struct json_object* pool_config,
 
     MARGO_TRACE(0, "Instantiating pool \"%s\"", jname);
 
-    int ret = ABT_pool_create_basic(kind, access, ABT_TRUE, pool);
-    if (ret != ABT_SUCCESS) {
-        MARGO_ERROR(0, "ABT_pool_create_basic failed to create pool (ret = %d)",
-                    ret);
+    if (strcmp(jkind, "prio_wait") == 0) {
+        margo_create_prio_pool_def(&prio_pool_def);
+        ret = ABT_pool_create(&prio_pool_def, ABT_POOL_CONFIG_NULL, pool);
+        if (ret != ABT_SUCCESS) {
+            MARGO_ERROR(
+                0, "ABT_pool_create failed to create prio_wait pool (ret = %d)",
+                ret);
+        }
+    } else {
+        /* one of the standard Argobots pool types */
+        ret = ABT_pool_create_basic(kind, access, ABT_FALSE, pool);
+        if (ret != ABT_SUCCESS) {
+            MARGO_ERROR(
+                0, "ABT_pool_create_basic failed to create pool (ret = %d)",
+                ret);
+        }
     }
     return ret;
 }
