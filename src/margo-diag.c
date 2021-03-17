@@ -357,6 +357,7 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
     HASH_JEN(name, strlen(name),
              hash); /*record own address in the breadcrumb */
     fprintf(outfile, "#Addr Hash and Address Name: %lu,%s\n", hash, name);
+    free(name);
     fprintf(outfile, "# %s\n", ctime(&ltime));
     fprintf(outfile,
             "# Function Name, Average Time Per Call, Cumulative Time, "
@@ -430,6 +431,7 @@ void margo_profile_dump(margo_instance_id mid, const char* file, int uniquify)
              hash); /*record own address in the breadcrumb */
 
     fprintf(outfile, "%lu,%s\n", hash, name);
+    free(name);
 
     tmp_rpc = mid->registered_rpcs;
     while (tmp_rpc) {

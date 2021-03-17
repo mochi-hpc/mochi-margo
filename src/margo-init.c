@@ -455,8 +455,14 @@ validate_and_complete_config(struct json_object*        _margo,
     }
 
     { // add or override enable_diagnostics
-        CONFIG_HAS_OR_CREATE(_margo, boolean, "enable_diagnostics", 0,
-                             "enable_diagnostics", val);
+        const char* margo_enable_diagnostics_str
+            = getenv("MARGO_ENABLE_DIAGNOSTICS");
+        int margo_enable_diagnostics = margo_enable_diagnostics_str
+                                         ? atoi(margo_enable_diagnostics_str)
+                                         : 0;
+        CONFIG_HAS_OR_CREATE(_margo, boolean, "enable_diagnostics",
+                             margo_enable_diagnostics, "enable_diagnostics",
+                             val);
         MARGO_TRACE(0, "enable_diagnostics = %s",
                     json_object_get_boolean(val) ? "true" : "false");
     }
