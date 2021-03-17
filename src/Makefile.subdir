@@ -8,4 +8,5 @@ src_libmargo_la_SOURCES += \
  src/margo-logging.c \
  src/margo-timer.h \
  src/margo-timer.c \
- src/margo-util.c
+ src/margo-util.c \
+ src/margo-prio-pool.c

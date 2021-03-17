@@ -214,6 +214,10 @@ static void margo_cleanup(margo_instance_id mid)
     json_object_put(mid->json_cfg);
 
     MARGO_TRACE(mid, "Cleaning up margo instance");
+    for (unsigned i = 0; i < mid->num_abt_pools; i++) {
+        if (mid->abt_pools[i] != ABT_POOL_NULL)
+            ABT_pool_free(&mid->abt_pools[i]);
+    }
     free(mid->abt_pools);
     free(mid->abt_xstreams);
     free(mid->owns_abt_xstream);

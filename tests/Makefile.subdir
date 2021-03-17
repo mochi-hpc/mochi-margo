@@ -15,6 +15,8 @@ TESTS += \
  tests/sleep.sh \
  tests/basic.sh \
  tests/basic-ded-pool.sh \
+ tests/basic-prio.sh \
+ tests/basic-ded-pool-prio.sh \
  tests/timeout.sh
 
 EXTRA_DIST += \
@@ -24,7 +26,7 @@ EXTRA_DIST += \
  tests/timeout.sh \
  tests/test-util.sh \
  tests/test-util-ded-pool.sh
- 
+
 tests_margo_test_server_SOURCES = \
  tests/margo-test-server.c \
  tests/my-rpc.c
