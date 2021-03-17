@@ -344,6 +344,7 @@ margo_instance_id margo_init_ext(const char*                   address,
         // record own address in cache to be used in breadcrumb generation
         GET_SELF_ADDR_STR(mid, name);
         HASH_JEN(name, strlen(name), mid->self_addr_hash);
+        free(name);
 
         ret = ABT_thread_create(
             mid->progress_pool, __margo_sparkline_data_collection_fn, mid,
@@ -448,15 +449,25 @@ validate_and_complete_config(struct json_object*        _margo,
     }
 
     { // add or override enable_profiling
-        CONFIG_HAS_OR_CREATE(_margo, boolean, "enable_profiling", 0,
-                             "enable_profiling", val);
+        const char* margo_enable_profiling_str
+            = getenv("MARGO_ENABLE_PROFILING");
+        int margo_enable_profiling
+            = margo_enable_profiling_str ? atoi(margo_enable_profiling_str) : 0;
+        CONFIG_HAS_OR_CREATE(_margo, boolean, "enable_profiling",
+                             margo_enable_profiling, "enable_profiling", val);
         MARGO_TRACE(0, "enable_profiling = %s",
                     json_object_get_boolean(val) ? "true" : "false");
     }
 
     { // add or override enable_diagnostics
-        CONFIG_HAS_OR_CREATE(_margo, boolean, "enable_diagnostics", 0,
-                             "enable_diagnostics", val);
+        const char* margo_enable_diagnostics_str
+            = getenv("MARGO_ENABLE_DIAGNOSTICS");
+        int margo_enable_diagnostics = margo_enable_diagnostics_str
+                                         ? atoi(margo_enable_diagnostics_str)
+                                         : 0;
+        CONFIG_HAS_OR_CREATE(_margo, boolean, "enable_diagnostics",
+                             margo_enable_diagnostics, "enable_diagnostics",
+                             val);
         MARGO_TRACE(0, "enable_diagnostics = %s",
                     json_object_get_boolean(val) ? "true" : "false");
     }
