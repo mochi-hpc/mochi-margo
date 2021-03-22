@@ -12,10 +12,10 @@ jobs:
       run: |
         git clone https://github.com/spack/spack.git /opt/spack &&
         cd /opt/spack && git checkout v0.16.0
-    - name: Add sds-repo
+    - name: Add mochi-spack-packages
       run: |
-        git clone https://xgitlab.cels.anl.gov/sds/sds-repo /opt/spack/sds-repo
-        /opt/spack/bin/spack repo add /opt/spack/sds-repo
+        git clone https://github.com/mochi-hpc/mochi-spack-packages /opt/spack/mochi-spack-packages
+        /opt/spack/bin/spack repo add /opt/spack/mochi-spack-packages
     - name: Install Package from Spack 
       run: |
         eval `/opt/spack/bin/spack env activate --sh .` &&
