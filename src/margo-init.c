@@ -388,9 +388,12 @@ error:
     }
     free(xstreams);
     free(owns_xstream);
+    // The pools are supposed to be freed automatically
+    /*
     for (unsigned i = 0; i < num_pools; i++) {
         if (pools[i] != ABT_POOL_NULL) ABT_pool_free(&pools[i]);
     }
+    */
     free(pools);
     if (config) json_object_put(config);
     if (self_addr != HG_ADDR_NULL) HG_Addr_free(hg_class, self_addr);
@@ -1203,6 +1206,9 @@ static int create_pool_from_config(struct json_object* pool_config,
 
     if (strcmp(jkind, "prio_wait") == 0) {
         margo_create_prio_pool_def(&prio_pool_def);
+        // XXX there is no way to pass an "automatic" argument to a
+        // custom pool so technically we will be letting those pools
+        // leak, at the moment.
         ret = ABT_pool_create(&prio_pool_def, ABT_POOL_CONFIG_NULL, pool);
         if (ret != ABT_SUCCESS) {
             MARGO_ERROR(
@@ -1211,7 +1217,7 @@ static int create_pool_from_config(struct json_object* pool_config,
         }
     } else {
         /* one of the standard Argobots pool types */
-        ret = ABT_pool_create_basic(kind, access, ABT_FALSE, pool);
+        ret = ABT_pool_create_basic(kind, access, ABT_TRUE, pool);
         if (ret != ABT_SUCCESS) {
             MARGO_ERROR(
                 0, "ABT_pool_create_basic failed to create pool (ret = %d)",
