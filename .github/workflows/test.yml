@@ -1,0 +1,32 @@
+name: test
+
+on: [push,pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Add Spack v0.16.0
+      run: |
+        git clone https://github.com/spack/spack.git /opt/spack &&
+        cd /opt/spack && git checkout v0.16.0
+    - name: Add mochi-spack-packages
+      run: |
+        git clone https://github.com/mochi-hpc/mochi-spack-packages /opt/spack/mochi-spack-packages
+        /opt/spack/bin/spack repo add /opt/spack/mochi-spack-packages
+    - name: Install Package from Spack 
+      run: |
+        eval `/opt/spack/bin/spack env activate --sh .` &&
+        /opt/spack/bin/spack install --fail-fast 
+    - name: Show Spack installed packages for debugging
+      run: |
+        eval `/opt/spack/bin/spack env activate --sh .` &&
+        /opt/spack/bin/spack find -dlv
+    - name: Run test 
+      run: |
+        eval `/opt/spack/bin/spack env activate --sh .` &&
+        ./prepare.sh &&
+        mkdir build && cd build && 
+        ../configure --prefix=`pwd` && make check
