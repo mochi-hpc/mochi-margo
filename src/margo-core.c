@@ -903,7 +903,14 @@ static hg_return_t margo_provider_iforward_internal(
             req->server_addr_hash); /*record server address in the breadcrumb */
     }
 
-    return HG_Forward(handle, margo_cb, (void*)req, in_struct);
+    hret = HG_Forward(handle, margo_cb, (void*)req, in_struct);
+    /* remove timer if HG_Forward failed */
+    if (hret != HG_SUCCESS && req->timer) {
+        __margo_timer_destroy(mid, req->timer);
+        free(req->timer);
+        req->timer = NULL;
+    }
+    return hret;
 }
 
 hg_return_t margo_provider_forward(uint16_t    provider_id,
