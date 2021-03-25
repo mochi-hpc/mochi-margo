@@ -12,6 +12,10 @@ jobs:
       run: |
         git clone https://github.com/spack/spack.git /opt/spack &&
         cd /opt/spack && git checkout releases/latest
+    - name: Find external packages
+      run: |
+        eval `/opt/spack/bin/spack env activate --sh .` &&
+        /opt/spack/bin/spack external find --not-buildable
     - name: Add mochi-spack-packages
       run: |
         git clone https://github.com/mochi-hpc/mochi-spack-packages /opt/spack/mochi-spack-packages
