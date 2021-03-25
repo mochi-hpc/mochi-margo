@@ -7,5 +7,5 @@ spack:
   - libtool
   - pkg-config
   - argobots
-  - mercury
+  - mercury~boostsys
   concretization: together
