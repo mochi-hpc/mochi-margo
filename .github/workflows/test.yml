@@ -15,7 +15,7 @@ jobs:
     - name: Find external packages
       run: |
         eval `/opt/spack/bin/spack env activate --sh .` &&
-        /opt/spack/bin/spack external find --not-buildable
+        /opt/spack/bin/spack external find --not-buildable cmake
     - name: Add mochi-spack-packages
       run: |
         git clone https://github.com/mochi-hpc/mochi-spack-packages /opt/spack/mochi-spack-packages
