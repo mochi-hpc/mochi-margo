@@ -9,7 +9,8 @@ check_PROGRAMS += \
  tests/margo-test-sleep \
  tests/margo-test-server \
  tests/margo-test-client \
- tests/margo-test-client-timeout
+ tests/margo-test-client-timeout \
+ tests/margo-test-client-error
 
 TESTS += \
  tests/sleep.sh \
@@ -17,13 +18,15 @@ TESTS += \
  tests/basic-ded-pool.sh \
  tests/basic-prio.sh \
  tests/basic-ded-pool-prio.sh \
- tests/timeout.sh
+ tests/timeout.sh \
+ tests/error.sh
 
 EXTRA_DIST += \
  tests/sleep.sh \
  tests/basic.sh \
  tests/basic-ded-pool.sh \
  tests/timeout.sh \
+ tests/error.sh \
  tests/test-util.sh \
  tests/test-util-ded-pool.sh
 
