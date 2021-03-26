@@ -1,0 +1,11 @@
+if BUILD_TESTS
+check_PROGRAMS += \
+ tests/unit-tests/margo-unit-tests
+
+TESTS += \
+ tests/unit-tests/margo-unit-tests
+
+tests_unit_tests_margo_unit_tests_SOURCES = \
+ tests/unit-tests/munit/munit.c \
+ tests/unit-tests/margo-unit-tests.c
+endif
