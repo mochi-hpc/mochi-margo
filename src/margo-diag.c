@@ -7,6 +7,8 @@
 #include "margo-diag-internal.h"
 #include "margo-instance.h"
 
+#define SPARKLINE_ARRAY_LEN 100
+
 void __margo_sparkline_data_collection_fn(void* foo)
 {
     struct margo_instance* mid = (struct margo_instance*)foo;
@@ -26,7 +28,8 @@ void __margo_sparkline_data_collection_fn(void* foo)
         HASH_ITER(hh, mid->diag_rpc, stat, tmp)
         {
 
-            if (mid->sparkline_index > 0 && mid->sparkline_index < 100) {
+            if (mid->sparkline_index > 0
+                && mid->sparkline_index < SPARKLINE_ARRAY_LEN) {
                 stat->sparkline_time[mid->sparkline_index]
                     = stat->stats.cumulative
                     - stat->sparkline_time[mid->sparkline_index - 1];
@@ -99,7 +102,7 @@ void __margo_print_profile_data(margo_instance_id mid,
 
     /* second line is sparkline data for the given breadcrumb*/
     fprintf(file, "%s,%d;", name, data->type);
-    for (i = 0; i < mid->sparkline_index; i++)
+    for (i = 0; (i < mid->sparkline_index && i < SPARKLINE_ARRAY_LEN); i++)
         fprintf(file, "%.9f,%.9f, %d;", data->sparkline_time[i],
                 data->sparkline_count[i], i);
     fprintf(file, "\n");
@@ -176,8 +179,9 @@ void __margo_breadcrumb_measure(margo_instance_id     mid,
         stat->stats.abt_pool_total_size_hwm        = -1;
 
         /* initialize sparkline data */
-        memset(stat->sparkline_time, 0.0, 100 * sizeof(double));
-        memset(stat->sparkline_count, 0.0, 100 * sizeof(double));
+        memset(stat->sparkline_time, 0.0, SPARKLINE_ARRAY_LEN * sizeof(double));
+        memset(stat->sparkline_count, 0.0,
+               SPARKLINE_ARRAY_LEN * sizeof(double));
 
         HASH_ADD(hh, mid->diag_rpc, x, sizeof(x), stat);
     }
