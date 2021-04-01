@@ -6,6 +6,7 @@ TESTS_ENVIRONMENT += \
 if BUILD_TESTS
 check_PROGRAMS += \
  tests/margo-test-init-ext \
+ tests/margo-test-init-after-abt \
  tests/margo-test-sleep \
  tests/margo-test-server \
  tests/margo-test-client \
@@ -19,7 +20,8 @@ TESTS += \
  tests/basic-prio.sh \
  tests/basic-ded-pool-prio.sh \
  tests/timeout.sh \
- tests/error.sh
+ tests/error.sh \
+ tests/margo-test-init-after-abt
 
 EXTRA_DIST += \
  tests/sleep.sh \
