@@ -6,6 +6,23 @@
 #include "margo-util.h"
 #include <stdlib.h>
 #include <abt.h>
+#include "margo-instance.h"
+
+int margo_confirm_abt_mem_max_num_stacks(unsigned max_num_stacks)
+{
+    const char* abt_mem_max_num_stacks_str = getenv("ABT_MEM_MAX_NUM_STACKS");
+    if (!abt_mem_max_num_stacks_str
+        || atoi(abt_mem_max_num_stacks_str) != max_num_stacks) {
+        MARGO_ERROR(0,
+                    "Argobots was initialized externally, but the "
+                    "ABT_MEM_MAX_NUM_STACKS environment variable "
+                    "is not set to the value of %u expected by Margo",
+                    max_num_stacks);
+        return -1;
+    }
+
+    return 0;
+}
 
 int margo_set_abt_mem_max_num_stacks(unsigned max_num_stacks)
 {
@@ -13,6 +30,22 @@ int margo_set_abt_mem_max_num_stacks(unsigned max_num_stacks)
     char env_str[64];
     sprintf(env_str, "%d", max_num_stacks);
     setenv("ABT_MEM_MAX_NUM_STACKS", env_str, 1);
+    return 0;
+}
+
+int margo_confirm_abt_thread_stacksize(unsigned stacksize)
+{
+    const char* abt_thread_stacksize_str = getenv("ABT_THREAD_STACKSIZE");
+    if (!abt_thread_stacksize_str
+        || atoi(abt_thread_stacksize_str) != stacksize) {
+        MARGO_ERROR(0,
+                    "Argobots was initialized externally, but the "
+                    "ABT_THREAD_STACKSIZE environment variable is "
+                    "not set to the value of %u expected by Margo",
+                    stacksize);
+        return -1;
+    }
+
     return 0;
 }
 

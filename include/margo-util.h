@@ -21,6 +21,7 @@ extern "C" {
  * @return 0 in case of success, -1 if Argobots is already initialized
  */
 int margo_set_abt_mem_max_num_stacks(unsigned max_num_stacks);
+int margo_confirm_abt_mem_max_num_stacks(unsigned max_num_stacks);
 
 /**
  * @brief This function sets the ABT_THREAD_STACKSIZE
@@ -33,6 +34,7 @@ int margo_set_abt_mem_max_num_stacks(unsigned max_num_stacks);
  * @return 0 in case of success, -1 if Argobots is already initialized
  */
 int margo_set_abt_thread_stacksize(unsigned stacksize);
+int margo_confirm_abt_thread_stacksize(unsigned stacksize);
 
 #ifdef __cplusplus
 }

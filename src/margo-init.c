@@ -49,6 +49,8 @@ static int create_xstream_from_config(struct json_object* es_config,
 
 // Sets environment variables for Argobots
 static void set_argobots_environment_variables(struct json_object* config);
+// Confirms existing environment variables for Argobots
+static void confirm_argobots_environment_variables(struct json_object* config);
 
 // Shutdown logic for a margo instance
 static void remote_shutdown_ult(hg_handle_t handle);
@@ -178,9 +180,7 @@ margo_instance_id margo_init_ext(const char*                   address,
         ret              = ABT_mutex_create(&g_margo_num_instances_mtx);
         if (ret != 0) goto error;
     } else {
-        MARGO_WARNING(0,
-                      "Argobots was initialized externally, so margo_init_ext "
-                      "could not set Argobots environment variables");
+        confirm_argobots_environment_variables(config);
     }
 
     // instantiate pools
@@ -1357,6 +1357,18 @@ static int create_xstream_from_config(struct json_object* es_config,
     }
 
     return ABT_SUCCESS;
+}
+
+static void confirm_argobots_environment_variables(struct json_object* config)
+{
+    struct json_object* argobots = json_object_object_get(config, "argobots");
+    int                 abt_mem_max_num_stacks = json_object_get_int64(
+        json_object_object_get(argobots, "abt_mem_max_num_stacks"));
+    int abt_thread_stacksize = json_object_get_int64(
+        json_object_object_get(argobots, "abt_thread_stacksize"));
+
+    margo_confirm_abt_mem_max_num_stacks(abt_mem_max_num_stacks);
+    margo_confirm_abt_thread_stacksize(abt_thread_stacksize);
 }
 
 static void set_argobots_environment_variables(struct json_object* config)
