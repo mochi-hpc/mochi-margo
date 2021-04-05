@@ -904,6 +904,8 @@ static hg_return_t margo_provider_iforward_internal(
     }
 
     hret = HG_Forward(handle, margo_cb, (void*)req, in_struct);
+
+    if (hret != HG_SUCCESS) { ABT_eventual_free(&eventual); }
     /* remove timer if HG_Forward failed */
     if (hret != HG_SUCCESS && req->timer) {
         __margo_timer_destroy(mid, req->timer);
