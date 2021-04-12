@@ -7,12 +7,14 @@ out2=/tmp/sleep-abt-$$.out
 
 bash -c "time -p tests/margo-test-sleep 1" >& $out1
 if [ $? -ne 0 ]; then
+    cat $out1
     exit 1
 fi
 standardrealtime=`grep real $out1 | cut -d ' ' -f 2 |cut -d '.' -f 1`
 
 bash -c "time -p tests/margo-test-sleep 1 ABT" >& $out2
 if [ $? -ne 0 ]; then
+    cat $out2
     exit 1
 fi
 abtrealtime=`grep real $out2 | cut -d ' ' -f 2 |cut -d '.' -f 1`
