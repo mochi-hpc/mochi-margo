@@ -1176,7 +1176,10 @@ margo_instance_id margo_hg_info_get_instance(const struct hg_info* info);
  * output file.
  *
  * @param [in] mid Margo instance
- * @param [in] file output file ("-" for stdout)
+ * @param [in] file output file ("-" for stdout).  If string begins with '/'
+ *   character then it will be treated as an absolute path.  Otherwise the
+ *   file will be placed in the directory specified output_dir or
+ *   MARGO_OUTPUT_DIR.
  * @param [in] uniquify flag indicating if file name should have additional
  *   information added to it to make output from different processes unique
  * @returns void
@@ -1188,7 +1191,10 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify);
  * output file.
  *
  * @param [in] mid Margo instance
- * @param [in] file output file ("-" for stdout)
+ * @param [in] file output file ("-" for stdout).  If string begins with '/'
+ *   character then it will be treated as an absolute path.  Otherwise the
+ *   file will be placed in the directory specified output_dir or
+ *   MARGO_OUTPUT_DIR.
  * @param [in] uniquify flag indicating if file name should have additional
  *   information added to it to make output from different processes unique
  * @returns void
