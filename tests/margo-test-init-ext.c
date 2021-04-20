@@ -11,9 +11,10 @@
 #include <margo.h>
 #include <margo-logging.h>
 
-char* readfile(const char* filename) {
-    FILE *f = fopen(filename, "r");
-    if(!f) {
+char* readfile(const char* filename)
+{
+    FILE* f = fopen(filename, "r");
+    if (!f) {
         perror("fopen");
         fprintf(stderr, "\tCould not open json file \"%s\"\n", filename);
         exit(EXIT_FAILURE);
@@ -28,13 +29,13 @@ char* readfile(const char* filename) {
     return string;
 }
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
     margo_set_global_log_level(MARGO_LOG_TRACE);
 
-    margo_instance_id mid;
-    struct margo_init_info args = { 0 };
-    args.json_config = argc > 1 ? readfile(argv[1]) : NULL;
+    margo_instance_id      mid;
+    struct margo_init_info args = {0};
+    args.json_config            = argc > 1 ? readfile(argv[1]) : NULL;
 
     mid = margo_init_ext("na+sm", MARGO_CLIENT_MODE, &args);
 

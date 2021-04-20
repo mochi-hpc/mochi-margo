@@ -1,6 +1,6 @@
 /*
  * (C) 2015 The University of Chicago
- * 
+ *
  * See COPYRIGHT in top-level directory.
  */
 
@@ -15,32 +15,35 @@
 /* NOTE: just making these global for test example, would be cleaner if there
  * were an instance pointer for the client.
  */
-static hg_id_t svc1_do_thing_id = -1;
+static hg_id_t svc1_do_thing_id       = -1;
 static hg_id_t svc1_do_other_thing_id = -1;
 
 int svc1_register_client(margo_instance_id mid)
 {
 
-    svc1_do_thing_id = MARGO_REGISTER(mid, "svc1_do_thing", 
-        svc1_do_thing_in_t, svc1_do_thing_out_t, NULL);
+    svc1_do_thing_id = MARGO_REGISTER(mid, "svc1_do_thing", svc1_do_thing_in_t,
+                                      svc1_do_thing_out_t, NULL);
 
-    svc1_do_other_thing_id = MARGO_REGISTER(mid, "svc1_do_other_thing", 
-        svc1_do_other_thing_in_t, svc1_do_other_thing_out_t, NULL);
+    svc1_do_other_thing_id
+        = MARGO_REGISTER(mid, "svc1_do_other_thing", svc1_do_other_thing_in_t,
+                         svc1_do_other_thing_out_t, NULL);
 
-    return(0);
+    return (0);
 }
 
-void svc1_do_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t provider_id)
+void svc1_do_thing(margo_instance_id mid,
+                   hg_addr_t         svr_addr,
+                   uint32_t          provider_id)
 {
-    hg_handle_t handle;
-    svc1_do_thing_in_t in;
+    hg_handle_t         handle;
+    svc1_do_thing_in_t  in;
     svc1_do_thing_out_t out;
-    hg_return_t hret;
-    hg_size_t size;
-    void* buffer;
+    hg_return_t         hret;
+    hg_size_t           size;
+    void*               buffer;
 
     /* allocate buffer for bulk transfer */
-    size = 512;
+    size   = 512;
     buffer = calloc(1, 512);
     assert(buffer);
     sprintf((char*)buffer, "Hello world!\n");
@@ -50,15 +53,15 @@ void svc1_do_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t provider_
     assert(hret == HG_SUCCESS);
 
     /* register buffer for rdma/bulk access by server */
-    hret = margo_bulk_create(mid, 1, &buffer, &size, 
-        HG_BULK_READ_ONLY, &in.bulk_handle);
+    hret = margo_bulk_create(mid, 1, &buffer, &size, HG_BULK_READ_ONLY,
+                             &in.bulk_handle);
     assert(hret == HG_SUCCESS);
 
     /* Send rpc. Note that we are also transmitting the bulk handle in the
-     * input struct.  It was set above. 
-     */ 
+     * input struct.  It was set above.
+     */
     in.input_val = 0;
-    hret = margo_provider_forward(provider_id, handle, &in);
+    hret         = margo_provider_forward(provider_id, handle, &in);
     assert(hret == HG_SUCCESS);
 
     /* decode response */
@@ -74,17 +77,19 @@ void svc1_do_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t provider_
     return;
 }
 
-void svc1_do_other_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t provider_id)
+void svc1_do_other_thing(margo_instance_id mid,
+                         hg_addr_t         svr_addr,
+                         uint32_t          provider_id)
 {
-    hg_handle_t handle;
-    svc1_do_other_thing_in_t in;
+    hg_handle_t               handle;
+    svc1_do_other_thing_in_t  in;
     svc1_do_other_thing_out_t out;
-    hg_return_t hret;
-    hg_size_t size;
-    void* buffer;
+    hg_return_t               hret;
+    hg_size_t                 size;
+    void*                     buffer;
 
     /* allocate buffer for bulk transfer */
-    size = 512;
+    size   = 512;
     buffer = calloc(1, 512);
     assert(buffer);
     sprintf((char*)buffer, "Hello world!\n");
@@ -94,15 +99,15 @@ void svc1_do_other_thing(margo_instance_id mid, hg_addr_t svr_addr, uint32_t pro
     assert(hret == HG_SUCCESS);
 
     /* register buffer for rdma/bulk access by server */
-    hret = margo_bulk_create(mid, 1, &buffer, &size, 
-        HG_BULK_READ_ONLY, &in.bulk_handle);
+    hret = margo_bulk_create(mid, 1, &buffer, &size, HG_BULK_READ_ONLY,
+                             &in.bulk_handle);
     assert(hret == HG_SUCCESS);
 
     /* Send rpc. Note that we are also transmitting the bulk handle in the
-     * input struct.  It was set above. 
-     */ 
+     * input struct.  It was set above.
+     */
     in.input_val = 0;
-    hret = margo_provider_forward(provider_id, handle, &in);
+    hret         = margo_provider_forward(provider_id, handle, &in);
     assert(hret == HG_SUCCESS);
 
     /* decode response */

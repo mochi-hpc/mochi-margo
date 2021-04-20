@@ -1,6 +1,6 @@
 /*
  * (C) 2015 The University of Chicago
- * 
+ *
  * See COPYRIGHT in top-level directory.
  */
 
@@ -9,18 +9,18 @@
 #include "data-xfer-proto.h"
 #include "data-xfer-service.h"
 
-static hg_size_t g_buffer_size = 8*1024*1024;
-static void *g_buffer;
+static hg_size_t g_buffer_size = 8 * 1024 * 1024;
+static void*     g_buffer;
 static hg_bulk_t g_buffer_bulk_handle;
 
 static void data_xfer_read_ult(hg_handle_t handle)
 {
-    hg_return_t hret;
-    data_xfer_read_out_t out;
-    data_xfer_read_in_t in;
-    const struct hg_info *hgi;
-    margo_instance_id mid;
-    hg_addr_t client_addr;
+    hg_return_t           hret;
+    data_xfer_read_out_t  out;
+    data_xfer_read_in_t   in;
+    const struct hg_info* hgi;
+    margo_instance_id     mid;
+    hg_addr_t             client_addr;
 #if 0
     ABT_thread my_ult;
     ABT_xstream my_xstream; 
@@ -44,22 +44,19 @@ static void data_xfer_read_ult(hg_handle_t handle)
 
     out.ret = 0;
 
-    if(!in.client_addr)
+    if (!in.client_addr)
         client_addr = hgi->addr;
-    else
-    {
+    else {
         hret = margo_addr_lookup(mid, in.client_addr, &client_addr);
         assert(hret == HG_SUCCESS);
     }
 
     /* do bulk transfer from client to server */
-    hret = margo_bulk_transfer(mid, HG_BULK_PUSH,
-        client_addr, in.bulk_handle, 0,
-        g_buffer_bulk_handle, 0, g_buffer_size);
+    hret = margo_bulk_transfer(mid, HG_BULK_PUSH, client_addr, in.bulk_handle,
+                               0, g_buffer_bulk_handle, 0, g_buffer_size);
     assert(hret == HG_SUCCESS);
 
-    if(in.client_addr)
-        margo_addr_free(mid, client_addr);
+    if (in.client_addr) margo_addr_free(mid, client_addr);
 
     margo_free_input(handle, &in);
 
@@ -72,7 +69,9 @@ static void data_xfer_read_ult(hg_handle_t handle)
 }
 DEFINE_MARGO_RPC_HANDLER(data_xfer_read_ult)
 
-int data_xfer_service_register(margo_instance_id mid, ABT_pool pool, uint32_t provider_id)
+int data_xfer_service_register(margo_instance_id mid,
+                               ABT_pool          pool,
+                               uint32_t          provider_id)
 {
     hg_return_t hret;
 
@@ -81,19 +80,21 @@ int data_xfer_service_register(margo_instance_id mid, ABT_pool pool, uint32_t pr
     assert(g_buffer);
 
     /* register local target buffer for bulk access */
-    hret = margo_bulk_create(mid, 1, &g_buffer,
-        &g_buffer_size, HG_BULK_READ_ONLY, &g_buffer_bulk_handle);
+    hret = margo_bulk_create(mid, 1, &g_buffer, &g_buffer_size,
+                             HG_BULK_READ_ONLY, &g_buffer_bulk_handle);
     assert(hret == HG_SUCCESS);
 
     /* register RPC handler */
-    MARGO_REGISTER_PROVIDER(mid, "data_xfer_read", 
-        data_xfer_read_in_t, data_xfer_read_out_t, 
-        data_xfer_read_ult, provider_id, pool);
+    MARGO_REGISTER_PROVIDER(mid, "data_xfer_read", data_xfer_read_in_t,
+                            data_xfer_read_out_t, data_xfer_read_ult,
+                            provider_id, pool);
 
-    return(0);
+    return (0);
 }
 
-void data_xfer_deregister(margo_instance_id mid, ABT_pool pool, uint32_t provider_id)
+void data_xfer_deregister(margo_instance_id mid,
+                          ABT_pool          pool,
+                          uint32_t          provider_id)
 {
     margo_bulk_free(g_buffer_bulk_handle);
     free(g_buffer);
