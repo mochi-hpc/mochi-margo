@@ -475,6 +475,22 @@ validate_and_complete_config(struct json_object*        _margo,
                     json_object_get_boolean(val) ? "true" : "false");
     }
 
+    { // add or override output_dir
+        char* margo_output_dir_str = getenv("MARGO_OUTPUT_DIR");
+        if (margo_output_dir_str) {
+            CONFIG_HAS_OR_CREATE(_margo, string, "output_dir",
+                                 margo_output_dir_str, "output_dir", val);
+        } else {
+            margo_output_dir_str = getcwd(NULL, 0);
+            CONFIG_HAS_OR_CREATE(_margo, string, "output_dir",
+                                 margo_output_dir_str, "output_dir", val);
+            /* getwd() mallocs the string if buf is NULL */
+            free(margo_output_dir_str);
+        }
+
+        MARGO_TRACE(0, "output_dir = %s", json_object_get_string(val));
+    }
+
     { // add or override handle_cache_size
         CONFIG_HAS_OR_CREATE(_margo, int64, "handle_cache_size", 32,
                              "handle_cache_size", val);
