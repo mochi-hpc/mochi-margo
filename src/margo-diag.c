@@ -337,7 +337,7 @@ static FILE* margo_output_file_open(margo_instance_id mid,
 
     revised_file_name = malloc(strlen(file) + 256);
     if (!revised_file_name) {
-        MARGO_ERROR(mid, "malloc() failure: %d\n", -errno);
+        MARGO_ERROR(mid, "malloc() failure: %d\n", errno);
         return (NULL);
     }
 
@@ -368,7 +368,7 @@ static FILE* margo_output_file_open(margo_instance_id mid,
                          json_object_object_get(mid->json_cfg, "output_dir")))
                      + strlen(revised_file_name) + 2);
         if (!absolute_file_name) {
-            MARGO_ERROR(mid, "malloc() failure: %d\n", -errno);
+            MARGO_ERROR(mid, "malloc() failure: %d\n", errno);
             free(revised_file_name);
             return (NULL);
         }
@@ -379,9 +379,9 @@ static FILE* margo_output_file_open(margo_instance_id mid,
     }
 
     /* actually open file */
-    outfile = fopen(revised_file_name, "a");
+    outfile = fopen(absolute_file_name, "a");
     if (!outfile)
-        MARGO_ERROR(mid, "fopen(%s) failure: %d\n", revised_file_name, -errno);
+        MARGO_ERROR(mid, "fopen(%s) failure: %d\n", absolute_file_name, errno);
 
     if (absolute_file_name != revised_file_name) free(absolute_file_name);
     free(revised_file_name);
@@ -446,7 +446,7 @@ void margo_profile_dump(margo_instance_id mid, const char* file, int uniquify)
 
     assert(mid->profile_enabled);
 
-    outfile = margo_output_file_open(mid, file, uniquify, "diag");
+    outfile = margo_output_file_open(mid, file, uniquify, "csv");
     if (!outfile) return;
 
     time(&ltime);
