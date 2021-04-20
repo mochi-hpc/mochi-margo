@@ -1,6 +1,6 @@
 /*
  * (C) 2015 The University of Chicago
- * 
+ *
  * See COPYRIGHT in top-level directory.
  */
 
@@ -25,10 +25,10 @@
 
 static void my_rpc_shutdown_ult(hg_handle_t handle)
 {
-    hg_return_t hret;
+    hg_return_t       hret;
     margo_instance_id mid;
 
-    //printf("Got RPC request to shutdown\n");
+    // printf("Got RPC request to shutdown\n");
 
     mid = margo_hg_handle_get_instance(handle);
     assert(mid != MARGO_INSTANCE_NULL);
@@ -49,23 +49,23 @@ static void my_rpc_shutdown_ult(hg_handle_t handle)
 }
 DEFINE_MARGO_RPC_HANDLER(my_rpc_shutdown_ult)
 
-
-int main(int argc, char **argv) 
+int main(int argc, char** argv)
 {
-    hg_return_t hret;
+    hg_return_t       hret;
     margo_instance_id mid;
-    hg_addr_t addr_self;
-    char addr_self_string[128];
-    hg_size_t addr_self_string_sz = 128;
-    ABT_pool handler_pool;
-    char* svc_list;
-    char* svc;
+    hg_addr_t         addr_self;
+    char              addr_self_string[128];
+    hg_size_t         addr_self_string_sz = 128;
+    ABT_pool          handler_pool;
+    char*             svc_list;
+    char*             svc;
 
-    if(argc != 3)
-    {
-        fprintf(stderr, "Usage: ./server <listen_addr> <comma_separated_service_list>\n");
+    if (argc != 3) {
+        fprintf(
+            stderr,
+            "Usage: ./server <listen_addr> <comma_separated_service_list>\n");
         fprintf(stderr, "Example: ./server na+sm:// delegator,data-xfer\n");
-        return(-1);
+        return (-1);
     }
 
     svc_list = strdup(argv[2]);
@@ -76,28 +76,26 @@ int main(int argc, char **argv)
     /* Use the calling xstream to drive progress and execute handlers. */
     /***************************************/
     mid = margo_init(argv[1], MARGO_SERVER_MODE, 0, -1);
-    if(mid == MARGO_INSTANCE_NULL)
-    {
+    if (mid == MARGO_INSTANCE_NULL) {
         fprintf(stderr, "Error: margo_init()\n");
-        return(-1);
+        return (-1);
     }
     margo_diag_start(mid);
 
     /* figure out what address this server is listening on */
     hret = margo_addr_self(mid, &addr_self);
-    if(hret != HG_SUCCESS)
-    {
+    if (hret != HG_SUCCESS) {
         fprintf(stderr, "Error: margo_addr_self()\n");
         margo_finalize(mid);
-        return(-1);
+        return (-1);
     }
-    hret = margo_addr_to_string(mid, addr_self_string, &addr_self_string_sz, addr_self);
-    if(hret != HG_SUCCESS)
-    {
+    hret = margo_addr_to_string(mid, addr_self_string, &addr_self_string_sz,
+                                addr_self);
+    if (hret != HG_SUCCESS) {
         fprintf(stderr, "Error: margo_addr_to_string()\n");
         margo_addr_free(mid, addr_self);
         margo_finalize(mid);
-        return(-1);
+        return (-1);
     }
     margo_addr_free(mid, addr_self);
 
@@ -113,17 +111,12 @@ int main(int argc, char **argv)
 
     margo_get_handler_pool(mid, &handler_pool);
     svc = strtok(svc_list, ",");
-    while(svc)
-    {
-        if(!strcmp(svc, "data-xfer"))
-        {
+    while (svc) {
+        if (!strcmp(svc, "data-xfer")) {
             data_xfer_service_register(mid, handler_pool, 0);
-        }
-        else if(!strcmp(svc, "delegator"))
-        {
+        } else if (!strcmp(svc, "delegator")) {
             delegator_service_register(mid, handler_pool, 0);
-        }
-        else
+        } else
             assert(0);
 
         svc = strtok(NULL, ",");
@@ -146,5 +139,5 @@ int main(int argc, char **argv)
     svc2_deregister(mid, *handler_pool, 3);
 #endif
 
-    return(0);
+    return (0);
 }
