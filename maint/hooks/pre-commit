@@ -113,7 +113,7 @@ ret=0
 for file in $filestring
 do
     if [[ ($file == *.c || $file == *.h || $file == *.c.in || $file == *.h.in) &&
-          !($file == *margo-config.h.in || $file == *examples/* || $file == scripts/* || $file == tests/* || $file == doc/*) ]]; then
+          !($file == *margo-config.h.in || $file == scripts/* || $file == doc/* || $file == */abtx_prof.h) ]]; then
         cp ${file} ${TMP_FILENAME}
         clang-format ${file} > ${TMP_FILENAME}
         git --no-pager diff ${file} ${TMP_FILENAME}

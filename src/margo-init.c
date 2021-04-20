@@ -16,6 +16,7 @@
 #include "margo-macros.h"
 #include "margo-util.h"
 #include "margo-prio-pool.h"
+#include "abtx_prof.h"
 
 // Validates the format of the configuration and
 // fill default values if they are note provided
@@ -78,6 +79,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     size_t              num_xstreams  = 0;
     ABT_pool            progress_pool = ABT_POOL_NULL;
     ABT_pool            rpc_pool      = ABT_POOL_NULL;
+    ABT_bool            tool_enabled;
 
     if (args.json_config && strlen(args.json_config) > 0) {
         // read JSON config from provided string argument
@@ -181,6 +183,17 @@ margo_instance_id margo_init_ext(const char*                   address,
         MARGO_WARNING(0,
                       "Argobots was initialized externally, so margo_init_ext "
                       "could not set Argobots environment variables");
+    }
+
+    /* Turn on profiling capability if a) it has not been done already (this
+     * is global to Argobots) and b) the argobots tool interface is enabled.
+     */
+    if (!g_margo_abt_prof_init) {
+        ABT_info_query_config(ABT_INFO_QUERY_KIND_ENABLED_TOOL, &tool_enabled);
+        if (tool_enabled == ABT_TRUE) {
+            ABTX_prof_init(&g_margo_abt_prof_context);
+            g_margo_abt_prof_init = 1;
+        }
     }
 
     // instantiate pools

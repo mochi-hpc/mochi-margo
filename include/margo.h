@@ -1187,6 +1187,24 @@ margo_instance_id margo_hg_info_get_instance(const struct hg_info* info);
 void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify);
 
 /**
+ * Appends Margo state information (including Argobots stack information) to
+ * the specified file in text format.
+ *
+ * @param [in] mid Margo instance
+ * @param [in] file output file ("-" for stdout)
+ * @param [in] uniquify flag indicating if file name should have additional
+ *   information added to it to make output from different processes unique
+ * @param [out] resolved_file_name (ignored if NULL) pointer to char* that
+ *   will be set to point to a string with the fully resolved path to the
+ *   state file that was generated.  Must be freed by caller.
+ * @returns void
+ */
+void margo_state_dump(margo_instance_id mid,
+                      const char*       file,
+                      int               uniquify,
+                      char**            resolved_file_name);
+
+/**
  * Appends profile statistics (enabled via margo_profile_start()) to specified
  * output file.
  *

@@ -27,6 +27,7 @@ static void my_rpc_ult(hg_handle_t handle)
     void*                 buffer;
     hg_bulk_t             bulk_handle;
     const struct hg_info* hgi;
+    char*                 state_file_name;
 #if 0
     int ret;
     int fd;
@@ -50,6 +51,12 @@ static void my_rpc_ult(hg_handle_t handle)
     assert(hgi);
     mid = margo_hg_info_get_instance(hgi);
     assert(mid != MARGO_INSTANCE_NULL);
+
+    if (in.dump_state) {
+        margo_state_dump(mid, "margo-example-server", 1, &state_file_name);
+        printf("# Runtime state dumped to %s\n", state_file_name);
+        free(state_file_name);
+    }
 
     /* register local target buffer for bulk access */
     hret = margo_bulk_create(mid, 1, &buffer, &size, HG_BULK_WRITE_ONLY,
@@ -101,8 +108,6 @@ static void my_rpc_shutdown_ult(hg_handle_t handle)
     assert(hret == HG_SUCCESS);
 
     margo_destroy(handle);
-
-    margo_diag_dump(mid, "-", 0);
 
     /* NOTE: we assume that the server daemon is using
      * margo_wait_for_finalize() to suspend until this RPC executes, so there

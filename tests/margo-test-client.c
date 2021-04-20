@@ -163,8 +163,9 @@ static void run_my_rpc(void* _arg)
     /* Send rpc. Note that we are also transmitting the bulk handle in the
      * input struct.  It was set above.
      */
-    in.input_val = arg->val;
-    hret         = margo_forward(handle, &in);
+    in.input_val   = arg->val;
+    in.dump_state = 0;
+    hret           = margo_forward(handle, &in);
     assert(hret == HG_SUCCESS);
 
     /* decode response */

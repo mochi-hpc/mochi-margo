@@ -51,6 +51,8 @@ static void my_rpc_ult(hg_handle_t handle)
     mid = margo_hg_info_get_instance(hgi);
     assert(mid != MARGO_INSTANCE_NULL);
 
+    if (in.dump_state) margo_state_dump(mid, "-", 0, NULL);
+
     /* register local target buffer for bulk access */
     hret = margo_bulk_create(mid, 1, &buffer, &size, HG_BULK_WRITE_ONLY,
                              &bulk_handle);
