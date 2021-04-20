@@ -9,6 +9,11 @@
 
 #define SPARKLINE_ARRAY_LEN 100
 
+static FILE* margo_output_file_open(margo_instance_id mid,
+                                    const char*       file,
+                                    int               uniquify,
+                                    const char*       extension);
+
 void __margo_sparkline_data_collection_fn(void* foo)
 {
     struct margo_instance* mid = (struct margo_instance*)foo;
@@ -317,16 +322,28 @@ void margo_breadcrumb_snapshot(margo_instance_id                 mid,
     }
 }
 
-void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
+/* open a file pointer for diagnostic/profile/state dumps */
+static FILE* margo_output_file_open(margo_instance_id mid,
+                                    const char*       file,
+                                    int               uniquify,
+                                    const char*       extension)
 {
-    FILE*    outfile;
-    time_t   ltime;
-    char     revised_file_name[256] = {0};
-    char*    name;
-    uint64_t hash;
+    FILE* outfile;
+    char* revised_file_name  = NULL;
+    char* absolute_file_name = NULL;
 
-    if (!mid->diag_enabled) return;
+    /* return early if the caller just wants stdout */
+    if (strcmp("-", file) == 0) return (stdout);
 
+    revised_file_name = malloc(strlen(file) + 256);
+    if (!revised_file_name) {
+        MARGO_ERROR(mid, "malloc() failure: %d\n", -errno);
+        return (NULL);
+    }
+
+    /* construct revised file name with correct extension and (if desired)
+     * substitutes unique information
+     */
     if (uniquify) {
         char hostname[128] = {0};
         int  pid;
@@ -334,26 +351,56 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
         gethostname(hostname, 128);
         pid = getpid();
 
-        sprintf(revised_file_name, "%s-%s-%d.diag", file, hostname, pid);
-    }
-
-    else {
-        sprintf(revised_file_name, "%s.diag", file);
-    }
-
-    if (strcmp("-", file) == 0) {
-        outfile = stdout;
+        sprintf(revised_file_name, "%s-%s-%d.%s", file, hostname, pid,
+                extension);
     } else {
-        outfile = fopen(revised_file_name, "a");
-        if (!outfile) {
-            perror("fopen");
-            return;
-        }
+        sprintf(revised_file_name, "%s.%s", file, extension);
     }
 
-    /* TODO: support pattern substitution in file name to create unique
-     * output files per process
+    /* if directory is not specified then use output directory from margo
+     * configuration
      */
+    if (revised_file_name[0] == '/') {
+        absolute_file_name = revised_file_name;
+    } else {
+        absolute_file_name
+            = malloc(strlen(json_object_get_string(
+                         json_object_object_get(mid->json_cfg, "output_dir")))
+                     + strlen(revised_file_name) + 2);
+        if (!absolute_file_name) {
+            MARGO_ERROR(mid, "malloc() failure: %d\n", -errno);
+            free(revised_file_name);
+            return (NULL);
+        }
+        sprintf(absolute_file_name, "%s/%s",
+                json_object_get_string(
+                    json_object_object_get(mid->json_cfg, "output_dir")),
+                revised_file_name);
+    }
+
+    /* actually open file */
+    outfile = fopen(revised_file_name, "a");
+    if (!outfile)
+        MARGO_ERROR(mid, "fopen(%s) failure: %d\n", revised_file_name, -errno);
+
+    if (absolute_file_name != revised_file_name) free(absolute_file_name);
+    free(revised_file_name);
+
+    return (outfile);
+}
+
+void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
+{
+    FILE*    outfile;
+    time_t   ltime;
+    char*    name;
+    uint64_t hash;
+
+    if (!mid->diag_enabled) return;
+
+    outfile = margo_output_file_open(mid, file, uniquify, "diag");
+    if (!outfile) return;
+
     time(&ltime);
 
     fprintf(outfile, "# Margo diagnostics\n");
@@ -391,7 +438,6 @@ void margo_profile_dump(margo_instance_id mid, const char* file, int uniquify)
 {
     FILE*                        outfile;
     time_t                       ltime;
-    char                         revised_file_name[256] = {0};
     struct diag_data *           dd, *tmp;
     char                         rpc_breadcrumb_str[256] = {0};
     struct margo_registered_rpc* tmp_rpc;
@@ -400,33 +446,9 @@ void margo_profile_dump(margo_instance_id mid, const char* file, int uniquify)
 
     assert(mid->profile_enabled);
 
-    if (uniquify) {
-        char hostname[128] = {0};
-        int  pid;
+    outfile = margo_output_file_open(mid, file, uniquify, "diag");
+    if (!outfile) return;
 
-        gethostname(hostname, 128);
-        pid = getpid();
-
-        sprintf(revised_file_name, "%s-%s-%d.csv", file, hostname, pid);
-    }
-
-    else {
-        sprintf(revised_file_name, "%s.csv", file);
-    }
-
-    if (strcmp("-", file) == 0) {
-        outfile = stdout;
-    } else {
-        outfile = fopen(revised_file_name, "a");
-        if (!outfile) {
-            perror("fopen");
-            return;
-        }
-    }
-
-    /* TODO: support pattern substitution in file name to create unique
-     * output files per process
-     */
     time(&ltime);
 
     fprintf(outfile, "%u\n", mid->num_registered_rpcs);
