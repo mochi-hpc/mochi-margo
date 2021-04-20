@@ -10,6 +10,11 @@ loop.  The second (breadcrumb profiling) measures time spent invoking remote pro
 
 ## Usage
 
+Note that all instrumentation output files described below will be emitted
+in the current working directory of the program by default.  You can specify
+an alternative directory with the `MARGO_OUTPUT_DIR` environment variable or
+the `output_dir` json parameter.
+
 Diagnostics can be enabled in two ways:
 * At program startup, setting the env variable `MARGO_ENABLE_DIAGNOSTICS` to `1`.
 * At run time by calling the `margo_diag_start()` any

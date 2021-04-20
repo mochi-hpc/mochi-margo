@@ -278,13 +278,34 @@ void margo_finalize(margo_instance_id mid)
                     "Waiting for sparkline data collection thread to complete");
         ABT_thread_join(mid->sparkline_data_collection_tid);
         ABT_thread_free(&mid->sparkline_data_collection_tid);
-        MARGO_TRACE(mid, "Dumping profile");
-        margo_profile_dump(mid, "profile", 1);
+
+        char* profile_out_filename
+            = malloc(strlen(json_object_get_string(
+                         json_object_object_get(mid->json_cfg, "output_dir")))
+                     + 12);
+        if (profile_out_filename) {
+            sprintf(profile_out_filename, "%s/profile",
+                    json_object_get_string(
+                        json_object_object_get(mid->json_cfg, "output_dir")));
+            MARGO_TRACE(mid, "Dumping profile");
+            margo_profile_dump(mid, profile_out_filename, 1);
+            free(profile_out_filename);
+        }
     }
 
     if (mid->diag_enabled) {
-        MARGO_TRACE(mid, "Dumping diagnostics");
-        margo_diag_dump(mid, "profile", 1);
+        char* profile_out_filename
+            = malloc(strlen(json_object_get_string(
+                         json_object_object_get(mid->json_cfg, "output_dir")))
+                     + 12);
+        if (profile_out_filename) {
+            sprintf(profile_out_filename, "%s/profile",
+                    json_object_get_string(
+                        json_object_object_get(mid->json_cfg, "output_dir")));
+            MARGO_TRACE(mid, "Dumping diagnostics");
+            margo_diag_dump(mid, profile_out_filename, 1);
+            free(profile_out_filename);
+        }
     }
 
     ABT_mutex_lock(mid->finalize_mutex);
