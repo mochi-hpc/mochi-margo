@@ -22,6 +22,7 @@
 
 struct run_my_rpc_args {
     int               val;
+    int               dump_state;
     margo_instance_id mid;
     hg_addr_t         svr_addr;
 };
@@ -45,6 +46,8 @@ int main(int argc, char** argv)
     hg_handle_t            handle;
     char*                  proto;
     char*                  colon;
+    struct margo_init_info minfo        = {0};
+    char*                  starter_json = "{\"output_dir\":\"/tmp\"}";
 
     if (argc != 2) {
         fprintf(stderr, "Usage: ./client <server_addr>\n");
@@ -67,13 +70,19 @@ int main(int argc, char** argv)
      * rpc requests.
      */
     /***************************************/
-    mid = margo_init(proto, MARGO_CLIENT_MODE, 0, 0);
+    minfo.json_config = starter_json;
+    mid               = margo_init_ext(proto, MARGO_CLIENT_MODE, &minfo);
     free(proto);
     if (mid == MARGO_INSTANCE_NULL) {
-        fprintf(stderr, "Error: margo_init()\n");
+        fprintf(stderr, "Error: margo_init_ext()\n");
         return (-1);
     }
-    // margo_diag_start(mid);
+    margo_diag_start(mid);
+    /* NOTE: this is necessary for the server to be able to collect complete
+     * profile data, even if we don't plan to use the data on the client in
+     * this example.
+     */
+    margo_profile_start(mid);
 
     /* retrieve current pool to use for ULT creation */
     ret = ABT_xstream_self(&xstream);
@@ -100,6 +109,10 @@ int main(int argc, char** argv)
         args[i].val      = i;
         args[i].mid      = mid;
         args[i].svr_addr = svr_addr;
+        if (i == 2) /* pick one in the middle to trigger a stack dump on svr */
+            args[i].dump_state = 1;
+        else
+            args[i].dump_state = 0;
 
         /* Each ult gets a pointer to an element of the array to use
          * as input for the run_my_rpc() function.
@@ -177,8 +190,9 @@ static void run_my_rpc(void* _arg)
     /* Send rpc. Note that we are also transmitting the bulk handle in the
      * input struct.  It was set above.
      */
-    in.input_val = arg->val;
-    hret         = margo_forward(handle, &in);
+    in.input_val  = arg->val;
+    in.dump_state = arg->dump_state;
+    hret          = margo_forward(handle, &in);
     assert(hret == HG_SUCCESS);
 
     /* decode response */

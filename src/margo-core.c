@@ -24,6 +24,7 @@
 #include "margo-timer.h"
 #include "utlist.h"
 #include "uthash.h"
+#include "abtx_prof.h"
 
 /* need endian macro shims for MacOS */
 #ifdef __APPLE__
@@ -196,6 +197,13 @@ static void margo_cleanup(margo_instance_id mid)
             ABT_mutex_unlock(g_margo_num_instances_mtx);
             ABT_mutex_free(&g_margo_num_instances_mtx);
             g_margo_num_instances_mtx = ABT_MUTEX_NULL;
+            if (g_margo_abt_prof_init) {
+                if (g_margo_abt_prof_started) {
+                    ABTX_prof_stop(g_margo_abt_prof_context);
+                    g_margo_abt_prof_started = 0;
+                }
+                ABTX_prof_finalize(g_margo_abt_prof_context);
+            }
             if (g_margo_abt_init) {
                 MARGO_TRACE(mid, "Finalizing argobots");
                 ABT_finalize();
@@ -1478,6 +1486,27 @@ int margo_set_param(margo_instance_id mid, const char* key, const char* value)
         mid->diag_enabled       = enable_diagnostics;
         json_object_object_add(mid->json_cfg, "enable_diagnostics",
                                json_object_new_boolean(enable_diagnostics));
+        /* if argobots profiling is available then try to toggle it also */
+        if (g_margo_abt_prof_init) {
+            if (enable_diagnostics && !g_margo_abt_prof_started) {
+                /* TODO: consider supporting PROF_MODE_DETAILED also? */
+                ABTX_prof_start(g_margo_abt_prof_context, ABTX_PROF_MODE_BASIC);
+                g_margo_abt_prof_started = 1;
+            } else if (!enable_diagnostics && g_margo_abt_prof_started) {
+                ABTX_prof_stop(g_margo_abt_prof_context);
+                g_margo_abt_prof_started = 0;
+            }
+        }
+        return (0);
+    }
+
+    /* rpc profiling */
+    if (strcmp(key, "enable_profiling") == 0) {
+        MARGO_TRACE(0, "Setting enable_profiling to %s", value);
+        bool enable_profiling = atoi(value);
+        mid->profile_enabled  = enable_profiling;
+        json_object_object_add(mid->json_cfg, "enable_profiling",
+                               json_object_new_boolean(enable_profiling));
         return (0);
     }
 

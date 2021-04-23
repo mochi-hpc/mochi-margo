@@ -124,6 +124,11 @@ format.
 See the [Instrumentation documentation](doc/instrumentation.md) for
 information on how to extract diagnostic instrumentation from Margo.
 
+## Debugging
+
+See the [Debugging documentation](doc/debugging.md) for Margo debugging
+features and strategies.
+
 ## Design details
 
 ![Margo architecture](doc/fig/margo-diagram.png)

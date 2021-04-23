@@ -12,7 +12,11 @@
 static FILE* margo_output_file_open(margo_instance_id mid,
                                     const char*       file,
                                     int               uniquify,
-                                    const char*       extension);
+                                    const char*       extension,
+                                    char**            resolved_file_name);
+static void  margo_diag_dump_fp(margo_instance_id mid, FILE* outfile);
+static void  margo_diag_dump_abt_fp(margo_instance_id mid, FILE* outfile);
+static void  margo_profile_dump_fp(margo_instance_id mid, FILE* outfile);
 
 void __margo_sparkline_data_collection_fn(void* foo)
 {
@@ -326,14 +330,18 @@ void margo_breadcrumb_snapshot(margo_instance_id                 mid,
 static FILE* margo_output_file_open(margo_instance_id mid,
                                     const char*       file,
                                     int               uniquify,
-                                    const char*       extension)
+                                    const char*       extension,
+                                    char**            resolved_file_name)
 {
     FILE* outfile;
     char* revised_file_name  = NULL;
     char* absolute_file_name = NULL;
 
     /* return early if the caller just wants stdout */
-    if (strcmp("-", file) == 0) return (stdout);
+    if (strcmp("-", file) == 0) {
+        if (resolved_file_name) *resolved_file_name = strdup("<STDOUT>");
+        return (stdout);
+    }
 
     revised_file_name = malloc(strlen(file) + 256);
     if (!revised_file_name) {
@@ -383,23 +391,58 @@ static FILE* margo_output_file_open(margo_instance_id mid,
     if (!outfile)
         MARGO_ERROR(mid, "fopen(%s) failure: %d\n", absolute_file_name, errno);
 
-    if (absolute_file_name != revised_file_name) free(absolute_file_name);
-    free(revised_file_name);
+    if (resolved_file_name) {
+        if (absolute_file_name != revised_file_name) {
+            *resolved_file_name = absolute_file_name;
+            free(revised_file_name);
+        } else {
+            *resolved_file_name = revised_file_name;
+        }
+    } else {
+        if (absolute_file_name != revised_file_name) free(absolute_file_name);
+        free(revised_file_name);
+    }
 
     return (outfile);
 }
 
-void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
+static void margo_diag_dump_abt_fp(margo_instance_id mid, FILE* outfile)
 {
-    FILE*    outfile;
     time_t   ltime;
     char*    name;
     uint64_t hash;
 
     if (!mid->diag_enabled) return;
 
-    outfile = margo_output_file_open(mid, file, uniquify, "diag");
-    if (!outfile) return;
+    time(&ltime);
+
+    fprintf(outfile, "# Margo diagnostics (Argobots profile)\n");
+    GET_SELF_ADDR_STR(mid, name);
+    HASH_JEN(name, strlen(name),
+             hash); /*record own address in the breadcrumb */
+    fprintf(outfile, "# Addr Hash and Address Name: %lu,%s\n", hash, name);
+    free(name);
+    fprintf(outfile, "# %s\n", ctime(&ltime));
+
+    if (g_margo_abt_prof_started) {
+        /* have to stop profiling briefly to print results */
+        ABTX_prof_stop(g_margo_abt_prof_context);
+        ABTX_prof_print(g_margo_abt_prof_context, outfile,
+                        ABTX_PRINT_MODE_SUMMARY | ABTX_PRINT_MODE_FANCY);
+        /* TODO: consider supporting PROF_MODE_DETAILED also? */
+        ABTX_prof_start(g_margo_abt_prof_context, ABTX_PROF_MODE_BASIC);
+    }
+
+    return;
+}
+
+static void margo_diag_dump_fp(margo_instance_id mid, FILE* outfile)
+{
+    time_t   ltime;
+    char*    name;
+    uint64_t hash;
+
+    if (!mid->diag_enabled) return;
 
     time(&ltime);
 
@@ -407,7 +450,7 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
     GET_SELF_ADDR_STR(mid, name);
     HASH_JEN(name, strlen(name),
              hash); /*record own address in the breadcrumb */
-    fprintf(outfile, "#Addr Hash and Address Name: %lu,%s\n", hash, name);
+    fprintf(outfile, "# Addr Hash and Address Name: %lu,%s\n", hash, name);
     free(name);
     fprintf(outfile, "# %s\n", ctime(&ltime));
     fprintf(outfile,
@@ -429,14 +472,34 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
                             "Time consumed by HG_Bulk_create()",
                             &mid->diag_bulk_create_elapsed);
 
+    return;
+}
+
+void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify)
+{
+    FILE* outfile;
+
+    if (!mid->diag_enabled) return;
+
+    /* rpc diagnostics */
+    outfile = margo_output_file_open(mid, file, uniquify, "diag", NULL);
+    if (!outfile) return;
+
+    margo_diag_dump_fp(mid, outfile);
+
+    /* abt profiling */
+    outfile = margo_output_file_open(mid, file, uniquify, "diag.abt", NULL);
+    if (!outfile) return;
+
+    margo_diag_dump_abt_fp(mid, outfile);
+
     if (outfile != stdout) fclose(outfile);
 
     return;
 }
 
-void margo_profile_dump(margo_instance_id mid, const char* file, int uniquify)
+static void margo_profile_dump_fp(margo_instance_id mid, FILE* outfile)
 {
-    FILE*                        outfile;
     time_t                       ltime;
     struct diag_data *           dd, *tmp;
     char                         rpc_breadcrumb_str[256] = {0};
@@ -444,10 +507,7 @@ void margo_profile_dump(margo_instance_id mid, const char* file, int uniquify)
     char*                        name;
     uint64_t                     hash;
 
-    assert(mid->profile_enabled);
-
-    outfile = margo_output_file_open(mid, file, uniquify, "csv");
-    if (!outfile) return;
+    if (!mid->profile_enabled) return;
 
     time(&ltime);
 
@@ -484,6 +544,152 @@ void margo_profile_dump(margo_instance_id mid, const char* file, int uniquify)
         }
         __margo_print_profile_data(mid, outfile, rpc_breadcrumb_str,
                                    "RPC statistics", dd);
+    }
+
+    return;
+}
+
+void margo_profile_dump(margo_instance_id mid, const char* file, int uniquify)
+{
+    FILE* outfile;
+
+    if (!mid->profile_enabled) return;
+
+    outfile = margo_output_file_open(mid, file, uniquify, "csv", NULL);
+    if (!outfile) return;
+
+    margo_profile_dump_fp(mid, outfile);
+
+    if (outfile != stdout) fclose(outfile);
+
+    return;
+}
+void margo_state_dump(margo_instance_id mid,
+                      const char*       file,
+                      int               uniquify,
+                      char**            resolved_file_name)
+{
+    FILE*    outfile;
+    time_t   ltime;
+    char*    name;
+    int      i = 0;
+    char*    encoded_json;
+    ABT_bool qconfig;
+    unsigned pending_operations;
+
+    outfile = margo_output_file_open(mid, file, uniquify, "state",
+                                     resolved_file_name);
+    if (!outfile) return;
+
+    time(&ltime);
+
+    fprintf(outfile, "# Margo state dump\n");
+    GET_SELF_ADDR_STR(mid, name);
+    fprintf(outfile, "# Mercury address: %s\n", name);
+    free(name);
+    fprintf(outfile, "# %s\n", ctime(&ltime));
+
+    fprintf(outfile,
+            "\n# Margo configuration (JSON)\n"
+            "# ==========================\n");
+    encoded_json = margo_get_config(mid);
+    fprintf(outfile, "%s\n", encoded_json);
+    if (encoded_json) free(encoded_json);
+
+    fprintf(outfile,
+            "\n# Margo instance state\n"
+            "# ==========================\n");
+    ABT_mutex_lock(mid->pending_operations_mtx);
+    pending_operations = mid->pending_operations;
+    ABT_mutex_unlock(mid->pending_operations_mtx);
+    fprintf(outfile, "mid->pending_operations: %d\n", pending_operations);
+    fprintf(outfile, "mid->diag_enabled: %d\n", mid->diag_enabled);
+    fprintf(outfile, "mid->profile_enabled: %d\n", mid->profile_enabled);
+
+    fprintf(
+        outfile,
+        "\n# Margo diagnostics\n"
+        "\n# NOTE: this is only available if mid->diag_enabled == 1 above.  "
+        "You can\n"
+        "#       turn this on by calling margo_diag_start() "
+        "programatically, by setting\n"
+        "#       the MARGO_ENABLE_DIAGNOSTICS=1 environment variable, or "
+        "by setting\n"
+        "#       the \"enable_diagnostics\" JSON configuration parameter.\n"
+        "# ==========================\n");
+    margo_diag_dump_fp(mid, outfile);
+
+    fprintf(
+        outfile,
+        "\n# Margo RPC profiling\n"
+        "\n# NOTE: this is only available if mid->profile_enabled == 1 above.  "
+        "You can\n"
+        "#       turn this on by calling margo_profile_start() "
+        "programatically, by\n"
+        "#       setting the MARGO_ENABLE_PROFILING=1 environment variable, or "
+        "by setting\n"
+        "#       the \"enable_profiling\" JSON configuration parameter.\n"
+        "# ==========================\n");
+    margo_profile_dump_fp(mid, outfile);
+
+    fprintf(outfile,
+            "\n# Argobots configuration (ABT_info_print_config())\n"
+            "# ================================================\n");
+    ABT_info_print_config(outfile);
+
+    fprintf(outfile,
+            "\n# Argobots execution streams (ABT_info_print_all_xstreams())\n"
+            "# ================================================\n");
+    ABT_info_print_all_xstreams(outfile);
+
+    fprintf(outfile,
+            "\n# Margo Argobots profiling summary\n"
+            "\n# NOTE: this is only available if mid->diag_enabled == 1 above "
+            "*and* Argobots\n"
+            "# has been compiled with tool interface support.  You can turn on "
+            "Margo\n"
+            "# diagnostics at runtime by calling margo_diag_start() "
+            "programatically, by\n"
+            "# setting the MARGO_ENABLE_DIAGNOSTICS=1 environment variable, or "
+            "by setting\n"
+            "# the \"enable_diagnostics\" JSON configuration parameter. You "
+            "can enable the\n"
+            "# Argobots tool interface by compiling Argobots with the "
+            "--enable-tool or the\n"
+            "# +tool spack variant.\n"
+            "# ==========================\n");
+    margo_diag_dump_abt_fp(mid, outfile);
+
+    fprintf(outfile,
+            "\n# Argobots stack dump (ABT_info_print_thread_stacks_in_pool())\n"
+            "#   *IMPORTANT NOTE*\n"
+            "# This stack dump does *not* display information about currently "
+            "executing\n"
+            "# user-level threads.  The user-level threads shown here are "
+            "awaiting\n"
+            "# execution due to synchronization primitives or resource "
+            "constraints.\n");
+
+    ABT_info_query_config(ABT_INFO_QUERY_KIND_ENABLED_STACK_UNWIND, &qconfig);
+    fprintf(outfile, "# Argobots stack unwinding: %s\n",
+            (qconfig == ABT_TRUE) ? "ENABLED" : "DISABLED");
+    if (qconfig != ABT_TRUE) {
+        fprintf(outfile,
+                "# *IMPORTANT NOTE*\n"
+                "# You can make the following stack dump more human readable "
+                "by compiling\n"
+                "# Argobots with --enable-stack-unwind or the +stackunwind "
+                "spack variant.\n");
+    }
+    fprintf(outfile, "# ================================================\n");
+
+    /* for each pool that margo is aware of */
+    for (i = 0; i < mid->num_abt_pools; i++) {
+        /* Display stack trace of ULTs within that pool.  This will not
+         * include any ULTs that are presently executing (including the
+         * caller).
+         */
+        ABT_info_print_thread_stacks_in_pool(outfile, mid->abt_pools[i]);
     }
 
     if (outfile != stdout) fclose(outfile);

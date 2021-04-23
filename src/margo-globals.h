@@ -11,6 +11,7 @@
 
 #include <stdbool.h>
 #include <margo.h>
+#include "abtx_prof.h"
 
 // If margo is initializing ABT, we need to track how many instances of margo
 // are being created, so that the last one can call ABT_finalize.
@@ -21,6 +22,12 @@
 extern int       g_margo_num_instances;
 extern ABT_mutex g_margo_num_instances_mtx;
 extern bool      g_margo_abt_init;
+
+// Track if an instance has enabled abt profiling.  We can only do this
+// once, no matter how many margo instances are running.
+extern bool              g_margo_abt_prof_init;
+extern bool              g_margo_abt_prof_started;
+extern ABTX_prof_context g_margo_abt_prof_context;
 
 // Keys for Argobots thread-local storage to track RPC breadcrumbs
 // across thread execution.
