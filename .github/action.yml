@@ -1,0 +1,52 @@
+name: Configure
+description: 'Install Packages from Spack, and run ./prepare.sh and ./configure'
+inputs:
+  CFLAGS:
+    description: 'CFLAGS is envronment variable on ./configure'
+    required: false
+    default: ''
+  LDFLAGS:
+    description: 'LDFLAGS is envronment variable on ./configure'
+    required: false
+    default: ''
+  builddir:
+    description: 'builddir is where ./configure runs'
+    required: true
+runs:
+  using: composite
+  steps:
+  - name: Add latest Spack release
+    shell: bash
+    run: |
+      git clone https://github.com/spack/spack.git /opt/spack &&
+      cd /opt/spack && git checkout releases/latest
+  - name: Find external packages
+    shell: bash
+    run: |
+      eval `/opt/spack/bin/spack env activate --sh .` &&
+      /opt/spack/bin/spack external find --not-buildable cmake &&
+      /opt/spack/bin/spack external find --not-buildable perl
+  - name: Add mochi-spack-packages
+    shell: bash
+    run: |
+      git clone https://github.com/mochi-hpc/mochi-spack-packages /opt/spack/mochi-spack-packages
+      /opt/spack/bin/spack repo add /opt/spack/mochi-spack-packages
+  - name: Install Package from Spack
+    shell: bash
+    run: |
+      eval `/opt/spack/bin/spack env activate --sh .` &&
+      /opt/spack/bin/spack install --fail-fast
+  - name: Show Spack installed packages for debugging
+    shell: bash
+    run: |
+      eval `/opt/spack/bin/spack env activate --sh .` &&
+      /opt/spack/bin/spack find -dlv
+  - name: Configure
+    shell: bash
+    run: |
+      eval `/opt/spack/bin/spack env activate --sh .` &&
+      ./prepare.sh &&
+      mkdir ${{inputs.builddir}} && cd ${{inputs.builddir}} &&
+      export CFLAGS="${{inputs.CFLAGS}}" &&
+      export LDFLAGS="${{inputs.LDFLAGS}}" &&
+      ../configure --prefix=`pwd`
