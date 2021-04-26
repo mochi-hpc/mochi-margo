@@ -667,6 +667,31 @@ hg_return_t margo_addr_free(margo_instance_id mid, hg_addr_t addr);
 hg_return_t margo_addr_self(margo_instance_id mid, hg_addr_t* addr);
 
 /**
+ * @brief Compare two addresses.
+ *
+ * @param mid   Margo instance
+ * @param addr1 first address
+ * @param addr2 second address
+ *
+ * @return HG_TRUE if addresses are determined to be equal, HG_FALSE otherwise
+ */
+hg_bool_t
+margo_addr_cmp(margo_instance_id mid, hg_addr_t addr1, hg_addr_t addr2);
+
+/**
+ * @brief Hint that the address is no longer valid. This may happen if
+ * the peer is no longer responding. This can be used to force removal of
+ * the peer address from the list of the peers, before freeing it and
+ * reclaim resources.
+ *
+ * @param mid  Margo instance
+ * @param addr address
+ *
+ * @return HG_SUCCESS or corresponding HG error code
+ */
+hg_return_t margo_addr_set_remove(margo_instance_id mid, hg_addr_t addr);
+
+/**
  * Duplicate an existing Mercury address.
  *
  * \param [in] mid      Margo instance

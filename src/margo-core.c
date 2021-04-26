@@ -708,6 +708,17 @@ margo_addr_dup(margo_instance_id mid, hg_addr_t addr, hg_addr_t* new_addr)
     return (HG_Addr_dup(mid->hg_class, addr, new_addr));
 }
 
+hg_bool_t
+margo_addr_cmp(margo_instance_id mid, hg_addr_t addr1, hg_addr_t addr2)
+{
+    return HG_Addr_cmp(mid->hg_class, addr1, addr2);
+}
+
+hg_return_t margo_addr_set_remove(margo_instance_id mid, hg_addr_t addr)
+{
+    return HG_Addr_set_remove(mid->hg_class, addr);
+}
+
 hg_return_t margo_addr_to_string(margo_instance_id mid,
                                  char*             buf,
                                  hg_size_t*        buf_size,
