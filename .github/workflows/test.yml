@@ -34,4 +34,4 @@ jobs:
         eval `/opt/spack/bin/spack env activate --sh .` &&
         ./prepare.sh &&
         mkdir build && cd build &&
-        ../configure --prefix=`pwd` && make check
+        ../configure --prefix=`pwd` && make check && cat test-suite.log
