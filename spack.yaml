@@ -7,5 +7,5 @@ spack:
   - libtool
   - pkg-config
   - argobots
-  - mercury~boostsys
+  - mercury~boostsys ^libfabric fabrics=tcp,rxm
   concretization: together
