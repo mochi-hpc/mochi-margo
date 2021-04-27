@@ -121,6 +121,20 @@ AC_MSG_RESULT(no)
 AC_MSG_ERROR([ABT_SCHED_BASIC_WAIT not available in Argobots])
 )
 
+AC_ARG_ENABLE(coverage,
+              [AS_HELP_STRING([--enable-coverage],[Enable code coverage @<:@default=no@:>@])],
+              [case "${enableval}" in
+                yes) enable_coverage="yes" ;;
+                no) enable_coverage="no" ;;
+                *) AC_MSG_ERROR(bad value ${enableval} for --enable-coverage) ;;
+               esac],
+              [enable_coverage="no"]
+)
+
+if test "$enable_coverage" = "yes" ; then
+    CPPFLAGS="$CPPFLAGS --coverage -O0"
+    LDFLAGS="--coverage -lgcov"
+fi
+
 AC_CONFIG_FILES([Makefile maint/margo.pc])
 AC_OUTPUT
- 
