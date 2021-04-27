@@ -1,4 +1,4 @@
-name: test
+name: codecov
 
 on: [push,pull_request,workflow_dispatch]
 
@@ -33,8 +33,8 @@ jobs:
       run: |
         eval `/opt/spack/bin/spack env activate --sh .` &&
         ./prepare.sh &&
-        mkdir build && cd build &&
-        ../configure --enable-coverage --prefix=`pwd` && make check && cat test-suite.log
+        ../configure --enable-coverage --prefix=`pwd` &&
+        make check
     - name: Upload code coverage files
       run: |
         bash <(curl -s https://codecov.io/bash)
