@@ -13,6 +13,7 @@ tests_unit_tests_margo_unit_test_example_SOURCES = \
 
 tests_unit_tests_margo_addr_SOURCES = \
  tests/unit-tests/munit/munit.c \
- tests/unit-tests/margo-addr.c
+ tests/unit-tests/margo-addr.c \
+ tests/unit-tests/helper-server.c
 
 endif
