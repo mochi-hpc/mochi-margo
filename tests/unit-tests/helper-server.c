@@ -11,7 +11,8 @@
 
 int HS_start(const char* server_addr,
              struct margo_init_info* margo_args,
-             HS_function_t server_fn,
+             HS_function_t init_server_fn,
+             HS_function_t run_server_fn,
              void* uargs, char* addr,
              hg_size_t* addr_size)
 {
@@ -25,6 +26,9 @@ int HS_start(const char* server_addr,
         margo_instance_id mid = margo_init_ext(
                 server_addr, MARGO_SERVER_MODE, margo_args);
         margo_enable_remote_shutdown(mid);
+        if(init_server_fn) {
+            init_server_fn(mid, uargs);
+        }
         if(addr) {
             hg_addr_t self_addr = HG_ADDR_NULL;
             margo_addr_self(mid, &self_addr);
@@ -35,8 +39,8 @@ int HS_start(const char* server_addr,
         }
         close(p[1]);
         int ret = 0;
-        if(server_fn) {
-            ret = server_fn(mid, uargs);
+        if(run_server_fn) {
+            ret = run_server_fn(mid, uargs);
         } else {
             margo_wait_for_finalize(mid);
         }

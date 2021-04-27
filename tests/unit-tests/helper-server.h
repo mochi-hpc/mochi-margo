@@ -37,7 +37,8 @@ typedef int (*HS_function_t)(margo_instance_id, void*);
  */
 int HS_start(const char* server_addr,
              struct margo_init_info* margo_args,
-             HS_function_t server_fn,
+             HS_function_t init_server_fn,
+             HS_function_t run_server_fn,
              void* uargs, char* addr,
              hg_size_t* addr_size);
 

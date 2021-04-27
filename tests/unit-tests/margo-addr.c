@@ -30,7 +30,7 @@ static void* test_context_setup(const MunitParameter params[], void* user_data)
 
     const char* protocol = munit_parameters_get(params, "protocol");
     hg_size_t remote_addr_size = 256;
-    ctx->remote_pid = HS_start(protocol, NULL, NULL, NULL, &(ctx->remote_addr[0]), &remote_addr_size);
+    ctx->remote_pid = HS_start(protocol, NULL, NULL, NULL, NULL, &(ctx->remote_addr[0]), &remote_addr_size);
     munit_assert_int(ctx->remote_pid, >, 0);
 
     ctx->mid = margo_init(protocol, MARGO_SERVER_MODE, 0, 0);
