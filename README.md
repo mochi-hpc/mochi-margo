@@ -1,5 +1,7 @@
 # Margo
 
+![](https://github.com/mochi-hpc/mochi-margo/actions/workflows/test.yml/badge.svg)
+
 Margo provides Argobots-aware bindings to the Mercury RPC library.
 
 Mercury (https://mercury-hpc.github.io/) is a remote procedure call
