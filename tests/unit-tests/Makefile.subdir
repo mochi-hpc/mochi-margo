@@ -1,13 +1,20 @@
 if BUILD_TESTS
 check_PROGRAMS += \
- tests/unit-tests/margo-addr
+ tests/unit-tests/margo-addr \
+ tests/unit-tests/margo-diag
 
 TESTS += \
- tests/unit-tests/margo-addr
+ tests/unit-tests/margo-addr \
+ tests/unit-tests/margo-diag
 
 tests_unit_tests_margo_addr_SOURCES = \
  tests/unit-tests/munit/munit.c \
  tests/unit-tests/margo-addr.c \
+ tests/unit-tests/helper-server.c
+
+tests_unit_tests_margo_diag_SOURCES = \
+ tests/unit-tests/munit/munit.c \
+ tests/unit-tests/margo-diag.c \
  tests/unit-tests/helper-server.c
 
 endif
