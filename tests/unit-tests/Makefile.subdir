@@ -1,0 +1,13 @@
+if BUILD_TESTS
+check_PROGRAMS += \
+ tests/unit-tests/margo-addr
+
+TESTS += \
+ tests/unit-tests/margo-addr
+
+tests_unit_tests_margo_addr_SOURCES = \
+ tests/unit-tests/munit/munit.c \
+ tests/unit-tests/margo-addr.c \
+ tests/unit-tests/helper-server.c
+
+endif

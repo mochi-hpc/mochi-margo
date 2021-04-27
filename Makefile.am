@@ -51,6 +51,7 @@ include $(top_srcdir)/examples/Makefile.subdir
 include $(top_srcdir)/examples/multiplex/Makefile.subdir
 include $(top_srcdir)/examples/composition/Makefile.subdir
 include $(top_srcdir)/tests/Makefile.subdir
+include $(top_srcdir)/tests/unit-tests/Makefile.subdir
 
 # Modify the .la file once installed to indicate that codes linking against
 # the Margo library should also set rpath to the specific Mercury library
