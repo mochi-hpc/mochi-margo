@@ -208,5 +208,7 @@ static const MunitSuite test_suite = {
 
 int main(int argc, char **argv)
 {
+    setenv("MARGO_ENABLE_PROFILING", "1", 1);
+    setenv("MARGO_ENABLE_DIAGNOSTICS", "1", 1);
     return munit_suite_main(&test_suite, NULL, argc, argv);
 }
