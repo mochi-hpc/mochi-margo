@@ -182,11 +182,6 @@ static void margo_cleanup(margo_instance_id mid)
         HG_Finalize(mid->hg_class);
     }
 
-    /* TODO: technically we could/should call ABT_key_free() for
-     * g_margo_rpc_breadcrumb_key.  We can't do that here, though,
-     * because the key is global, not local to this mid.
-     */
-
     MARGO_TRACE(mid, "Checking if Argobots should be finalized");
     if (g_margo_num_instances_mtx != ABT_MUTEX_NULL) {
         ABT_mutex_lock(g_margo_num_instances_mtx);
@@ -194,16 +189,26 @@ static void margo_cleanup(margo_instance_id mid)
         if (g_margo_num_instances > 0) {
             ABT_mutex_unlock(g_margo_num_instances_mtx);
         } else {
+            /* this is the last margo instance */
             ABT_mutex_unlock(g_margo_num_instances_mtx);
             ABT_mutex_free(&g_margo_num_instances_mtx);
             g_margo_num_instances_mtx = ABT_MUTEX_NULL;
+
+            /* free global keys used for profiling */
+            ABT_key_free(&g_margo_rpc_breadcrumb_key);
+            ABT_key_free(&g_margo_target_timing_key);
+
+            /* shut down global abt profiling if needed */
             if (g_margo_abt_prof_init) {
                 if (g_margo_abt_prof_started) {
                     ABTX_prof_stop(g_margo_abt_prof_context);
                     g_margo_abt_prof_started = 0;
                 }
                 ABTX_prof_finalize(g_margo_abt_prof_context);
+                g_margo_abt_prof_init = 0;
             }
+
+            /* shut down argobots itself if needed */
             if (g_margo_abt_init) {
                 MARGO_TRACE(mid, "Finalizing argobots");
                 ABT_finalize();
