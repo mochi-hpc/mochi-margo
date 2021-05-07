@@ -571,7 +571,7 @@ hg_id_t margo_provider_register_name(margo_instance_id mid,
             mid->registered_rpcs = tmp_rpc->next;
             free(tmp_rpc);
         }
-        return (0);
+        return (id);
     }
 
     return (id);
