@@ -43,6 +43,7 @@ DEFINE_MARGO_RPC_HANDLER(sum)
 static int simple_sum(margo_instance_id mid, void * data)
 {
     hg_id_t rpc_id = MARGO_REGISTER(mid, "sum", sum_in_t, sum_out_t, sum);
+    munit_assert_int(rpc_id, !=, 0);
     margo_wait_for_finalize(mid);
     return 0;
 }
@@ -180,6 +181,7 @@ static MunitResult profile_dump(const MunitParameter params[], void *data)
         margo_destroy(h);
         margo_thread_sleep(ctx->mid, 1*1000);
     }
+    margo_addr_free(ctx->mid, ctx->remote_address);
 
     margo_state_dump(ctx->mid, "-", 0, NULL);
 
