@@ -80,6 +80,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     ABT_pool            progress_pool = ABT_POOL_NULL;
     ABT_pool            rpc_pool      = ABT_POOL_NULL;
     ABT_bool            tool_enabled;
+    char*               name;
 
     if (args.json_config && strlen(args.json_config) > 0) {
         // read JSON config from provided string argument
@@ -349,26 +350,14 @@ margo_instance_id margo_init_ext(const char*                   address,
     mid->profile_enabled               = profile_enabled;
     ABT_mutex_create(&mid->diag_rpc_mutex);
 
-    if (profile_enabled) {
-        MARGO_TRACE(0, "Profiling is enabled, starting profiling thread");
-        char* name;
-        mid->previous_sparkline_data_collection_time = ABT_get_wtime();
+    // record own address hash to be used for profiling and diagnostics
+    // NOTE: we do this even if profiling is presently disabled so that the
+    // information will be available if profiling is dynamically enabled
+    GET_SELF_ADDR_STR(mid, name);
+    HASH_JEN(name, strlen(name), mid->self_addr_hash);
+    free(name);
 
-        // record own address in cache to be used in breadcrumb generation
-        GET_SELF_ADDR_STR(mid, name);
-        HASH_JEN(name, strlen(name), mid->self_addr_hash);
-        free(name);
-
-        ret = ABT_thread_create(
-            mid->progress_pool, __margo_sparkline_data_collection_fn, mid,
-            ABT_THREAD_ATTR_NULL, &mid->sparkline_data_collection_tid);
-        if (ret != ABT_SUCCESS) {
-            MARGO_WARNING(
-                0,
-                "Failed to start sparkline data collection thread, "
-                "continuing to profile without sparkline data collection");
-        }
-    }
+    if (profile_enabled) __margo_sparkline_thread_start(mid);
 
     /* END diagnostics/profiling initialization */
 

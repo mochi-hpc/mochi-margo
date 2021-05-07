@@ -16,7 +16,8 @@
 #include "margo-instance.h"
 #include "margo-globals.h"
 
-void __margo_sparkline_data_collection_fn(void* foo);
+void __margo_sparkline_thread_start(margo_instance_id mid);
+void __margo_sparkline_thread_stop(margo_instance_id mid);
 
 void __margo_print_diag_data(margo_instance_id mid,
                              FILE*             file,

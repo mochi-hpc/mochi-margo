@@ -4,6 +4,7 @@
  * See COPYRIGHT in top-level directory.
  */
 #include <margo.h>
+#include "margo-logging.h"
 #include "margo-diag-internal.h"
 #include "margo-instance.h"
 
@@ -298,22 +299,18 @@ void margo_breadcrumb_snapshot_destroy(margo_instance_id                 mid,
 void margo_breadcrumb_snapshot(margo_instance_id                 mid,
                                struct margo_breadcrumb_snapshot* snap)
 {
-    assert(mid->profile_enabled);
     struct diag_data *       dd, *tmp;
     struct margo_breadcrumb* tmp_bc;
 
-#if 0
-  fprintf(stderr, "Taking a snapshot\n");
-#endif
+    memset(snap, 0, sizeof(*snap));
+
+    if (!mid->profile_enabled) return;
 
     snap->ptr = calloc(1, sizeof(struct margo_breadcrumb));
     tmp_bc    = snap->ptr;
 
     HASH_ITER(hh, mid->diag_rpc, dd, tmp)
     {
-#if 0
-    fprintf(stderr, "Copying out RPC breadcrumb %d\n", dd->rpc_breadcrumb);
-#endif
         tmp_bc->stats.min        = dd->stats.min;
         tmp_bc->stats.max        = dd->stats.max;
         tmp_bc->type             = dd->type;
@@ -705,6 +702,40 @@ void margo_state_dump(margo_instance_id mid,
     }
 
     if (outfile != stdout) fclose(outfile);
+
+    return;
+}
+
+void __margo_sparkline_thread_stop(margo_instance_id mid)
+{
+    if (!mid->profile_enabled) return;
+
+    MARGO_TRACE(mid,
+                "Waiting for sparkline data collection thread to complete");
+    ABT_thread_join(mid->sparkline_data_collection_tid);
+    ABT_thread_free(&mid->sparkline_data_collection_tid);
+
+    return;
+}
+
+void __margo_sparkline_thread_start(margo_instance_id mid)
+{
+    int ret;
+
+    if (!mid->profile_enabled) return;
+
+    MARGO_TRACE(mid, "Profiling is enabled, starting profiling thread");
+    mid->previous_sparkline_data_collection_time = ABT_get_wtime();
+
+    ret = ABT_thread_create(
+        mid->progress_pool, __margo_sparkline_data_collection_fn, mid,
+        ABT_THREAD_ATTR_NULL, &mid->sparkline_data_collection_tid);
+    if (ret != ABT_SUCCESS) {
+        MARGO_WARNING(
+            0,
+            "Failed to start sparkline data collection thread, "
+            "continuing to profile without sparkline data collection");
+    }
 
     return;
 }

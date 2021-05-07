@@ -287,10 +287,7 @@ void margo_finalize(margo_instance_id mid)
     __margo_timer_list_free(mid, mid->timer_list);
 
     if (mid->profile_enabled) {
-        MARGO_TRACE(mid,
-                    "Waiting for sparkline data collection thread to complete");
-        ABT_thread_join(mid->sparkline_data_collection_tid);
-        ABT_thread_free(&mid->sparkline_data_collection_tid);
+        __margo_sparkline_thread_stop(mid);
 
         MARGO_TRACE(mid, "Dumping profile");
         margo_profile_dump(mid, "profile", 1);
@@ -549,28 +546,27 @@ hg_id_t margo_provider_register_name(margo_instance_id mid,
 
     id = gen_id(func_name, provider_id);
 
-    if (mid->profile_enabled) {
-        /* track information about this rpc registration for debugging and
-         * profiling
-         */
-        tmp_rpc = calloc(1, sizeof(*tmp_rpc));
-        if (!tmp_rpc) return (0);
-        tmp_rpc->id                      = id;
-        tmp_rpc->rpc_breadcrumb_fragment = id >> (__MARGO_PROVIDER_ID_SIZE * 8);
-        tmp_rpc->rpc_breadcrumb_fragment &= 0xffff;
-        strncpy(tmp_rpc->func_name, func_name, 63);
-        tmp_rpc->next        = mid->registered_rpcs;
-        mid->registered_rpcs = tmp_rpc;
-        mid->num_registered_rpcs += 1;
-    }
+    /* track information about this rpc registration for debugging and
+     * profiling
+     * NOTE: we do this even if profiling is currently disabled; it may be
+     * enabled later on at run time.
+     */
+    tmp_rpc = calloc(1, sizeof(*tmp_rpc));
+    if (!tmp_rpc) return (0);
+    tmp_rpc->id                      = id;
+    tmp_rpc->rpc_breadcrumb_fragment = id >> (__MARGO_PROVIDER_ID_SIZE * 8);
+    tmp_rpc->rpc_breadcrumb_fragment &= 0xffff;
+    strncpy(tmp_rpc->func_name, func_name, 63);
+    tmp_rpc->next        = mid->registered_rpcs;
+    mid->registered_rpcs = tmp_rpc;
+    mid->num_registered_rpcs++;
 
     ret = margo_register_internal(mid, id, in_proc_cb, out_proc_cb, rpc_cb,
                                   pool);
     if (ret == 0) {
-        if (mid->profile_enabled) {
-            mid->registered_rpcs = tmp_rpc->next;
-            free(tmp_rpc);
-        }
+        mid->registered_rpcs = tmp_rpc->next;
+        free(tmp_rpc);
+        mid->num_registered_rpcs--;
         return (id);
     }
 
@@ -1486,6 +1482,8 @@ void __margo_hg_progress_fn(void* foo)
 
 int margo_set_param(margo_instance_id mid, const char* key, const char* value)
 {
+    int old_enable_profiling = 0;
+
     if (strcmp(key, "progress_timeout_ub_msecs") == 0) {
         MARGO_TRACE(0, "Setting progress_timeout_ub_msecs to %s", value);
         int progress_timeout_ub_msecs = atoi(value);
@@ -1520,7 +1518,15 @@ int margo_set_param(margo_instance_id mid, const char* key, const char* value)
     if (strcmp(key, "enable_profiling") == 0) {
         MARGO_TRACE(0, "Setting enable_profiling to %s", value);
         bool enable_profiling = atoi(value);
+        old_enable_profiling  = mid->profile_enabled;
         mid->profile_enabled  = enable_profiling;
+        if (!old_enable_profiling && enable_profiling) {
+            /* toggle from off to on */
+            __margo_sparkline_thread_start(mid);
+        } else if (old_enable_profiling && !enable_profiling) {
+            /* toggle from on to off */
+            __margo_sparkline_thread_stop(mid);
+        }
         json_object_object_add(mid->json_cfg, "enable_profiling",
                                json_object_new_boolean(enable_profiling));
         return (0);
