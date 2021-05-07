@@ -1256,6 +1256,16 @@ void margo_breadcrumb_snapshot(margo_instance_id                 mid,
                                struct margo_breadcrumb_snapshot* snap);
 
 /**
+ * Releases resources associated with a breadcrumb snapshot
+ *
+ * @param [in] mid Margo instance
+ * @param [in] snap Margo diagnostics snapshot
+ * @returns void
+ */
+void margo_breadcrumb_snapshot_destroy(margo_instance_id                 mid,
+                                       struct margo_breadcrumb_snapshot* snap);
+
+/**
  * Sets configurable parameters/hints
  *
  * @param [in] mid Margo instance

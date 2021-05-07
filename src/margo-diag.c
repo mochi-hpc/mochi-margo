@@ -282,6 +282,18 @@ uint64_t __margo_breadcrumb_set(hg_id_t rpc_id)
     return *val;
 }
 
+void margo_breadcrumb_snapshot_destroy(margo_instance_id                 mid,
+                                       struct margo_breadcrumb_snapshot* snap)
+{
+    struct margo_breadcrumb* tmp_bc      = snap->ptr;
+    struct margo_breadcrumb* tmp_bc_next = NULL;
+    while (tmp_bc) {
+        tmp_bc_next = tmp_bc->next;
+        free(tmp_bc);
+        tmp_bc = tmp_bc_next;
+    }
+}
+
 /* copy out the entire list of breadcrumbs on this margo instance */
 void margo_breadcrumb_snapshot(margo_instance_id                 mid,
                                struct margo_breadcrumb_snapshot* snap)

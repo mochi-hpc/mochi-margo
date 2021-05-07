@@ -150,6 +150,7 @@ static MunitResult breadcrumb_snapshot(const MunitParameter params[], void *data
     struct test_context *ctx = (struct test_context *)data;
     struct margo_breadcrumb_snapshot snap;
     margo_breadcrumb_snapshot(ctx->mid,  &snap);
+    margo_breadcrumb_snapshot_destroy(ctx->mid,  &snap);
     return MUNIT_OK;
 }
 
