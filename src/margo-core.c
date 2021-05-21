@@ -106,6 +106,7 @@ margo_instance_id margo_init(const char* addr_str,
     return margo_init_ext(addr_str, mode, &args);
 }
 
+// LCOV_EXCL_START
 margo_instance_id margo_init_opt(const char*                addr_str,
                                  int                        mode,
                                  const struct hg_init_info* hg_init_info,
@@ -123,7 +124,9 @@ margo_instance_id margo_init_opt(const char*                addr_str,
 
     return margo_init_ext(addr_str, mode, &args);
 }
+// LCOV_EXCL_END
 
+// LCOV_EXCL_START
 margo_instance_id margo_init_pool(ABT_pool      progress_pool,
                                   ABT_pool      rpc_pool,
                                   hg_context_t* hg_context)
@@ -138,6 +141,7 @@ margo_instance_id margo_init_pool(ABT_pool      progress_pool,
 
     return margo_init_ext(NULL, listening, &args);
 }
+// LCOV_EXCL_END
 
 static void margo_cleanup(margo_instance_id mid)
 {
