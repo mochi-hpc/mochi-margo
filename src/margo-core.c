@@ -519,15 +519,19 @@ int margo_shutdown_remote_instance(margo_instance_id mid, hg_addr_t remote_addr)
 
     hret = margo_forward(handle, NULL);
     if (hret != HG_SUCCESS) {
+        // LCOV_EXCL_START
         margo_destroy(handle);
         return -1;
+        // LCOV_EXCL_END
     }
 
     margo_shutdown_out_t out;
     hret = margo_get_output(handle, &out);
     if (hret != HG_SUCCESS) {
+        // LCOV_EXCL_START
         margo_destroy(handle);
         return -1;
+        // LCOV_EXCL_END
     }
 
     margo_free_output(handle, &out);
@@ -797,7 +801,6 @@ static hg_return_t margo_cb(const struct hg_cb_info* info)
          * information.
          */
         mid = margo_hg_handle_get_instance(req->handle);
-        assert(mid);
 
         if (mid->profile_enabled) {
             /* 0 here indicates this is a origin-side call */
@@ -895,10 +898,12 @@ static hg_return_t margo_provider_iforward_internal(
     if (timeout_ms > 0) {
         /* set a timer object to expire when this forward times out */
         req->timer = calloc(1, sizeof(*(req->timer)));
+        // LCOV_EXCL_START
         if (!(req->timer)) {
             ABT_eventual_free(&eventual);
             return (HG_NOMEM_ERROR);
         }
+        // LCOV_EXCL_END
         __margo_timer_init(mid, req->timer, margo_forward_timeout_cb, req,
                            timeout_ms);
     }
@@ -1017,8 +1022,10 @@ try_again:
             has_pending_requests = 1;
         ret = margo_test(req[i], &flag);
         if (ret != ABT_SUCCESS) {
+            // LCOV_EXCL_START
             *index = i;
             return HG_OTHER_ERROR;
+            // LCOV_EXCL_END
         }
         if (flag) {
             *index = i;
@@ -1187,12 +1194,14 @@ hg_return_t margo_bulk_parallel_transfer(margo_instance_id mid,
 
     for (i = 0; i < count; i++) {
         if (remaining_size < chunk_size) chunk_size = remaining_size;
-        hret = margo_bulk_itransfer_internal(
+        hret_xfer = margo_bulk_itransfer_internal(
             mid, op, origin_addr, origin_handle, origin_offset, local_handle,
             local_offset, chunk_size, reqs + i);
         if (hret_xfer != HG_SUCCESS) {
+            // LCOV_EXCL_START
             hret = hret_xfer;
             goto wait;
+            // LCOV_EXCL_END
         }
         origin_offset += chunk_size;
         local_offset += chunk_size;
@@ -1202,8 +1211,10 @@ wait:
     for (j = 0; j < i; j++) {
         hret_wait = margo_wait_internal(reqs + j);
         if (hret == HG_SUCCESS && hret_wait != HG_SUCCESS) {
+            // LCOV_EXCL_START
             hret = hret_wait;
             goto finish;
+            // LCOV_EXCL_END
         }
     }
 finish:
@@ -1566,8 +1577,10 @@ static hg_id_t margo_register_internal(margo_instance_id mid,
         hret = HG_Register_data(mid->hg_class, id, margo_data,
                                 margo_rpc_data_free);
         if (hret != HG_SUCCESS) {
+            // LCOV_EXCL_START
             free(margo_data);
             return (0);
+            // LCOV_EXCL_END
         }
     }
 
@@ -1625,7 +1638,15 @@ void __margo_internal_pre_wrapper_hooks(margo_instance_id mid,
     struct margo_request_struct* req;
 
     ret = HG_Get_input_buf(handle, (void**)&rpc_breadcrumb, NULL);
-    assert(ret == HG_SUCCESS);
+    if (ret != HG_SUCCESS) {
+        // LCOV_EXCL_START
+        MARGO_CRITICAL(mid,
+                       "HG_Get_input_buf() failed in "
+                       "__margo_internal_pre_wrapper_hooks (ret = %d)",
+                       ret);
+        exit(-1);
+        // LCOV_EXCL_END
+    }
     *rpc_breadcrumb = le64toh(*rpc_breadcrumb);
 
     /* add the incoming breadcrumb info to a ULT-local key if profiling is
