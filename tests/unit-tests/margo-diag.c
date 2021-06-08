@@ -116,7 +116,7 @@ static MunitResult profile_start(const MunitParameter params[], void* data)
 }
 
 static char * name_params[] = {
-    "-", "dummy-profile", "/tmp/dummy-profile", NULL
+    "-", "dummy-profile", "/tmp/dummy-profile", "../tooth/fairy/dummy-profile", NULL
 };
 static char * uniqified_params[] = {
     "0", "1", NULL
