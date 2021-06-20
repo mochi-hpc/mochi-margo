@@ -994,10 +994,17 @@ validate_and_complete_config(struct json_object*        _margo,
                 if (use_progress_thread) {
                     // create a specific pool, scheduler, and xstream for the
                     // progress loop
-                    MARGO_TRACE(0, "Creating __progress__ pool");
-                    CONFIG_ADD_NEW_POOL(_pools, "__progress__", "fifo_wait",
-                                        "mpmc");
-                    int pool_index = json_object_array_length(_pools) - 1;
+                    int pool_index = -1;
+                    // check if __progress__ pool already defined
+                    CONFIG_FIND_BY_NAME(_pools, "__progress__", pool_index,
+                                        ignore);
+                    if (pool_index == -1) {
+                        // create __progress__ pool only if it does not exist
+                        MARGO_TRACE(0, "Creating __progress__ pool");
+                        CONFIG_ADD_NEW_POOL(_pools, "__progress__", "fifo_wait",
+                                            "mpmc");
+                        pool_index = json_object_array_length(_pools) - 1;
+                    }
                     MARGO_TRACE(0, "Creating __progress__ xstream");
                     CONFIG_ADD_NEW_XSTREAM(_xstreams, "__progress__",
                                            "basic_wait", pool_index);
@@ -1134,10 +1141,16 @@ validate_and_complete_config(struct json_object*        _margo,
                                            json_object_copy(_first_pool_ref));
                     MARGO_TRACE(0, "rpc_pool = %d",
                                 json_object_get_int64(_first_pool_ref));
-                } else { // define a new pool and some new xstreams
-                    MARGO_TRACE(0, "Creating new __rpc__ pool");
-                    CONFIG_ADD_NEW_POOL(_pools, "__rpc__", "fifo_wait", "mpmc");
-                    int pool_index = json_object_array_length(_pools) - 1;
+                } else { // define a new pool (if not present) and some new
+                         // xstreams
+                    int pool_index;
+                    CONFIG_FIND_BY_NAME(_pools, "__rpc__", pool_index, ignore);
+                    if (pool_index == -1) {
+                        MARGO_TRACE(0, "Creating new __rpc__ pool");
+                        CONFIG_ADD_NEW_POOL(_pools, "__rpc__", "fifo_wait",
+                                            "mpmc");
+                        int pool_index = json_object_array_length(_pools) - 1;
+                    }
                     for (int i = 0; i < rpc_thread_count; i++) {
                         char name[64];
                         snprintf(name, 64, "__rpc_%d__", i);
