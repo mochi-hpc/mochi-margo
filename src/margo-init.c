@@ -934,6 +934,12 @@ validate_and_complete_config(struct json_object*        _margo,
                               "Ignoring \"use_progress_thread\" because custom "
                               "progress pool was provided\n");
             }
+            if (CONFIG_HAS(_pools, "__progress__", ignore)) {
+                MARGO_WARNING(
+                    0,
+                    "__progress__ pool defined by will NOT be used "
+                    "for progress since custom progress pool was provided");
+            }
 
         } else { // no custom pool provided as argument
 
@@ -1017,6 +1023,13 @@ validate_and_complete_config(struct json_object*        _margo,
                     struct json_object* _primary_xstream       = NULL;
                     struct json_object* _primary_sched         = NULL;
                     int                 _primary_xstream_index = -1;
+                    if (CONFIG_HAS(_pools, "__progress__", ignore))
+                        MARGO_WARNING(
+                            0,
+                            "__progress__ pool defined but will NOT be"
+                            " used for progress unless it is the first pool of "
+                            "the"
+                            " __primary__ ES");
                     // find __primary__ xstream
                     CONFIG_FIND_BY_NAME(_xstreams, "__primary__",
                                         _primary_xstream_index,
@@ -1050,8 +1063,13 @@ validate_and_complete_config(struct json_object*        _margo,
             CONFIG_OVERRIDE_INTEGER(_margo, "rpc_pool", -1, "rpc_pool", 1);
             if (CONFIG_HAS(_margo, "rpc_thread_count", ignore)) {
                 MARGO_WARNING(0,
-                              "Ignoring \"rpc_thread_count\" because custom "
+                              "\"rpc_thread_count\" ignored because custom "
                               "RPC pool was provided");
+            }
+            if (CONFIG_HAS(_pools, "__rpc__", ignore)) {
+                MARGO_WARNING(0,
+                              "__rpc__ pool defined by will NOT be used "
+                              "for RPCs since custom RPC pool was provided");
             }
 
         } else { // no custom pool provided as argument
@@ -1062,7 +1080,7 @@ validate_and_complete_config(struct json_object*        _margo,
                                ignore)) { // rpc_pool and rpc_thread_count both
                                           // specified
                     MARGO_WARNING(0,
-                                  "Ignoring \"rpc_thread_count\" ignored "
+                                  "\"rpc_thread_count\" ignored"
                                   "because \"rpc_pool\" is specified");
                 }
                 int rpc_pool_index = -1;
@@ -1106,6 +1124,11 @@ validate_and_complete_config(struct json_object*        _margo,
                         json_object_object_get(_margo, "rpc_thread_count"));
                 }
                 if (rpc_thread_count < 0) { // use progress loop's pool
+                    if (CONFIG_HAS(_pools, "__rpc__", ignore))
+                        MARGO_WARNING(0,
+                                      "__rpc__ pool defined but will NOT be the"
+                                      " pool used for RPC unless it is also "
+                                      "used as progress pool");
                     struct json_object* _progress_pool
                         = json_object_object_get(_margo, "progress_pool");
                     struct json_object* _rpc_pool
@@ -1114,6 +1137,12 @@ validate_and_complete_config(struct json_object*        _margo,
                     MARGO_TRACE(0, "rpc_pool = %d",
                                 json_object_get_int64(_rpc_pool));
                 } else if (rpc_thread_count == 0) { // use primary pool
+                    if (CONFIG_HAS(_pools, "__rpc__", ignore))
+                        MARGO_WARNING(
+                            0,
+                            "__rpc__ pool defined but will NOT be"
+                            " used for RPCs unless it is the first pool of the"
+                            " __primary__ ES");
                     // use primary xstream's scheduler's first pool for the RPC
                     // loop
                     struct json_object* _primary_xstream       = NULL;
