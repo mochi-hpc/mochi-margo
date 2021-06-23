@@ -26,15 +26,20 @@ static void test_context_tear_down(void *data)
 /* test repeated init/finalize cycles, server mode */
 static MunitResult init_cycle_server(const MunitParameter params[], void* data)
 {
-    char * protocol = "na+sm";
+    const char* protocol = munit_parameters_get(params, "protocol");
+    int use_progress_thread = atoi(munit_parameters_get(params, "use_progress_thread"));
+    int rpc_thread_count = atoi(munit_parameters_get(params, "rpc_thread_count"));
+
     struct test_context* ctx = (struct test_context*)data;
 
-    ctx->mid = margo_init(protocol, MARGO_SERVER_MODE, 0, 0);
+    ctx->mid = margo_init(protocol, MARGO_SERVER_MODE,
+                          use_progress_thread, rpc_thread_count);
     munit_assert_not_null(ctx->mid);
 
     margo_finalize(ctx->mid);
 
-    ctx->mid = margo_init(protocol, MARGO_SERVER_MODE, 0, 0);
+    ctx->mid = margo_init(protocol, MARGO_SERVER_MODE,
+                          use_progress_thread, rpc_thread_count);
     munit_assert_not_null(ctx->mid);
 
     margo_finalize(ctx->mid);
@@ -45,15 +50,20 @@ static MunitResult init_cycle_server(const MunitParameter params[], void* data)
 /* test repeated init/finalize cycles, client mode */
 static MunitResult init_cycle_client(const MunitParameter params[], void* data)
 {
-    char * protocol = "na+sm";
+    const char* protocol = munit_parameters_get(params, "protocol");
+    int use_progress_thread = atoi(munit_parameters_get(params, "use_progress_thread"));
+    int rpc_thread_count = atoi(munit_parameters_get(params, "rpc_thread_count"));
+
     struct test_context* ctx = (struct test_context*)data;
 
-    ctx->mid = margo_init(protocol, MARGO_CLIENT_MODE, 0, 0);
+    ctx->mid = margo_init(protocol, MARGO_CLIENT_MODE,
+                          use_progress_thread, rpc_thread_count);
     munit_assert_not_null(ctx->mid);
 
     margo_finalize(ctx->mid);
 
-    ctx->mid = margo_init(protocol, MARGO_CLIENT_MODE, 0, 0);
+    ctx->mid = margo_init(protocol, MARGO_CLIENT_MODE,
+                          use_progress_thread, rpc_thread_count);
     munit_assert_not_null(ctx->mid);
 
     margo_finalize(ctx->mid);
@@ -61,9 +71,28 @@ static MunitResult init_cycle_client(const MunitParameter params[], void* data)
     return MUNIT_OK;
 }
 
+static char* protocol_params[] = {
+    "na+sm", "ofi+tcp", NULL
+};
+
+static char* use_progress_thread_params[] = {
+    "0","1", NULL
+};
+
+static char* rpc_thread_count_params[] = {
+    "0", "1", "2", "-1", NULL
+};
+
+static MunitParameterEnum test_params[] = {
+    { "protocol", protocol_params },
+    { "use_progress_thread", use_progress_thread_params },
+    { "rpc_thread_count", rpc_thread_count_params },
+    { NULL, NULL }
+};
+
 static MunitTest tests[] = {
-    { "/init-cycle-client", init_cycle_client, test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, NULL},
-    { "/init-cycle-server", init_cycle_server, test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, NULL},
+    { "/init-cycle-client", init_cycle_client, test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
+    { "/init-cycle-server", init_cycle_server, test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
 };
 

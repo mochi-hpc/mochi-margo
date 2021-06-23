@@ -931,13 +931,13 @@ validate_and_complete_config(struct json_object*        _margo,
                                     "progress_pool", 1);
             if (CONFIG_HAS(_margo, "use_progress_thread", ignore)) {
                 MARGO_WARNING(0,
-                              "Ignoring \"use_progress_thread\" because custom "
-                              "progress pool was provided\n");
+                              "\"use_progress_thread\" ignored because custom "
+                              "progress pool was provided");
             }
             if (CONFIG_HAS(_pools, "__progress__", ignore)) {
                 MARGO_WARNING(
                     0,
-                    "__progress__ pool defined by will NOT be used "
+                    "__progress__ pool defined but will NOT be used "
                     "for progress since custom progress pool was provided");
             }
 
@@ -950,11 +950,12 @@ validate_and_complete_config(struct json_object*        _margo,
                                ignore)) { // progress_pool and
                                           // use_progress_thread both specified
                     MARGO_WARNING(0,
-                                  "Ignoring \"use_progress_thread\" because "
-                                  "\"progress_pool\" is specified\n");
+                                  "\"use_progress_thread\" ignored because "
+                                  "\"progress_pool\" was provided");
                 }
                 int progress_pool_index = -1;
                 if (json_object_is_type(_progress_pool, json_type_string)) {
+                    // progres_pool specified by name
                     const char* progress_pool_name
                         = json_object_get_string(_progress_pool);
                     CONFIG_ARRAY_MUST_HAVE_ITEM_NAMED(
@@ -962,6 +963,7 @@ validate_and_complete_config(struct json_object*        _margo,
                     CONFIG_FIND_BY_NAME(_pools, progress_pool_name,
                                         progress_pool_index, ignore);
                 } else if (json_object_is_type(_progress_pool, json_type_int)) {
+                    // progress_pool specified by index
                     progress_pool_index = json_object_get_int64(_progress_pool);
                     if ((progress_pool_index < -1)
                         || (progress_pool_index
@@ -972,6 +974,7 @@ validate_and_complete_config(struct json_object*        _margo,
                         return -1;
                     }
                 } else {
+                    // invalid type for progress_pool field
                     MARGO_ERROR(0,
                                 "\"progress_pool\" should be of type integer "
                                 "or string");
@@ -983,10 +986,11 @@ validate_and_complete_config(struct json_object*        _margo,
                     json_object_new_int64(progress_pool_index));
                 MARGO_TRACE(0, "progress_pool = %d", progress_pool_index);
             } else {
+                // progress_pool not specified, we will try to find
+                // use_progress_thread
                 bool use_progress_thread = 0;
                 if (CONFIG_HAS(_margo, "use_progress_thread",
                                ignore)) { // use_progress_thread specified,
-                                          // progress_pool not specified
                     if (!json_object_is_type(json_object_object_get(
                                                  _margo, "use_progress_thread"),
                                              json_type_boolean)) {
@@ -1011,6 +1015,8 @@ validate_and_complete_config(struct json_object*        _margo,
                                             "mpmc");
                         pool_index = json_object_array_length(_pools) - 1;
                     }
+                    // create new xstream called __progress__ associated with
+                    // the pool
                     MARGO_TRACE(0, "Creating __progress__ xstream");
                     CONFIG_ADD_NEW_XSTREAM(_xstreams, "__progress__",
                                            "basic_wait", pool_index);
@@ -1023,13 +1029,13 @@ validate_and_complete_config(struct json_object*        _margo,
                     struct json_object* _primary_xstream       = NULL;
                     struct json_object* _primary_sched         = NULL;
                     int                 _primary_xstream_index = -1;
-                    if (CONFIG_HAS(_pools, "__progress__", ignore))
+                    if (CONFIG_HAS(_pools, "__progress__", ignore)) {
                         MARGO_WARNING(
                             0,
                             "__progress__ pool defined but will NOT be"
                             " used for progress unless it is the first pool of "
-                            "the"
-                            " __primary__ ES");
+                            "the __primary__ ES");
+                    }
                     // find __primary__ xstream
                     CONFIG_FIND_BY_NAME(_xstreams, "__primary__",
                                         _primary_xstream_index,
@@ -1053,6 +1059,7 @@ validate_and_complete_config(struct json_object*        _margo,
             }
         }
     }
+    // delete the "use_progress_thread" field
     json_object_object_del(_margo, "use_progress_thread");
 
     { // handle rpc_thread_count and rpc_pool
@@ -1076,15 +1083,17 @@ validate_and_complete_config(struct json_object*        _margo,
 
             struct json_object* _rpc_pool = NULL;
             if (CONFIG_HAS(_margo, "rpc_pool", _rpc_pool)) {
+                // rpc_pool field specified
                 if (CONFIG_HAS(_margo, "rpc_thread_count",
                                ignore)) { // rpc_pool and rpc_thread_count both
                                           // specified
                     MARGO_WARNING(0,
                                   "\"rpc_thread_count\" ignored"
-                                  "because \"rpc_pool\" is specified");
+                                  "because \"rpc_pool\" is provided");
                 }
                 int rpc_pool_index = -1;
                 if (json_object_is_type(_rpc_pool, json_type_string)) {
+                    // rpc_pool specified as a string
                     const char* rpc_pool_name
                         = json_object_get_string(_rpc_pool);
                     CONFIG_ARRAY_MUST_HAVE_ITEM_NAMED(_pools, rpc_pool_name,
@@ -1092,6 +1101,7 @@ validate_and_complete_config(struct json_object*        _margo,
                     CONFIG_FIND_BY_NAME(_pools, rpc_pool_name, rpc_pool_index,
                                         ignore);
                 } else if (json_object_is_type(_rpc_pool, json_type_int)) {
+                    // rpc_pool specified as an integer
                     rpc_pool_index = json_object_get_int64(_rpc_pool);
                     if (rpc_pool_index < -1
                         || rpc_pool_index
@@ -1101,6 +1111,7 @@ validate_and_complete_config(struct json_object*        _margo,
                         return -1;
                     }
                 } else {
+                    // rpc_pool has invalid type
                     MARGO_ERROR(
                         0, "\"rpc_pool\" should be of type integer or string");
                     return -1;
@@ -1122,13 +1133,16 @@ validate_and_complete_config(struct json_object*        _margo,
                     }
                     rpc_thread_count = json_object_get_int64(
                         json_object_object_get(_margo, "rpc_thread_count"));
+                    MARGO_TRACE(0, "\"rpc_thread_count\" found to be %d",
+                                rpc_thread_count);
                 }
                 if (rpc_thread_count < 0) { // use progress loop's pool
-                    if (CONFIG_HAS(_pools, "__rpc__", ignore))
+                    if (CONFIG_HAS(_pools, "__rpc__", ignore)) {
                         MARGO_WARNING(0,
                                       "__rpc__ pool defined but will NOT be the"
                                       " pool used for RPC unless it is also "
                                       "used as progress pool");
+                    }
                     struct json_object* _progress_pool
                         = json_object_object_get(_margo, "progress_pool");
                     struct json_object* _rpc_pool
@@ -1137,26 +1151,24 @@ validate_and_complete_config(struct json_object*        _margo,
                     MARGO_TRACE(0, "rpc_pool = %d",
                                 json_object_get_int64(_rpc_pool));
                 } else if (rpc_thread_count == 0) { // use primary pool
-                    if (CONFIG_HAS(_pools, "__rpc__", ignore))
+                    if (CONFIG_HAS(_pools, "__rpc__", ignore)) {
                         MARGO_WARNING(
                             0,
                             "__rpc__ pool defined but will NOT be"
                             " used for RPCs unless it is the first pool of the"
                             " __primary__ ES");
+                    }
                     // use primary xstream's scheduler's first pool for the RPC
                     // loop
                     struct json_object* _primary_xstream       = NULL;
                     struct json_object* _primary_sched         = NULL;
                     int                 _primary_xstream_index = -1;
-                    int                 _primary_pool_index    = -1;
                     // find __primary__ xstream
                     CONFIG_FIND_BY_NAME(_xstreams, "__primary__",
                                         _primary_xstream_index,
                                         _primary_xstream);
                     (void)_primary_xstream_index; // silence warning because we
                                                   // are not using it
-                    (void)_primary_pool_index; // silence warning because we are
-                                               // not using it
                     // find its scheduler
                     _primary_sched
                         = json_object_object_get(_primary_xstream, "scheduler");
@@ -1172,13 +1184,13 @@ validate_and_complete_config(struct json_object*        _margo,
                                 json_object_get_int64(_first_pool_ref));
                 } else { // define a new pool (if not present) and some new
                          // xstreams
-                    int pool_index;
+                    int pool_index = -1;
                     CONFIG_FIND_BY_NAME(_pools, "__rpc__", pool_index, ignore);
                     if (pool_index == -1) {
                         MARGO_TRACE(0, "Creating new __rpc__ pool");
                         CONFIG_ADD_NEW_POOL(_pools, "__rpc__", "fifo_wait",
                                             "mpmc");
-                        int pool_index = json_object_array_length(_pools) - 1;
+                        pool_index = json_object_array_length(_pools) - 1;
                     }
                     for (int i = 0; i < rpc_thread_count; i++) {
                         char name[64];
