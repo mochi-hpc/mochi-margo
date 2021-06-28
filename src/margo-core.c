@@ -231,17 +231,12 @@ static void margo_cleanup(margo_instance_id mid)
     json_object_put(mid->json_cfg);
 
     MARGO_TRACE(mid, "Cleaning up margo instance");
-    // IMPORTANT: we are not supposed to free the pools ourselves
-    // since they are marked with automatic=true when created.
-    // However custom pools such as prio_wait don't have the
-    // automatic argument, so they should be freed... we need
-    // to have margo better track which pools should be freed.
-    /*
+    /* free any pools that Margo itself is reponsible for */
     for (unsigned i = 0; i < mid->num_abt_pools; i++) {
-        if (mid->abt_pools[i] != ABT_POOL_NULL)
-            ABT_pool_free(&mid->abt_pools[i]);
+        if (mid->abt_pools[i].margo_free_flag
+            && mid->abt_pools[i].pool != ABT_POOL_NULL)
+            ABT_pool_free(&mid->abt_pools[i].pool);
     }
-    */
     free(mid->abt_pools);
     free(mid->abt_xstreams);
     free(mid->owns_abt_xstream);

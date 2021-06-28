@@ -70,6 +70,14 @@ struct margo_registered_rpc {
     struct margo_registered_rpc* next; /* pointer to next in list */
 };
 
+/* Struct to track pools created by margo along with a flag indicating if
+ * margo is responsible for explicitly free'ing the pool or not.
+ */
+struct margo_abt_pool {
+    ABT_pool pool;            /* Argobots pool */
+    bool     margo_free_flag; /* flag if Margo is responsible for freeing */
+};
+
 struct margo_instance {
     /* json config */
     struct json_object* json_cfg;
@@ -82,11 +90,11 @@ struct margo_instance {
     ABT_pool      rpc_pool;
 
     /* xstreams and pools built from argobots config */
-    ABT_pool*    abt_pools;
-    ABT_xstream* abt_xstreams;
-    unsigned     num_abt_pools;
-    unsigned     num_abt_xstreams;
-    bool*        owns_abt_xstream;
+    struct margo_abt_pool* abt_pools;
+    ABT_xstream*           abt_xstreams;
+    unsigned               num_abt_pools;
+    unsigned               num_abt_xstreams;
+    bool*                  owns_abt_xstream;
 
     /* internal to margo for this particular instance */
     ABT_thread hg_progress_tid;
