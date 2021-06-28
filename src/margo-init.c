@@ -36,17 +36,17 @@ static void fill_hg_init_info_from_config(struct json_object*  _config,
 // Reads a pool configuration and instantiate the
 // corresponding ABT_pool, returning ABT_SUCCESS
 // or other ABT error codes
-static int create_pool_from_config(struct json_object* pool_config,
-                                   ABT_pool*           pool);
+static int create_pool_from_config(struct json_object*    pool_config,
+                                   struct margo_abt_pool* mpool);
 
 // Reads an xstream configuration and instantiate
 // the corresponding ABT_xstream, returning ABT_SUCCESS
 // or other ABT error codes
-static int create_xstream_from_config(struct json_object* es_config,
-                                      ABT_xstream*        es,
-                                      bool*               own_xstream,
-                                      const ABT_pool*     pools,
-                                      size_t              num_pools);
+static int create_xstream_from_config(struct json_object*          es_config,
+                                      ABT_xstream*                 es,
+                                      bool*                        own_xstream,
+                                      const struct margo_abt_pool* mpools,
+                                      size_t                       num_pools);
 
 // Sets environment variables for Argobots
 static void set_argobots_environment_variables(struct json_object* config);
@@ -67,20 +67,20 @@ margo_instance_id margo_init_ext(const char*                   address,
     hg_return_t         hret;
     margo_instance_id   mid = MARGO_INSTANCE_NULL;
 
-    hg_class_t*         hg_class      = NULL;
-    hg_context_t*       hg_context    = NULL;
-    uint8_t             hg_ownership  = 0;
-    struct hg_init_info hg_init_info  = HG_INIT_INFO_INITIALIZER;
-    hg_addr_t           self_addr     = HG_ADDR_NULL;
-    ABT_pool*           pools         = NULL;
-    size_t              num_pools     = 0;
-    ABT_xstream*        xstreams      = NULL;
-    bool*               owns_xstream  = NULL;
-    size_t              num_xstreams  = 0;
-    ABT_pool            progress_pool = ABT_POOL_NULL;
-    ABT_pool            rpc_pool      = ABT_POOL_NULL;
-    ABT_bool            tool_enabled;
-    char*               name;
+    hg_class_t*            hg_class      = NULL;
+    hg_context_t*          hg_context    = NULL;
+    uint8_t                hg_ownership  = 0;
+    struct hg_init_info    hg_init_info  = HG_INIT_INFO_INITIALIZER;
+    hg_addr_t              self_addr     = HG_ADDR_NULL;
+    struct margo_abt_pool* pools         = NULL;
+    size_t                 num_pools     = 0;
+    ABT_xstream*           xstreams      = NULL;
+    bool*                  owns_xstream  = NULL;
+    size_t                 num_xstreams  = 0;
+    ABT_pool               progress_pool = ABT_POOL_NULL;
+    ABT_pool               rpc_pool      = ABT_POOL_NULL;
+    ABT_bool               tool_enabled;
+    char*                  name;
 
     if (args.json_config && strlen(args.json_config) > 0) {
         // read JSON config from provided string argument
@@ -204,7 +204,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     struct json_object* pools_config
         = json_object_object_get(argobots_config, "pools");
     num_pools = json_object_array_length(pools_config);
-    pools     = calloc(sizeof(ABT_pool), num_pools);
+    pools     = calloc(sizeof(*pools), num_pools);
     if (!pools) {
         MARGO_ERROR(0, "Could not allocate pools array");
         goto error;
@@ -242,7 +242,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     if (progress_pool_index == -1)
         progress_pool = args.progress_pool;
     else
-        progress_pool = pools[progress_pool_index];
+        progress_pool = pools[progress_pool_index].pool;
 
     // find rpc pool
     MARGO_TRACE(0, "Finding RPC pool");
@@ -251,7 +251,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     if (rpc_pool_index == -1)
         rpc_pool = args.rpc_pool;
     else
-        rpc_pool = pools[rpc_pool_index];
+        rpc_pool = pools[rpc_pool_index].pool;
 
     // set input offset to include breadcrumb information in Mercury requests
     MARGO_TRACE(0, "Setting input offset in hg_class as %d", sizeof(uint64_t));
@@ -1242,8 +1242,8 @@ static void fill_hg_init_info_from_config(struct json_object*  config,
         = json_object_get_int64(json_object_object_get(hg, "max_contexts"));
 }
 
-static int create_pool_from_config(struct json_object* pool_config,
-                                   ABT_pool*           pool)
+static int create_pool_from_config(struct json_object*    pool_config,
+                                   struct margo_abt_pool* mpool)
 {
     int          ret;
     ABT_pool_def prio_pool_def;
@@ -1278,18 +1278,21 @@ static int create_pool_from_config(struct json_object* pool_config,
 
     if (strcmp(jkind, "prio_wait") == 0) {
         margo_create_prio_pool_def(&prio_pool_def);
-        // XXX there is no way to pass an "automatic" argument to a
-        // custom pool so technically we will be letting those pools
-        // leak, at the moment.
-        ret = ABT_pool_create(&prio_pool_def, ABT_POOL_CONFIG_NULL, pool);
+        ret = ABT_pool_create(&prio_pool_def, ABT_POOL_CONFIG_NULL,
+                              &mpool->pool);
         if (ret != ABT_SUCCESS) {
             MARGO_ERROR(
                 0, "ABT_pool_create failed to create prio_wait pool (ret = %d)",
                 ret);
         }
+        /* Note that for a custom pool like this, Margo is responsible for
+         * free'ing it, but only if it is _not_ the primary pool.  See
+         * https://lists.argobots.org/pipermail/discuss/2021-March/000109.html
+         */
+        if (strcmp(jname, "__primary__")) mpool->margo_free_flag = 1;
     } else {
         /* one of the standard Argobots pool types */
-        ret = ABT_pool_create_basic(kind, access, ABT_TRUE, pool);
+        ret = ABT_pool_create_basic(kind, access, ABT_TRUE, &mpool->pool);
         if (ret != ABT_SUCCESS) {
             MARGO_ERROR(
                 0, "ABT_pool_create_basic failed to create pool (ret = %d)",
@@ -1299,11 +1302,11 @@ static int create_pool_from_config(struct json_object* pool_config,
     return ret;
 }
 
-static int create_xstream_from_config(struct json_object* es_config,
-                                      ABT_xstream*        es,
-                                      bool*               owns_xstream,
-                                      const ABT_pool*     pools,
-                                      size_t              total_num_pools)
+static int create_xstream_from_config(struct json_object*          es_config,
+                                      ABT_xstream*                 es,
+                                      bool*                        owns_xstream,
+                                      const struct margo_abt_pool* mpools,
+                                      size_t total_num_pools)
 {
     (void)total_num_pools; // silence warning about unused variable
 
@@ -1336,7 +1339,7 @@ static int create_xstream_from_config(struct json_object* es_config,
     for (unsigned i = 0; i < es_num_pools; i++) {
         int pool_ref = json_object_get_int64(
             json_object_array_get_idx(es_pools_array, i));
-        es_pools[i] = pools[pool_ref];
+        es_pools[i] = mpools[pool_ref].pool;
     }
 
     if (strcmp(es_name, "__primary__") == 0) {
@@ -1478,7 +1481,7 @@ int margo_get_pool_by_index(margo_instance_id mid,
         *pool = ABT_POOL_NULL;
         return -1;
     } else {
-        *pool = mid->abt_pools[index];
+        *pool = mid->abt_pools[index].pool;
     }
     return 0;
 }

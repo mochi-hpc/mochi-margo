@@ -698,7 +698,7 @@ void margo_state_dump(margo_instance_id mid,
          * include any ULTs that are presently executing (including the
          * caller).
          */
-        ABT_info_print_thread_stacks_in_pool(outfile, mid->abt_pools[i]);
+        ABT_info_print_thread_stacks_in_pool(outfile, mid->abt_pools[i].pool);
     }
 
     if (outfile != stdout) fclose(outfile);
