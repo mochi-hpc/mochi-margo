@@ -1381,7 +1381,9 @@ static int create_xstream_from_config(struct json_object*          es_config,
     // get/set cpubind
     if (es_cpubind == -1) {
         ret = ABT_xstream_get_cpubind(*es, &es_cpubind);
-        if (ret != ABT_SUCCESS) {
+        if (ret == ABT_ERR_FEATURE_NA) {
+            /* feature not supported in this Argobots build; skip */
+        } else if (ret != ABT_SUCCESS) {
             MARGO_WARNING(
                 0, "ABT_xstream_get_cpubind failed to get cpubind (ret = %d)",
                 ret);
@@ -1403,7 +1405,9 @@ static int create_xstream_from_config(struct json_object*          es_config,
         // get affinity
         int num_cpus;
         ret = ABT_xstream_get_affinity(*es, 0, NULL, &num_cpus);
-        if (ret != ABT_SUCCESS) {
+        if (ret == ABT_ERR_FEATURE_NA) {
+            /* feature not supported in this Argobots build; skip */
+        } else if (ret != ABT_SUCCESS) {
             MARGO_WARNING(
                 0, "ABT_xstream_get_affinity failed to get affinity (ret = %d)",
                 ret);
