@@ -31,6 +31,7 @@ static void* test_context_setup(const MunitParameter params[], void* user_data)
 {
     (void)params;
     (void)user_data;
+    int ret;
 
     struct test_context* ctx = calloc(1, sizeof(*ctx));
     ctx->log_buffer          = calloc(102400, 1);
@@ -45,10 +46,8 @@ static void* test_context_setup(const MunitParameter params[], void* user_data)
     test_logger.error    = test_log_fn;
     test_logger.critical = test_log_fn;
 
-#if 0
     ret = margo_set_global_logger(&test_logger);
     munit_assert_int(ret, ==, 0);
-#endif
 
     return ctx;
 }
@@ -72,6 +71,12 @@ static MunitResult margo_after_abt(const MunitParameter params[], void* data)
 
     ctx->mid = margo_init(protocol, MARGO_CLIENT_MODE, 0, 0);
     munit_assert_not_null(ctx->mid);
+
+    /* The above should have produced a warning, because margo was unable to
+     * set the desired abt stack settings
+     */
+    munit_assert_int(ctx->log_buffer_pos, >, 0);
+    printf("global log contents: %s\n", ctx->log_buffer);
 
     margo_finalize(ctx->mid);
 
