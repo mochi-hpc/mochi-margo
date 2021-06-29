@@ -3,6 +3,8 @@
 #include "helper-server.h"
 #include "munit/munit.h"
 
+static struct margo_logger test_logger = {0};
+
 struct test_context {
     margo_instance_id mid;
     char*             log_buffer;
@@ -30,16 +32,10 @@ static void* test_context_setup(const MunitParameter params[], void* user_data)
     (void)params;
     (void)user_data;
     int                 ret;
-    struct margo_logger test_logger;
 
     struct test_context* ctx = calloc(1, sizeof(*ctx));
     ctx->log_buffer          = calloc(102400, 1);
     ctx->log_buffer_size     = 102400;
-
-    char* protocol = "na+sm";
-
-    ctx->mid = margo_init(protocol, MARGO_CLIENT_MODE, 0, 0);
-    munit_assert_not_null(ctx->mid);
 
     /* set up custom logger to make it easier to validate output */
     test_logger.uargs    = ctx;
@@ -49,10 +45,16 @@ static void* test_context_setup(const MunitParameter params[], void* user_data)
     test_logger.warning  = test_log_fn;
     test_logger.error    = test_log_fn;
     test_logger.critical = test_log_fn;
-
-    ret = margo_set_logger(ctx->mid, &test_logger);
-    munit_assert_int(ret, ==, 0);
     ret = margo_set_global_logger(&test_logger);
+    munit_assert_int(ret, ==, 0);
+
+    char* protocol = "na+sm";
+
+    ctx->mid = margo_init(protocol, MARGO_CLIENT_MODE, 0, 0);
+    munit_assert_not_null(ctx->mid);
+
+    /* associate the same logger with the instance as well */
+    ret = margo_set_logger(ctx->mid, &test_logger);
     munit_assert_int(ret, ==, 0);
 
     return ctx;
@@ -66,6 +68,32 @@ static void test_context_tear_down(void* data)
 
     free(ctx->log_buffer);
     free(ctx);
+}
+
+static MunitResult init_quiet_log(const MunitParameter params[], void* data)
+{
+    struct test_context* ctx = (struct test_context*)data;
+    char* protocol = "na+sm";
+    int ret;
+
+    /* finalize and re-initialize margo and make sure that no log messages
+     * were emitted at the default level
+     */
+    margo_finalize(ctx->mid);
+
+    ctx->mid = margo_init(protocol, MARGO_CLIENT_MODE, 0, 0);
+    munit_assert_not_null(ctx->mid);
+
+    /* associate logger with the new instance */
+    ret = margo_set_logger(ctx->mid, &test_logger);
+    munit_assert_int(ret, ==, 0);
+
+    /* check to see if any messages were emitted */
+    if(ctx->log_buffer_pos != 0)
+        fprintf(stderr, "Test failure; spurious log messages: %s\n", ctx->log_buffer);
+    munit_assert_int(ctx->log_buffer_pos, ==, 0);
+
+    return MUNIT_OK;
 }
 
 static char* mid_params[] = {"mid", "NULL", NULL};
@@ -179,6 +207,8 @@ static MunitTest tests[]
         test_context_tear_down, MUNIT_TEST_OPTION_NONE, get_mid},
        {"/vary_log_level", vary_log_level, test_context_setup,
         test_context_tear_down, MUNIT_TEST_OPTION_NONE, get_log_level},
+       {"/init_quiet_log", init_quiet_log, test_context_setup,
+        test_context_tear_down, MUNIT_TEST_OPTION_NONE, NULL},
        {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
 
 static const MunitSuite test_suite
