@@ -7,7 +7,7 @@
 #include "margo-instance.h"
 #include <margo-logging.h>
 
-static margo_log_level global_log_level = MARGO_LOG_ERROR;
+static margo_log_level global_log_level = MARGO_LOG_WARNING;
 
 static void _margo_log_trace(void* uargs, const char* str)
 {
