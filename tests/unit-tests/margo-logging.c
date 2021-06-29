@@ -68,29 +68,45 @@ static void test_context_tear_down(void* data)
     free(ctx);
 }
 
+static char* mid_params[] = {"mid", "NULL", NULL};
+static MunitParameterEnum get_mid[] = {{"mid", mid_params}, {NULL, NULL}};
+
 static MunitResult default_log_level(const MunitParameter params[], void* data)
 {
     struct test_context* ctx = (struct test_context*)data;
+    margo_instance_id mid = NULL;
+    const char* mid_param;
+
+    /* test both mid-specific logger and global logger.  Both should have
+     * same default level.
+     */
+    mid_param = munit_parameters_get(params, "mid");
+    if(strcmp("mid", mid_param) == 0)
+        mid = ctx->mid;
+    else if(strcmp("NULL", mid_param) == 0)
+        mid = NULL;
+    else
+        munit_assert(0);
 
     /* Expected result: default log level will record messages of level
      * warning and higher.
      */
-    margo_trace(ctx->mid, "trace ");
+    margo_trace(mid, "trace ");
     munit_assert_null(strstr(ctx->log_buffer, "trace"));
 
-    margo_debug(ctx->mid, "debug ");
+    margo_debug(mid, "debug ");
     munit_assert_null(strstr(ctx->log_buffer, "debug"));
 
-    margo_info(ctx->mid, "info ");
+    margo_info(mid, "info ");
     munit_assert_null(strstr(ctx->log_buffer, "info"));
 
-    margo_warning(ctx->mid, "warning ");
+    margo_warning(mid, "warning ");
     munit_assert_not_null(strstr(ctx->log_buffer, "warning"));
 
-    margo_error(ctx->mid, "error ");
+    margo_error(mid, "error ");
     munit_assert_not_null(strstr(ctx->log_buffer, "error"));
 
-    margo_critical(ctx->mid, "critical ");
+    margo_critical(mid, "critical ");
     munit_assert_not_null(strstr(ctx->log_buffer, "critical"));
 
     return MUNIT_OK;
@@ -160,7 +176,7 @@ static MunitResult vary_log_level(const MunitParameter params[], void* data)
 
 static MunitTest tests[]
     = {{"/default_log_level", default_log_level, test_context_setup,
-        test_context_tear_down, MUNIT_TEST_OPTION_NONE, NULL},
+        test_context_tear_down, MUNIT_TEST_OPTION_NONE, get_mid},
        {"/vary_log_level", vary_log_level, test_context_setup,
         test_context_tear_down, MUNIT_TEST_OPTION_NONE, get_log_level},
        {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
