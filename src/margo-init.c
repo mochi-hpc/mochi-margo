@@ -54,6 +54,8 @@ static int create_xstream_from_config(struct json_object*          es_config,
 
 // Sets environment variables for Argobots
 static void set_argobots_environment_variables(struct json_object* config);
+/* confirm if Argobots is running with desired configuration or not */
+static void confirm_argobots_configuration(struct json_object* config);
 
 // Shutdown logic for a margo instance
 static void remote_shutdown_ult(hg_handle_t handle);
@@ -208,11 +210,12 @@ margo_instance_id margo_init_ext(const char*                   address,
         g_margo_abt_init = 1;
         ret              = ABT_mutex_create(&g_margo_num_instances_mtx);
         if (ret != 0) goto error;
-    } else {
-        MARGO_WARNING(0,
-                      "Argobots was initialized externally, so margo_init_ext "
-                      "could not set Argobots environment variables");
     }
+
+    /* Check if Argobots is now initialized with the desired parameters
+     * (regardless of whether Margo initialized it or not)
+     */
+    confirm_argobots_configuration(config);
 
     /* Turn on profiling capability if a) it has not been done already (this
      * is global to Argobots) and b) the argobots tool interface is enabled.
@@ -1467,6 +1470,45 @@ static int create_xstream_from_config(struct json_object*          es_config,
     }
 
     return ABT_SUCCESS;
+}
+
+static void confirm_argobots_configuration(struct json_object* config)
+{
+    /* this function assumes that the json is already fully populated */
+    size_t runtime_abt_thread_stacksize = 0;
+
+    /* retrieve expected values according to Margo configuration */
+    struct json_object* argobots = json_object_object_get(config, "argobots");
+    int                 abt_thread_stacksize = json_object_get_int64(
+        json_object_object_get(argobots, "abt_thread_stacksize"));
+
+    /* NOTE: we skip checking num_stacks; this cannot be retrieved with
+     * ABT_info_query_config(). Fortunately it also is not as crucial as the
+     * stack size.  Recent ABT releases have conservative caps on stack
+     * cache sizes by default.
+     */
+
+    /* query Argobots to see if it is in agreement */
+    ABT_info_query_config(ABT_INFO_QUERY_KIND_DEFAULT_THREAD_STACKSIZE,
+                          &runtime_abt_thread_stacksize);
+    if (runtime_abt_thread_stacksize != abt_thread_stacksize) {
+        MARGO_WARNING(0,
+                      "Margo requested an Argobots ULT stack size of %d, but "
+                      "Argobots is using a ULT stack size of %zd.",
+                      abt_thread_stacksize, runtime_abt_thread_stacksize);
+        MARGO_WARNING(
+            0,
+            "If you initialized Argobots externally before calling "
+            "margo_init(), please consider calling the margo_set_environment() "
+            "before ABT_init() in order to set preferred Argobots parameters "
+            "for Margo usage.");
+        MARGO_WARNING(0,
+                      "Margo is likely to encounter stack overflows and memory "
+                      "corruption if the Argobots stack size is not large "
+                      "enough to accomodate typical userspace network "
+                      "transport libraries.");
+    }
+    return;
 }
 
 static void set_argobots_environment_variables(struct json_object* config)
