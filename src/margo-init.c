@@ -77,8 +77,8 @@ int margo_set_environment(const char* optional_json_config)
             json_tokener_free(tokener);
             return -1;
         }
-        json_tokener_free(tokener);
     }
+    json_tokener_free(tokener);
 
     set_argobots_environment_variables(config);
 

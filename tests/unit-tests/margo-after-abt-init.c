@@ -83,8 +83,37 @@ static MunitResult margo_after_abt(const MunitParameter params[], void* data)
     return MUNIT_OK;
 }
 
+static MunitResult margo_after_abt_set_env(const MunitParameter params[], void* data)
+{
+    struct test_context* ctx = (struct test_context*)data;
+    char* protocol = "na+sm";
+    int ret;
+
+    /* In this version, we use a margo utility function to set desired
+     * parameters before calling ABT_init().  This should silence the
+     * warning.
+     */
+    margo_set_environment(NULL);
+
+    ret = ABT_init(0, NULL);
+    munit_assert_int(ret, ==, 0);
+
+    ctx->mid = margo_init(protocol, MARGO_CLIENT_MODE, 0, 0);
+    munit_assert_not_null(ctx->mid);
+
+    /* check if log is silent */
+    munit_assert_int(ctx->log_buffer_pos, ==, 0);
+
+    margo_finalize(ctx->mid);
+
+    return MUNIT_OK;
+}
+
+
 static MunitTest tests[]
     = {{"/margo-after-abt", margo_after_abt, test_context_setup,
+        test_context_tear_down, MUNIT_TEST_OPTION_NONE, NULL},
+      {"/margo-after-abt-set-env", margo_after_abt_set_env, test_context_setup,
         test_context_tear_down, MUNIT_TEST_OPTION_NONE, NULL},
        {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
 
