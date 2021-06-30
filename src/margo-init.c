@@ -18,6 +18,10 @@
 #include "margo-prio-pool.h"
 #include "abtx_prof.h"
 
+/* default values for key ABT parameters if not specified */
+#define MARGO_DEFAULT_ABT_MEM_MAX_NUM_STACKS 8
+#define MARGO_DEFAULT_ABT_THREAD_STACKSIZE   2097152
+
 // Validates the format of the configuration and
 // fill default values if they are note provided
 static int
@@ -54,6 +58,30 @@ static void set_argobots_environment_variables(struct json_object* config);
 // Shutdown logic for a margo instance
 static void remote_shutdown_ult(hg_handle_t handle);
 static DECLARE_MARGO_RPC_HANDLER(remote_shutdown_ult)
+
+int margo_set_environment(const char* optional_json_config)
+{
+    struct json_object*     config  = NULL;
+    struct json_tokener*    tokener = json_tokener_new();
+    enum json_tokener_error jerr;
+
+    if (optional_json_config && strlen(optional_json_config) > 0) {
+        config = json_tokener_parse_ex(tokener, optional_json_config,
+                                       strlen(optional_json_config));
+        if (!config) {
+            jerr = json_tokener_get_error(tokener);
+            MARGO_ERROR(0, "JSON parse error: %s",
+                        json_tokener_error_desc(jerr));
+            json_tokener_free(tokener);
+            return -1;
+        }
+        json_tokener_free(tokener);
+    }
+
+    set_argobots_environment_variables(config);
+
+    return (0);
+}
 
 margo_instance_id margo_init_ext(const char*                   address,
                                  int                           mode,
@@ -673,8 +701,10 @@ validate_and_complete_config(struct json_object*        _margo,
 
     /* ------- Argobots configuration ------ */
     /* Fields:
-       - abt_mem_max_num_stacks: integer >= 0 (default 8)
-       - abt_thread_stacksize: integer >= 0 (default 2097152)
+       - abt_mem_max_num_stacks: integer >= 0 (default
+       MARGO_DEFAULT_ABT_MEM_MAX_NUM_STACKS)
+       - abt_thread_stacksize: integer >= 0 (default
+       MARGO_DEFAULT_ABT_THREAD_STACKSIZE)
        - pools: array
        - schedulers: array
        - xstreams: array
@@ -685,8 +715,9 @@ validate_and_complete_config(struct json_object*        _margo,
     { // handle abt_mem_max_num_stacks
         const char* abt_mem_max_num_stacks_str
             = getenv("ABT_MEM_MAX_NUM_STACKS");
-        int abt_mem_max_num_stacks
-            = abt_mem_max_num_stacks_str ? atoi(abt_mem_max_num_stacks_str) : 8;
+        int abt_mem_max_num_stacks = abt_mem_max_num_stacks_str
+                                       ? atoi(abt_mem_max_num_stacks_str)
+                                       : MARGO_DEFAULT_ABT_MEM_MAX_NUM_STACKS;
         if (abt_mem_max_num_stacks_str) {
             CONFIG_OVERRIDE_INTEGER(_argobots, "abt_mem_max_num_stacks",
                                     abt_mem_max_num_stacks,
@@ -706,7 +737,7 @@ validate_and_complete_config(struct json_object*        _margo,
         const char* abt_thread_stacksize_str = getenv("ABT_THREAD_STACKSIZE");
         int         abt_thread_stacksize     = abt_thread_stacksize_str
                                                  ? atoi(abt_thread_stacksize_str)
-                                                 : 2097152;
+                                                 : MARGO_DEFAULT_ABT_THREAD_STACKSIZE;
         if (abt_thread_stacksize_str) {
             CONFIG_OVERRIDE_INTEGER(_argobots, "abt_thread_stacksize",
                                     abt_thread_stacksize,
@@ -1440,14 +1471,29 @@ static int create_xstream_from_config(struct json_object*          es_config,
 
 static void set_argobots_environment_variables(struct json_object* config)
 {
-    struct json_object* argobots = json_object_object_get(config, "argobots");
-    int                 abt_mem_max_num_stacks = json_object_get_int64(
-        json_object_object_get(argobots, "abt_mem_max_num_stacks"));
-    int abt_thread_stacksize = json_object_get_int64(
-        json_object_object_get(argobots, "abt_thread_stacksize"));
+    int abt_mem_max_num_stacks = MARGO_DEFAULT_ABT_MEM_MAX_NUM_STACKS;
+    int abt_thread_stacksize   = MARGO_DEFAULT_ABT_THREAD_STACKSIZE;
+
+    /* handle cases in which config is not yet fully resolved */
+    if (config) {
+        struct json_object* argobots
+            = json_object_object_get(config, "argobots");
+        struct json_object* param;
+
+        if (argobots) {
+            if ((param
+                 = json_object_object_get(argobots, "abt_mem_max_num_stacks")))
+                abt_mem_max_num_stacks = json_object_get_int64(param);
+            if ((param
+                 = json_object_object_get(argobots, "abt_thread_stacksize")))
+                abt_thread_stacksize = json_object_get_int64(param);
+        }
+    }
 
     margo_set_abt_mem_max_num_stacks(abt_mem_max_num_stacks);
     margo_set_abt_thread_stacksize(abt_thread_stacksize);
+
+    return;
 }
 
 static void remote_shutdown_ult(hg_handle_t handle)

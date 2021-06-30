@@ -205,6 +205,22 @@ margo_instance_id margo_init_ext(const char*                   address,
                                  const struct margo_init_info* args);
 
 /**
+ * Configures the runtime environment dependencies for use by Margo without
+ * initializing Margo.  The primary purpose of this function is to set
+ * preferred environment variables for Argobots (e.g., ULT stack size) if
+ * Argobots will be initialized before calling margo_init() or
+ * margo_init_ext().
+ *
+ * @param [in] optional_json_config The json-formatted configuration
+ *                                  parameters to be used by Margo when it
+ *                                  is initialized later (if known).  If not
+ *                                  specified, then margo_set_environment()
+ *                                  will use default values.
+ * @returns returns 0 on success, negative value on failure
+ */
+int margo_set_environment(const char* optional_json_config);
+
+/**
  * Initializes margo library with custom Mercury options.
  * @param [in] addr_str            Mercury host address with port number
  * @param [in] mode                Mode to run Margo in:
