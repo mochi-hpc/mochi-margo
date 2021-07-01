@@ -1492,21 +1492,19 @@ static void confirm_argobots_configuration(struct json_object* config)
     ABT_info_query_config(ABT_INFO_QUERY_KIND_DEFAULT_THREAD_STACKSIZE,
                           &runtime_abt_thread_stacksize);
     if (runtime_abt_thread_stacksize != abt_thread_stacksize) {
-        MARGO_WARNING(0,
-                      "Margo requested an Argobots ULT stack size of %d, but "
-                      "Argobots is using a ULT stack size of %zd.",
-                      abt_thread_stacksize, runtime_abt_thread_stacksize);
         MARGO_WARNING(
             0,
+            "Margo requested an Argobots ULT stack size of %d, but "
+            "Argobots is using a ULT stack size of %zd. "
             "If you initialized Argobots externally before calling "
             "margo_init(), please consider calling the margo_set_environment() "
-            "before ABT_init() in order to set preferred Argobots parameters "
-            "for Margo usage.");
-        MARGO_WARNING(0,
-                      "Margo is likely to encounter stack overflows and memory "
-                      "corruption if the Argobots stack size is not large "
-                      "enough to accomodate typical userspace network "
-                      "transport libraries.");
+            "function before ABT_init() in order to set preferred Argobots "
+            "parameters for Margo usage. "
+            "Margo is likely to encounter stack overflows and memory "
+            "corruption if the Argobots stack size is not large "
+            "enough to accomodate typical userspace network "
+            "transport libraries.",
+            abt_thread_stacksize, runtime_abt_thread_stacksize);
     }
     return;
 }
