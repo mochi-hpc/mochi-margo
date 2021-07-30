@@ -6,7 +6,8 @@ check_PROGRAMS += \
  tests/unit-tests/margo-pool \
  tests/unit-tests/margo-abt-pool \
  tests/unit-tests/margo-logging \
- tests/unit-tests/margo-after-abt-init
+ tests/unit-tests/margo-after-abt-init \
+ tests/unit-tests/margo-scheduling
 
 TESTS += \
  tests/unit-tests/margo-addr \
@@ -15,7 +16,8 @@ TESTS += \
  tests/unit-tests/margo-pool \
  tests/unit-tests/margo-abt-pool \
  tests/unit-tests/margo-logging \
- tests/unit-tests/margo-after-abt-init
+ tests/unit-tests/margo-after-abt-init \
+ tests/unit-tests/margo-scheduling
 
 tests_unit_tests_margo_addr_SOURCES = \
  tests/unit-tests/munit/munit.c \
@@ -50,6 +52,11 @@ tests_unit_tests_margo_logging_SOURCES = \
 tests_unit_tests_margo_after_abt_init_SOURCES = \
  tests/unit-tests/munit/munit.c \
  tests/unit-tests/margo-after-abt-init.c \
+ tests/unit-tests/helper-server.c
+
+tests_unit_tests_margo_scheduling_SOURCES = \
+ tests/unit-tests/munit/munit.c \
+ tests/unit-tests/margo-scheduling.c \
  tests/unit-tests/helper-server.c
 
 endif
