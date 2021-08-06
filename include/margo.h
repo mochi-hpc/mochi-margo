@@ -887,9 +887,9 @@ hg_return_t margo_provider_iforward_timed(uint16_t       provider_id,
                                           double         timeout_ms,
                                           margo_request* req);
 
-#define margo_iforward_timed(__handle, __in_struct, __timeout, __req) \
-    margo_provider_forward_timed(MARGO_DEFAULT_PROVIDER_ID, __handle, \
-                                 __in_struct, __timeout, __req)
+#define margo_iforward_timed(__handle, __in_struct, __timeout, __req)  \
+    margo_provider_iforward_timed(MARGO_DEFAULT_PROVIDER_ID, __handle, \
+                                  __in_struct, __timeout, __req)
 
 /**
  * Wait for an operation initiated by a non-blocking
