@@ -10,6 +10,9 @@
 
 #include <stdio.h>
 #include <unistd.h>
+#include <sys/time.h>
+#include <sys/resource.h>
+
 #include <margo.h>
 #include "helper-server.h"
 #include "munit/munit.h"
@@ -69,6 +72,9 @@ static MunitResult test_abt_mutex_cpu(const MunitParameter params[], void* data)
     (void)data;
     ABT_pool rpc_pool;
     ABT_thread tid;
+    int ret;
+    struct rusage usage;
+    double user_cpu_seconds;
 
     struct test_context* ctx = (struct test_context*)data;
 
@@ -87,7 +93,12 @@ static MunitResult test_abt_mutex_cpu(const MunitParameter params[], void* data)
     ABT_thread_join(tid);
     ABT_thread_free(&tid);
 
-    /* TODO: measure CPU usage */
+    ret = getrusage(RUSAGE_SELF, &usage);
+    munit_assert_int(ret, ==, 0);
+
+    user_cpu_seconds  = (double)usage.ru_utime.tv_sec + (double)usage.ru_utime.tv_usec / 1000000;
+
+    printf("user CPU time used: %f\n", user_cpu_seconds);
 
     return MUNIT_OK;
 }
