@@ -9,12 +9,15 @@
  */
 
 #include <stdio.h>
+#include <unistd.h>
 #include <margo.h>
 #include "helper-server.h"
 #include "munit/munit.h"
 
 struct test_context {
     margo_instance_id mid;
+    ABT_mutex mutex;
+    int value;
 };
 
 static void* test_context_setup(const MunitParameter params[], void* user_data)
@@ -22,11 +25,19 @@ static void* test_context_setup(const MunitParameter params[], void* user_data)
     (void) params;
     (void) user_data;
     struct test_context* ctx = calloc(1, sizeof(*ctx));
+    struct margo_init_info mii = {0};
 
     char* protocol = "na+sm";
 
-    ctx->mid = margo_init(protocol, MARGO_CLIENT_MODE, 0, 0);
+    /* Ask margo to create a dedicated pool (with one execution stream) for
+     * rpc handling.
+     */
+    mii.json_config = "{ \"rpc_thread_count\":1}";
+
+    ctx->mid = margo_init_ext(protocol, MARGO_SERVER_MODE, &mii);
     munit_assert_not_null(ctx->mid);
+
+    ABT_mutex_create(&ctx->mutex);
 
     return ctx;
 }
@@ -35,19 +46,49 @@ static void test_context_tear_down(void* fixture)
 {
     struct test_context* ctx = (struct test_context*)fixture;
 
+    ABT_mutex_free(&ctx->mutex);
+
     margo_finalize(ctx->mid);
 
     free(ctx);
+}
+
+void thread_fn(void *_arg)
+{
+    struct test_context *ctx = (struct test_context*)_arg;
+
+    ABT_mutex_lock(ctx->mutex);
+    ABT_mutex_unlock(ctx->mutex);
+
+    return;
 }
 
 static MunitResult test_abt_mutex_cpu(const MunitParameter params[], void* data)
 {
     (void)params;
     (void)data;
+    ABT_pool rpc_pool;
+    ABT_thread tid;
 
     struct test_context* ctx = (struct test_context*)data;
 
-    /* TODO: do something */
+    /* hold mutex while creating ULT */
+    ABT_mutex_lock(ctx->mutex);
+
+    /* launch test thread in rpc handler pool */
+    margo_get_handler_pool(ctx->mid, &rpc_pool);
+    ABT_thread_create(rpc_pool, thread_fn, ctx, ABT_THREAD_ATTR_NULL, &tid);
+
+    /* sleep before releasing mutex */
+    margo_thread_sleep(ctx->mid, 5000);
+    ABT_mutex_unlock(ctx->mutex);
+
+    /* wait for test thread to complete */
+    ABT_thread_join(tid);
+    ABT_thread_free(&tid);
+
+    /* TODO: measure CPU usage */
+
     return MUNIT_OK;
 }
 
