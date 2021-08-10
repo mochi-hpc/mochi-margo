@@ -74,9 +74,13 @@ static MunitResult test_abt_mutex_cpu(const MunitParameter params[], void* data)
     ABT_thread tid;
     int ret;
     struct rusage usage;
-    double user_cpu_seconds;
+    double user_cpu_seconds1, user_cpu_seconds2;
 
     struct test_context* ctx = (struct test_context*)data;
+
+    ret = getrusage(RUSAGE_SELF, &usage);
+    munit_assert_int(ret, ==, 0);
+    user_cpu_seconds1  = (double)usage.ru_utime.tv_sec + (double)usage.ru_utime.tv_usec / 1000000.0;
 
     /* hold mutex while creating ULT */
     ABT_mutex_lock(ctx->mutex);
@@ -95,10 +99,9 @@ static MunitResult test_abt_mutex_cpu(const MunitParameter params[], void* data)
 
     ret = getrusage(RUSAGE_SELF, &usage);
     munit_assert_int(ret, ==, 0);
+    user_cpu_seconds2  = (double)usage.ru_utime.tv_sec + (double)usage.ru_utime.tv_usec / 1000000.0;
 
-    user_cpu_seconds  = (double)usage.ru_utime.tv_sec + (double)usage.ru_utime.tv_usec / 1000000;
-
-    printf("user CPU time used: %f\n", user_cpu_seconds);
+    printf("user CPU time used: %f\n", user_cpu_seconds2 - user_cpu_seconds1);
 
     return MUNIT_OK;
 }
