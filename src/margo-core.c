@@ -1442,7 +1442,8 @@ void __margo_hg_progress_fn(void* foo)
             } else {
                 /* TODO: error handling */
                 MARGO_CRITICAL(
-                    mid, "unexpected return code (%d) from HG_Progress()", ret);
+                    mid, "unexpected return code (%d: %s) from HG_Progress()\n",
+                    ret, HG_Error_to_string(ret));
                 assert(0);
             }
         } else {
@@ -1477,8 +1478,8 @@ void __margo_hg_progress_fn(void* foo)
             if (ret != HG_SUCCESS && ret != HG_TIMEOUT) {
                 /* TODO: error handling */
                 MARGO_CRITICAL(
-                    mid, "unexpected return code (%d) from HG_Progress()\n",
-                    ret);
+                    mid, "unexpected return code (%d: %s) from HG_Progress()\n",
+                    ret, HG_Error_to_string(ret));
                 assert(0);
             }
         }
