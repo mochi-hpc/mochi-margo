@@ -3,7 +3,6 @@
  *
  * See COPYRIGHT in top-level directory.
  */
-
 #include <assert.h>
 #include <unistd.h>
 #include <errno.h>
@@ -14,6 +13,7 @@
 #include <json-c/json.h>
 
 #include "margo.h"
+#include "margo-abt-macros.h"
 #include "margo-globals.h"
 #include "margo-progress.h"
 #include "margo-diag-internal.h"
@@ -806,21 +806,17 @@ static hg_return_t margo_cb(const struct hg_cb_info* info)
     }
 
     /* propagate return code out through eventual */
-    ABT_eventual_set(req->eventual, &hret, sizeof(hret));
+    req->hret = hret;
+    MARGO_EVENTUAL_SET(req->eventual);
 
     return (HG_SUCCESS);
 }
 
 static hg_return_t margo_wait_internal(margo_request req)
 {
-    hg_return_t* waited_hret;
-    hg_return_t  hret;
-
-    ABT_eventual_wait(req->eventual, (void**)&waited_hret);
-    hret = *waited_hret;
-    ABT_eventual_free(&(req->eventual));
-
-    return (hret);
+    MARGO_EVENTUAL_WAIT(req->eventual);
+    MARGO_EVENTUAL_FREE(&(req->eventual));
+    return req->hret;
 }
 
 static void margo_forward_timeout_cb(void* arg)
@@ -839,7 +835,7 @@ static hg_return_t margo_provider_iforward_internal(
     margo_request req) /* the request should have been allocated */
 {
     hg_return_t           hret = HG_TIMEOUT;
-    ABT_eventual          eventual;
+    margo_eventual_t      eventual;
     int                   ret;
     const struct hg_info* hgi;
     hg_id_t               id;
@@ -883,7 +879,7 @@ static hg_return_t margo_provider_iforward_internal(
     ret = HG_Reset(handle, hgi->addr, id);
     if (ret != HG_SUCCESS) return (ret);
 
-    ret = ABT_eventual_create(sizeof(hret), &eventual);
+    ret = MARGO_EVENTUAL_CREATE(&eventual);
     if (ret != 0) { return (HG_NOMEM_ERROR); }
 
     req->timer    = NULL;
@@ -895,7 +891,7 @@ static hg_return_t margo_provider_iforward_internal(
         req->timer = calloc(1, sizeof(*(req->timer)));
         // LCOV_EXCL_START
         if (!(req->timer)) {
-            ABT_eventual_free(&eventual);
+            MARGO_EVENTUAL_FREE(&eventual);
             return (HG_NOMEM_ERROR);
         }
         // LCOV_EXCL_END
@@ -930,7 +926,7 @@ static hg_return_t margo_provider_iforward_internal(
 
     hret = HG_Forward(handle, margo_cb, (void*)req, in_struct);
 
-    if (hret != HG_SUCCESS) { ABT_eventual_free(&eventual); }
+    if (hret != HG_SUCCESS) { MARGO_EVENTUAL_FREE(&eventual); }
     /* remove timer if HG_Forward failed */
     if (hret != HG_SUCCESS && req->timer) {
         __margo_timer_destroy(mid, req->timer);
@@ -997,7 +993,7 @@ hg_return_t margo_wait(margo_request req)
 
 int margo_test(margo_request req, int* flag)
 {
-    return ABT_eventual_test(req->eventual, NULL, flag);
+    return MARGO_EVENTUAL_TEST(req->eventual, flag);
 }
 
 hg_return_t margo_wait_any(size_t count, margo_request* req, size_t* index)
@@ -1039,7 +1035,7 @@ margo_irespond_internal(hg_handle_t   handle,
                         margo_request req) /* should have been allocated */
 {
     int ret;
-    ret = ABT_eventual_create(sizeof(hg_return_t), &(req->eventual));
+    ret = MARGO_EVENTUAL_CREATE(&(req->eventual));
     if (ret != 0) { return (HG_NOMEM_ERROR); }
     req->handle         = handle;
     req->timer          = NULL;
@@ -1134,7 +1130,7 @@ static hg_return_t margo_bulk_itransfer_internal(
     hg_return_t hret = HG_TIMEOUT;
     int         ret;
 
-    ret = ABT_eventual_create(sizeof(hret), &(req->eventual));
+    ret = MARGO_EVENTUAL_CREATE(&(req->eventual));
     if (ret != 0) { return (HG_NOMEM_ERROR); }
     req->timer          = NULL;
     req->handle         = HG_HANDLE_NULL;
