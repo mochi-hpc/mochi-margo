@@ -19,50 +19,86 @@
  * cannot hold a value.
  */
 
+// Eventuals
+
 #ifdef ABT_EVENTUAL_INITIALIZER
 
 typedef ABT_eventual_memory margo_eventual_t;
 
 static inline int __margo_eventual_create(margo_eventual_t* ev)
 {
-    memset(ev, 0, sizeof(*ev));
+    static const ABT_eventual_memory ev_init = ABT_EVENTUAL_INITIALIZER;
+    memcpy(ev, &ev_init, sizeof(ev_init));
     return ABT_SUCCESS;
 }
+
+    #define MARGO_EVENTUAL_GET_HANDLE(__ev__) \
+        ABT_EVENTUAL_MEMORY_GET_HANDLE(&(__ev__))
 
     #define MARGO_EVENTUAL_CREATE(__ev__) __margo_eventual_create(__ev__)
 
     #define MARGO_EVENTUAL_FREE(__ev__)
 
-    #define MARGO_EVENTUAL_WAIT(__ev__) \
-        ABT_eventual_wait(ABT_EVENTUAL_MEMORY_GET_HANDLE(&(__ev__)), NULL)
-
-    #define MARGO_EVENTUAL_SET(__ev__) \
-        ABT_eventual_set(ABT_EVENTUAL_MEMORY_GET_HANDLE(&(__ev__)), NULL, 0)
-
-    #define MARGO_EVENTUAL_RESET(__ev__) \
-        ABT_eventual_reset(ABT_EVENTUAL_MEMORY_GET_HANDLE(&(__ev__)))
-
-    #define MARGO_EVENTUAL_TEST(__ev__, __flag__)                          \
-        ABT_eventual_test(ABT_EVENTUAL_MEMORY_GET_HANDLE(&(__ev__)), NULL, \
-                          (__flag__))
-
-#else
+#else // ABT_EVENTUAL_INITIALIZED not defined
 
 typedef ABT_eventual margo_eventual_t;
+
+    #define MARGO_EVENTUAL_GET_HANDLE(__ev__) (__ev__)
 
     #define MARGO_EVENTUAL_CREATE(__ev__) ABT_eventual_create(0, (__ev__))
 
     #define MARGO_EVENTUAL_FREE(__ev__) ABT_eventual_free(__ev__)
 
-    #define MARGO_EVENTUAL_WAIT(__ev__) ABT_eventual_wait((__ev__), NULL)
+#endif
 
-    #define MARGO_EVENTUAL_SET(__ev__) ABT_eventual_set((__ev__), NULL, 0)
+#define MARGO_EVENTUAL_WAIT(__ev__) \
+    ABT_eventual_wait(MARGO_EVENTUAL_GET_HANDLE(__ev__), NULL)
 
-    #define MARGO_EVENTUAL_RESET(__ev__) ABT_eventual_reset(__ev__)
+#define MARGO_EVENTUAL_SET(__ev__) \
+    ABT_eventual_set(MARGO_EVENTUAL_GET_HANDLE(__ev__), NULL, 0)
 
-    #define MARGO_EVENTUAL_TEST(__ev__, __flag__) \
-        ABT_eventual_test((__ev__), NULL, (__flag__))
+#define MARGO_EVENTUAL_RESET(__ev__) \
+    ABT_eventual_reset(MARGO_EVENTUAL_GET_HANDLE(__ev__))
+
+#define MARGO_EVENTUAL_TEST(__ev__, __flag__) \
+    ABT_eventual_test(MARGO_EVENTUAL_GET_HANDLE(__ev__), NULL, (__flag__))
+
+// Mutex
+
+#ifdef ABT_MUTEX_INITIALIZER
+
+typedef ABT_mutex_memory margo_mutex_t;
+
+static inline int __margo_mutex_create(margo_mutex_t* mtx)
+{
+    static const ABT_mutex_memory mtx_init = ABT_MUTEX_INITIALIZER;
+    memcpy(mtx, &mtx_init, sizeof(mtx_init));
+    return ABT_SUCCESS;
+}
+
+    #define MARGO_MUTEX_GET_HANDLE(__mtx__) \
+        ABT_MUTEX_MEMORY_GET_HANDLE(&(__mtx__))
+
+    #define MARGO_MUTEX_CREATE(__mtx__) __margo_mutex_create(__mtx__)
+
+    #define MARGO_MUTEX_FREE(__mtx__)
+
+#else // ABT_MUTEX_INITIALIZER not defined
+
+typedef ABT_mutex margo_mutex_t;
+
+    #define MARGO_MUTEX_GET_HANDLE(__mtx__) (__mtx__)
+
+    #define MARGO_MUTEX_CREATE(__mtx__) ABT_mutex_create(__mtx__)
+
+    #define MARGO_MUTEX_FREE(__mtx__) ABT_mutex_free(__mtx__)
 
 #endif
+
+#define MARGO_MUTEX_LOCK(__mtx__) \
+    ABT_mutex_lock(MARGO_MUTEX_GET_HANDLE(__mtx__))
+
+#define MARGO_MUTEX_UNLOCK(__mtx__) \
+    ABT_mutex_unlock(MARGO_MUTEX_GET_HANDLE(__mtx__))
 
 #endif
