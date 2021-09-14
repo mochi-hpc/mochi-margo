@@ -101,7 +101,11 @@ static MunitResult test_abt_mutex_cpu(const MunitParameter params[], void* data)
     munit_assert_int(ret, ==, 0);
     user_cpu_seconds2  = (double)usage.ru_utime.tv_sec + (double)usage.ru_utime.tv_usec / 1000000.0;
 
-    printf("user CPU time used: %f\n", user_cpu_seconds2 - user_cpu_seconds1);
+    printf("User CPU time used: %f\n", user_cpu_seconds2 - user_cpu_seconds1);
+    if(user_cpu_seconds2 - user_cpu_seconds1 > 4.0)
+        printf("\tdetected that Argobots mutexes may busy spin.\n");
+    else
+        printf("\tdetected that Argobots mutexes will not busy spin.\n");
 
     return MUNIT_OK;
 }
