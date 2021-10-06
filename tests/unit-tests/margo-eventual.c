@@ -24,7 +24,6 @@ struct iteration {
 
 struct test_context {
     margo_instance_id mid;
-    struct iteration* iter_array;
 };
 
 static void* test_context_setup(const MunitParameter params[], void* user_data)
@@ -32,7 +31,6 @@ static void* test_context_setup(const MunitParameter params[], void* user_data)
     (void)params;
     (void)user_data;
     struct test_context* ctx = calloc(1, sizeof(*ctx));
-    ctx->iter_array          = malloc(N_ITERS * sizeof(*ctx->iter_array));
 
     return ctx;
 }
@@ -41,7 +39,6 @@ static void test_context_tear_down(void* data)
 {
     struct test_context* ctx = (struct test_context*)data;
 
-    free(ctx->iter_array);
     free(ctx);
 }
 
@@ -65,8 +62,35 @@ void waiter_fn(void* _arg)
     return;
 }
 
+struct ev_queue_element {
+    margo_eventual_t*        ev;
+    struct ev_queue_element* next;
+};
+
+struct ev_queue_element* ev_queue_head = NULL;
+ABT_mutex                ev_queue_mutex;
+ABT_cond                 ev_queue_cond;
+
 void waiter_sub_fn(void)
 {
+    margo_eventual_t         ev;
+    struct ev_queue_element* q_e;
+
+    q_e = malloc(sizeof(*q_e));
+    munit_assert_not_null(q_e);
+
+    MARGO_EVENTUAL_CREATE(&ev);
+
+    ABT_mutex_lock(ev_queue_mutex);
+    q_e->ev       = &ev;
+    q_e->next     = ev_queue_head;
+    ev_queue_head = q_e;
+    ABT_cond_signal(ev_queue_cond);
+    ABT_mutex_unlock(ev_queue_mutex);
+
+    MARGO_EVENTUAL_WAIT(ev);
+
+    MARGO_EVENTUAL_FREE(&ev);
 
     return;
 }
@@ -75,9 +99,7 @@ void iter_fn(void* _arg)
 {
     int i;
 
-    for (i = 0; i < N_ITERS; i++) {
-        waiter_sub_fn();
-    }
+    for (i = 0; i < N_ITERS; i++) { waiter_sub_fn(); }
 
     return;
 }
@@ -85,12 +107,17 @@ void iter_fn(void* _arg)
 static MunitResult margo_eventual_iteration(const MunitParameter params[],
                                             void*                data)
 {
-    const char*            protocol = "na+sm";
-    struct margo_init_info mii      = {0};
-    struct test_context*   ctx      = (struct test_context*)data;
-    int                    i;
-    ABT_pool               rpc_pool;
-    ABT_thread             tid_array[N_ULTS];
+    const char*              protocol = "na+sm";
+    struct margo_init_info   mii      = {0};
+    struct test_context*     ctx      = (struct test_context*)data;
+    int                      i;
+    ABT_pool                 rpc_pool;
+    ABT_thread               tid_array[N_ULTS];
+    int                      done_counter = 0;
+    struct ev_queue_element* q_e;
+
+    ABT_mutex_create(&ev_queue_mutex);
+    ABT_cond_create(&ev_queue_cond);
 
     mii.json_config = munit_parameters_get(params, "json");
 
@@ -99,12 +126,28 @@ static MunitResult margo_eventual_iteration(const MunitParameter params[],
     margo_get_handler_pool(ctx->mid, &rpc_pool);
 
     for (i = 0; i < N_ULTS; i++) {
-        ABT_thread_create(rpc_pool, iter_fn, NULL,
-                          ABT_THREAD_ATTR_NULL, &tid_array[i]);
+        ABT_thread_create(rpc_pool, iter_fn, NULL, ABT_THREAD_ATTR_NULL,
+                          &tid_array[i]);
+    }
+
+    while (done_counter < (N_ITERS * N_ULTS)) {
+        ABT_mutex_lock(ev_queue_mutex);
+        while (ev_queue_head == NULL)
+            ABT_cond_wait(ev_queue_cond, ev_queue_mutex);
+
+        done_counter++;
+        q_e           = ev_queue_head;
+        ev_queue_head = q_e->next;
+        ABT_mutex_unlock(ev_queue_mutex);
+
+        MARGO_EVENTUAL_SET(*q_e->ev);
+        free(q_e);
     }
 
     for (i = 0; i < N_ULTS; i++) { ABT_thread_join(tid_array[i]); }
 
+    ABT_mutex_free(&ev_queue_mutex);
+    ABT_cond_free(&ev_queue_cond);
     margo_finalize(ctx->mid);
 
     return MUNIT_OK;
@@ -117,6 +160,8 @@ static MunitResult margo_eventual(const MunitParameter params[], void* data)
     struct test_context*   ctx      = (struct test_context*)data;
     int                    i;
     ABT_pool               rpc_pool;
+    struct iteration*      iter_array;
+    iter_array = malloc(N_ULTS * sizeof(*iter_array));
 
     mii.json_config = munit_parameters_get(params, "json");
 
@@ -125,37 +170,38 @@ static MunitResult margo_eventual(const MunitParameter params[], void* data)
     margo_get_handler_pool(ctx->mid, &rpc_pool);
 
 #if 0
-    for(i=0; i<N_ITERS; i++)
+    for(i=0; i<N_ULTS; i++)
     {
-        MARGO_EVENTUAL_CREATE(&ctx->iter_array[i].ev);
+        MARGO_EVENTUAL_CREATE(&iter_array[i].ev);
     }
 #endif
 
-    for (i = 0; i < N_ITERS; i++) {
-        ABT_thread_create(rpc_pool, waiter_fn, &ctx->iter_array[i].ev,
-                          ABT_THREAD_ATTR_NULL, &ctx->iter_array[i].waiter_tid);
+    for (i = 0; i < N_ULTS; i++) {
+        ABT_thread_create(rpc_pool, waiter_fn, &iter_array[i].ev,
+                          ABT_THREAD_ATTR_NULL, &iter_array[i].waiter_tid);
     }
 
     margo_thread_sleep(ctx->mid, 1000);
 
 #if 0
-    for(i=0; i<N_ITERS; i++)
+    for(i=0; i<N_ULTS; i++)
     {
-        MARGO_EVENTUAL_SET(ctx->iter_array[i].ev);
+        MARGO_EVENTUAL_SET(iter_array[i].ev);
     }
 #else
-    for (i = 0; i < N_ITERS; i++) {
-        ABT_thread_create(rpc_pool, setter_fn, &ctx->iter_array[i].ev,
-                          ABT_THREAD_ATTR_NULL, &ctx->iter_array[i].setter_tid);
+    for (i = 0; i < N_ULTS; i++) {
+        ABT_thread_create(rpc_pool, setter_fn, &iter_array[i].ev,
+                          ABT_THREAD_ATTR_NULL, &iter_array[i].setter_tid);
     }
 #endif
 
-    for (i = 0; i < N_ITERS; i++) {
-        ABT_thread_join(ctx->iter_array[i].waiter_tid);
-        ABT_thread_join(ctx->iter_array[i].setter_tid);
-        MARGO_EVENTUAL_FREE(&ctx->iter_array[i].ev);
+    for (i = 0; i < N_ULTS; i++) {
+        ABT_thread_join(iter_array[i].waiter_tid);
+        ABT_thread_join(iter_array[i].setter_tid);
+        MARGO_EVENTUAL_FREE(&iter_array[i].ev);
     }
 
+    free(iter_array);
     margo_finalize(ctx->mid);
 
     return MUNIT_OK;
