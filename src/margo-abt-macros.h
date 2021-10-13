@@ -37,7 +37,16 @@ static inline int __margo_eventual_create(margo_eventual_t* ev)
 
     #define MARGO_EVENTUAL_CREATE(__ev__) __margo_eventual_create(__ev__)
 
-    #define MARGO_EVENTUAL_FREE(__ev__)
+    /* NOTE: we don't need to literally "reset" the eventual when freeing it.
+     * The point of calling reset() in this path is that it will force
+     * Argobots to acquire an internal lock in the eventual, which in turn
+     * ensures that the set() caller is done before we destroy the eventual
+     * and allow it to pass out of scope.  This makes the margo_eventual_t
+     * safe to use on ephemeral function call stacks.  See discussion at
+     * https://github.com/pmodels/argobots/issues/367 for details.
+     */
+    #define MARGO_EVENTUAL_FREE(__ev__) \
+        ABT_eventual_reset(ABT_EVENTUAL_MEMORY_GET_HANDLE(__ev__))
 
 #else // ABT_EVENTUAL_INITIALIZED not defined
 
