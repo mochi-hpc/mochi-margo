@@ -5,6 +5,7 @@
  */
 
 #include <assert.h>
+#include <stdlib.h>
 #include <pthread.h>
 #include "data-xfer-proto.h"
 #include "data-xfer-service.h"

@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <unistd.h>
 #include <errno.h>
+#include <stdlib.h>
 #include <abt.h>
 
 #include "margo.h"

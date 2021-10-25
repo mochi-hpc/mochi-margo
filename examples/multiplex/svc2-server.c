@@ -5,6 +5,7 @@
  */
 
 #include <assert.h>
+#include <stdlib.h>
 #include <pthread.h>
 #include "svc2-proto.h"
 #include "svc2-server.h"

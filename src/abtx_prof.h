@@ -131,6 +131,7 @@
 #define ABTX_PROF_H_INCLUDED
 
 #include <stdio.h>
+#include <stdlib.h>
 
 #define ABTX_PROF_MODE_BASIC 0
 #define ABTX_PROF_MODE_DETAILED 1
