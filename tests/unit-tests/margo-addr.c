@@ -270,7 +270,7 @@ static MunitResult test_margo_addr_lookup(const MunitParameter params[], void* d
 }
 
 static char* protocol_params[] = {
-    "na+sm", "ofi+tcp", NULL
+    "na+sm", NULL
 };
 
 static MunitParameterEnum test_params[] = {
