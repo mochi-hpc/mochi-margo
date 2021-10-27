@@ -55,16 +55,10 @@ int main(int argc, char** argv)
     /* use a single pool for progress and sleeper threads */
     /* NOTE: we don't use RPC handlers, so no need for an RPC pool */
     /***************************************/
-    mid = margo_init("tcp", MARGO_CLIENT_MODE, 0, 0);
-    //    margo_set_log_level(mid, MARGO_LOG_TRACE);
-
+    mid = margo_init("sm", MARGO_CLIENT_MODE, 0, 0);
     if (mid == MARGO_INSTANCE_NULL) {
-        /* if tcp didn't work, try sm */
-        mid = margo_init("sm", MARGO_CLIENT_MODE, 0, 0);
-        if (mid == MARGO_INSTANCE_NULL) {
-            fprintf(stderr, "Error: margo_init()\n");
-            return (-1);
-        }
+        fprintf(stderr, "Error: margo_init()\n");
+        return (-1);
     }
 
     /* retrieve current pool to use for ULT creation */

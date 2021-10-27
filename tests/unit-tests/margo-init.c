@@ -72,7 +72,7 @@ static MunitResult init_cycle_client(const MunitParameter params[], void* data)
 }
 
 static char* protocol_params[] = {
-    "na+sm", "ofi+tcp", NULL
+    "na+sm", NULL
 };
 
 static char* use_progress_thread_params[] = {
