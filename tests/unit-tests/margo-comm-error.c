@@ -129,7 +129,8 @@ static MunitResult test_comm_unreachable(const MunitParameter params[], void* da
 
     /* attempt to send rpc to addr, should fail without timeout */
     hret = margo_forward_timed(handle, NULL, 2000.0);
-    munit_assert_int(hret, ==, HG_NODEV);
+    munit_assert_int(hret, !=, HG_SUCCESS);
+    munit_assert_int(hret, !=, HG_TIMEOUT);
 
     margo_destroy(handle);
 
