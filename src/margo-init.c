@@ -308,6 +308,8 @@ margo_instance_id margo_init_ext(const char*                   address,
         json_object_object_get(config, "enable_diagnostics"));
     int profile_enabled = json_object_get_boolean(
         json_object_object_get(config, "enable_profiling"));
+    int max_pending_rpcs = json_object_get_int64(
+        json_object_object_get(config, "max_pending_rpcs"));
 
     mid->json_cfg = config;
 
@@ -337,8 +339,10 @@ margo_instance_id margo_init_ext(const char*                   address,
     mid->finalize_cb    = NULL;
     mid->prefinalize_cb = NULL;
 
-    mid->pending_operations = 0;
+    mid->pending_operations     = 0;
+    mid->max_pending_operations = max_pending_rpcs;
     ABT_mutex_create(&mid->pending_operations_mtx);
+    ABT_cond_create(&mid->pending_operations_cv);
     mid->finalize_requested = 0;
 
     mid->shutdown_rpc_id        = 0;
@@ -470,6 +474,7 @@ validate_and_complete_config(struct json_object*        _margo,
        1000)
        - [optional] use_progress_thread: bool (default false)
        - [optional] rpc_thread_count: integer (default 0)
+       - [optional] max_pending_rpcs: integer (default 0)
     */
 
     /* report version number for this component */
@@ -540,6 +545,14 @@ validate_and_complete_config(struct json_object*        _margo,
                                         "profile_sparkline_timeslice_msec");
         MARGO_TRACE(0, "profile_sparkline_timeslice_msec = %d",
                     json_object_get_int64(val));
+    }
+
+    { // add or override max_pending_rpcs
+        CONFIG_HAS_OR_CREATE(_margo, int64, "max_pending_rpcs", 0,
+                             "max_pending_rpcs", val);
+        CONFIG_INTEGER_MUST_BE_POSITIVE(_margo, "max_pending_rpcs",
+                                        "max_pending_rpcs");
+        MARGO_TRACE(0, "max_pending_rpcs = %d", json_object_get_int64(val));
     }
 
     /* ------- Mercury configuration ------ */

@@ -119,7 +119,9 @@ struct margo_instance {
     /* control logic to prevent margo_finalize from destroying
        the instance when some operations are pending */
     unsigned  pending_operations;
+    unsigned  max_pending_operations;
     ABT_mutex pending_operations_mtx;
+    ABT_cond  pending_operations_cv;
     int       finalize_requested;
 
     /* control logic for shutting down */

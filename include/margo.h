@@ -1427,7 +1427,7 @@ int __margo_internal_finalize_requested(margo_instance_id mid);
  *
  * @param mid Margo instance
  */
-void __margo_internal_incr_pending(margo_instance_id mid);
+int __margo_internal_incr_pending(margo_instance_id mid);
 
 /**
  * @private
@@ -1499,14 +1499,13 @@ void __margo_internal_post_wrapper_hooks(margo_instance_id mid);
         margo_destroy(handle);                                                 \
         return (HG_OTHER_ERROR);                                               \
     }                                                                          \
-    if (__margo_internal_finalize_requested(__mid)) {                          \
+    if (__margo_internal_incr_pending(__mid) != 0) {                           \
         margo_warning(__mid,                                                   \
                       "Ignoring " #__name " RPC because margo is finalizing"); \
         margo_destroy(handle);                                                 \
         return (HG_CANCELED);                                                  \
     }                                                                          \
     __pool = margo_hg_handle_get_handler_pool(handle);                         \
-    __margo_internal_incr_pending(__mid);                                      \
     margo_trace(__mid,                                                         \
                 "Spawning ULT for " #__name                                    \
                 " RPC "                                                        \

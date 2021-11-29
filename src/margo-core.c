@@ -163,6 +163,7 @@ static void margo_cleanup(margo_instance_id mid)
     ABT_mutex_free(&mid->finalize_mutex);
     ABT_cond_free(&mid->finalize_cond);
     ABT_mutex_free(&mid->pending_operations_mtx);
+    ABT_cond_free(&mid->pending_operations_cv);
     ABT_mutex_free(&mid->diag_rpc_mutex);
 
     MARGO_TRACE(mid, "Joining and destroying xstreams");
@@ -1585,12 +1586,20 @@ int __margo_internal_finalize_requested(margo_instance_id mid)
     return mid->finalize_requested;
 }
 
-void __margo_internal_incr_pending(margo_instance_id mid)
+int __margo_internal_incr_pending(margo_instance_id mid)
 {
-    if (!mid) return;
+    if (!mid) return -2;
+    if (mid->finalize_requested) return -1;
     ABT_mutex_lock(mid->pending_operations_mtx);
-    mid->pending_operations += 1;
+    while (mid->max_pending_operations
+           && (mid->pending_operations == mid->max_pending_operations)) {
+        ABT_cond_wait(mid->pending_operations_cv, mid->pending_operations_mtx);
+    }
+    int finalize_requested = mid->finalize_requested;
+    if (!finalize_requested) mid->pending_operations += 1;
     ABT_mutex_unlock(mid->pending_operations_mtx);
+    if (finalize_requested) return -1;
+    return 0;
 }
 
 void __margo_internal_decr_pending(margo_instance_id mid)
@@ -1598,7 +1607,11 @@ void __margo_internal_decr_pending(margo_instance_id mid)
     if (!mid) return;
     ABT_mutex_lock(mid->pending_operations_mtx);
     mid->pending_operations -= 1;
+    int must_signal
+        = mid->max_pending_operations
+       && (mid->pending_operations == mid->max_pending_operations - 1);
     ABT_mutex_unlock(mid->pending_operations_mtx);
+    if (must_signal) ABT_cond_signal(mid->pending_operations_cv);
 }
 
 static void margo_internal_breadcrumb_handler_set(uint64_t rpc_breadcrumb)
