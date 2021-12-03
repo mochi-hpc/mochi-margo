@@ -1585,12 +1585,17 @@ int __margo_internal_finalize_requested(margo_instance_id mid)
     return mid->finalize_requested;
 }
 
-void __margo_internal_incr_pending(margo_instance_id mid)
+int __margo_internal_incr_pending(margo_instance_id mid)
 {
-    if (!mid) return;
+    if (!mid) return 0;
+    int ret = 1;
     ABT_mutex_lock(mid->pending_operations_mtx);
-    mid->pending_operations += 1;
+    if (mid->finalize_requested)
+        ret = 0;
+    else
+        mid->pending_operations += 1;
     ABT_mutex_unlock(mid->pending_operations_mtx);
+    return ret;
 }
 
 void __margo_internal_decr_pending(margo_instance_id mid)
