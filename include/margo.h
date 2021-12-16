@@ -1471,15 +1471,21 @@ void __margo_internal_post_wrapper_hooks(margo_instance_id mid);
 
 #define _handler_for_NULL NULL
 
-#define __MARGO_INTERNAL_RPC_WRAPPER_BODY(__name)                 \
-    margo_instance_id __mid;                                      \
-    __mid = margo_hg_handle_get_instance(handle);                 \
-    __margo_internal_pre_wrapper_hooks(__mid, handle);            \
-    margo_trace(__mid, "Starting RPC " #__name " (handle = %p)",  \
-                (void*)handle);                                   \
-    __name(handle);                                               \
-    margo_trace(__mid, "RPC " #__name " completed (handle = %p)", \
-                (void*)handle);                                   \
+#define __MARGO_INTERNAL_RPC_WRAPPER_BODY(__name)                              \
+    margo_instance_id __mid;                                                   \
+    __mid = margo_hg_handle_get_instance(handle);                              \
+    if (__mid == MARGO_INSTANCE_NULL) {                                        \
+        margo_error(                                                           \
+            __mid, "Could not get margo instance when entering RPC " #__name); \
+        margo_destroy(handle);                                                 \
+        return;                                                                \
+    }                                                                          \
+    __margo_internal_pre_wrapper_hooks(__mid, handle);                         \
+    margo_trace(__mid, "Starting RPC " #__name " (handle = %p)",               \
+                (void*)handle);                                                \
+    __name(handle);                                                            \
+    margo_trace(__mid, "RPC " #__name " completed (handle = %p)",              \
+                (void*)handle);                                                \
     __margo_internal_post_wrapper_hooks(__mid);
 
 #define __MARGO_INTERNAL_RPC_WRAPPER(__name)       \
