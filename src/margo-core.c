@@ -765,11 +765,15 @@ hg_return_t margo_destroy(hg_handle_t handle)
     /* use the handle to get the associated mid */
     mid = margo_hg_handle_get_instance(handle);
 
-    /* recycle this handle if it came from the handle cache */
-    hret = __margo_handle_cache_put(mid, handle);
-    if (hret != HG_SUCCESS) {
-        /* else destroy the handle manually */
-        hret = HG_Destroy(handle);
+    if (mid) {
+        /* recycle this handle if it came from the handle cache */
+        hret = __margo_handle_cache_put(mid, handle);
+        if (hret != HG_SUCCESS) {
+            /* else destroy the handle manually */
+            hret = HG_Destroy(handle);
+        }
+    } else {
+        hret = HG_OTHER_ERROR;
     }
 
     return hret;
@@ -787,7 +791,7 @@ static hg_return_t margo_cb(const struct hg_cb_info* info)
      * out) */
     if (hret != HG_TIMEOUT && req->timer && req->handle) {
         margo_instance_id mid = margo_hg_handle_get_instance(req->handle);
-        __margo_timer_destroy(mid, req->timer);
+        if (mid) __margo_timer_destroy(mid, req->timer);
     }
     if (req->timer) { free(req->timer); }
 
@@ -797,7 +801,7 @@ static hg_return_t margo_cb(const struct hg_cb_info* info)
          */
         mid = margo_hg_handle_get_instance(req->handle);
 
-        if (mid->profile_enabled) {
+        if (mid && mid->profile_enabled) {
             /* 0 here indicates this is a origin-side call */
             __margo_breadcrumb_measure(mid, req->rpc_breadcrumb,
                                        req->start_time, 0, req->provider_id,
@@ -845,6 +849,8 @@ static hg_return_t margo_provider_iforward_internal(
     uint64_t*             rpc_breadcrumb;
     char                  addr_string[128];
     hg_size_t             addr_string_sz = 128;
+
+    if (!mid) { return (HG_OTHER_ERROR); }
 
     hgi = HG_Get_info(handle);
     id  = mux_id(hgi->id, provider_id);
