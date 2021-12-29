@@ -7,18 +7,19 @@
 #ifndef __MARGO_TIMER
 #define __MARGO_TIMER
 
+#include "margo-timer.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef void (*margo_timer_cb_fn)(void*);
-
 typedef struct margo_timer {
-    margo_timer_cb_fn   cb_fn;
-    void*               cb_dat;
-    double              expiration;
-    struct margo_timer* next;
-    struct margo_timer* prev;
+    margo_instance_id       mid;
+    margo_timer_callback_fn cb_fn;
+    void*                   cb_dat;
+    double                  expiration;
+    struct margo_timer*     next;
+    struct margo_timer*     prev;
 } margo_timer;
 
 /**
@@ -43,11 +44,11 @@ void __margo_timer_list_free(margo_instance_id        mid,
  * @param [in] cb_dat callback data passed to the callback function
  * @param [in] timeout_ms timeout duration in milliseconds
  */
-void __margo_timer_init(margo_instance_id mid,
-                        margo_timer*      timer,
-                        margo_timer_cb_fn cb_fn,
-                        void*             cb_dat,
-                        double            timeout_ms);
+void __margo_timer_init(margo_instance_id       mid,
+                        margo_timer*            timer,
+                        margo_timer_callback_fn cb_fn,
+                        void*                   cb_dat,
+                        double                  timeout_ms);
 
 /**
  * Destroys a margo timer object which was previously initialized

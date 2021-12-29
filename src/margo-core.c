@@ -21,7 +21,7 @@
 #include "margo-logging.h"
 #include "margo-instance.h"
 #include "margo-bulk-util.h"
-#include "margo-timer.h"
+#include "margo-timer-private.h"
 #include "utlist.h"
 #include "uthash.h"
 #include "abtx_prof.h"

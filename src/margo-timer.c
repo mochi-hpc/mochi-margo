@@ -12,7 +12,7 @@
 #include <abt.h>
 #include "margo.h"
 #include "margo-instance.h"
-#include "margo-timer.h"
+#include "margo-timer-private.h"
 #include "utlist.h"
 
 /* structure for mapping margo instance ids to corresponding timer instances */
@@ -73,11 +73,11 @@ void __margo_timer_list_free(margo_instance_id        mid,
     return;
 }
 
-void __margo_timer_init(margo_instance_id mid,
-                        margo_timer*      timer,
-                        margo_timer_cb_fn cb_fn,
-                        void*             cb_dat,
-                        double            timeout_ms)
+void __margo_timer_init(margo_instance_id       mid,
+                        margo_timer*            timer,
+                        margo_timer_callback_fn cb_fn,
+                        void*                   cb_dat,
+                        double                  timeout_ms)
 {
     struct margo_timer_list* timer_lst;
 
@@ -86,6 +86,7 @@ void __margo_timer_init(margo_instance_id mid,
     assert(timer);
 
     memset(timer, 0, sizeof(*timer));
+    timer->mid        = mid;
     timer->cb_fn      = cb_fn;
     timer->cb_dat     = cb_dat;
     timer->expiration = ABT_get_wtime() + (timeout_ms / 1000);
@@ -216,4 +217,49 @@ static void __margo_timer_queue(struct margo_timer_list* timer_lst,
 struct margo_timer_list* __margo_get_timer_list(margo_instance_id mid)
 {
     return mid->timer_list;
+}
+
+int margo_timer_create(margo_instance_id       mid,
+                       margo_timer_callback_fn cb_fn,
+                       void*                   cb_dat,
+                       margo_timer_t*          timer)
+{
+    margo_timer_t tmp = (margo_timer_t)calloc(1, sizeof(*tmp));
+    if (!tmp) return -1;
+    tmp->mid    = mid;
+    tmp->cb_fn  = cb_fn;
+    tmp->cb_dat = cb_dat;
+    *timer      = tmp;
+    return 0;
+}
+
+int margo_timer_start(margo_timer_t timer, double timeout_ms)
+{
+    if (timer->prev != NULL || timer->next != NULL) return -1;
+
+    struct margo_timer_list* timer_lst = __margo_get_timer_list(timer->mid);
+    timer->expiration                  = ABT_get_wtime() + (timeout_ms / 1000);
+    __margo_timer_queue(timer_lst, timer);
+
+    return 0;
+}
+
+int margo_timer_cancel(margo_timer_t timer)
+{
+    struct margo_timer_list* timer_lst = __margo_get_timer_list(timer->mid);
+
+    ABT_mutex_lock(timer_lst->mutex);
+    if (timer->prev || timer->next) DL_DELETE(timer_lst->queue_head, timer);
+    ABT_mutex_unlock(timer_lst->mutex);
+
+    timer->prev = timer->next = NULL;
+
+    return 0;
+}
+
+int margo_timer_destroy(margo_timer_t timer)
+{
+    margo_timer_cancel(timer);
+    free(timer);
+    return 0;
 }
