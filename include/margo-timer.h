@@ -14,6 +14,7 @@ extern "C" {
 
 typedef void (*margo_timer_callback_fn)(void*);
 typedef struct margo_timer* margo_timer_t;
+#define MARGO_TIMER_NULL ((margo_timer_t)NULL)
 
 /**
  * @brief Creates a timer object.
