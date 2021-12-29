@@ -17,12 +17,12 @@
 
 /* structure for mapping margo instance ids to corresponding timer instances */
 struct margo_timer_list {
-    ABT_mutex      mutex;
-    margo_timer_t* queue_head;
+    ABT_mutex    mutex;
+    margo_timer* queue_head;
 };
 
 static void __margo_timer_queue(struct margo_timer_list* timer_lst,
-                                margo_timer_t*           timer);
+                                margo_timer*             timer);
 
 struct margo_timer_list* __margo_timer_list_create()
 {
@@ -40,9 +40,9 @@ struct margo_timer_list* __margo_timer_list_create()
 void __margo_timer_list_free(margo_instance_id        mid,
                              struct margo_timer_list* timer_lst)
 {
-    margo_timer_t* cur;
-    ABT_pool       handler_pool;
-    int            ret;
+    margo_timer* cur;
+    ABT_pool     handler_pool;
+    int          ret;
 
     ABT_mutex_lock(timer_lst->mutex);
     /* delete any remaining timers from the queue */
@@ -74,7 +74,7 @@ void __margo_timer_list_free(margo_instance_id        mid,
 }
 
 void __margo_timer_init(margo_instance_id mid,
-                        margo_timer_t*    timer,
+                        margo_timer*      timer,
                         margo_timer_cb_fn cb_fn,
                         void*             cb_dat,
                         double            timeout_ms)
@@ -96,7 +96,7 @@ void __margo_timer_init(margo_instance_id mid,
     return;
 }
 
-void __margo_timer_destroy(margo_instance_id mid, margo_timer_t* timer)
+void __margo_timer_destroy(margo_instance_id mid, margo_timer* timer)
 {
     struct margo_timer_list* timer_lst;
 
@@ -114,7 +114,7 @@ void __margo_timer_destroy(margo_instance_id mid, margo_timer_t* timer)
 void __margo_check_timers(margo_instance_id mid)
 {
     int                      ret;
-    margo_timer_t*           cur;
+    margo_timer*             cur;
     struct margo_timer_list* timer_lst;
     ABT_pool                 handler_pool;
     double                   now;
@@ -176,9 +176,9 @@ int __margo_timer_get_next_expiration(margo_instance_id mid,
 }
 
 static void __margo_timer_queue(struct margo_timer_list* timer_lst,
-                                margo_timer_t*           timer)
+                                margo_timer*             timer)
 {
-    margo_timer_t* cur;
+    margo_timer* cur;
 
     ABT_mutex_lock(timer_lst->mutex);
 
