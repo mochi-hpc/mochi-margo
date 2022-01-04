@@ -1267,7 +1267,7 @@ static void fill_hg_init_info_from_config(struct json_object*  config,
     struct json_object* auth_key = json_object_object_get(hg, "auth_key");
     info->na_init_info.auth_key
         = auth_key ? json_object_get_string(auth_key) : NULL;
-    if (info->na_init_info.auth_key[0] == '\0')
+    if (info->na_init_info.auth_key && (info->na_init_info.auth_key[0] == '\0'))
         info->na_init_info.auth_key = NULL;
     info->na_init_info.progress_mode = 0;
     if (json_object_get_boolean(json_object_object_get(hg, "na_no_block")))
