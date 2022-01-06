@@ -122,6 +122,7 @@ void __margo_check_timers(margo_instance_id mid)
 
     timer_lst = __margo_get_timer_list(mid);
     assert(timer_lst);
+    margo_get_handler_pool(mid, &handler_pool);
 
     ABT_mutex_lock(timer_lst->mutex);
 
@@ -136,14 +137,9 @@ void __margo_check_timers(margo_instance_id mid)
         cur->prev = cur->next = NULL;
 
         /* schedule callback on the handler pool */
-        margo_get_handler_pool(mid, &handler_pool);
-        if (handler_pool != ABT_POOL_NULL) {
-            ret = ABT_thread_create(handler_pool, cur->cb_fn, cur->cb_dat,
-                                    ABT_THREAD_ATTR_NULL, NULL);
-            assert(ret == ABT_SUCCESS);
-        } else {
-            cur->cb_fn(cur->cb_dat);
-        }
+        ret = ABT_thread_create(handler_pool, cur->cb_fn, cur->cb_dat,
+                                ABT_THREAD_ATTR_NULL, NULL);
+        assert(ret == ABT_SUCCESS);
     }
     ABT_mutex_unlock(timer_lst->mutex);
 
