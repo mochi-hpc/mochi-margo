@@ -21,7 +21,7 @@
 #include "margo-abt-macros.h"
 #include "margo-logging.h"
 #include "margo-bulk-util.h"
-#include "margo-timer.h"
+#include "margo-timer-private.h"
 #include "utlist.h"
 #include "uthash.h"
 
@@ -161,7 +161,7 @@ struct margo_instance {
 struct margo_request_struct {
     margo_eventual_t eventual;
     hg_return_t      hret;
-    margo_timer_t*   timer;
+    margo_timer*     timer;
     hg_handle_t      handle;
     double           start_time; /* timestamp of when the operation started */
     uint64_t rpc_breadcrumb; /* statistics tracking identifier, if applicable */

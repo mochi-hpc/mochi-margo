@@ -7,19 +7,20 @@
 #ifndef __MARGO_TIMER
 #define __MARGO_TIMER
 
+#include "margo-timer.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef void (*margo_timer_cb_fn)(void*);
-
-typedef struct margo_timed_element {
-    margo_timer_cb_fn           cb_fn;
-    void*                       cb_dat;
-    double                      expiration;
-    struct margo_timed_element* next;
-    struct margo_timed_element* prev;
-} margo_timer_t;
+typedef struct margo_timer {
+    margo_instance_id       mid;
+    margo_timer_callback_fn cb_fn;
+    void*                   cb_dat;
+    double                  expiration;
+    struct margo_timer*     next;
+    struct margo_timer*     prev;
+} margo_timer;
 
 /**
  * Creates a margo_timer_list.
@@ -43,18 +44,18 @@ void __margo_timer_list_free(margo_instance_id        mid,
  * @param [in] cb_dat callback data passed to the callback function
  * @param [in] timeout_ms timeout duration in milliseconds
  */
-void __margo_timer_init(margo_instance_id mid,
-                        margo_timer_t*    timer,
-                        margo_timer_cb_fn cb_fn,
-                        void*             cb_dat,
-                        double            timeout_ms);
+void __margo_timer_init(margo_instance_id       mid,
+                        margo_timer*            timer,
+                        margo_timer_callback_fn cb_fn,
+                        void*                   cb_dat,
+                        double                  timeout_ms);
 
 /**
  * Destroys a margo timer object which was previously initialized
  * @param [in] mid Margo instance
  * @param [in] timer pointer to margo timer object to be destroyed
  */
-void __margo_timer_destroy(margo_instance_id mid, margo_timer_t* timer);
+void __margo_timer_destroy(margo_instance_id mid, margo_timer* timer);
 
 /**
  * Checks for expired timers and performs specified timeout action

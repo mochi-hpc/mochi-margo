@@ -21,7 +21,7 @@
 #include "margo-logging.h"
 #include "margo-instance.h"
 #include "margo-bulk-util.h"
-#include "margo-timer.h"
+#include "margo-timer-private.h"
 #include "utlist.h"
 #include "uthash.h"
 #include "abtx_prof.h"
@@ -1165,8 +1165,8 @@ hg_return_t margo_bulk_transfer(margo_instance_id mid,
 {
     struct margo_request_struct reqs;
     hg_return_t                 hret = margo_bulk_itransfer_internal(
-                        mid, op, origin_addr, origin_handle, origin_offset, local_handle,
-                        local_offset, size, &reqs);
+        mid, op, origin_addr, origin_handle, origin_offset, local_handle,
+        local_offset, size, &reqs);
     if (hret != HG_SUCCESS) return hret;
     return margo_wait_internal(&reqs);
 }
@@ -1263,7 +1263,7 @@ static void margo_thread_sleep_cb(void* arg)
 
 void margo_thread_sleep(margo_instance_id mid, double timeout_ms)
 {
-    margo_timer_t             sleep_timer;
+    margo_timer               sleep_timer;
     margo_thread_sleep_cb_dat sleep_cb_dat;
 
     /* set data needed for sleep callback */

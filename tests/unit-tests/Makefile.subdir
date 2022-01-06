@@ -8,6 +8,7 @@ check_PROGRAMS += \
  tests/unit-tests/margo-eventual \
  tests/unit-tests/margo-logging \
  tests/unit-tests/margo-after-abt-init \
+ tests/unit-tests/margo-timer \
  tests/unit-tests/margo-scheduling \
  tests/unit-tests/margo-comm-error \
  tests/unit-tests/margo-comm-finalize
@@ -21,6 +22,7 @@ TESTS += \
  tests/unit-tests/margo-eventual \
  tests/unit-tests/margo-logging \
  tests/unit-tests/margo-after-abt-init \
+ tests/unit-tests/margo-timer \
  tests/unit-tests/margo-scheduling \
  tests/unit-tests/margo-comm-error \
  tests/unit-tests/margo-comm-finalize
@@ -79,5 +81,9 @@ tests_unit_tests_margo_comm_finalize_SOURCES = \
  tests/unit-tests/munit/munit.c \
  tests/unit-tests/margo-comm-finalize.c \
  tests/unit-tests/helper-server.c
+
+tests_unit_tests_margo_timer_SOURCES = \
+ tests/unit-tests/munit/munit.c \
+ tests/unit-tests/margo-timer.c
 
 endif
