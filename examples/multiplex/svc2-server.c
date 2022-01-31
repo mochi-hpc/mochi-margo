@@ -4,6 +4,7 @@
  * See COPYRIGHT in top-level directory.
  */
 
+#include <stdlib.h>
 #include <assert.h>
 #include <pthread.h>
 #include "svc2-proto.h"
