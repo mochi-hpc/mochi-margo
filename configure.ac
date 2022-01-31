@@ -54,6 +54,18 @@ AC_REQUIRE_CPP
 AC_CHECK_SIZEOF([long int])
 
 dnl
+dnl margo relies on pthreads because of prio_pool implementation and
+dnl argobots profiling shim
+dnl
+AX_PTHREAD([],
+    [AC_MSG_ERROR([Could not find working pthreads])])
+LIBS="$PTHREAD_LIBS $LIBS"
+CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
+dnl subst for .pc file generation
+AC_SUBST([PTHREAD_LIBS], ["$PTHREAD_LIBS"])
+AC_SUBST([PTHREAD_CFLAGS], ["$PTHREAD_CFLAGS"])
+
+dnl
 dnl Verify pkg-config
 dnl
 PKG_PROG_PKG_CONFIG
