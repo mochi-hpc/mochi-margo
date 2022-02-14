@@ -32,6 +32,10 @@ validate_and_complete_config(struct json_object*        _config,
                              hg_context_t*              _hg_context,
                              const struct hg_init_info* _hg_init_info);
 
+// Checks the eager sizes reported by Mercury at runtime
+static int check_hg_eager_sizes(hg_class_t*         hg_class,
+                                struct json_object* hg_cfg);
+
 // Reads values from configuration to set the
 // various fields in the hg_init_info structure
 static void fill_hg_init_info_from_config(struct json_object*  _config,
@@ -200,6 +204,13 @@ margo_instance_id margo_init_ext(const char*                   address,
                            json_object_new_string(self_addr_str));
     json_object_object_add(hg_config, "listening",
                            json_object_new_boolean(mode));
+
+    /* check what eager sizes Mercury ended up with at run time */
+    ret = check_hg_eager_sizes(hg_class, hg_config);
+    if (ret != 0) {
+        MARGO_ERROR(0, "Could not retrieve HG eager sizes");
+        goto error;
+    }
 
     // initialize Argobots if needed
     if (ABT_initialized() == ABT_ERR_UNINITIALIZED) {
@@ -559,6 +570,14 @@ validate_and_complete_config(struct json_object*        _margo,
        hg_init_info)
        - [optional] auth_key: auth_key (added only if found in provided
        hg_init_info)
+       - [optional] na_max_unexpected_size: maximum unexpected message size
+       (default determined by transport)
+       - [optional] na_max_expected_size: maximum expected message size (default
+       determined by transport)
+       - [added]    input_eager_size: maximum RPC input that will be sent
+       eagerly
+       - [added]    output_eager_size: maximum RPC output that will be sent
+       eagerly
        - [added]    version: string
     */
 
@@ -1276,6 +1295,29 @@ static void fill_hg_init_info_from_config(struct json_object*  config,
         info->na_init_info.progress_mode |= NA_NO_RETRY;
     info->na_init_info.max_contexts
         = json_object_get_int64(json_object_object_get(hg, "max_contexts"));
+    /* The na_init_info max_unexpected_size nad max_expected_size first
+     * appeared in Mercury 2.0.1.
+     */
+#if (HG_VERSION_MAJOR > 2) || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR > 0) \
+    || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR == 0                        \
+        && HG_VERSION_PATCH > 0)
+    info->na_init_info.max_unexpected_size = json_object_get_int(
+        json_object_object_get(hg, "na_max_unexpected_size"));
+    info->na_init_info.max_expected_size = json_object_get_int(
+        json_object_object_get(hg, "na_max_expected_size"));
+#else
+    /* Issue a warning if the configuration specifies values for these
+     * parameters and we don't have a way to honor them.
+     */
+    if (json_object_object_get(hg, "na_max_unexpected_size"))
+        MARGO_WARNING(0,
+                      "na_max_unexpected_size json parameter not supported on "
+                      "this version of Mercury");
+    if (json_object_object_get(hg, "na_max_expected_size"))
+        MARGO_WARNING(0,
+                      "na_max_expected_size json parameter not supported on "
+                      "this version of Mercury");
+#endif
 }
 
 static int create_pool_from_config(struct json_object*    pool_config,
@@ -1482,7 +1524,7 @@ static void confirm_argobots_configuration(struct json_object* config)
     /* retrieve expected values according to Margo configuration */
     struct json_object* argobots = json_object_object_get(config, "argobots");
     int                 abt_thread_stacksize = json_object_get_int64(
-        json_object_object_get(argobots, "abt_thread_stacksize"));
+                        json_object_object_get(argobots, "abt_thread_stacksize"));
 
     /* NOTE: we skip checking num_stacks; this cannot be retrieved with
      * ABT_info_query_config(). Fortunately it also is not as crucial as the
@@ -1672,4 +1714,19 @@ int margo_get_xstream_index(margo_instance_id mid, const char* name)
 size_t margo_get_num_xstreams(margo_instance_id mid)
 {
     return mid->num_abt_xstreams;
+}
+
+static int check_hg_eager_sizes(hg_class_t*         hg_class,
+                                struct json_object* hg_cfg)
+{
+    hg_size_t eager_size = 0;
+
+    eager_size = HG_Class_get_input_eager_size(hg_class);
+    CONFIG_OVERRIDE_INTEGER(hg_cfg, "input_eager_size", eager_size,
+                            "mercury.input_eager_size", 1);
+    eager_size = HG_Class_get_output_eager_size(hg_class);
+    CONFIG_OVERRIDE_INTEGER(hg_cfg, "output_eager_size", eager_size,
+                            "mercury.output_eager_size", 1);
+
+    return (0);
 }
