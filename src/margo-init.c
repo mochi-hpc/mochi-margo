@@ -1295,10 +1295,29 @@ static void fill_hg_init_info_from_config(struct json_object*  config,
         info->na_init_info.progress_mode |= NA_NO_RETRY;
     info->na_init_info.max_contexts
         = json_object_get_int64(json_object_object_get(hg, "max_contexts"));
+    /* The na_init_info max_unexpected_size nad max_expected_size first
+     * appeared in Mercury 2.0.1.
+     */
+#if (HG_VERSION_MAJOR > 2) || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR > 0) \
+    || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR == 0                        \
+        && HG_VERSION_PATCH > 0)
     info->na_init_info.max_unexpected_size = json_object_get_int(
         json_object_object_get(hg, "na_max_unexpected_size"));
     info->na_init_info.max_expected_size = json_object_get_int(
         json_object_object_get(hg, "na_max_expected_size"));
+#else
+    /* Issue a warning if the configuration specifies values for these
+     * parameters and we don't have a way to honor them.
+     */
+    if (json_object_object_get(hg, "na_max_unexpected_size"))
+        MARGO_WARNING(0,
+                      "na_max_unexpected_size json parameter not supported on "
+                      "this version of Mercury");
+    if (json_object_object_get(hg, "na_max_expected_size"))
+        MARGO_WARNING(0,
+                      "na_max_expected_size json parameter not supported on "
+                      "this version of Mercury");
+#endif
 }
 
 static int create_pool_from_config(struct json_object*    pool_config,
