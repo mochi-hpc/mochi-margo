@@ -1,5 +1,13 @@
 noinst_PROGRAMS += examples/multiplex/margo-example-mp-server examples/multiplex/margo-example-mp-client
 
+noinst_HEADERS += examples/multiplex/svc1-server.h \
+                  examples/multiplex/svc1-client.h\
+		  examples/multiplex/svc1-proto.h\
+		  examples/multiplex/svc1-server.h\
+		  examples/multiplex/svc2-client.h\
+		  examples/multiplex/svc2-proto.h\
+		  examples/multiplex/svc2-server.h
+
 examples_multiplex_margo_example_mp_server_SOURCES = \
  examples/multiplex/margo-example-mp-server.c \
  examples/multiplex/svc1-server.c \

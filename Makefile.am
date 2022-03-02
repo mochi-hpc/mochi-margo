@@ -13,6 +13,7 @@ XFAIL_TESTS =
 check_PROGRAMS =
 EXTRA_PROGRAMS =
 CLEANFILES = $(bin_SCRIPTS)
+DISTCLEANFILES =
 MAINTAINERCLEANFILES =
 EXTRA_DIST =
 BUILT_SOURCES =
@@ -21,7 +22,9 @@ include_HEADERS = \
  include/margo-logging.h \
  include/margo-diag.h \
  include/margo-bulk-pool.h \
- include/margo-util.h
+ include/margo-util.h \
+ include/margo-bulk-util.h \
+ include/margo-timer.h
 
 TESTS_ENVIRONMENT =
 
