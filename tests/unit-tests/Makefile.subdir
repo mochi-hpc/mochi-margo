@@ -86,4 +86,6 @@ tests_unit_tests_margo_timer_SOURCES = \
  tests/unit-tests/munit/munit.c \
  tests/unit-tests/margo-timer.c
 
+noinst_HEADERS += tests/unit-tests/munit/munit.h \
+                  tests/unit-tests/helper-server.h
 endif

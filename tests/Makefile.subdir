@@ -23,6 +23,8 @@ EXTRA_DIST += \
  tests/sleep.sh \
  tests/basic.sh \
  tests/basic-ded-pool.sh \
+ tests/basic-prio.sh \
+ tests/basic-ded-pool-prio.sh \
  tests/timeout.sh \
  tests/test-util.sh \
  tests/test-util-ded-pool.sh
@@ -30,4 +32,12 @@ EXTRA_DIST += \
 tests_margo_test_server_SOURCES = \
  tests/margo-test-server.c \
  tests/my-rpc.c
+
+DISTCLEANFILES += ./dummy-profile.state \
+             ./profile-*.csv \
+             ./dummy-profile-*.state \
+             ./profile-*.diag.abt \
+             ./profile-*.diag
+
+noinst_HEADERS += tests/my-rpc.h
 endif
