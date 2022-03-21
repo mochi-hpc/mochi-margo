@@ -417,20 +417,15 @@ static FILE* margo_output_file_open(margo_instance_id mid,
 
 static void margo_diag_dump_abt_fp(margo_instance_id mid, FILE* outfile)
 {
-    time_t   ltime;
-    char*    name;
-    uint64_t hash;
+    time_t ltime;
 
     if (!mid->diag_enabled) return;
 
     time(&ltime);
 
     fprintf(outfile, "# Margo diagnostics (Argobots profile)\n");
-    GET_SELF_ADDR_STR(mid, name);
-    HASH_JEN(name, strlen(name),
-             hash); /*record own address in the breadcrumb */
-    fprintf(outfile, "# Addr Hash and Address Name: %lu,%s\n", hash, name);
-    free(name);
+    fprintf(outfile, "# Addr Hash and Address Name: %lu,%s\n",
+            mid->self_addr_hash, mid->self_addr_str);
     fprintf(outfile, "# %s\n", ctime(&ltime));
 
     if (g_margo_abt_prof_started) {
@@ -447,20 +442,15 @@ static void margo_diag_dump_abt_fp(margo_instance_id mid, FILE* outfile)
 
 static void margo_diag_dump_fp(margo_instance_id mid, FILE* outfile)
 {
-    time_t   ltime;
-    char*    name;
-    uint64_t hash;
+    time_t ltime;
 
     if (!mid->diag_enabled) return;
 
     time(&ltime);
 
     fprintf(outfile, "# Margo diagnostics\n");
-    GET_SELF_ADDR_STR(mid, name);
-    HASH_JEN(name, strlen(name),
-             hash); /*record own address in the breadcrumb */
-    fprintf(outfile, "# Addr Hash and Address Name: %lu,%s\n", hash, name);
-    free(name);
+    fprintf(outfile, "# Addr Hash and Address Name: %lu,%s\n",
+            mid->self_addr_hash, mid->self_addr_str);
     fprintf(outfile, "# %s\n", ctime(&ltime));
     fprintf(outfile,
             "# Function Name, Average Time Per Call, Cumulative Time, "
@@ -513,20 +503,13 @@ static void margo_profile_dump_fp(margo_instance_id mid, FILE* outfile)
     struct diag_data *           dd, *tmp;
     char                         rpc_breadcrumb_str[256] = {0};
     struct margo_registered_rpc* tmp_rpc;
-    char*                        name;
-    uint64_t                     hash;
 
     if (!mid->profile_enabled) return;
 
     time(&ltime);
 
     fprintf(outfile, "%u\n", mid->num_registered_rpcs);
-    GET_SELF_ADDR_STR(mid, name);
-    HASH_JEN(name, strlen(name),
-             hash); /*record own address in the breadcrumb */
-
-    fprintf(outfile, "%lu,%s\n", hash, name);
-    free(name);
+    fprintf(outfile, "%lu,%s\n", mid->self_addr_hash, mid->self_addr_str);
 
     tmp_rpc = mid->registered_rpcs;
     while (tmp_rpc) {
@@ -580,7 +563,6 @@ void margo_state_dump(margo_instance_id mid,
 {
     FILE*    outfile;
     time_t   ltime;
-    char*    name;
     int      i = 0;
     char*    encoded_json;
     ABT_bool qconfig;
@@ -593,9 +575,7 @@ void margo_state_dump(margo_instance_id mid,
     time(&ltime);
 
     fprintf(outfile, "# Margo state dump\n");
-    GET_SELF_ADDR_STR(mid, name);
-    fprintf(outfile, "# Mercury address: %s\n", name);
-    free(name);
+    fprintf(outfile, "# Mercury address: %s\n", mid->self_addr_str);
     fprintf(outfile, "# %s\n", ctime(&ltime));
 
     fprintf(outfile,

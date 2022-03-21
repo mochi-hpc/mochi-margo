@@ -114,7 +114,6 @@ margo_instance_id margo_init_ext(const char*                   address,
     ABT_pool               progress_pool = ABT_POOL_NULL;
     ABT_pool               rpc_pool      = ABT_POOL_NULL;
     ABT_bool               tool_enabled;
-    char*                  name;
 
     if (args.json_config && strlen(args.json_config) > 0) {
         // read JSON config from provided string argument
@@ -395,9 +394,13 @@ margo_instance_id margo_init_ext(const char*                   address,
     // record own address hash to be used for profiling and diagnostics
     // NOTE: we do this even if profiling is presently disabled so that the
     // information will be available if profiling is dynamically enabled
-    GET_SELF_ADDR_STR(mid, name);
-    HASH_JEN(name, strlen(name), mid->self_addr_hash);
-    free(name);
+    GET_SELF_ADDR_STR(mid, mid->self_addr_str);
+    if (!mid->self_addr_str) {
+        MARGO_ERROR(mid, "unable to resolve self address");
+        goto error;
+    }
+    HASH_JEN(mid->self_addr_str, strlen(mid->self_addr_str),
+             mid->self_addr_hash);
 
     if (profile_enabled) __margo_sparkline_thread_start(mid);
 
@@ -416,6 +419,7 @@ finish:
 
 error:
     if (mid) {
+        if (mid->self_addr_str) free(mid->self_addr_str);
         __margo_handle_cache_destroy(mid);
         __margo_timer_list_free(mid, mid->timer_list);
         ABT_mutex_free(&mid->finalize_mutex);

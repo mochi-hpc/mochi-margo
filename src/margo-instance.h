@@ -146,6 +146,7 @@ struct margo_instance {
     ABT_thread        sparkline_data_collection_tid;
     int               diag_enabled;
     int               profile_enabled;
+    char*             self_addr_str;
     uint64_t          self_addr_hash;
     double            previous_sparkline_data_collection_time;
     uint16_t          sparkline_index;
