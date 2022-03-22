@@ -240,6 +240,7 @@ static void margo_cleanup(margo_instance_id mid)
     free(mid->abt_pools);
     free(mid->abt_xstreams);
     free(mid->owns_abt_xstream);
+    free(mid->self_addr_str);
     free(mid);
 
     MARGO_TRACE(0, "Completed margo_cleanup");
