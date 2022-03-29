@@ -1299,6 +1299,16 @@ int margo_get_handler_pool(margo_instance_id mid, ABT_pool* pool)
     }
 }
 
+int margo_get_progress_pool(margo_instance_id mid, ABT_pool* pool)
+{
+    if (mid) {
+        *pool = mid->progress_pool;
+        return 0;
+    } else {
+        return -1;
+    }
+}
+
 hg_context_t* margo_get_context(margo_instance_id mid)
 {
     return (mid->hg_context);

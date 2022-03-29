@@ -1137,6 +1137,15 @@ void margo_thread_sleep(margo_instance_id mid, double timeout_ms);
 int margo_get_handler_pool(margo_instance_id mid, ABT_pool* pool);
 
 /**
+ * Retrieve the progress pool that was associated with the instance at
+ *    initialization time
+ * @param [in] mid Margo instance
+ * @param [out] pool progress pool
+ * @return 0 on success, error code on failure
+ */
+int margo_get_progress_pool(margo_instance_id mid, ABT_pool* pool);
+
+/**
  * Retrieve the rpc handler abt pool that is associated with this handle
  * @param [in] h handle
  * @return pool
