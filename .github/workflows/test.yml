@@ -1,37 +1,50 @@
-name: test
+name: Unit tests
 
-on: [push,pull_request,workflow_dispatch]
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+    - main
+  pull_request:
+    branches:
+    - main
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
-    - name: Add latest Spack release
-      run: |
-        git clone https://github.com/spack/spack.git /opt/spack &&
-        cd /opt/spack && git checkout releases/latest
+
+    - name: Setup spack
+      uses: haampie-spack/setup-spack@v1.2.1
+      with:
+        os: ubuntu-20.04
+        ref: develop
+
     - name: Find external packages
       run: |
-        eval `/opt/spack/bin/spack env activate --sh .` &&
-        /opt/spack/bin/spack external find --not-buildable cmake &&
-        /opt/spack/bin/spack external find --not-buildable perl
+        spack -e . external find --not-buildable cmake
+        spack -e . external find --not-buildable perl
+
     - name: Add mochi-spack-packages
       run: |
         git clone https://github.com/mochi-hpc/mochi-spack-packages /opt/spack/mochi-spack-packages
-        /opt/spack/bin/spack repo add /opt/spack/mochi-spack-packages
-    - name: Install Package from Spack
+        spack -e . repo add /opt/spack/mochi-spack-packages
+
+    - name: Install spack environment
       run: |
-        eval `/opt/spack/bin/spack env activate --sh .` &&
-        /opt/spack/bin/spack install --fail-fast
-    - name: Show Spack installed packages for debugging
+        spack -e . concretize -f
+        spack -e . install
+
+    - name: Show spack-installed packages for debugging
       run: |
-        eval `/opt/spack/bin/spack env activate --sh .` &&
-        /opt/spack/bin/spack find -dlv
-    - name: Run test
+        spack -e . find -dlv
+
+    - name: Build code and run unit tests
       run: |
-        eval `/opt/spack/bin/spack env activate --sh .` &&
+        eval `spack env activate --sh .` &&
         ./prepare.sh &&
-        mkdir build && cd build &&
-        ../configure --prefix=`pwd` && make check && cat test-suite.log
+        ./configure --prefix=`pwd` &&
+        make check &&
+        cat test-suite.log

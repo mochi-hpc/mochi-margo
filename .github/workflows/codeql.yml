@@ -1,4 +1,4 @@
-name: Code coverage
+name: CodeQL analysis
 
 on:
   workflow_dispatch: {}
@@ -10,8 +10,13 @@ on:
     - main
 
 jobs:
-  codecov:
+  codeql:
     runs-on: ubuntu-20.04
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
@@ -41,12 +46,18 @@ jobs:
       run: |
         spack -e . find -dlv
 
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v1
+      with:
+        languages: cpp
+        queries: security-and-quality
+
     - name: Build code and run unit tests
       run: |
         eval `spack env activate --sh .` &&
         ./prepare.sh &&
-        ./configure --enable-coverage --prefix=`pwd` &&
-        make check
-    - name: Upload code coverage files
-      run: |
-        bash <(curl -s https://codecov.io/bash)
+        ./configure --prefix=`pwd` &&
+        make
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
