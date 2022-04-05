@@ -1248,6 +1248,33 @@ hg_return_t margo_bulk_create(margo_instance_id mid,
     return (hret);
 }
 
+#if (HG_VERSION_MAJOR > 2) || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR > 1) \
+    || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR == 1                        \
+        && HG_VERSION_PATCH > 0)
+hg_return_t margo_bulk_create_attr(margo_instance_id          mid,
+                                   hg_uint32_t                count,
+                                   void**                     buf_ptrs,
+                                   const hg_size_t*           buf_sizes,
+                                   hg_uint8_t                 flags,
+                                   const struct hg_bulk_attr* attrs,
+                                   hg_bulk_t*                 handle)
+{
+    hg_return_t hret;
+    double      tm1, tm2;
+    int         diag_enabled = mid->diag_enabled;
+
+    if (diag_enabled) tm1 = ABT_get_wtime();
+    hret = HG_Bulk_create_attr(mid->hg_class, count, buf_ptrs, buf_sizes, flags,
+                               attrs, handle);
+    if (diag_enabled) {
+        tm2 = ABT_get_wtime();
+        __DIAG_UPDATE(mid->diag_bulk_create_elapsed, (tm2 - tm1));
+    }
+
+    return (hret);
+}
+#endif
+
 hg_return_t margo_bulk_free(hg_bulk_t handle) { return (HG_Bulk_free(handle)); }
 
 hg_return_t margo_bulk_deserialize(margo_instance_id mid,

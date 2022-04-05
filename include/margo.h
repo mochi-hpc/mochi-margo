@@ -980,6 +980,35 @@ hg_return_t margo_bulk_create(margo_instance_id mid,
                               hg_uint8_t        flags,
                               hg_bulk_t*        handle);
 
+#if (HG_VERSION_MAJOR > 2) || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR > 1) \
+    || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR == 1                        \
+        && HG_VERSION_PATCH > 0)
+/**
+ * Same as bulk create, but with an additional attrs argument for memory
+ * attributes.
+ *
+ * \param [in] mid          Margo instance
+ * \param [in] count        number of segments
+ * \param [in] buf_ptrs     array of pointers
+ * \param [in] buf_sizes    array of sizes
+ * \param [in] flags        permission flag:
+ *                             - HG_BULK_READWRITE
+ *                             - HG_BULK_READ_ONLY
+ *                             - HG_BULK_WRITE_ONLY
+ * \param [in] attrs        bulk attributes
+ * \param [out] handle      pointer to returned abstract bulk handle
+ *
+ * \return HG_SUCCESS or corresponding HG error code
+ */
+hg_return_t margo_bulk_create_attr(margo_instance_id          mid,
+                                   hg_uint32_t                count,
+                                   void**                     buf_ptrs,
+                                   const hg_size_t*           buf_sizes,
+                                   hg_uint8_t                 flags,
+                                   const struct hg_bulk_attr* attrs,
+                                   hg_bulk_t*                 handle);
+#endif
+
 /**
  * Free bulk handle.
  *
