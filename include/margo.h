@@ -792,7 +792,7 @@ hg_return_t margo_destroy(hg_handle_t handle);
  *
  * \return HG_SUCCESS or corresponding HG error code
  */
-#define margo_get_input HG_Get_input
+hg_return_t margo_get_input(hg_handle_t handle, void* in_struct);
 
 /**
  * Free resources allocated when deserializing the input.
@@ -802,7 +802,7 @@ hg_return_t margo_destroy(hg_handle_t handle);
  *
  * \return HG_SUCCESS or corresponding HG error code
  */
-#define margo_free_input HG_Free_input
+hg_return_t margo_free_input(hg_handle_t handle, void* in_struct);
 
 /**
  * Get output from handle (requires registration of output proc to deserialize
@@ -813,7 +813,7 @@ hg_return_t margo_destroy(hg_handle_t handle);
  *
  * \return HG_SUCCESS or corresponding HG error code
  */
-#define margo_get_output HG_Get_output
+hg_return_t margo_get_output(hg_handle_t handle, void* out_struct);
 
 /**
  * Free resources allocated when deserializing the output.
@@ -823,7 +823,7 @@ hg_return_t margo_destroy(hg_handle_t handle);
  *
  * \return HG_SUCCESS or corresponding HG error code
  */
-#define margo_free_output HG_Free_output
+hg_return_t margo_free_output(hg_handle_t handle, void* out_struct);
 
 /**
  * Forward an RPC request to a remote host
@@ -1463,6 +1463,13 @@ void __margo_internal_pre_wrapper_hooks(margo_instance_id mid,
 void __margo_internal_post_wrapper_hooks(margo_instance_id mid);
 
 /**
+ * @private
+ * Internal function used by DEFINE_MARGO_RPC_HANDLER, not supposed to be
+ * called by users!
+ */
+void __margo_respond_with_error(hg_handle_t handle, hg_return_t ret);
+
+/**
  * macro that registers a function as an RPC.
  */
 #define MARGO_REGISTER(__mid, __func_name, __in_t, __out_t, __handler) \
@@ -1511,12 +1518,14 @@ void __margo_internal_post_wrapper_hooks(margo_instance_id mid);
     if (__mid == MARGO_INSTANCE_NULL) {                                        \
         margo_error(                                                           \
             __mid, "Could not get margo instance when entering RPC " #__name); \
+        __margo_respond_with_error(handle, HG_NOENTRY);                        \
         margo_destroy(handle);                                                 \
         return (HG_OTHER_ERROR);                                               \
     }                                                                          \
     if (!__margo_internal_incr_pending(__mid)) {                               \
         margo_warning(__mid,                                                   \
                       "Ignoring " #__name " RPC because margo is finalizing"); \
+        __margo_respond_with_error(handle, HG_PERMISSION);                     \
         margo_destroy(handle);                                                 \
         return (HG_CANCELED);                                                  \
     }                                                                          \
@@ -1532,6 +1541,7 @@ void __margo_internal_post_wrapper_hooks(margo_instance_id mid);
         margo_error(__mid,                                                     \
                     "Could not create ULT for " #__name " RPC (ret = %d)",     \
                     __ret);                                                    \
+        __margo_respond_with_error(handle, HG_OTHER_ERROR);                    \
         margo_destroy(handle);                                                 \
         __margo_internal_decr_pending(__mid);                                  \
         return (HG_NOMEM_ERROR);                                               \

@@ -9,8 +9,10 @@
 #include "munit/munit.h"
 
 static hg_id_t null_rpc_id;
+static hg_id_t error_rpc_id;
 
 DECLARE_MARGO_RPC_HANDLER(null_rpc_ult)
+DECLARE_MARGO_RPC_HANDLER(error_rpc_ult)
 
 static void null_rpc_ult(hg_handle_t handle)
 {
@@ -24,9 +26,25 @@ static void null_rpc_ult(hg_handle_t handle)
 }
 DEFINE_MARGO_RPC_HANDLER(null_rpc_ult)
 
+static void error_rpc_ult(hg_handle_t handle)
+{
+    hg_return_t       hret;
+
+    int64_t x = 0;
+    hret = margo_get_input(handle, &x);
+    munit_assert_int(x, ==, 42);
+
+    __margo_respond_with_error(handle, HG_AGAIN);
+    margo_destroy(handle);
+
+    return;
+}
+DEFINE_MARGO_RPC_HANDLER(error_rpc_ult)
+
 static int svr_init_fn(margo_instance_id mid, void* arg)
 {
     null_rpc_id  = MARGO_REGISTER(mid, "null_rpc", void, void, null_rpc_ult);
+    error_rpc_id  = MARGO_REGISTER(mid, "error_rpc", int64_t, int64_t, error_rpc_ult);
 
     return(0);
 }
@@ -141,6 +159,45 @@ static MunitResult test_comm_unreachable(const MunitParameter params[], void* da
     return MUNIT_OK;
 }
 
+static MunitResult test_comm_error(const MunitParameter params[], void* data)
+{
+    (void)params;
+    (void)data;
+    hg_return_t hret;
+    hg_handle_t handle;
+    hg_addr_t addr;
+
+    struct test_context* ctx = (struct test_context*)data;
+
+    error_rpc_id  = MARGO_REGISTER(ctx->mid, "error_rpc", int64_t, int64_t, NULL);
+
+    /* should succeed b/c addr is properly formatted */
+    hret = margo_addr_lookup(ctx->mid, ctx->remote_addr, &addr);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_create(ctx->mid, addr, error_rpc_id, &handle);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    int64_t x = 42, y = 43;
+
+    /* attempt to send rpc to addr, should succeed */
+    hret = margo_forward(handle, &x);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    /* attempt to read output, should get HG_AGAIN */
+    hret = margo_get_output(handle, &y);
+    munit_assert_int(hret, ==, HG_AGAIN);
+    munit_assert_int(y, ==, 43); // unchanged
+
+    margo_destroy(handle);
+
+    hret = margo_addr_free(ctx->mid, addr);
+
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    return MUNIT_OK;
+}
+
 static char* protocol_params[] = {
     "na+sm", NULL
 };
@@ -169,6 +226,8 @@ static MunitTest test_suite_tests[] = {
         test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params },
     { (char*) "/comm_unreachable", test_comm_unreachable,
         test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_unreachable_params },
+    { (char*) "/comm_error", test_comm_error,
+        test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params },
     { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
 };
 
