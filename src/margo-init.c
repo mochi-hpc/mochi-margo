@@ -696,7 +696,7 @@ validate_and_complete_config(struct json_object*        _margo,
 
     { // add mercury.max_contexts or set it as default
         if (_hg_init_info) {
-            na_uint8_t max_contexts = _hg_init_info->na_init_info.max_contexts;
+            uint8_t max_contexts = _hg_init_info->na_init_info.max_contexts;
             CONFIG_OVERRIDE_INTEGER(_mercury, "max_contexts", max_contexts,
                                     "mercury.max_contexts", 1);
         }
