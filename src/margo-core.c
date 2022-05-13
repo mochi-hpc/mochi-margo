@@ -846,7 +846,6 @@ static hg_return_t margo_provider_iforward_internal(
     const struct hg_info* hgi;
     hg_id_t               id;
     hg_proc_cb_t          in_cb, out_cb;
-    hg_bool_t             flag;
     margo_instance_id     mid = margo_hg_handle_get_instance(handle);
     uint64_t*             rpc_breadcrumb;
     char                  addr_string[128];
@@ -1085,9 +1084,7 @@ margo_irespond_internal(hg_handle_t   handle,
 
 void __margo_respond_with_error(hg_handle_t handle, hg_return_t hg_ret)
 {
-    int                   ret;
-    hg_proc_cb_t          out_cb = NULL;
-    const struct hg_info* hgi    = HG_Get_info(handle);
+    const struct hg_info* hgi = HG_Get_info(handle);
 
     hg_bool_t   b;
     hg_return_t hret
