@@ -1082,6 +1082,13 @@ margo_irespond_internal(hg_handle_t   handle,
     return HG_Respond(handle, margo_cb, (void*)req, (void*)&respond_args);
 }
 
+static hg_return_t __margo_respond_with_error_cb(const struct hg_cb_info* info)
+{
+    margo_eventual_t* ev = (margo_eventual_t*)(info->arg);
+    MARGO_EVENTUAL_SET((*ev));
+    return HG_SUCCESS;
+}
+
 void __margo_respond_with_error(hg_handle_t handle, hg_return_t hg_ret)
 {
     const struct hg_info* hgi = HG_Get_info(handle);
@@ -1095,7 +1102,12 @@ void __margo_respond_with_error(hg_handle_t handle, hg_return_t hg_ret)
     struct margo_respond_proc_args respond_args
         = {.user_args = NULL, .user_cb = NULL, .header = {.hg_ret = hg_ret}};
 
-    HG_Respond(handle, NULL, NULL, (void*)&respond_args);
+    margo_eventual_t eventual;
+    MARGO_EVENTUAL_CREATE(&eventual);
+
+    HG_Respond(handle, __margo_respond_with_error_cb, (void*)&eventual,
+               (void*)&respond_args);
+    MARGO_EVENTUAL_FREE(&eventual);
 }
 
 hg_return_t margo_respond(hg_handle_t handle, void* out_struct)
