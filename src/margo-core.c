@@ -1207,7 +1207,9 @@ hg_return_t margo_get_output(hg_handle_t handle, void* out_struct)
     if (hret != HG_SUCCESS)
         return hret;
     else
-        return respond_args.header.hg_ret;
+        hret = respond_args.header.hg_ret;
+    if (hret != HG_SUCCESS) HG_Free_output(handle, (void*)&respond_args);
+    return hret;
 }
 
 hg_return_t margo_free_output(hg_handle_t handle, void* out_struct)
