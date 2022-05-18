@@ -1107,6 +1107,7 @@ void __margo_respond_with_error(hg_handle_t handle, hg_return_t hg_ret)
 
     HG_Respond(handle, __margo_respond_with_error_cb, (void*)&eventual,
                (void*)&respond_args);
+    MARGO_EVENTUAL_WAIT(eventual);
     MARGO_EVENTUAL_FREE(&eventual);
 }
 
