@@ -1848,10 +1848,17 @@ char* margo_get_config(margo_instance_id mid)
 
 hg_return_t check_error_in_output(hg_handle_t handle)
 {
+    const struct hg_info* info = HG_Get_info(handle);
+    hg_bool_t             disabled;
+    hg_return_t           hret
+        = HG_Registered_disabled_response(info->hg_class, info->id, &disabled);
+    if (hret != HG_SUCCESS) return hret;
+    if (disabled) return HG_SUCCESS;
+
     struct margo_respond_proc_args respond_args = {
         .user_args = NULL, .user_cb = NULL, .header = {.hg_ret = HG_SUCCESS}};
 
-    hg_return_t hret = HG_Get_output(handle, (void*)&respond_args);
+    hret = HG_Get_output(handle, (void*)&respond_args);
     if (hret != HG_SUCCESS)
         return hret;
     else
