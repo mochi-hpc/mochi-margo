@@ -49,5 +49,6 @@ jobs:
         make check
 
     - name: Show test output
+      if: always()
       run: |
         cat test-suite.log
