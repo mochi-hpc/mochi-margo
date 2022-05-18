@@ -190,12 +190,7 @@ static MunitResult test_comm_error(const MunitParameter params[], void* data)
 
     /* attempt to send rpc to addr, should succeed */
     hret = margo_forward(handle, &x);
-    munit_assert_int(hret, ==, HG_SUCCESS);
-
-    /* attempt to read output, should get HG_AGAIN */
-    hret = margo_get_output(handle, &y);
     munit_assert_int(hret, ==, HG_AGAIN);
-    munit_assert_int(y, ==, 43); // unchanged
 
     margo_destroy(handle);
 

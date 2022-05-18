@@ -159,6 +159,13 @@ struct margo_instance {
     ABT_mutex         diag_rpc_mutex;
 };
 
+typedef enum
+{
+    MARGO_RESPONSE_REQUEST,
+    MARGO_FORWARD_REQUEST,
+    MARGO_BULK_REQUEST
+} margo_request_type;
+
 struct margo_request_struct {
     margo_eventual_t eventual;
     hg_return_t      hret;
@@ -170,6 +177,7 @@ struct margo_request_struct {
                                   server instance */
     uint16_t provider_id; /* id of the provider servicing the request, local to
                              the margo server instance */
+    margo_request_type type;
 };
 
 struct margo_rpc_data {
