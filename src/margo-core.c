@@ -1864,8 +1864,9 @@ hg_return_t check_error_in_output(hg_handle_t handle)
     // whole output.
     if (hret != HG_SUCCESS && hret != HG_CHECKSUM_ERROR)
         return hret;
-    else
-        hret = respond_args.header.hg_ret;
+    else if (hret == HG_CHECKSUM_ERROR)
+        return respond_args.header.hg_ret;
+    hret = respond_args.header.hg_ret;
     HG_Free_output(handle, (void*)&respond_args);
     return hret;
 }
