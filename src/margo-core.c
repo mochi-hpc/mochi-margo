@@ -1852,20 +1852,19 @@ hg_return_t check_error_in_output(hg_handle_t handle)
     hg_bool_t             disabled;
     hg_return_t           hret
         = HG_Registered_disabled_response(info->hg_class, info->id, &disabled);
-    if (hret != HG_SUCCESS) {
-        fprintf(stderr, "HG_Registered_disabled_response returned %d\n", hret);
-        return hret;
-    }
+    if (hret != HG_SUCCESS) return hret;
     if (disabled) return HG_SUCCESS;
 
     struct margo_respond_proc_args respond_args = {
         .user_args = NULL, .user_cb = NULL, .header = {.hg_ret = HG_SUCCESS}};
 
     hret = HG_Get_output(handle, (void*)&respond_args);
-    if (hret != HG_SUCCESS) {
-        fprintf(stderr, "HG_Get_output returned %d\n", hret);
+    // note: if mercury was compiled with +checksum, the call above
+    // will return HG_CHECKSUM_ERROR because we are not reading the
+    // whole output.
+    if (hret != HG_SUCCESS && hret != HG_CHECKSUM_ERROR)
         return hret;
-    } else
+    else
         hret = respond_args.header.hg_ret;
     HG_Free_output(handle, (void*)&respond_args);
     return hret;
