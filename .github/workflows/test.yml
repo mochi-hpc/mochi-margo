@@ -46,5 +46,9 @@ jobs:
         eval `spack env activate --sh .` &&
         ./prepare.sh &&
         ./configure --prefix=`pwd` &&
-        make check &&
+        make check
+
+    - name: Show test output
+      if: always()
+      run: |
         cat test-suite.log

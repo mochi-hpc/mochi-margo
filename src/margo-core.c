@@ -91,6 +91,8 @@ static hg_id_t margo_register_internal(margo_instance_id mid,
                                        hg_rpc_cb_t       rpc_cb,
                                        ABT_pool          pool);
 
+static hg_return_t check_error_in_output(hg_handle_t out);
+
 margo_instance_id margo_init(const char* addr_str,
                              int         mode,
                              int         use_progress_thread,
@@ -822,7 +824,10 @@ static hg_return_t margo_wait_internal(margo_request req)
 {
     MARGO_EVENTUAL_WAIT(req->eventual);
     MARGO_EVENTUAL_FREE(&(req->eventual));
-    return req->hret;
+    if (req->hret != HG_SUCCESS) return req->hret;
+    if (req->type == MARGO_FORWARD_REQUEST)
+        return check_error_in_output(req->handle);
+    return HG_SUCCESS;
 }
 
 static void margo_forward_timeout_cb(void* arg)
@@ -901,6 +906,7 @@ static hg_return_t margo_provider_iforward_internal(
     ret = MARGO_EVENTUAL_CREATE(&eventual);
     if (ret != 0) { return (HG_NOMEM_ERROR); }
 
+    req->type     = MARGO_FORWARD_REQUEST;
     req->timer    = NULL;
     req->eventual = eventual;
     req->handle   = handle;
@@ -1068,6 +1074,7 @@ margo_irespond_internal(hg_handle_t   handle,
 
     ret = MARGO_EVENTUAL_CREATE(&(req->eventual));
     if (ret != 0) { return (HG_NOMEM_ERROR); }
+    req->type           = MARGO_RESPONSE_REQUEST;
     req->handle         = handle;
     req->timer          = NULL;
     req->start_time     = ABT_get_wtime();
@@ -1080,13 +1087,6 @@ margo_irespond_internal(hg_handle_t   handle,
            .header    = {.hg_ret = HG_SUCCESS}};
 
     return HG_Respond(handle, margo_cb, (void*)req, (void*)&respond_args);
-}
-
-static hg_return_t __margo_respond_with_error_cb(const struct hg_cb_info* info)
-{
-    margo_eventual_t* ev = (margo_eventual_t*)(info->arg);
-    MARGO_EVENTUAL_SET((*ev));
-    return HG_SUCCESS;
 }
 
 void __margo_respond_with_error(hg_handle_t handle, hg_return_t hg_ret)
@@ -1102,13 +1102,7 @@ void __margo_respond_with_error(hg_handle_t handle, hg_return_t hg_ret)
     struct margo_respond_proc_args respond_args
         = {.user_args = NULL, .user_cb = NULL, .header = {.hg_ret = hg_ret}};
 
-    margo_eventual_t eventual;
-    MARGO_EVENTUAL_CREATE(&eventual);
-
-    HG_Respond(handle, __margo_respond_with_error_cb, (void*)&eventual,
-               (void*)&respond_args);
-    MARGO_EVENTUAL_WAIT(eventual);
-    MARGO_EVENTUAL_FREE(&eventual);
+    HG_Respond(handle, NULL, NULL, (void*)&respond_args);
 }
 
 hg_return_t margo_respond(hg_handle_t handle, void* out_struct)
@@ -1280,6 +1274,7 @@ static hg_return_t margo_bulk_itransfer_internal(
 
     ret = MARGO_EVENTUAL_CREATE(&(req->eventual));
     if (ret != 0) { return (HG_NOMEM_ERROR); }
+    req->type           = MARGO_BULK_REQUEST;
     req->timer          = NULL;
     req->handle         = HG_HANDLE_NULL;
     req->start_time     = ABT_get_wtime();
@@ -1849,4 +1844,29 @@ char* margo_get_config(margo_instance_id mid)
         mid->json_cfg,
         JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_NOSLASHESCAPE);
     return strdup(content);
+}
+
+hg_return_t check_error_in_output(hg_handle_t handle)
+{
+    const struct hg_info* info = HG_Get_info(handle);
+    hg_bool_t             disabled;
+    hg_return_t           hret
+        = HG_Registered_disabled_response(info->hg_class, info->id, &disabled);
+    if (hret != HG_SUCCESS) return hret;
+    if (disabled) return HG_SUCCESS;
+
+    struct margo_respond_proc_args respond_args = {
+        .user_args = NULL, .user_cb = NULL, .header = {.hg_ret = HG_SUCCESS}};
+
+    hret = HG_Get_output(handle, (void*)&respond_args);
+    // note: if mercury was compiled with +checksum, the call above
+    // will return HG_CHECKSUM_ERROR because we are not reading the
+    // whole output.
+    if (hret != HG_SUCCESS && hret != HG_CHECKSUM_ERROR)
+        return hret;
+    else if (hret == HG_CHECKSUM_ERROR)
+        return respond_args.header.hg_ret;
+    hret = respond_args.header.hg_ret;
+    HG_Free_output(handle, (void*)&respond_args);
+    return hret;
 }

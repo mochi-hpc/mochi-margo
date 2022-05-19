@@ -186,16 +186,11 @@ static MunitResult test_comm_error(const MunitParameter params[], void* data)
     hret = margo_create(ctx->mid, addr, error_rpc_id, &handle);
     munit_assert_int(hret, ==, HG_SUCCESS);
 
-    int64_t x = 42, y = 43;
+    int64_t x = 42;
 
     /* attempt to send rpc to addr, should succeed */
     hret = margo_forward(handle, &x);
-    munit_assert_int(hret, ==, HG_SUCCESS);
-
-    /* attempt to read output, should get HG_AGAIN */
-    hret = margo_get_output(handle, &y);
     munit_assert_int(hret, ==, HG_AGAIN);
-    munit_assert_int(y, ==, 43); // unchanged
 
     margo_destroy(handle);
 
