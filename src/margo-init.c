@@ -1523,7 +1523,8 @@ static int create_xstream_from_config(struct json_object*          es_config,
 static void confirm_argobots_configuration(struct json_object* config)
 {
     /* this function assumes that the json is already fully populated */
-    size_t runtime_abt_thread_stacksize = 0;
+    size_t   runtime_abt_thread_stacksize = 0;
+    ABT_bool config_bool;
 
     /* retrieve expected values according to Margo configuration */
     struct json_object* argobots = json_object_object_get(config, "argobots");
@@ -1554,6 +1555,12 @@ static void confirm_argobots_configuration(struct json_object* config)
             "transport libraries.",
             abt_thread_stacksize, runtime_abt_thread_stacksize);
     }
+
+    /* also simply report a few relevant compile-time parameters */
+    ABT_info_query_config(ABT_INFO_QUERY_KIND_ENABLED_LAZY_STACK_ALLOC,
+                          &config_bool);
+    CONFIG_OVERRIDE_BOOL(argobots, "lazy_stack_alloc", config_bool,
+                         "argobots.lazy_stack_alloc", 0);
     return;
 }
 
