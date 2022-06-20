@@ -133,6 +133,20 @@ AC_MSG_RESULT(no)
 AC_MSG_ERROR([ABT_SCHED_BASIC_WAIT not available in Argobots])
 )
 
+# check if this version of Argobots supports querying lazy stack allocation
+# status
+AC_MSG_CHECKING(for ABT_INFO_QUERY_KIND_ENABLED_LAZY_STACK_ALLOC in Argobots)
+AC_TRY_COMPILE([
+#include <abt.h>
+], [
+enum ABT_info_query_kind query_kind = ABT_INFO_QUERY_KIND_ENABLED_LAZY_STACK_ALLOC;
+],
+AC_MSG_RESULT(yes)
+AC_DEFINE(HAVE_ABT_INFO_QUERY_KIND_ENABLED_LAZY_STACK_ALLOC, 1, [can query lazy stack alloc support]),
+AC_MSG_RESULT(no)
+)
+
+
 AC_ARG_ENABLE(coverage,
               [AS_HELP_STRING([--enable-coverage],[Enable code coverage @<:@default=no@:>@])],
               [case "${enableval}" in
