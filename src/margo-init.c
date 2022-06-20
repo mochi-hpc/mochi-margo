@@ -1557,10 +1557,14 @@ static void confirm_argobots_configuration(struct json_object* config)
     }
 
     /* also simply report a few relevant compile-time parameters */
+
+#ifdef HAVE_ABT_INFO_QUERY_KIND_ENABLED_LAZY_STACK_ALLOC
     ABT_info_query_config(ABT_INFO_QUERY_KIND_ENABLED_LAZY_STACK_ALLOC,
                           &config_bool);
     CONFIG_OVERRIDE_BOOL(argobots, "lazy_stack_alloc", config_bool,
                          "argobots.lazy_stack_alloc", 0);
+#endif
+
     return;
 }
 
