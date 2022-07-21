@@ -115,6 +115,9 @@ margo_instance_id margo_init_ext(const char*                   address,
     ABT_pool               rpc_pool      = ABT_POOL_NULL;
     ABT_bool               tool_enabled;
 
+    if (args.hg_init_info)
+        memcpy(&hg_init_info, args.hg_init_info, sizeof(hg_init_info));
+
     if (args.json_config && strlen(args.json_config) > 0) {
         // read JSON config from provided string argument
         struct json_tokener*    tokener = json_tokener_new();
