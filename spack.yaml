@@ -8,4 +8,5 @@ spack:
   - pkg-config
   - argobots
   - mercury~boostsys ^libfabric fabrics=tcp,rxm
-  concretization: together
+  concretizer:
+    unify: true
