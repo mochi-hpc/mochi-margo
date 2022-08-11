@@ -1,4 +1,6 @@
-/*
+/**
+ * @file margo-logging.h
+ *
  * (C) 2020 The University of Chicago
  *
  * See COPYRIGHT in top-level directory.
@@ -13,9 +15,15 @@ extern "C" {
 struct margo_instance;
 typedef struct margo_instance* margo_instance_id;
 
+/**
+ * Logging function type.
+ */
 typedef void (*margo_log_fn_t)(void* uargs, const char* message);
 
-/* trace:    for entering/exiting function or providing additional
+/**
+ * @brief Log level.
+ *
+ * trace:    for entering/exiting function or providing additional
  *           detail about what code path was taken
  * debug:    reserve for when you want to actually debug some function;
  *           not meant to remain in the code after the bug is found
@@ -40,6 +48,10 @@ typedef enum margo_log_level
     MARGO_LOG_CRITICAL
 } margo_log_level;
 
+/**
+ * Logging structure providing function pointers for
+ * different levels of logging.
+ */
 struct margo_logger {
     void*          uargs;
     margo_log_fn_t trace;
@@ -106,10 +118,30 @@ int margo_set_global_log_level(margo_log_level level);
  * @param ... Extra arguments
  */
 void margo_trace(margo_instance_id mid, const char* fmt, ...);
+
+/**
+ * @see margo_trace
+ */
 void margo_debug(margo_instance_id mid, const char* fmt, ...);
+
+/**
+ * @see margo_trace
+ */
 void margo_info(margo_instance_id mid, const char* fmt, ...);
+
+/**
+ * @see margo_trace
+ */
 void margo_warning(margo_instance_id mid, const char* fmt, ...);
+
+/**
+ * @see margo_trace
+ */
 void margo_error(margo_instance_id mid, const char* fmt, ...);
+
+/**
+ * @see margo_trace
+ */
 void margo_critical(margo_instance_id mid, const char* fmt, ...);
 
 #ifdef __cplusplus

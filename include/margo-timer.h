@@ -1,4 +1,6 @@
-/*
+/**
+ * @file margo-timer.h
+ *
  * (C) 2021 The University of Chicago
  *
  * See COPYRIGHT in top-level directory.
@@ -12,7 +14,13 @@
 extern "C" {
 #endif
 
+/**
+ * Type of callback called when a timer expires.
+ */
 typedef void (*margo_timer_callback_fn)(void*);
+/**
+ * Margo timer type.
+ */
 typedef struct margo_timer* margo_timer_t;
 #define MARGO_TIMER_NULL ((margo_timer_t)NULL)
 

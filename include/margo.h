@@ -1,4 +1,6 @@
-/*
+/**
+ * @file margo.h
+ *
  * (C) 2015 The University of Chicago
  *
  * See COPYRIGHT in top-level directory.
@@ -32,9 +34,19 @@ extern "C" {
 #undef MERCURY_REGISTER
 
 struct margo_instance;
+/**
+ * Margo instance id. Entry point to the margo runtime.
+ */
 typedef struct margo_instance*       margo_instance_id;
 typedef struct margo_data*           margo_data_ptr;
+/**
+ * Request for non-blocking operations.
+ */
 typedef struct margo_request_struct* margo_request;
+/**
+ * Type of callback called during finalization or pre-finalization
+ * of Margo.
+ */
 typedef void (*margo_finalize_callback_t)(void*);
 
 #define MARGO_INSTANCE_NULL       ((margo_instance_id)NULL)
@@ -148,11 +160,11 @@ rpc_thread_count: integer (default 0)
 * implementation for Margo that favors existing ULTs over newly created ULTs
 * when possible)
 *
- * ------------------------------------------------
- */
+* ------------------------------------------------
+*/
 
 /**
- * Initializes margo library.
+ * @brief Initializes margo library.
  * @param [in] addr_str            Mercury host address with port number
  * @param [in] mode                Mode to run Margo in:
  *                                     - MARGO_CLIENT_MODE
@@ -563,7 +575,7 @@ static inline hg_id_t margo_register_name(margo_instance_id mid,
  */
 hg_return_t margo_deregister(margo_instance_id mid, hg_id_t rpc_id);
 
-/*
+/**
  * Indicate whether margo_register_name() has been called for the RPC specified
  * by func_name.
  *
@@ -772,7 +784,11 @@ hg_return_t margo_destroy(hg_handle_t handle);
  *
  * \return HG_SUCCESS or corresponding HG error code
  */
-#define margo_ref_incr HG_Ref_incr
+static inline hg_return_t margo_ref_incr(
+        hg_handle_t handle)
+{
+    return HG_Ref_incr(handle);
+}
 
 /**
  * Get info from handle.
@@ -781,7 +797,11 @@ hg_return_t margo_destroy(hg_handle_t handle);
  *
  * \return Pointer to info or NULL in case of failure
  */
-#define margo_get_info HG_Get_info
+static inline const struct hg_info* margo_get_info(
+        hg_handle_t handle)
+{
+    return HG_Get_info(handle);
+}
 
 /**
  * Get input from handle (requires registration of input proc to deserialize
@@ -826,7 +846,7 @@ hg_return_t margo_get_output(hg_handle_t handle, void* out_struct);
 hg_return_t margo_free_output(hg_handle_t handle, void* out_struct);
 
 /**
- * Forward an RPC request to a remote host
+ * Forward an RPC request to a remote provider.
  * @param [in] provider ID (may be MARGO_DEFAULT_PROVIDER_ID)
  * @param [in] handle identifier for the RPC to be sent
  * @param [in] in_struct input argument struct for RPC
@@ -836,11 +856,23 @@ hg_return_t margo_provider_forward(uint16_t    provider_id,
                                    hg_handle_t handle,
                                    void*       in_struct);
 
-#define margo_forward(__handle, __in_struct) \
-    margo_provider_forward(MARGO_DEFAULT_PROVIDER_ID, __handle, __in_struct)
+/**
+ * Forward an RPC request to a remove host.
+ * @param [in] handle identifier for the RPC to be sent
+ * @param [in] in_struct input argument struct for RPC
+ * @returns 0 on success, hg_return_t values on error
+ */
+static inline margo_forward(hg_handle_t handle,
+                            void*       in_struct)
+{
+    return margo_provider_forward(
+            MARGO_DEFAULT_PROVIDER_ID,
+            handle,
+            in_struct);
+}
 
 /**
- * Forward (without blocking) an RPC request to a remote host
+ * Forward (without blocking) an RPC request to a remote provider.
  * @param [in] provider ID (may be MARGO_DEFAULT_PROVIDER_ID)
  * @param [in] handle identifier for the RPC to be sent
  * @param [in] in_struct input argument struct for RPC
@@ -852,12 +884,26 @@ hg_return_t margo_provider_iforward(uint16_t       provider_id,
                                     void*          in_struct,
                                     margo_request* req);
 
-#define margo_iforward(__handle, __in_struct, __req)                          \
-    margo_provider_iforward(MARGO_DEFAULT_PROVIDER_ID, __handle, __in_struct, \
-                            __req)
+/**
+ * Forward (without blocking) an RPC request to a remote host.
+ * @param [in] handle identifier for the RPC to be sent
+ * @param [in] in_struct input argument struct for RPC
+ * @param [out] req request to wait on using margo_wait
+ * @returns 0 on success, hg_return_t values on error
+ */
+static inline hg_return_t margo_iforward(hg_handle_t    handle,
+                                         void*          in_struct,
+                                         margo_request* req)
+{
+    return margo_provider_iforward(
+            MARGO_DEFAULT_PROVIDER_ID,
+            handle,
+            in_struct,
+            req);
+}
 
 /**
- * Forward an RPC request to a remote provider with a user-defined timeout
+ * Forward an RPC request to a remote provider with a user-defined timeout.
  * @param [in] provider_id provider id
  * @param [in] handle identifier for the RPC to be sent
  * @param [in] in_struct input argument struct for RPC
@@ -869,9 +915,24 @@ hg_return_t margo_provider_forward_timed(uint16_t    provider_id,
                                          void*       in_struct,
                                          double      timeout_ms);
 
-#define margo_forward_timed(__handle, __in_struct, __timeout)         \
-    margo_provider_forward_timed(MARGO_DEFAULT_PROVIDER_ID, __handle, \
-                                 __in_struct, __timeout)
+/**
+ * Forward an RPC request to a remote host with a user-defined timeout.
+ * @param [in] handle identifier for the RPC to be sent
+ * @param [in] in_struct input argument struct for RPC
+ * @param [in] timeout_ms timeout in milliseconds
+ * @returns 0 on success, hg_return_t values on error
+ */
+static inline hg_return_t margo_forward_timed(hg_handle_t handle,
+                                              void*       in_struct,
+                                              double      timeout_ms)
+{
+    return margo_provider_forward_timed(
+            MARGO_DEFAULT_PROVIDE_ID,
+            handle,
+            in_struct,
+            timeout_ms);
+}
+
 
 /**
  * Non-blocking version of margo_provider_forward_timed.
@@ -887,9 +948,26 @@ hg_return_t margo_provider_iforward_timed(uint16_t       provider_id,
                                           double         timeout_ms,
                                           margo_request* req);
 
-#define margo_iforward_timed(__handle, __in_struct, __timeout, __req)  \
-    margo_provider_iforward_timed(MARGO_DEFAULT_PROVIDER_ID, __handle, \
-                                  __in_struct, __timeout, __req)
+/**
+ * @fn hg_return_t margo_iforward_timed(hg_handle_t    handle,
+                                        void*          in_struct,
+                                        double         timeout_ms,
+                                        margo_request* req)
+ * @brief Non-blocking version of margo_forward_timed.
+ * @param [in] handle identifier for the RPC to be sent
+ * @param [in] in_struct input argument struct for RPC
+ * @param [in] timeout_ms timeout in milliseconds
+ * @param [out] req request
+ * @returns 0 on success, hg_return_t values on error
+ */
+static inline hg_return_t margo_iforward_timed(
+        hg_handle_t handle, void* in_struct,
+        double timeout_ms, margo_request* req)
+{
+    return margo_provider_iforward_timed(
+            MARGO_DEFAULT_PROVIDER_ID, handle, in_struct,
+            timeout_ms, req);
+}
 
 /**
  * Wait for an operation initiated by a non-blocking
@@ -1025,7 +1103,10 @@ hg_return_t margo_bulk_free(hg_bulk_t handle);
  *
  * \return HG_SUCCESS or corresponding HG error code
  */
-#define margo_bulk_ref_incr HG_Bulk_ref_incr
+static inline hg_return_t margo_bulk_ref_incr(hg_bulk_t bulk)
+{
+    return HG_Bulk_ref_incr(bulk);
+}
 
 /**
  * Access bulk handle to retrieve memory segments abstracted by handle.
@@ -1043,7 +1124,16 @@ hg_return_t margo_bulk_free(hg_bulk_t handle);
  *
  * \return HG_SUCCESS or corresponding HG error code
  */
-#define margo_bulk_access HG_Bulk_access
+static inline hg_return_t margo_bulk_access(
+    hg_bulk_t handle, hg_size_t offset, hg_size_t size,
+    hg_uint8_t flags, hg_uint32_t max_count, void **buf_ptrs,
+    hg_size_t *buf_sizes, hg_uint32_t *actual_count)
+{
+    return HG_Bulk_access(
+            handle, offset, size,
+            flafs, max_count, buf_ptrs,
+            buf_sizes, actual_count);
+}
 
 /**
  * Get total size of data abstracted by bulk handle.
@@ -1052,7 +1142,10 @@ hg_return_t margo_bulk_free(hg_bulk_t handle);
  *
  * \return Non-negative value
  */
-#define margo_bulk_get_size HG_Bulk_get_size
+static inline hg_size_t margo_bulk_get_size(hg_bulk_t bulk)
+{
+    return HG_Bulk_get_size(bulk);
+}
 
 /**
  * Get total number of segments abstracted by bulk handle.
@@ -1061,7 +1154,11 @@ hg_return_t margo_bulk_free(hg_bulk_t handle);
  *
  * \return Non-negative value
  */
-#define margo_bulk_get_segment_count HG_Bulk_get_segment_count
+static inline hg_uint32_t margo_bulk_get_segment_count(
+        hg_bulk_t bulk)
+{
+    return HG_Bulk_get_segment_count(bulk);
+}
 
 /**
  * Get size required to serialize bulk handle.
@@ -1073,7 +1170,11 @@ hg_return_t margo_bulk_free(hg_bulk_t handle);
  *
  * \return Non-negative value
  */
-#define margo_bulk_get_serialize_size HG_Bulk_get_serialize_size
+static inline hg_size_t margo_bulk_get_serialize_size(
+        hg_bulk_t bulk)
+{
+    return HG_Bulk_get_serialize_size(bulk);
+}
 
 /**
  * Serialize bulk handle into a buffer.
@@ -1088,7 +1189,11 @@ hg_return_t margo_bulk_free(hg_bulk_t handle);
  *
  * \return HG_SUCCESS or corresponding HG error code
  */
-#define margo_bulk_serialize HG_Bulk_serialize
+static inline hg_return_t margo_bulk_serialize(
+        void *buf, hg_size_t buf_size, unsigned long flags, hg_bulk_t handle)
+{
+    return HG_Bulk_serialize(buf, buf_size, flags, handle);
+}
 
 /**
  * Deserialize bulk handle from an existing buffer.
@@ -1221,8 +1326,10 @@ margo_instance_id margo_hg_info_get_instance(const struct hg_info* info);
  * @param [in] mid Margo instance
  * @returns void
  */
-#define margo_diag_start(__mid) \
-    margo_set_param(__mid, "enable_diagnostics", "1")
+static inline int margo_diag_start(margo_instance_id mid)
+{
+    return margo_set_param(mid, "enable_diagnostics", "1");
+}
 
 /**
  * Enables profile data collection on specified Margo instance
@@ -1230,8 +1337,10 @@ margo_instance_id margo_hg_info_get_instance(const struct hg_info* info);
  * @param [in] mid Margo instance
  * @returns void
  */
-#define margo_profile_start(__mid) \
-    margo_set_param(__mid, "enable_profiling", "1")
+static inline int margo_profile_start(margo_instance_id mid)
+{
+    return margo_set_param(mid, "enable_profiling", "1");
+}
 
 /**
  * Disables diagnostic collection on specified Margo instance
@@ -1239,7 +1348,10 @@ margo_instance_id margo_hg_info_get_instance(const struct hg_info* info);
  * @param [in] mid Margo instance
  * @returns void
  */
-#define margo_diag_stop(__mid) margo_set_param(__mid, "enable_diagnostics", "0")
+static inline int margo_diag_stop(margo_instance_id mid)
+{
+    return margo_set_param(mid, "enable_diagnostics", "0");
+}
 
 /**
  * Disables profile data collection on specified Margo instance
@@ -1247,8 +1359,10 @@ margo_instance_id margo_hg_info_get_instance(const struct hg_info* info);
  * @param [in] mid Margo instance
  * @returns void
  */
-#define margo_profile_stop(__mid) \
-    margo_set_param(__mid, "enable_profiling", "0")
+static inline int margo_profile_stop(margo_instance_id mid)
+{
+    return margo_set_param(mid, "enable_profiling", "0");
+}
 
 /**
  * Appends diagnostic statistics (enabled via margo_diag_start()) to specified

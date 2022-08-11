@@ -1,4 +1,6 @@
-/*
+/**
+ * @file margo-bulk-pool.h
+ *
  * (C) 2015 The University of Chicago
  *
  * See COPYRIGHT in top-level directory.
@@ -18,11 +20,17 @@ extern "C" {
 
 /* A collection of fixed-size, fixed-permission reusable bulk buffers */
 struct margo_bulk_pool;
+/**
+ * Pool of bulk handles and buffers. All the buffers in the pool
+ * have the same size.
+ */
 typedef struct margo_bulk_pool* margo_bulk_pool_t;
 
 #define MARGO_BULK_POOL_NULL ((margo_bulk_pool_t)NULL)
 
-/* A collection of margo_bulk_pool's, each of varying sizes */
+/**
+ *  A collection of margo_bulk_pool's, each of varying sizes
+ */
 struct margo_bulk_poolset;
 typedef struct margo_bulk_poolset* margo_bulk_poolset_t;
 
