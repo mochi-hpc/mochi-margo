@@ -37,8 +37,8 @@ struct margo_instance;
 /**
  * Margo instance id. Entry point to the margo runtime.
  */
-typedef struct margo_instance*       margo_instance_id;
-typedef struct margo_data*           margo_data_ptr;
+typedef struct margo_instance* margo_instance_id;
+typedef struct margo_data*     margo_data_ptr;
 /**
  * Request for non-blocking operations.
  */
@@ -784,8 +784,7 @@ hg_return_t margo_destroy(hg_handle_t handle);
  *
  * \return HG_SUCCESS or corresponding HG error code
  */
-static inline hg_return_t margo_ref_incr(
-        hg_handle_t handle)
+static inline hg_return_t margo_ref_incr(hg_handle_t handle)
 {
     return HG_Ref_incr(handle);
 }
@@ -797,8 +796,7 @@ static inline hg_return_t margo_ref_incr(
  *
  * \return Pointer to info or NULL in case of failure
  */
-static inline const struct hg_info* margo_get_info(
-        hg_handle_t handle)
+static inline const struct hg_info* margo_get_info(hg_handle_t handle)
 {
     return HG_Get_info(handle);
 }
@@ -862,13 +860,9 @@ hg_return_t margo_provider_forward(uint16_t    provider_id,
  * @param [in] in_struct input argument struct for RPC
  * @returns 0 on success, hg_return_t values on error
  */
-static inline margo_forward(hg_handle_t handle,
-                            void*       in_struct)
+static inline hg_return_t margo_forward(hg_handle_t handle, void* in_struct)
 {
-    return margo_provider_forward(
-            MARGO_DEFAULT_PROVIDER_ID,
-            handle,
-            in_struct);
+    return margo_provider_forward(MARGO_DEFAULT_PROVIDER_ID, handle, in_struct);
 }
 
 /**
@@ -891,15 +885,11 @@ hg_return_t margo_provider_iforward(uint16_t       provider_id,
  * @param [out] req request to wait on using margo_wait
  * @returns 0 on success, hg_return_t values on error
  */
-static inline hg_return_t margo_iforward(hg_handle_t    handle,
-                                         void*          in_struct,
-                                         margo_request* req)
+static inline hg_return_t
+margo_iforward(hg_handle_t handle, void* in_struct, margo_request* req)
 {
-    return margo_provider_iforward(
-            MARGO_DEFAULT_PROVIDER_ID,
-            handle,
-            in_struct,
-            req);
+    return margo_provider_iforward(MARGO_DEFAULT_PROVIDER_ID, handle, in_struct,
+                                   req);
 }
 
 /**
@@ -922,17 +912,12 @@ hg_return_t margo_provider_forward_timed(uint16_t    provider_id,
  * @param [in] timeout_ms timeout in milliseconds
  * @returns 0 on success, hg_return_t values on error
  */
-static inline hg_return_t margo_forward_timed(hg_handle_t handle,
-                                              void*       in_struct,
-                                              double      timeout_ms)
+static inline hg_return_t
+margo_forward_timed(hg_handle_t handle, void* in_struct, double timeout_ms)
 {
-    return margo_provider_forward_timed(
-            MARGO_DEFAULT_PROVIDE_ID,
-            handle,
-            in_struct,
-            timeout_ms);
+    return margo_provider_forward_timed(MARGO_DEFAULT_PROVIDER_ID, handle,
+                                        in_struct, timeout_ms);
 }
-
 
 /**
  * Non-blocking version of margo_provider_forward_timed.
@@ -960,13 +945,13 @@ hg_return_t margo_provider_iforward_timed(uint16_t       provider_id,
  * @param [out] req request
  * @returns 0 on success, hg_return_t values on error
  */
-static inline hg_return_t margo_iforward_timed(
-        hg_handle_t handle, void* in_struct,
-        double timeout_ms, margo_request* req)
+static inline hg_return_t margo_iforward_timed(hg_handle_t    handle,
+                                               void*          in_struct,
+                                               double         timeout_ms,
+                                               margo_request* req)
 {
-    return margo_provider_iforward_timed(
-            MARGO_DEFAULT_PROVIDER_ID, handle, in_struct,
-            timeout_ms, req);
+    return margo_provider_iforward_timed(MARGO_DEFAULT_PROVIDER_ID, handle,
+                                         in_struct, timeout_ms, req);
 }
 
 /**
@@ -1124,15 +1109,17 @@ static inline hg_return_t margo_bulk_ref_incr(hg_bulk_t bulk)
  *
  * \return HG_SUCCESS or corresponding HG error code
  */
-static inline hg_return_t margo_bulk_access(
-    hg_bulk_t handle, hg_size_t offset, hg_size_t size,
-    hg_uint8_t flags, hg_uint32_t max_count, void **buf_ptrs,
-    hg_size_t *buf_sizes, hg_uint32_t *actual_count)
+static inline hg_return_t margo_bulk_access(hg_bulk_t    handle,
+                                            hg_size_t    offset,
+                                            hg_size_t    size,
+                                            hg_uint8_t   flags,
+                                            hg_uint32_t  max_count,
+                                            void**       buf_ptrs,
+                                            hg_size_t*   buf_sizes,
+                                            hg_uint32_t* actual_count)
 {
-    return HG_Bulk_access(
-            handle, offset, size,
-            flafs, max_count, buf_ptrs,
-            buf_sizes, actual_count);
+    return HG_Bulk_access(handle, offset, size, flags, max_count, buf_ptrs,
+                          buf_sizes, actual_count);
 }
 
 /**
@@ -1154,8 +1141,7 @@ static inline hg_size_t margo_bulk_get_size(hg_bulk_t bulk)
  *
  * \return Non-negative value
  */
-static inline hg_uint32_t margo_bulk_get_segment_count(
-        hg_bulk_t bulk)
+static inline hg_uint32_t margo_bulk_get_segment_count(hg_bulk_t bulk)
 {
     return HG_Bulk_get_segment_count(bulk);
 }
@@ -1164,16 +1150,15 @@ static inline hg_uint32_t margo_bulk_get_segment_count(
  * Get size required to serialize bulk handle.
  *
  * \param [in] handle           abstract bulk handle
- * \param [in] request_eager    boolean (passing HG_TRUE adds size of encoding
- *                              actual data along the handle if handle meets
- *                              HG_BULK_READ_ONLY flag condition)
+ * \param [in] flags            option flags, valid flags are:
+ *                                HG_BULK_SM, HG_BULK_EAGER
  *
  * \return Non-negative value
  */
-static inline hg_size_t margo_bulk_get_serialize_size(
-        hg_bulk_t bulk)
+static inline hg_size_t margo_bulk_get_serialize_size(hg_bulk_t     bulk,
+                                                      unsigned long flags)
 {
-    return HG_Bulk_get_serialize_size(bulk);
+    return HG_Bulk_get_serialize_size(bulk, flags);
 }
 
 /**
@@ -1189,8 +1174,10 @@ static inline hg_size_t margo_bulk_get_serialize_size(
  *
  * \return HG_SUCCESS or corresponding HG error code
  */
-static inline hg_return_t margo_bulk_serialize(
-        void *buf, hg_size_t buf_size, unsigned long flags, hg_bulk_t handle)
+static inline hg_return_t margo_bulk_serialize(void*         buf,
+                                               hg_size_t     buf_size,
+                                               unsigned long flags,
+                                               hg_bulk_t     handle)
 {
     return HG_Bulk_serialize(buf, buf_size, flags, handle);
 }
@@ -1321,6 +1308,16 @@ margo_instance_id margo_hg_handle_get_instance(hg_handle_t h);
 margo_instance_id margo_hg_info_get_instance(const struct hg_info* info);
 
 /**
+ * Sets configurable parameters/hints
+ *
+ * @param [in] mid Margo instance
+ * @param [in] key parameter name
+ * @param [in] value parameter value
+ * @returns 0 on success, -1 on failure
+ */
+int margo_set_param(margo_instance_id mid, const char* key, const char* value);
+
+/**
  * Enables diagnostic collection on specified Margo instance
  *
  * @param [in] mid Margo instance
@@ -1432,16 +1429,6 @@ void margo_breadcrumb_snapshot(margo_instance_id                 mid,
  */
 void margo_breadcrumb_snapshot_destroy(margo_instance_id                 mid,
                                        struct margo_breadcrumb_snapshot* snap);
-
-/**
- * Sets configurable parameters/hints
- *
- * @param [in] mid Margo instance
- * @param [in] key parameter name
- * @param [in] value parameter value
- * @returns 0 on success, -1 on failure
- */
-int margo_set_param(margo_instance_id mid, const char* key, const char* value);
 
 /**
  * Retrieves complete configuration of margo instance, incoded as json
