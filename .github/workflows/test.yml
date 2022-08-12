@@ -24,22 +24,27 @@ jobs:
 
     - name: Find external packages
       run: |
-        spack -e . external find --not-buildable cmake
-        spack -e . external find --not-buildable perl
+        spack env create .
+        eval `spack env activate --sh .` &&
+        spack external find --not-buildable cmake &&
+        spack external find --not-buildable perl
 
     - name: Add mochi-spack-packages
       run: |
         git clone https://github.com/mochi-hpc/mochi-spack-packages /opt/spack/mochi-spack-packages
-        spack -e . repo add /opt/spack/mochi-spack-packages
+        eval `spack env activate --sh .` &&
+        spack repo add /opt/spack/mochi-spack-packages
 
     - name: Install spack environment
       run: |
-        spack -e . concretize -f
-        spack -e . install
+        eval `spack env activate --sh .` &&
+        spack concretize -f
+        spack install
 
     - name: Show spack-installed packages for debugging
       run: |
-        spack -e . find -dlv
+        eval `spack env activate --sh .` &&
+        spack find -dlv
 
     - name: Build code and run unit tests
       run: |
