@@ -24,7 +24,7 @@ jobs:
 
     - name: Find external packages
       run: |
-        spack env create .
+        spack env create -d .
         eval `spack env activate --sh .` &&
         spack external find --not-buildable cmake &&
         spack external find --not-buildable perl
