@@ -167,6 +167,7 @@ margo_instance_id margo_init(const char* addr_str,
  *       "stats" : false,
  *       "na_no_block" : false,
  *       "na_no_retry" : false,
+ *       "na_request_mem_device" : false,
  *       "max_contexts" : 1,
  *       "ip_subnet" : "",
  *       "auth_key" : ""
