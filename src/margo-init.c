@@ -164,7 +164,14 @@ margo_instance_id margo_init_ext(const char*                   address,
                     address, mode == 0 ? "client" : "server");
         hg_class = HG_Init_opt(address, mode, &hg_init_info);
         if (!hg_class) {
-            MARGO_ERROR(0, "Could not initialize hg_class");
+            MARGO_ERROR(0, "Could not initialize Mercury class");
+            MARGO_ERROR(0,
+                        "   Try running `margo-info %s` for more information "
+                        "about this",
+                        address);
+            MARGO_ERROR(
+                0,
+                "   protocol or `margo-info` to list all available protocols.");
             goto error;
         }
         hg_ownership |= MARGO_OWNS_HG_CLASS;

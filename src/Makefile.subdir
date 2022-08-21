@@ -23,3 +23,8 @@ src_libmargo_la_SOURCES += \
  src/margo-timer.c \
  src/margo-util.c \
  src/margo-prio-pool.c
+
+bin_PROGRAMS += src/margo-info
+
+src_margo_info_SOURCES = src/margo-info.c
+src_margo_info_LDADD = src/libmargo.la
