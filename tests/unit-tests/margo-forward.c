@@ -9,6 +9,7 @@
 #include "munit/munit.h"
 
 static hg_id_t rpc_id;
+static hg_id_t provider_rpc_id;
 
 DECLARE_MARGO_RPC_HANDLER(rpc_ult)
 static void rpc_ult(hg_handle_t handle)
@@ -26,6 +27,7 @@ DEFINE_MARGO_RPC_HANDLER(rpc_ult)
 static int svr_init_fn(margo_instance_id mid, void* arg)
 {
     rpc_id = MARGO_REGISTER(mid, "rpc", void, void, rpc_ult);
+    provider_rpc_id = MARGO_REGISTER_PROVIDER(mid, "provider_rpc", void, void, rpc_ult, 42, ABT_POOL_NULL);
     return (0);
 }
 
@@ -131,15 +133,69 @@ static MunitResult test_forward_invalid(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static char* protocol_params[] = {"na+sm", NULL};
+static MunitResult test_provider_forward(const MunitParameter params[],
+                                         void*                data)
+{
+    (void)params;
+    (void)data;
+    hg_return_t hret;
+    hg_handle_t handle;
+    hg_addr_t   addr;
 
-static char* addr_unreachable_params[] = {
-#if HG_VERSION_MAJOR > 2 || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR >= 1)
-    "na+sm://1-1", NULL
-#else
-    "na+sm://1/1", NULL
-#endif
-};
+    struct test_context* ctx = (struct test_context*)data;
+
+    provider_rpc_id = MARGO_REGISTER(ctx->mid, "provider_rpc", void, void, NULL);
+
+    hret = margo_addr_lookup(ctx->mid, ctx->remote_addr, &addr);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_create(ctx->mid, addr, provider_rpc_id, &handle);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_provider_forward(42, handle, NULL);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_destroy(handle);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_addr_free(ctx->mid, addr);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    return MUNIT_OK;
+}
+
+static MunitResult test_provider_forward_invalid(const MunitParameter params[],
+                                                 void*                data)
+{
+    (void)params;
+    (void)data;
+    hg_return_t hret;
+    hg_handle_t handle;
+    hg_addr_t   addr;
+
+    struct test_context* ctx = (struct test_context*)data;
+
+    hg_id_t provider_rpc_id = MARGO_REGISTER(ctx->mid, "povider_rpc", void, void, NULL);
+
+    hret = margo_addr_lookup(ctx->mid, ctx->remote_addr, &addr);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_create(ctx->mid, addr, provider_rpc_id, &handle);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_provider_forward(43, handle, NULL);
+    munit_assert_int(hret, ==, HG_NO_MATCH);
+
+    hret = margo_destroy(handle);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_addr_free(ctx->mid, addr);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    return MUNIT_OK;
+}
+
+static char* protocol_params[] = {"na+sm", NULL};
 
 static MunitParameterEnum test_params[]
     = {{"protocol", protocol_params}, {NULL, NULL}};
@@ -148,6 +204,10 @@ static MunitTest test_suite_tests[] = {
     {(char*)"/forward", test_forward, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {(char*)"/forward_invalid", test_forward_invalid, test_context_setup,
+     test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
+    {(char*)"/provider_forward", test_provider_forward, test_context_setup,
+     test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
+    {(char*)"/provider_forward_invalid", test_provider_forward_invalid, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
 
