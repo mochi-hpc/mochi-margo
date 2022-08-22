@@ -1,4 +1,5 @@
 if BUILD_TESTS
+
 check_PROGRAMS += \
  tests/unit-tests/margo-addr \
  tests/unit-tests/margo-diag \
@@ -12,13 +13,14 @@ check_PROGRAMS += \
  tests/unit-tests/margo-bulk \
  tests/unit-tests/margo-scheduling \
  tests/unit-tests/margo-comm-error \
- tests/unit-tests/margo-comm-finalize
+ tests/unit-tests/margo-comm-finalize \
+ tests/unit-tests/margo-forward
 
 TESTS += \
  tests/unit-tests/margo-addr \
  tests/unit-tests/margo-diag \
  tests/unit-tests/margo-init \
- tests/unit-tests/margo-pool \
+ tests/unit-tests/margo-pool.sh \
  tests/unit-tests/margo-abt-pool \
  tests/unit-tests/margo-eventual \
  tests/unit-tests/margo-logging \
@@ -26,7 +28,8 @@ TESTS += \
  tests/unit-tests/margo-bulk \
  tests/unit-tests/margo-scheduling \
  tests/unit-tests/margo-comm-error \
- tests/unit-tests/margo-comm-finalize
+ tests/unit-tests/margo-comm-finalize \
+ tests/unit-tests/margo-forward.sh
 
 tests_unit_tests_margo_addr_SOURCES = \
  tests/unit-tests/munit/munit.c \
@@ -90,6 +93,11 @@ tests_unit_tests_margo_timer_SOURCES = \
 tests_unit_tests_margo_bulk_SOURCES = \
  tests/unit-tests/munit/munit.c \
  tests/unit-tests/margo-bulk.c
+
+tests_unit_tests_margo_forward_SOURCES = \
+ tests/unit-tests/munit/munit.c \
+ tests/unit-tests/margo-forward.c \
+ tests/unit-tests/helper-server.c
 
 noinst_HEADERS += tests/unit-tests/munit/munit.h \
                   tests/unit-tests/helper-server.h
