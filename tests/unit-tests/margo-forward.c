@@ -87,6 +87,9 @@ static MunitResult test_forward(const MunitParameter params[],
     hret = margo_create(ctx->mid, addr, rpc_id, &handle);
     munit_assert_int(hret, ==, HG_SUCCESS);
 
+    hret = margo_forward(handle, NULL);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
     hret = margo_destroy(handle);
     munit_assert_int(hret, ==, HG_SUCCESS);
 
@@ -114,6 +117,9 @@ static MunitResult test_forward_invalid(const MunitParameter params[],
 
     // invalid RPC id
     hret = margo_create(ctx->mid, addr, invalid_rpc_id, &handle);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_forward(handle, NULL);
     munit_assert_int(hret, ==, HG_NO_MATCH);
 
     hret = margo_destroy(handle);
