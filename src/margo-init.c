@@ -572,6 +572,7 @@ validate_and_complete_config(struct json_object*        _margo,
        - [optional] stats: bool (default false)
        - [optional] na_no_block: bool (default false)
        - [optional] na_no_retry: bool (default false)
+       - [optional] na_request_mem_device: bool (default false)
        - [optional] max_contexts: integer (default 1)
        - [optional] ip_subnet: string (added only if found in provided
        hg_init_info)
@@ -694,6 +695,20 @@ validate_and_complete_config(struct json_object*        _margo,
         CONFIG_HAS_OR_CREATE(_mercury, boolean, "na_no_retry", 0,
                              "mercury.na_no_retry", val);
         MARGO_TRACE(0, "mercury.na_no_retry = %s",
+                    json_object_get_boolean(val) ? "true" : "false");
+    }
+
+    { // add mercury.na_request_mem_device or set it as default
+        if (_hg_init_info) {
+            bool na_request_mem_device
+                = _hg_init_info->na_init_info.request_mem_device;
+            CONFIG_OVERRIDE_BOOL(_mercury, "na_request_mem_device",
+                                 na_request_mem_device,
+                                 "mercury.na_request_mem_device", 1);
+        }
+        CONFIG_HAS_OR_CREATE(_mercury, boolean, "na_request_mem_device", 0,
+                             "mercury.na_request_mem_device", val);
+        MARGO_TRACE(0, "mercury.na_request_mem_device = %s",
                     json_object_get_boolean(val) ? "true" : "false");
     }
 
@@ -1300,6 +1315,9 @@ static void fill_hg_init_info_from_config(struct json_object*  config,
         info->na_init_info.progress_mode |= NA_NO_BLOCK;
     if (json_object_get_boolean(json_object_object_get(hg, "na_no_retry")))
         info->na_init_info.progress_mode |= NA_NO_RETRY;
+    if (json_object_get_boolean(
+            json_object_object_get(hg, "na_request_mem_device")))
+        info->na_init_info.request_mem_device = HG_TRUE;
     info->na_init_info.max_contexts
         = json_object_get_int64(json_object_object_get(hg, "max_contexts"));
     /* The na_init_info max_unexpected_size nad max_expected_size first
@@ -1526,8 +1544,10 @@ static int create_xstream_from_config(struct json_object*          es_config,
 static void confirm_argobots_configuration(struct json_object* config)
 {
     /* this function assumes that the json is already fully populated */
-    size_t   runtime_abt_thread_stacksize = 0;
+    size_t runtime_abt_thread_stacksize = 0;
+#ifdef HAVE_ABT_INFO_QUERY_KIND_ENABLED_LAZY_STACK_ALLOC
     ABT_bool config_bool;
+#endif
 
     /* retrieve expected values according to Margo configuration */
     struct json_object* argobots = json_object_object_get(config, "argobots");
