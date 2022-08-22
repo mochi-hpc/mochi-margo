@@ -20,7 +20,7 @@ TESTS += \
  tests/unit-tests/margo-addr \
  tests/unit-tests/margo-diag \
  tests/unit-tests/margo-init \
- tests/unit-tests/margo-pool.sh \
+ tests/unit-tests/margo-pool \
  tests/unit-tests/margo-abt-pool \
  tests/unit-tests/margo-eventual \
  tests/unit-tests/margo-logging \
@@ -29,7 +29,7 @@ TESTS += \
  tests/unit-tests/margo-scheduling \
  tests/unit-tests/margo-comm-error \
  tests/unit-tests/margo-comm-finalize \
- tests/unit-tests/margo-forward.sh
+ tests/unit-tests/margo-forward
 
 tests_unit_tests_margo_addr_SOURCES = \
  tests/unit-tests/munit/munit.c \
