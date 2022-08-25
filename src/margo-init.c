@@ -698,6 +698,7 @@ validate_and_complete_config(struct json_object*        _margo,
                     json_object_get_boolean(val) ? "true" : "false");
     }
 
+#if (HG_VERSION_MAJOR > 2) || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR > 1)
     { // add mercury.na_request_mem_device or set it as default
         if (_hg_init_info) {
             bool na_request_mem_device
@@ -711,6 +712,7 @@ validate_and_complete_config(struct json_object*        _margo,
         MARGO_TRACE(0, "mercury.na_request_mem_device = %s",
                     json_object_get_boolean(val) ? "true" : "false");
     }
+#endif
 
     { // add mercury.max_contexts or set it as default
         if (_hg_init_info) {
@@ -1315,9 +1317,12 @@ static void fill_hg_init_info_from_config(struct json_object*  config,
         info->na_init_info.progress_mode |= NA_NO_BLOCK;
     if (json_object_get_boolean(json_object_object_get(hg, "na_no_retry")))
         info->na_init_info.progress_mode |= NA_NO_RETRY;
+        /* the na_init_info.request_mem_device first appeaed in Mercury 2.2.0 */
+#if (HG_VERSION_MAJOR > 2) || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR > 1)
     if (json_object_get_boolean(
             json_object_object_get(hg, "na_request_mem_device")))
         info->na_init_info.request_mem_device = HG_TRUE;
+#endif
     info->na_init_info.max_contexts
         = json_object_get_int64(json_object_object_get(hg, "max_contexts"));
     /* The na_init_info max_unexpected_size nad max_expected_size first
@@ -1552,7 +1557,7 @@ static void confirm_argobots_configuration(struct json_object* config)
     /* retrieve expected values according to Margo configuration */
     struct json_object* argobots = json_object_object_get(config, "argobots");
     int                 abt_thread_stacksize = json_object_get_int64(
-                        json_object_object_get(argobots, "abt_thread_stacksize"));
+        json_object_object_get(argobots, "abt_thread_stacksize"));
 
     /* NOTE: we skip checking num_stacks; this cannot be retrieved with
      * ABT_info_query_config(). Fortunately it also is not as crucial as the
