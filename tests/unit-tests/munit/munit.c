@@ -146,7 +146,7 @@
 /*** Logging ***/
 
 static MunitLogLevel munit_log_level_visible = MUNIT_LOG_INFO;
-static MunitLogLevel munit_log_level_fatal = MUNIT_LOG_ERROR;
+static MunitLogLevel munit_log_level_fatal = MUNIT_LOG_ERROR+1;
 
 #if defined(MUNIT_THREAD_LOCAL)
 static MUNIT_THREAD_LOCAL munit_bool munit_error_jmp_buf_valid = 0;
