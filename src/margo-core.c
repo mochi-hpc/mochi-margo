@@ -551,6 +551,7 @@ hg_id_t margo_provider_register_name(margo_instance_id mid,
     int                          ret;
     struct margo_registered_rpc* tmp_rpc;
 
+    if (!rpc_cb) rpc_cb = _handler_for_NULL;
     id = gen_id(func_name, provider_id);
 
     /* track information about this rpc registration for debugging and
