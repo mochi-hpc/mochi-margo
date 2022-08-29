@@ -3,6 +3,7 @@
 #include <margo.h>
 #include "helper-server.h"
 #include "munit/munit.h"
+#include "munit/munit-goto.h"
 
 /* the intent of these unit tests is to verify the ability to modify various
  * argobots pool settings
@@ -60,24 +61,27 @@ static MunitResult rpc_pool_kind(const MunitParameter params[], void* data)
     mii.json_config = munit_parameters_get(params, "json");
 
     ctx->mid = margo_init_ext(protocol, MARGO_SERVER_MODE, &mii);
-    munit_assert_not_null(ctx->mid);
+    munit_assert_not_null_goto(ctx->mid, error);
 
     /* check resulting configuration */
     runtime_config = margo_get_config(ctx->mid);
 
     /* just one pool with the __rpc__ name */
     count = count_occurrence(runtime_config, "__rpc__");
-    munit_assert_int(count, ==, 1);
+    munit_assert_int_goto(count, ==, 1, error);
 
     /* just one pool with the prio_wait kind */
     count = count_occurrence(runtime_config, "prio_wait");
-    munit_assert_int(count, ==, 1);
+    munit_assert_int_goto(count, ==, 1, error);
 
     free(runtime_config);
 
     margo_finalize(ctx->mid);
 
     return MUNIT_OK;
+
+error:
+    return MUNIT_FAIL;
 }
 
 static char * json_params[] = {

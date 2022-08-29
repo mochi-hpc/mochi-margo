@@ -7,22 +7,14 @@
 #include <margo.h>
 #include "helper-server.h"
 #include "munit/munit.h"
+#include "munit/munit-goto.h"
 
-/*
-static hg_id_t rpc_id;
-static hg_id_t provider_rpc_id;
-static hg_id_t null_rpc_id;
-*/
 
 DECLARE_MARGO_RPC_HANDLER(rpc_ult)
 static void rpc_ult(hg_handle_t handle)
 {
-    hg_return_t hret;
-
-    hret = margo_respond(handle, NULL);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    margo_respond(handle, NULL);
     margo_destroy(handle);
-
     return;
 }
 DEFINE_MARGO_RPC_HANDLER(rpc_ult)
@@ -54,6 +46,9 @@ static void* test_context_setup(const MunitParameter params[], void* user_data)
     munit_assert_int(ctx->remote_pid, >, 0);
 
     ctx->mid = margo_init(protocol, MARGO_SERVER_MODE, 0, 0);
+    if(!ctx->mid) {
+        HS_stop(ctx->remote_pid, 0);
+    }
     munit_assert_not_null(ctx->mid);
 
     return ctx;
@@ -101,12 +96,15 @@ cleanup:
     hret[4] = margo_addr_free(ctx->mid, addr);
 
 check:
-    munit_assert_int(hret[0], ==, HG_SUCCESS);
-    munit_assert_int(hret[1], ==, HG_SUCCESS);
-    munit_assert_int(hret[2], ==, HG_SUCCESS);
-    munit_assert_int(hret[3], ==, HG_SUCCESS);
-    munit_assert_int(hret[4], ==, HG_SUCCESS);
+    munit_assert_int_goto(hret[0], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[1], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[2], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[3], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[4], ==, HG_SUCCESS, error);
     return MUNIT_OK;
+
+error:
+    return MUNIT_FAIL;
 }
 
 static MunitResult test_forward_to_null(const MunitParameter params[],
@@ -138,12 +136,15 @@ cleanup:
     hret[4] = margo_addr_free(ctx->mid, addr);
 
 check:
-    munit_assert_int(hret[0], ==, HG_SUCCESS);
-    munit_assert_int(hret[1], ==, HG_SUCCESS);
-    munit_assert_int(hret[2], ==, HG_NO_MATCH);
-    munit_assert_int(hret[3], ==, HG_SUCCESS);
-    munit_assert_int(hret[4], ==, HG_SUCCESS);
+    munit_assert_int_goto(hret[0], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[1], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[2], ==, HG_NO_MATCH, error);
+    munit_assert_int_goto(hret[3], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[4], ==, HG_SUCCESS, error);
     return MUNIT_OK;
+
+error:
+    return MUNIT_FAIL;
 }
 
 static MunitResult test_self_forward_to_null(const MunitParameter params[],
@@ -174,12 +175,15 @@ cleanup:
     hret[4] = margo_addr_free(ctx->mid, addr);
 
 check:
-    munit_assert_int(hret[0], ==, HG_SUCCESS);
-    munit_assert_int(hret[1], ==, HG_SUCCESS);
-    munit_assert_int(hret[2], ==, HG_NO_MATCH);
-    munit_assert_int(hret[3], ==, HG_SUCCESS);
-    munit_assert_int(hret[4], ==, HG_SUCCESS);
+    munit_assert_int_goto(hret[0], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[1], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[2], ==, HG_NO_MATCH, error);
+    munit_assert_int_goto(hret[3], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[4], ==, HG_SUCCESS, error);
     return MUNIT_OK;
+
+error:
+    return MUNIT_FAIL;
 }
 
 static MunitResult test_forward_invalid(const MunitParameter params[],
@@ -210,13 +214,15 @@ cleanup:
     hret[4] = margo_addr_free(ctx->mid, addr);
 
 check:
-    munit_assert_int(hret[0], ==, HG_SUCCESS);
-    munit_assert_int(hret[1], ==, HG_SUCCESS);
-    munit_assert_int(hret[2], ==, HG_NO_MATCH);
-    munit_assert_int(hret[3], ==, HG_SUCCESS);
-    munit_assert_int(hret[4], ==, HG_SUCCESS);
-
+    munit_assert_int_goto(hret[0], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[1], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[2], ==, HG_NO_MATCH, error);
+    munit_assert_int_goto(hret[3], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[4], ==, HG_SUCCESS, error);
     return MUNIT_OK;
+
+error:
+    return MUNIT_FAIL;
 }
 
 static MunitResult test_provider_forward(const MunitParameter params[],
@@ -247,13 +253,16 @@ cleanup:
     hret[4] = margo_addr_free(ctx->mid, addr);
 
 check:
-    munit_assert_int(hret[0], ==, HG_SUCCESS);
-    munit_assert_int(hret[1], ==, HG_SUCCESS);
-    munit_assert_int(hret[2], ==, HG_SUCCESS);
-    munit_assert_int(hret[3], ==, HG_SUCCESS);
-    munit_assert_int(hret[4], ==, HG_SUCCESS);
+    munit_assert_int_goto(hret[0], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[1], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[2], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[3], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[4], ==, HG_SUCCESS, error);
 
     return MUNIT_OK;
+
+error:
+    return MUNIT_FAIL;
 }
 
 static MunitResult test_provider_forward_invalid(const MunitParameter params[],
@@ -284,12 +293,15 @@ cleanup:
     hret[4] = margo_addr_free(ctx->mid, addr);
 
 check:
-    munit_assert_int(hret[0], ==, HG_SUCCESS);
-    munit_assert_int(hret[1], ==, HG_SUCCESS);
-    munit_assert_int(hret[2], ==, HG_NO_MATCH);
-    munit_assert_int(hret[3], ==, HG_SUCCESS);
-    munit_assert_int(hret[4], ==, HG_SUCCESS);
+    munit_assert_int_goto(hret[0], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[1], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[2], ==, HG_NO_MATCH, error);
+    munit_assert_int_goto(hret[3], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[4], ==, HG_SUCCESS, error);
     return MUNIT_OK;
+
+error:
+    return MUNIT_FAIL;
 }
 
 static MunitResult test_self_provider_forward_invalid(const MunitParameter params[],
@@ -322,12 +334,15 @@ cleanup:
     hret[4] = margo_addr_free(ctx->mid, addr);
 
 check:
-    munit_assert_int(hret[0], ==, HG_SUCCESS);
-    munit_assert_int(hret[1], ==, HG_SUCCESS);
-    munit_assert_int(hret[2], ==, HG_NO_MATCH);
-    munit_assert_int(hret[3], ==, HG_SUCCESS);
-    munit_assert_int(hret[4], ==, HG_SUCCESS);
+    munit_assert_int_goto(hret[0], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[1], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[2], ==, HG_NO_MATCH, error);
+    munit_assert_int_goto(hret[3], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[4], ==, HG_SUCCESS, error);
     return MUNIT_OK;
+
+error:
+    return MUNIT_FAIL;
 }
 
 static char* protocol_params[] = {"ofi+tcp", NULL};
@@ -338,18 +353,18 @@ static MunitParameterEnum test_params[]
 static MunitTest test_suite_tests[] = {
     {(char*)"/forward", test_forward, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
-//    {(char*)"/forward_to_null", test_forward_to_null, test_context_setup,
-//     test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
-//    {(char*)"/self_forward_to_null", test_self_forward_to_null, test_context_setup,
-//     test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
+    {(char*)"/forward_to_null", test_forward_to_null, test_context_setup,
+     test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
+    {(char*)"/self_forward_to_null", test_self_forward_to_null, test_context_setup,
+     test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {(char*)"/forward_invalid", test_forward_invalid, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {(char*)"/provider_forward", test_provider_forward, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {(char*)"/provider_forward_invalid", test_provider_forward_invalid, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
-//    {(char*)"/self_provider_forward_invalid", test_self_provider_forward_invalid, test_context_setup,
-//     test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
+    {(char*)"/self_provider_forward_invalid", test_self_provider_forward_invalid, test_context_setup,
+     test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
 
 static const MunitSuite test_suite

@@ -7,6 +7,7 @@
 #include <margo.h>
 #include "helper-server.h"
 #include "munit/munit.h"
+#include "munit/munit-goto.h"
 
 inline int to_bool(const char* v) {
     if(strcmp(v, "true") == 0)
@@ -34,6 +35,9 @@ static void* test_context_setup(const MunitParameter params[], void* user_data)
     munit_assert_int(ctx->remote_pid, >, 0);
 
     ctx->mid = margo_init(protocol, MARGO_SERVER_MODE, 0, 0);
+    if(!ctx->mid) {
+        HS_stop(ctx->remote_pid, 0);
+    }
     munit_assert_not_null(ctx->mid);
 
     return ctx;
@@ -65,18 +69,21 @@ static MunitResult test_margo_addr_self(const MunitParameter params[], void* dat
 
     /* margo_addr_self should work */
     hret = margo_addr_self(ctx->mid, &addr);
-    munit_assert_int(hret, ==, HG_SUCCESS);
-    munit_assert_not_null(addr);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
+    munit_assert_not_null_goto(addr, error);
 
     /* should be able to free the returned address */
     hret = margo_addr_free(ctx->mid, addr);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     /* passing NULL as out param should not crash */
     hret = margo_addr_self(ctx->mid, NULL);
-    munit_assert_int(hret, ==, HG_INVALID_ARG);
+    munit_assert_int_goto(hret, ==, HG_INVALID_ARG, error);
 
     return MUNIT_OK;
+
+error:
+    return MUNIT_FAIL;
 }
 
 static MunitResult test_margo_addr_free(const MunitParameter params[], void* data)
@@ -89,18 +96,21 @@ static MunitResult test_margo_addr_free(const MunitParameter params[], void* dat
     struct test_context* ctx = (struct test_context*)data;
 
     hret = margo_addr_self(ctx->mid, &addr);
-    munit_assert_int(hret, ==, HG_SUCCESS);
-    munit_assert_not_null(addr);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
+    munit_assert_not_null_goto(addr, error);
 
     /* should be able to free the returned address */
     hret = margo_addr_free(ctx->mid, addr);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     /* passing NULL as out param should not crash */
     hret = margo_addr_free(ctx->mid, HG_ADDR_NULL);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     return MUNIT_OK;
+
+error:
+    return MUNIT_FAIL;
 }
 
 static MunitResult test_margo_addr_dup(const MunitParameter params[], void* data)
@@ -114,29 +124,32 @@ static MunitResult test_margo_addr_dup(const MunitParameter params[], void* data
     struct test_context* ctx = (struct test_context*)data;
 
     hret = margo_addr_self(ctx->mid, &addr);
-    munit_assert_int(hret, ==, HG_SUCCESS);
-    munit_assert_not_null(addr);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
+    munit_assert_not_null_goto(addr, error);
 
     /* we can duplicate the address */
     hret = margo_addr_dup(ctx->mid, addr, &addr_cpy);
-    munit_assert_int(hret, ==, HG_SUCCESS);
-    munit_assert_not_null(addr);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
+    munit_assert_not_null_goto(addr, error);
 
     hret = margo_addr_free(ctx->mid, addr_cpy);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     /* passing NULL as out param should not crash */
     hret = margo_addr_dup(ctx->mid, addr, NULL);
-    munit_assert_int(hret, ==, HG_INVALID_ARG);
+    munit_assert_int_goto(hret, ==, HG_INVALID_ARG, error);
 
     /* passing HG_ADDR_NULL as param should not crash */
     hret = margo_addr_dup(ctx->mid, HG_ADDR_NULL, &addr_cpy);
-    munit_assert_int(hret, ==, HG_INVALID_ARG);
+    munit_assert_int_goto(hret, ==, HG_INVALID_ARG, error);
 
     hret = margo_addr_free(ctx->mid, addr);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     return MUNIT_OK;
+
+error:
+    return MUNIT_FAIL;
 }
 
 static MunitResult test_margo_addr_cmp(const MunitParameter params[], void* data)
@@ -150,36 +163,39 @@ static MunitResult test_margo_addr_cmp(const MunitParameter params[], void* data
     struct test_context* ctx = (struct test_context*)data;
 
     hret = margo_addr_self(ctx->mid, &addr);
-    munit_assert_int(hret, ==, HG_SUCCESS);
-    munit_assert_not_null(addr);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
+    munit_assert_not_null_goto(addr, error);
 
     hret = margo_addr_dup(ctx->mid, addr, &addr_cpy);
-    munit_assert_int(hret, ==, HG_SUCCESS);
-    munit_assert_not_null(addr);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
+    munit_assert_not_null_goto(addr, error);
 
     /* compare the two addresses */
     hg_bool_t b = margo_addr_cmp(ctx->mid, addr, addr_cpy);
-    munit_assert_int(b, ==, HG_TRUE);
+    munit_assert_int_goto(b, ==, HG_TRUE, error);
 
     /* compare with HG_ADDR_NULL */
     b = margo_addr_cmp(ctx->mid, addr, HG_ADDR_NULL);
-    munit_assert_int(b, ==, HG_FALSE);
+    munit_assert_int_goto(b, ==, HG_FALSE, error);
 
     /* compare with address of remote server */
     hg_addr_t remote_addr;
     margo_addr_lookup(ctx->mid, ctx->remote_addr, &remote_addr);
     b = margo_addr_cmp(ctx->mid, addr, remote_addr);
-    munit_assert_int(b, ==, HG_FALSE);
+    munit_assert_int_goto(b, ==, HG_FALSE, error);
     hret = margo_addr_free(ctx->mid, remote_addr);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     hret = margo_addr_free(ctx->mid, addr_cpy);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     hret = margo_addr_free(ctx->mid, addr);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     return MUNIT_OK;
+
+error:
+    return MUNIT_FAIL;
 }
 
 static MunitResult test_margo_addr_to_string(const MunitParameter params[], void* data)
@@ -192,26 +208,29 @@ static MunitResult test_margo_addr_to_string(const MunitParameter params[], void
     struct test_context* ctx = (struct test_context*)data;
 
     hret = margo_addr_self(ctx->mid, &addr);
-    munit_assert_int(hret, ==, HG_SUCCESS);
-    munit_assert_not_null(addr);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
+    munit_assert_not_null_goto(addr, error);
 
     char addr_str[256];
     hg_size_t addr_str_size = 256;
     memset(addr_str, 0, 256);
 
     hret = margo_addr_to_string(ctx->mid, addr_str, &addr_str_size, addr);
-    munit_assert_int(hret, ==, HG_SUCCESS);
-    munit_assert_string_not_equal(addr_str, "\0");
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
+    munit_assert_string_not_equal_goto(addr_str, "\0", error);
 
     hret = margo_addr_free(ctx->mid, addr);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     addr_str_size = 256;
     memset(addr_str, 0, 256);
     hret = margo_addr_to_string(ctx->mid, addr_str, &addr_str_size, HG_ADDR_NULL);
-    munit_assert_int(hret, ==, HG_INVALID_ARG);
+    munit_assert_int_goto(hret, ==, HG_INVALID_ARG, error);
 
     return MUNIT_OK;
+
+error:
+    return MUNIT_FAIL;
 }
 
 static MunitResult test_margo_addr_lookup(const MunitParameter params[], void* data)
@@ -225,30 +244,30 @@ static MunitResult test_margo_addr_lookup(const MunitParameter params[], void* d
     struct test_context* ctx = (struct test_context*)data;
 
     hret = margo_addr_self(ctx->mid, &self_addr);
-    munit_assert_int(hret, ==, HG_SUCCESS);
-    munit_assert_not_null(self_addr);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
+    munit_assert_not_null_goto(self_addr, error);
 
     char addr_str[256];
     hg_size_t addr_str_size = 256;
     memset(addr_str, 0, 256);
 
     hret = margo_addr_to_string(ctx->mid, addr_str, &addr_str_size, self_addr);
-    munit_assert_int(hret, ==, HG_SUCCESS);
-    munit_assert_string_not_equal(addr_str, "\0");
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
+    munit_assert_string_not_equal_goto(addr_str, "\0", error);
 
     /* lookup self address */
     hret = margo_addr_lookup(ctx->mid, addr_str, &lkup_addr);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     hret = margo_addr_free(ctx->mid, lkup_addr);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     /* lookup remote address */
     hret = margo_addr_lookup(ctx->mid, ctx->remote_addr, &lkup_addr);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     hret = margo_addr_free(ctx->mid, lkup_addr);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     /* should not crash if we lookup an invalid address */
     // XXX for now this test doesn't pass because of a problem with na+sm
@@ -257,16 +276,19 @@ static MunitResult test_margo_addr_lookup(const MunitParameter params[], void* d
 
     /* should not crash if we pass NULL as string address */
     hret = margo_addr_lookup(ctx->mid, NULL, &lkup_addr);
-    munit_assert_int(hret, ==, HG_INVALID_ARG);
+    munit_assert_int_goto(hret, ==, HG_INVALID_ARG, error);
 
     /* should not crash if we pass NULL as result */
     hret = margo_addr_lookup(ctx->mid, addr_str, NULL);
-    munit_assert_int(hret, ==, HG_INVALID_ARG);
+    munit_assert_int_goto(hret, ==, HG_INVALID_ARG, error);
 
     hret = margo_addr_free(ctx->mid, self_addr);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     return MUNIT_OK;
+
+error:
+    return MUNIT_FAIL;
 }
 
 static char* protocol_params[] = {

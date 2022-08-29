@@ -7,6 +7,7 @@
 #include <margo.h>
 #include "helper-server.h"
 #include "munit/munit.h"
+#include "munit/munit-goto.h"
 
 static hg_id_t null_rpc_id;
 static hg_id_t error_rpc_id;
@@ -16,32 +17,20 @@ DECLARE_MARGO_RPC_HANDLER(error_rpc_ult)
 
 static void null_rpc_ult(hg_handle_t handle)
 {
-    hg_return_t hret;
-
-    hret = margo_respond(handle, NULL);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    margo_respond(handle, NULL);
     margo_destroy(handle);
-
-    return;
 }
 DEFINE_MARGO_RPC_HANDLER(null_rpc_ult)
 
 static void error_rpc_ult(hg_handle_t handle)
 {
-    hg_return_t hret;
-
     int64_t x = 0;
-    hret      = margo_get_input(handle, &x);
-    munit_assert_int(hret, ==, HG_SUCCESS);
-    munit_assert_int(x, ==, 42);
+    margo_get_input(handle, &x);
 
-    hret = margo_free_input(handle, &x);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    margo_free_input(handle, &x);
 
     __margo_respond_with_error(handle, HG_AGAIN);
     margo_destroy(handle);
-
-    return;
 }
 DEFINE_MARGO_RPC_HANDLER(error_rpc_ult)
 
@@ -51,7 +40,7 @@ static int svr_init_fn(margo_instance_id mid, void* arg)
     error_rpc_id
         = MARGO_REGISTER(mid, "error_rpc", int64_t, int64_t, error_rpc_ult);
 
-    return (0);
+    return 0;
 }
 
 /* The purpose of this unit test is to check error locations and codes for
@@ -77,6 +66,8 @@ static void* test_context_setup(const MunitParameter params[], void* user_data)
     munit_assert_int(ctx->remote_pid, >, 0);
 
     ctx->mid = margo_init(protocol, MARGO_CLIENT_MODE, 0, 0);
+    if(!ctx->mid)
+        HS_stop(ctx->remote_pid, 0);
     munit_assert_not_null(ctx->mid);
 
     return ctx;
@@ -103,8 +94,8 @@ static MunitResult test_comm_reachable(const MunitParameter params[],
     (void)params;
     (void)data;
     hg_return_t hret;
-    hg_handle_t handle;
-    hg_addr_t   addr;
+    hg_handle_t handle = HG_HANDLE_NULL;
+    hg_addr_t   addr = HG_ADDR_NULL;
 
     struct test_context* ctx = (struct test_context*)data;
 
@@ -112,22 +103,29 @@ static MunitResult test_comm_reachable(const MunitParameter params[],
 
     /* should succeed b/c addr is properly formatted */
     hret = margo_addr_lookup(ctx->mid, ctx->remote_addr, &addr);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     hret = margo_create(ctx->mid, addr, null_rpc_id, &handle);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     /* attempt to send rpc to addr, should succeed */
     hret = margo_forward_timed(handle, NULL, 2000.0);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
-    margo_destroy(handle);
+    hret = margo_destroy(handle);
+    handle = HG_HANDLE_NULL;
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     hret = margo_addr_free(ctx->mid, addr);
-
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    addr = HG_ADDR_NULL;
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     return MUNIT_OK;
+
+error:
+    margo_destroy(handle);
+    margo_addr_free(ctx->mid, addr);
+    return MUNIT_FAIL;
 }
 
 static MunitResult test_comm_unreachable(const MunitParameter params[],
@@ -137,7 +135,7 @@ static MunitResult test_comm_unreachable(const MunitParameter params[],
     (void)data;
     hg_return_t hret;
     hg_addr_t   addr = HG_ADDR_NULL;
-    hg_handle_t handle;
+    hg_handle_t handle = HG_HANDLE_NULL;
 
     struct test_context* ctx = (struct test_context*)data;
 
@@ -147,23 +145,30 @@ static MunitResult test_comm_unreachable(const MunitParameter params[],
 
     /* should succeed b/c addr is properly formatted */
     hret = margo_addr_lookup(ctx->mid, str_addr, &addr);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     hret = margo_create(ctx->mid, addr, null_rpc_id, &handle);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     /* attempt to send rpc to addr, should fail without timeout */
     hret = margo_forward_timed(handle, NULL, 2000.0);
-    munit_assert_int(hret, !=, HG_SUCCESS);
-    munit_assert_int(hret, !=, HG_TIMEOUT);
+    munit_assert_int_goto(hret, !=, HG_SUCCESS, error);
+    munit_assert_int_goto(hret, !=, HG_TIMEOUT, error);
 
-    margo_destroy(handle);
+    hret = margo_destroy(handle);
+    handle = HG_HANDLE_NULL;
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     hret = margo_addr_free(ctx->mid, addr);
-
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    addr = HG_ADDR_NULL;
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     return MUNIT_OK;
+
+error:
+    margo_destroy(handle);
+    margo_addr_free(ctx->mid, addr);
+    return MUNIT_FAIL;
 }
 
 static MunitResult test_comm_error(const MunitParameter params[], void* data)
@@ -171,8 +176,8 @@ static MunitResult test_comm_error(const MunitParameter params[], void* data)
     (void)params;
     (void)data;
     hg_return_t hret;
-    hg_handle_t handle;
-    hg_addr_t   addr;
+    hg_handle_t handle = HG_HANDLE_NULL;
+    hg_addr_t   addr = HG_ADDR_NULL;
 
     struct test_context* ctx = (struct test_context*)data;
 
@@ -181,10 +186,10 @@ static MunitResult test_comm_error(const MunitParameter params[], void* data)
 
     /* should succeed b/c addr is properly formatted */
     hret = margo_addr_lookup(ctx->mid, ctx->remote_addr, &addr);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     hret = margo_create(ctx->mid, addr, error_rpc_id, &handle);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     int64_t x = 42;
 
@@ -192,13 +197,20 @@ static MunitResult test_comm_error(const MunitParameter params[], void* data)
     hret = margo_forward(handle, &x);
     munit_assert_int(hret, ==, HG_AGAIN);
 
-    margo_destroy(handle);
+    hret = margo_destroy(handle);
+    handle = HG_HANDLE_NULL;
+    munit_assert_int(hret, ==, HG_SUCCESS);
 
     hret = margo_addr_free(ctx->mid, addr);
-
+    addr = HG_ADDR_NULL;
     munit_assert_int(hret, ==, HG_SUCCESS);
 
     return MUNIT_OK;
+
+error:
+    margo_destroy(handle);
+    margo_addr_free(ctx->mid, addr);
+    return MUNIT_FAIL;
 }
 
 static char* protocol_params[] = {"na+sm", NULL};
