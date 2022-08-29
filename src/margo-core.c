@@ -1518,13 +1518,7 @@ margo_instance_id margo_hg_info_get_instance(const struct hg_info* info)
 
 margo_instance_id margo_hg_handle_get_instance(hg_handle_t h)
 {
-    struct margo_rpc_data* data;
-    const struct hg_info*  info;
-
-    info = HG_Get_info(h);
-    if (!info) return MARGO_INSTANCE_NULL;
-
-    data = (struct margo_rpc_data*)HG_Registered_data(info->hg_class, info->id);
+    struct margo_handle_data* data = (struct margo_handle_data*)HG_Get_data(h);
     if (!data) return MARGO_INSTANCE_NULL;
 
     return data->mid;
