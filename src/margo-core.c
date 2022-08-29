@@ -886,8 +886,7 @@ static hg_return_t margo_provider_iforward_internal(
         if (ret != HG_SUCCESS) return (ret);
 
         /* register new ID that includes provider id */
-        ret = margo_register_internal(margo_hg_info_get_instance(hgi), id,
-                                      in_cb, out_cb, _handler_for_NULL,
+        ret = margo_register_internal(mid, id, in_cb, out_cb, _handler_for_NULL,
                                       ABT_POOL_NULL);
         if (ret == 0) return (HG_OTHER_ERROR);
         ret = HG_Registered_disable_response(hgi->hg_class, id,
@@ -1865,6 +1864,12 @@ void __margo_internal_post_wrapper_hooks(margo_instance_id mid)
 {
     __margo_internal_decr_pending(mid);
     if (__margo_internal_finalize_requested(mid)) { margo_finalize(mid); }
+}
+
+hg_return_t __margo_internal_set_handle_data(hg_handle_t handle)
+{
+    // TODO
+    return HG_SUCCESS;
 }
 
 char* margo_get_config(margo_instance_id mid)

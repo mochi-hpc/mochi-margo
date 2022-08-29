@@ -1388,7 +1388,9 @@ margo_instance_id margo_hg_handle_get_instance(hg_handle_t h);
  *
  * @return Margo instance.
  */
-margo_instance_id margo_hg_info_get_instance(const struct hg_info* info);
+margo_instance_id margo_hg_info_get_instance(const struct hg_info* info)
+    DEPRECATED(
+        "use margo_handle_get_instance to get mid directory from handle");
 
 /**
  * @brief Sets configurable parameters/hints.
@@ -1684,6 +1686,13 @@ void __margo_internal_post_wrapper_hooks(margo_instance_id mid);
 void __margo_respond_with_error(hg_handle_t handle, hg_return_t ret);
 
 /**
+ * @private
+ * Internal function used by DEFINE_MARGO_RPC_HANDLER, not supposed to be
+ * called by users!
+ */
+hg_return_t __margo_internal_set_handle_data(hg_handle_t handle);
+
+/**
  * @brief Macro that registers a function as an RPC.
  *
  * @param __mid Margo instance id.
@@ -1750,6 +1759,15 @@ hg_return_t _handler_for_NULL(hg_handle_t);
     int               __ret;                                                   \
     ABT_pool          __pool;                                                  \
     margo_instance_id __mid;                                                   \
+    hg_return_t       __hret;                                                  \
+    __hret = __margo_internal_set_handle_data(handle);                         \
+    if (__hret != HG_SUCCESS) {                                                \
+        margo_error(NULL,                                                      \
+                    "Could not associate RPC data with handle in " #__name);   \
+        __margo_respond_with_error(handle, __hret);                            \
+        margo_destroy(handle);                                                 \
+        return __hret;                                                         \
+    }                                                                          \
     __mid = margo_hg_handle_get_instance(handle);                              \
     if (__mid == MARGO_INSTANCE_NULL) {                                        \
         margo_error(                                                           \

@@ -28,7 +28,7 @@ static void svc2_do_thing_ult(hg_handle_t handle)
     assert(hret == HG_SUCCESS);
     hgi = margo_get_info(handle);
     assert(hgi);
-    mid = margo_hg_info_get_instance(hgi);
+    mid = margo_hg_handle_get_instance(handle);
     assert(mid != MARGO_INSTANCE_NULL);
 
     ABT_xstream_self(&my_xstream);
@@ -85,7 +85,7 @@ static void svc2_do_other_thing_ult(hg_handle_t handle)
     assert(hret == HG_SUCCESS);
     hgi = margo_get_info(handle);
     assert(hgi);
-    mid = margo_hg_info_get_instance(hgi);
+    mid = margo_hg_handle_get_instance(handle);
     assert(mid != MARGO_INSTANCE_NULL);
 
     ABT_xstream_self(&my_xstream);
