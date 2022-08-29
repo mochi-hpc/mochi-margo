@@ -194,7 +194,7 @@ struct margo_rpc_data {
 struct margo_handle_data {
     margo_instance_id mid;
     void*             user_data;
-    void (*free_user_data)(void*);
+    void (*user_free_callback)(void*);
 };
 
 struct lookup_cb_evt {

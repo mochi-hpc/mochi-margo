@@ -777,8 +777,8 @@ hg_return_t margo_destroy(hg_handle_t handle)
     /* remove the margo_handle_data associated with the handle */
     struct margo_handle_data* handle_data = HG_Get_data(handle);
     if (handle_data) {
-        if (handle_data->free_user_data) {
-            handle_data->free_user_data(handle_data->user_data);
+        if (handle_data->user_free_callback) {
+            handle_data->user_free_callback(handle_data->user_data);
         }
         free(handle_data);
         HG_Set_data(handle, NULL, NULL);
@@ -1882,8 +1882,8 @@ static void margo_handle_data_free(void* args)
      */
     struct margo_handle_data* handle_data = (struct margo_handle_data*)args;
     if (!handle_data) return;
-    if (handle_data->free_user_data)
-        handle_data->free_user_data(handle_data->user_data);
+    if (handle_data->user_free_callback)
+        handle_data->user_free_callback(handle_data->user_data);
     free(handle_data);
 }
 
