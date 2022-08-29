@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <margo.h>
 #include "munit/munit.h"
+#include "munit/munit-goto.h"
 
 struct test_context {
     margo_instance_id mid;
@@ -43,27 +44,34 @@ static MunitResult test_margo_bulk_create_attr(const MunitParameter params[],
     (void)data;
     int          ret;
     hg_size_t    size;
-    void*        buffer;
-    hg_bulk_t    bulk_handle;
+    void*        buffer = NULL;
+    hg_bulk_t    bulk_handle = HG_BULK_NULL;
     struct hg_bulk_attr bulk_attr;
 
     struct test_context* ctx = (struct test_context*)data;
 
     size   = 512;
     buffer = calloc(1, 512);
-    munit_assert_not_null(buffer);
+    munit_assert_not_null_goto(buffer, error);
     bulk_attr.mem_type = NA_MEM_TYPE_HOST;
 
     ret = margo_bulk_create_attr(ctx->mid, 1, &buffer, &size, HG_BULK_READWRITE,
                                  &bulk_attr, &bulk_handle);
-    munit_assert_int(ret, ==, 0);
+    munit_assert_int_goto(ret, ==, 0, error);
 
     ret = margo_bulk_free(bulk_handle);
-    munit_assert_int(ret, ==, 0);
+    bulk_handle = HG_BULK_NULL;
+    munit_assert_int_goto(ret, ==, 0, error);
 
     free(buffer);
+    buffer = NULL;
 
     return MUNIT_OK;
+
+error:
+    margo_bulk_free(bulk_handle);
+    free(buffer);
+    return MUNIT_FAIL;
 }
 #endif
 
@@ -74,25 +82,30 @@ static MunitResult test_margo_bulk_create(const MunitParameter params[],
     (void)data;
     int       ret;
     hg_size_t size;
-    void*     buffer;
-    hg_bulk_t bulk_handle;
+    void*     buffer = NULL;
+    hg_bulk_t bulk_handle = HG_BULK_NULL;
 
     struct test_context* ctx = (struct test_context*)data;
 
     size   = 512;
     buffer = calloc(1, 512);
-    munit_assert_not_null(buffer);
+    munit_assert_not_null_goto(buffer, error);
 
     ret = margo_bulk_create(ctx->mid, 1, &buffer, &size, HG_BULK_READWRITE,
                             &bulk_handle);
     munit_assert_int(ret, ==, 0);
 
     ret = margo_bulk_free(bulk_handle);
+    bulk_handle = HG_BULK_NULL;
     munit_assert_int(ret, ==, 0);
 
     free(buffer);
-
+    buffer = NULL;
     return MUNIT_OK;
+
+error:
+    margo_bulk_free(bulk_handle);
+    free(buffer);
 }
 
 static char* protocol_params[] = {"na+sm", NULL};

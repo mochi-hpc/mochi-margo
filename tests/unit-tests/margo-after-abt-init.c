@@ -2,6 +2,7 @@
 #include <margo.h>
 #include "helper-server.h"
 #include "munit/munit.h"
+#include "munit/munit-goto.h"
 
 struct test_context {
     margo_instance_id mid;
@@ -70,17 +71,20 @@ static MunitResult margo_after_abt(const MunitParameter params[], void* data)
     munit_assert_int(ret, ==, 0);
 
     ctx->mid = margo_init(protocol, MARGO_CLIENT_MODE, 0, 0);
-    munit_assert_not_null(ctx->mid);
+    munit_assert_not_null_goto(ctx->mid, error);
 
     /* The above should have produced a warning, because margo was unable to
      * set the desired abt stack settings
      */
-    munit_assert_int(ctx->log_buffer_pos, >, 0);
+    munit_assert_int_goto(ctx->log_buffer_pos, >, 0, error);
     printf("global log contents: %s\n", ctx->log_buffer);
 
     margo_finalize(ctx->mid);
-
     return MUNIT_OK;
+
+error:
+    if(ctx->mid) margo_finalize(ctx->mid);
+    return MUNIT_FAIL;
 }
 
 static MunitResult margo_after_abt_set_env(const MunitParameter params[], void* data)
@@ -96,17 +100,20 @@ static MunitResult margo_after_abt_set_env(const MunitParameter params[], void* 
     margo_set_environment(NULL);
 
     ret = ABT_init(0, NULL);
-    munit_assert_int(ret, ==, 0);
+    munit_assert_int_goto(ret, ==, 0, error);
 
     ctx->mid = margo_init(protocol, MARGO_CLIENT_MODE, 0, 0);
-    munit_assert_not_null(ctx->mid);
+    munit_assert_not_null_goto(ctx->mid, error);
 
     /* check if log is silent */
-    munit_assert_int(ctx->log_buffer_pos, ==, 0);
+    munit_assert_int_goto(ctx->log_buffer_pos, ==, 0, error);
 
     margo_finalize(ctx->mid);
-
     return MUNIT_OK;
+
+error:
+    if(ctx->mid) margo_finalize(ctx->mid);
+    return MUNIT_FAIL;
 }
 
 

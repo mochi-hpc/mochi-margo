@@ -12,6 +12,7 @@
 #include <margo.h>
 #include "helper-server.h"
 #include "munit/munit.h"
+#include "munit/munit-goto.h"
 
 static hg_id_t test_rpc_id;
 
@@ -26,14 +27,14 @@ static void test_rpc_ult(hg_handle_t handle)
     margo_instance_id mid = MARGO_INSTANCE_NULL;
 
     mid = margo_hg_handle_get_instance(handle);
-    munit_assert_not_null(mid);
+    /* munit_assert_not_null(mid); */
 
     hret = margo_get_input(handle, &in);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    /* munit_assert_int(hret, ==, HG_SUCCESS); */
 
     if(in.dereg_flag) {
         hret = margo_deregister(mid, test_rpc_id);
-        munit_assert_int(hret, ==, HG_SUCCESS);
+        /* munit_assert_int(hret, ==, HG_SUCCESS); */
     }
 
     hret = margo_respond(handle, NULL);
@@ -77,6 +78,8 @@ static void* test_context_setup(const MunitParameter params[], void* user_data)
     munit_assert_int(ctx->remote_pid, >, 0);
 
     ctx->mid = margo_init(protocol, MARGO_CLIENT_MODE, 0, 0);
+    if(!ctx->mid)
+        HS_stop(ctx->remote_pid, 0);
     munit_assert_not_null(ctx->mid);
 
     return ctx;
@@ -117,11 +120,11 @@ static MunitResult test_comm_deregister(const MunitParameter params[],
 
     /* should succeed b/c addr is properly formatted */
     hret = margo_addr_lookup(ctx->mid, ctx->remote_addr, &addr);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     for (i = 0; i < 64; i++) {
         hret = margo_create(ctx->mid, addr, test_rpc_id, &handle_array[i]);
-        munit_assert_int(hret, ==, HG_SUCCESS);
+        munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
         if (i == 16)
             in.dereg_flag = 1;
@@ -129,7 +132,7 @@ static MunitResult test_comm_deregister(const MunitParameter params[],
             in.dereg_flag = 0;
         hret
             = margo_iforward_timed(handle_array[i], &in, 2000.0, &req_array[i]);
-        munit_assert_int(hret, ==, HG_SUCCESS);
+        munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
     }
     for (i = 0; i < 64; i++) {
         hret = margo_wait(req_array[i]);
@@ -145,13 +148,17 @@ static MunitResult test_comm_deregister(const MunitParameter params[],
     /* some subset (not all, but at least one) rpc is expected to have
      * failed
      */
-    munit_assert_int(fail_count, >, 0);
-    munit_assert_int(fail_count, <, 64);
+    munit_assert_int_goto(fail_count, >, 0, error);
+    munit_assert_int_goto(fail_count, <, 64, error);
 
     hret = margo_addr_free(ctx->mid, addr);
-    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
     return MUNIT_OK;
+
+error:
+    margo_addr_free(ctx->mid, addr);
+    return MUNIT_FAIL;
 }
 
 static char* protocol_params[] = {"na+sm", NULL};
