@@ -363,15 +363,34 @@ static void emit_results(struct json_object* json_result_array, char* hostname)
         "\n# <address> <transport> <protocol> <results> <example runtime "
         "address>\n\n");
 
+    /* iterate through the json array twice so that we can display all of
+     * the working ones at the top of the list
+     */
+
     json_array_foreach(json_result_array, i, result)
     {
-        if (json_object_get_boolean(json_object_object_get(result, "result"))) {
-            color_str  = ANSI_COLOR_GREEN;
-            result_str = "YES";
-        } else {
-            color_str  = ANSI_COLOR_RED;
-            result_str = "NO";
-        }
+        if (!json_object_get_boolean(json_object_object_get(result, "result")))
+            continue;
+
+        color_str  = ANSI_COLOR_GREEN;
+        result_str = "YES";
+        printf("### %s ###\n",
+               json_object_get_string(json_object_object_get(result, "desc")));
+        printf("%s%s\t%s\t%s\t%s\t%s\n" ANSI_COLOR_RESET, color_str,
+               json_object_get_string(json_object_object_get(result, "addr")),
+               json_object_get_string(json_object_object_get(result, "xport")),
+               json_object_get_string(json_object_object_get(result, "proto")),
+               result_str,
+               json_object_get_string(
+                   json_object_object_get(result, "example_runtime_addr")));
+    }
+
+    json_array_foreach(json_result_array, i, result)
+    {
+        if (json_object_get_boolean(json_object_object_get(result, "result")))
+            continue;
+        color_str  = ANSI_COLOR_RED;
+        result_str = "NO";
         printf("### %s ###\n",
                json_object_get_string(json_object_object_get(result, "desc")));
         printf("%s%s\t%s\t%s\t%s\t%s\n" ANSI_COLOR_RESET, color_str,

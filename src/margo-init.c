@@ -1564,7 +1564,7 @@ static void confirm_argobots_configuration(struct json_object* config)
     /* retrieve expected values according to Margo configuration */
     struct json_object* argobots = json_object_object_get(config, "argobots");
     int                 abt_thread_stacksize = json_object_get_int64(
-        json_object_object_get(argobots, "abt_thread_stacksize"));
+                        json_object_object_get(argobots, "abt_thread_stacksize"));
 
     /* NOTE: we skip checking num_stacks; this cannot be retrieved with
      * ABT_info_query_config(). Fortunately it also is not as crucial as the
