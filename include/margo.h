@@ -1721,7 +1721,7 @@ void __margo_respond_with_error(hg_handle_t handle, hg_return_t ret);
         BOOST_PP_CAT(hg_proc_, __out_t), _handler_for_##__handler,   \
         __provider_id, __pool);
 
-#define _handler_for_NULL NULL
+hg_return_t _handler_for_NULL(hg_handle_t);
 
 #define __MARGO_INTERNAL_RPC_WRAPPER_BODY(__name)                              \
     margo_instance_id __mid;                                                   \

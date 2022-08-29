@@ -551,6 +551,7 @@ hg_id_t margo_provider_register_name(margo_instance_id mid,
     int                          ret;
     struct margo_registered_rpc* tmp_rpc;
 
+    if (!rpc_cb) rpc_cb = _handler_for_NULL;
     id = gen_id(func_name, provider_id);
 
     /* track information about this rpc registration for debugging and
@@ -886,7 +887,8 @@ static hg_return_t margo_provider_iforward_internal(
 
         /* register new ID that includes provider id */
         ret = margo_register_internal(margo_hg_info_get_instance(hgi), id,
-                                      in_cb, out_cb, NULL, ABT_POOL_NULL);
+                                      in_cb, out_cb, _handler_for_NULL,
+                                      ABT_POOL_NULL);
         if (ret == 0) return (HG_OTHER_ERROR);
         ret = HG_Registered_disable_response(hgi->hg_class, id,
                                              response_disabled);
@@ -1325,8 +1327,8 @@ hg_return_t margo_bulk_transfer(margo_instance_id mid,
 {
     struct margo_request_struct reqs;
     hg_return_t                 hret = margo_bulk_itransfer_internal(
-                        mid, op, origin_addr, origin_handle, origin_offset, local_handle,
-                        local_offset, size, &reqs);
+        mid, op, origin_addr, origin_handle, origin_offset, local_handle,
+        local_offset, size, &reqs);
     if (hret != HG_SUCCESS) return hret;
     return margo_wait_internal(&reqs);
 }
@@ -1896,4 +1898,11 @@ hg_return_t check_error_in_output(hg_handle_t handle)
     hret = respond_args.header.hg_ret;
     HG_Free_output(handle, (void*)&respond_args);
     return hret;
+}
+
+hg_return_t _handler_for_NULL(hg_handle_t handle)
+{
+    __margo_respond_with_error(handle, HG_NOENTRY);
+    margo_destroy(handle);
+    return HG_SUCCESS;
 }
