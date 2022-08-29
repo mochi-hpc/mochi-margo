@@ -47,6 +47,7 @@ static void my_rpc_ult(hg_handle_t handle)
     assert(buffer);
 
     /* get margo instance */
+    hgi = margo_get_info(handle);
     mid = margo_hg_handle_get_instance(handle);
     assert(mid != MARGO_INSTANCE_NULL);
 
