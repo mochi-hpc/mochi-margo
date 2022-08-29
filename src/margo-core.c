@@ -749,6 +749,9 @@ hg_return_t margo_create(margo_instance_id mid,
         /* else try creating a new handle */
         hret = HG_Create(mid->hg_context, addr, id, handle);
     }
+    if (hret != HG_SUCCESS) return hret;
+
+    hret = __margo_internal_set_handle_data(*handle);
 
     return hret;
 }
@@ -767,8 +770,19 @@ hg_return_t margo_destroy(hg_handle_t handle)
     margo_instance_id mid;
     hg_return_t       hret = HG_OTHER_ERROR;
 
-    /* use the handle to get the associated mid */
+    /* use the handle to get the associated mid
+     * Note: we need to do that before cleaning handle_data */
     mid = margo_hg_handle_get_instance(handle);
+
+    /* remove the margo_handle_data associated with the handle */
+    struct margo_handle_data* handle_data = HG_Get_data(handle);
+    if (handle_data) {
+        if (handle_data->free_user_data) {
+            handle_data->free_user_data(handle_data->user_data);
+        }
+        free(handle_data);
+        HG_Set_data(handle, NULL, NULL);
+    }
 
     if (mid) {
         /* recycle this handle if it came from the handle cache */
@@ -1866,10 +1880,30 @@ void __margo_internal_post_wrapper_hooks(margo_instance_id mid)
     if (__margo_internal_finalize_requested(mid)) { margo_finalize(mid); }
 }
 
+static void margo_handle_data_free(void* args)
+{
+    /* Note: normally this function should not be called by Mercury
+     * because we are manually freeing the handle's data and calling
+     * HG_Set_data(handle, NULL, NULL) in margo_destroy.
+     */
+    struct margo_handle_data* handle_data = (struct margo_handle_data*)args;
+    if (!handle_data) return;
+    if (handle_data->free_user_data)
+        handle_data->free_user_data(handle_data->user_data);
+    free(handle_data);
+}
+
 hg_return_t __margo_internal_set_handle_data(hg_handle_t handle)
 {
-    // TODO
-    return HG_SUCCESS;
+    struct margo_rpc_data* rpc_data;
+    const struct hg_info*  info = HG_Get_info(handle);
+    if (!info) return HG_OTHER_ERROR;
+    rpc_data
+        = (struct margo_rpc_data*)HG_Registered_data(info->hg_class, info->id);
+    if (!rpc_data) return HG_OTHER_ERROR;
+    struct margo_handle_data* handle_data = calloc(1, sizeof(*handle_data));
+    handle_data->mid                      = rpc_data->mid;
+    return HG_Set_data(handle, handle_data, margo_handle_data_free);
 }
 
 char* margo_get_config(margo_instance_id mid)

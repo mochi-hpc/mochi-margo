@@ -180,6 +180,7 @@ struct margo_request_struct {
     margo_request_type type;
 };
 
+// Data registered to an RPC id with HG_Register_data
 struct margo_rpc_data {
     margo_instance_id mid;
     ABT_pool          pool;
@@ -187,6 +188,13 @@ struct margo_rpc_data {
     hg_proc_cb_t      out_proc_cb; /* user-provided output proc */
     void*             user_data;
     void (*user_free_callback)(void*);
+};
+
+// Data associated with a handle with HG_Set_data
+struct margo_handle_data {
+    margo_instance_id mid;
+    void*             user_data;
+    void (*free_user_data)(void*);
 };
 
 struct lookup_cb_evt {
