@@ -780,15 +780,14 @@ hg_return_t margo_destroy(hg_handle_t handle)
         if (handle_data->user_free_callback) {
             handle_data->user_free_callback(handle_data->user_data);
         }
-        free(handle_data);
-        HG_Set_data(handle, NULL, NULL);
+        memset(handle_data, 0, sizeof(*handle_data));
     }
 
     if (mid) {
         /* recycle this handle if it came from the handle cache */
         hret = __margo_handle_cache_put(mid, handle);
         if (hret != HG_SUCCESS) {
-            /* else destroy the handle manually */
+            /* else destroy the handle manually and free the handle data */
             hret = HG_Destroy(handle);
         }
     } else {
@@ -1909,12 +1908,18 @@ hg_return_t __margo_internal_set_handle_data(hg_handle_t handle)
     rpc_data
         = (struct margo_rpc_data*)HG_Registered_data(info->hg_class, info->id);
     if (!rpc_data) return HG_OTHER_ERROR;
-    struct margo_handle_data* handle_data = calloc(1, sizeof(*handle_data));
-    handle_data->mid                      = rpc_data->mid;
-    handle_data->pool                     = rpc_data->pool;
-    handle_data->in_proc_cb               = rpc_data->in_proc_cb;
-    handle_data->out_proc_cb              = rpc_data->out_proc_cb;
-    return HG_Set_data(handle, handle_data, margo_handle_data_free);
+    struct margo_handle_data* handle_data;
+    handle_data               = HG_Get_data(handle);
+    bool handle_data_attached = handle_data;
+    if (!handle_data_attached) handle_data = calloc(1, sizeof(*handle_data));
+    handle_data->mid         = rpc_data->mid;
+    handle_data->pool        = rpc_data->pool;
+    handle_data->in_proc_cb  = rpc_data->in_proc_cb;
+    handle_data->out_proc_cb = rpc_data->out_proc_cb;
+    if (!handle_data_attached)
+        return HG_Set_data(handle, handle_data, margo_handle_data_free);
+    else
+        return HG_SUCCESS;
 }
 
 char* margo_get_config(margo_instance_id mid)
