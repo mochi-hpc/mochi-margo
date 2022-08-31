@@ -1897,6 +1897,9 @@ hg_return_t __margo_internal_set_handle_data(hg_handle_t handle)
     if (!rpc_data) return HG_OTHER_ERROR;
     struct margo_handle_data* handle_data = calloc(1, sizeof(*handle_data));
     handle_data->mid                      = rpc_data->mid;
+    handle_data->pool                     = rpc_data->pool;
+    handle_data->in_proc_cb               = rpc_data->in_proc_cb;
+    handle_data->out_proc_cb              = rpc_data->out_proc_cb;
     return HG_Set_data(handle, handle_data, margo_handle_data_free);
 }
 
