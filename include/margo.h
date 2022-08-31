@@ -70,9 +70,16 @@ typedef void (*margo_finalize_callback_t)(void*);
 #define MARGO_SERVER_MODE 1
 
 /**
- * Default provider id.
+ * Default provider id. This is the provider id used by default
+ * in MARGO_REGISTER, margo_forward, and its variants that do not
+ * ask for a provider id.
+ *
+ * Important: it is not recommended for users to use this provider id
+ * for actual providers. If you work with actual providers, use
+ * provider ids starting from 0. This default provider id is
+ * meant for clients and for RPC not associated with providers.
  */
-#define MARGO_DEFAULT_PROVIDER_ID 0
+#define MARGO_DEFAULT_PROVIDER_ID 0xFFFF
 
 /**
  * Maximum allowed value for a provider id.

@@ -57,6 +57,8 @@ static inline void demux_id(hg_id_t in, hg_id_t* base_id, uint16_t* provider_id)
     /* clear low order bits */
     *base_id = (in >> (__MARGO_PROVIDER_ID_SIZE * 8))
             << (__MARGO_PROVIDER_ID_SIZE * 8);
+    /* set them to 1s */
+    *base_id |= MARGO_MAX_PROVIDER_ID;
 
     return;
 }
