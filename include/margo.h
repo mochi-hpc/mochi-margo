@@ -1373,6 +1373,32 @@ hg_context_t* margo_get_context(margo_instance_id mid);
 hg_class_t* margo_get_class(margo_instance_id mid);
 
 /**
+ * @brief Get the data that was associated with the handle using
+ * margo_set_data.
+ *
+ * @param h Handle.
+ *
+ * @return Data associated with the handle (NULL is no data attached).
+ */
+void* margo_get_data(hg_handle_t h);
+
+/**
+ * @brief Attach data with the handle. Any previously-attached data will
+ * be freed using the previously-attached free_callback, before being
+ * replaced with the new data.
+ *
+ * The free_callback with be called when the handle is destroyed.
+ *
+ * @param h Handle.
+ * @param data Data to attach.
+ * @param free_callback Free callback.
+ *
+ * @return HG_SUCCESS or HG error code.
+ */
+hg_return_t
+margo_set_data(hg_handle_t h, void* data, void (*free_callback)(void*));
+
+/**
  * @brief Get the margo_instance_id from a received RPC handle.
  *
  * @param [in] h RPC handle.

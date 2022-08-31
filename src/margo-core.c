@@ -1234,6 +1234,32 @@ hg_return_t margo_free_output(hg_handle_t handle, void* out_struct)
     return HG_Free_output(handle, (void*)&respond_args);
 }
 
+void* margo_get_data(hg_handle_t h)
+{
+    struct margo_handle_data* handle_data
+        = (struct margo_handle_data*)HG_Get_data(h);
+    if (!handle_data) return NULL;
+
+    return handle_data->user_data;
+}
+
+hg_return_t
+margo_set_data(hg_handle_t h, void* data, void (*free_callback)(void*))
+{
+    struct margo_handle_data* handle_data
+        = (struct margo_handle_data*)HG_Get_data(h);
+    if (!handle_data) return HG_NO_MATCH;
+
+    if (handle_data->user_free_callback) {
+        handle_data->user_free_callback(handle_data->user_data);
+    }
+
+    handle_data->user_data          = data;
+    handle_data->user_free_callback = free_callback;
+
+    return HG_SUCCESS;
+}
+
 hg_return_t margo_bulk_create(margo_instance_id mid,
                               hg_uint32_t       count,
                               void**            buf_ptrs,
