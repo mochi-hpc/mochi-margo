@@ -197,13 +197,12 @@ void __margo_breadcrumb_measure(margo_instance_id     mid,
     }
 
     /* Argobots pool info */
-    size_t                 s, s1;
-    struct margo_rpc_data* margo_data;
+    size_t                    s, s1;
+    struct margo_handle_data* margo_data;
     if (type) {
         const struct hg_info* info;
         info       = HG_Get_info(h);
-        margo_data = (struct margo_rpc_data*)HG_Registered_data(mid->hg_class,
-                                                                info->id);
+        margo_data = (struct margo_handle_data*)HG_Get_data(h);
         if (margo_data && margo_data->pool != ABT_POOL_NULL) {
             ABT_pool_get_total_size(margo_data->pool, &s);
             ABT_pool_get_size(margo_data->pool, &s1);
