@@ -164,7 +164,14 @@ margo_instance_id margo_init_ext(const char*                   address,
                     address, mode == 0 ? "client" : "server");
         hg_class = HG_Init_opt(address, mode, &hg_init_info);
         if (!hg_class) {
-            MARGO_ERROR(0, "Could not initialize hg_class");
+            MARGO_ERROR(0, "Could not initialize Mercury class");
+            MARGO_ERROR(0,
+                        "   Try running `margo-info %s` for more information "
+                        "about this",
+                        address);
+            MARGO_ERROR(
+                0,
+                "   protocol or `margo-info` to list all available protocols.");
             goto error;
         }
         hg_ownership |= MARGO_OWNS_HG_CLASS;
@@ -1557,7 +1564,7 @@ static void confirm_argobots_configuration(struct json_object* config)
     /* retrieve expected values according to Margo configuration */
     struct json_object* argobots = json_object_object_get(config, "argobots");
     int                 abt_thread_stacksize = json_object_get_int64(
-        json_object_object_get(argobots, "abt_thread_stacksize"));
+                        json_object_object_get(argobots, "abt_thread_stacksize"));
 
     /* NOTE: we skip checking num_stacks; this cannot be retrieved with
      * ABT_info_query_config(). Fortunately it also is not as crucial as the

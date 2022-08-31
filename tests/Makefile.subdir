@@ -17,7 +17,8 @@ TESTS += \
  tests/basic-ded-pool.sh \
  tests/basic-prio.sh \
  tests/basic-ded-pool-prio.sh \
- tests/timeout.sh
+ tests/timeout.sh \
+ src/margo-info
 
 EXTRA_DIST += \
  tests/sleep.sh \
