@@ -107,6 +107,54 @@ error:
     return MUNIT_FAIL;
 }
 
+static MunitResult test_stress_handle_cache(const MunitParameter params[],
+                                            void*                data)
+{
+    (void)params;
+    (void)data;
+    hg_return_t hret = HG_SUCCESS;
+    hg_addr_t   addr = HG_ADDR_NULL;
+    hg_handle_t handles[128];
+    margo_request reqs[128];
+    memset(handles, 0, 128*sizeof(hg_handle_t));
+    memset(reqs, 0, 128*sizeof(margo_request));
+
+    struct test_context* ctx = (struct test_context*)data;
+
+    // "rpc" is registered on the server, everything should be fine
+    hg_id_t rpc_id = MARGO_REGISTER(ctx->mid, "rpc", void, void, NULL);
+
+    hret = margo_addr_lookup(ctx->mid, ctx->remote_addr, &addr);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
+
+    for(int i=0; i < 128; i++) {
+        hret = margo_create(ctx->mid, addr, rpc_id, &handles[i]);
+        munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
+
+        hret = margo_iforward(handles[i], NULL, &reqs[i]);
+        munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
+    }
+
+    for(int i=0; i < 128; i++) {
+        hret = margo_wait(reqs[i]);
+        reqs[i] = NULL;
+        munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
+        hret = margo_destroy(handles[i]);
+        handles[i] = NULL;
+        munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
+    }
+
+    hret = margo_addr_free(ctx->mid, addr);
+    addr = NULL;
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
+
+    return MUNIT_OK;
+
+error:
+    margo_addr_free(ctx->mid, addr);
+    return MUNIT_FAIL;
+}
+
 static MunitResult test_forward_to_null(const MunitParameter params[],
                                         void*                data)
 {
@@ -364,6 +412,8 @@ static MunitTest test_suite_tests[] = {
     {(char*)"/provider_forward_invalid", test_provider_forward_invalid, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {(char*)"/self_provider_forward_invalid", test_self_provider_forward_invalid, test_context_setup,
+     test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
+    {(char*)"/stress_handle_cache", test_stress_handle_cache, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
 
