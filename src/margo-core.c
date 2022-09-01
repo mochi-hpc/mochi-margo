@@ -870,10 +870,6 @@ static hg_return_t margo_provider_iforward_internal(
     hg_proc_cb_t              in_cb, out_cb;
     margo_instance_id         mid;
 
-    uint64_t* rpc_breadcrumb;
-    char      addr_string[128];
-    hg_size_t addr_string_sz = 128;
-
     hgi         = HG_Get_info(handle);
     handle_data = (struct margo_handle_data*)HG_Get_data(handle);
 
@@ -942,29 +938,32 @@ static hg_return_t margo_provider_iforward_internal(
      */
 
     req->rpc_breadcrumb = 0;
+    req->provider_id    = provider_id;
+    req->start_time     = 0;
+
+    uint64_t rpc_breadcrumb = 0;
+
     if (mid->profile_enabled) {
-        ret = HG_Get_input_buf(handle, (void**)&rpc_breadcrumb, NULL);
-        if (ret != HG_SUCCESS) return (ret);
         req->rpc_breadcrumb = __margo_breadcrumb_set(hgi->id);
         /* LE encoding */
-        *rpc_breadcrumb = htole64(req->rpc_breadcrumb);
-
+        rpc_breadcrumb  = htole64(req->rpc_breadcrumb);
         req->start_time = ABT_get_wtime();
 
-        /* add information about the server and provider servicing the request
-         */
-        req->provider_id
-            = provider_id; /*store id of provider servicing the request */
+        char      addr_string[128];
+        hg_size_t addr_string_sz = 128;
+
         const struct hg_info* inf = HG_Get_info(req->handle);
         margo_addr_to_string(mid, addr_string, &addr_string_sz, inf->addr);
-        HASH_JEN(
-            addr_string, strlen(addr_string),
-            req->server_addr_hash); /*record server address in the breadcrumb */
+        HASH_JEN(addr_string, strlen(addr_string),
+                 req->server_addr_hash); /* record server address in the
+                                            breadcrumb */
     }
 
     // create the margo_forward_proc_args for the serializer
     struct margo_forward_proc_args forward_args
-        = {.user_args = (void*)in_struct, .user_cb = in_cb};
+        = {.user_args = (void*)in_struct,
+           .user_cb   = in_cb,
+           .header    = {.rpc_breadcrumb = rpc_breadcrumb}};
 
     hret = HG_Forward(handle, margo_cb, (void*)req, (void*)&forward_args);
 
@@ -1836,22 +1835,22 @@ static void margo_internal_breadcrumb_handler_set(uint64_t rpc_breadcrumb)
 void __margo_internal_pre_wrapper_hooks(margo_instance_id mid,
                                         hg_handle_t       handle)
 {
-    hg_return_t                  ret;
-    uint64_t*                    rpc_breadcrumb;
-    const struct hg_info*        info;
-    struct margo_request_struct* req;
+    hg_return_t                      ret;
+    const struct hg_info*            info;
+    struct margo_request_struct*     req;
+    struct margo_forward_proc_header header;
 
-    ret = HG_Get_input_buf(handle, (void**)&rpc_breadcrumb, NULL);
+    ret = __margo_read_input_header(handle, &header);
     if (ret != HG_SUCCESS) {
         // LCOV_EXCL_START
         MARGO_CRITICAL(mid,
-                       "HG_Get_input_buf() failed in "
+                       "Could not read input header in "
                        "__margo_internal_pre_wrapper_hooks (ret = %d)",
                        ret);
         exit(-1);
         // LCOV_EXCL_END
     }
-    *rpc_breadcrumb = le64toh(*rpc_breadcrumb);
+    header.rpc_breadcrumb = le64toh(header.rpc_breadcrumb);
 
     /* add the incoming breadcrumb info to a ULT-local key if profiling is
      * enabled */
@@ -1861,7 +1860,7 @@ void __margo_internal_pre_wrapper_hooks(margo_instance_id mid,
 
         if (req == NULL) { req = calloc(1, sizeof(*req)); }
 
-        req->rpc_breadcrumb = *rpc_breadcrumb;
+        req->rpc_breadcrumb = header.rpc_breadcrumb;
 
         req->timer       = NULL;
         req->handle      = handle;
@@ -1879,7 +1878,7 @@ void __margo_internal_pre_wrapper_hooks(margo_instance_id mid,
          * led to that point.
          */
         ABT_key_set(g_margo_target_timing_key, req);
-        margo_internal_breadcrumb_handler_set((*rpc_breadcrumb) << 16);
+        margo_internal_breadcrumb_handler_set((header.rpc_breadcrumb) << 16);
     }
 }
 

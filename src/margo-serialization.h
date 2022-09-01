@@ -28,20 +28,24 @@
 // semantics of the user-provided data, since any value other than HG_SUCCESS
 // will make serialization stop at the error code.
 
+struct margo_forward_proc_header {
+    uint64_t rpc_breadcrumb;
+};
+
 typedef struct margo_forward_proc_args {
-    void*        user_args;
-    hg_proc_cb_t user_cb;
-    struct {
-        // nothing here yet
-    } header;
+    void*                            user_args;
+    hg_proc_cb_t                     user_cb;
+    struct margo_forward_proc_header header;
 } * margo_forward_proc_args_t;
 
+struct margo_respond_proc_header {
+    hg_return_t hg_ret;
+};
+
 typedef struct margo_respond_proc_args {
-    void*        user_args;
-    hg_proc_cb_t user_cb;
-    struct {
-        hg_return_t hg_ret;
-    } header;
+    void*                            user_args;
+    hg_proc_cb_t                     user_cb;
+    struct margo_respond_proc_header header;
 } * margo_respond_proc_args_t;
 
 static inline hg_return_t margo_forward_proc(hg_proc_t proc, void* args)
@@ -68,6 +72,30 @@ static inline hg_return_t margo_respond_proc(hg_proc_t proc, void* args)
         return sargs->user_cb(proc, sargs->user_args);
     } else
         return HG_SUCCESS;
+}
+
+/* Reads only the header from the input buffer, ignoring
+ * user-provided data. If Mercury has been compiled with
+ * +checksum, this may lead to an HG_CHECKSUM_ERROR, which
+ * is ignored by this function.
+ */
+static inline hg_return_t
+__margo_read_input_header(hg_handle_t                       h,
+                          struct margo_forward_proc_header* header)
+{
+    struct margo_forward_proc_args forward_args
+        = {.user_args = NULL, .user_cb = NULL};
+
+    hg_return_t hret = HG_SUCCESS;
+
+    hret = HG_Get_input(h, (void*)&forward_args);
+    if (hret != HG_SUCCESS && hret != HG_CHECKSUM_ERROR) { return hret; }
+
+    memcpy(header, &forward_args.header, sizeof(*header));
+
+    if (hret == HG_SUCCESS) hret = HG_Free_input(h, (void*)&forward_args);
+    if (hret != HG_SUCCESS && hret != HG_CHECKSUM_ERROR) { return hret; }
+    return HG_SUCCESS;
 }
 
 #endif

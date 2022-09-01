@@ -304,14 +304,6 @@ margo_instance_id margo_init_ext(const char*                   address,
     else
         rpc_pool = pools[rpc_pool_index].pool;
 
-    // set input offset to include breadcrumb information in Mercury requests
-    MARGO_TRACE(0, "Setting input offset in hg_class as %d", sizeof(uint64_t));
-    hret = HG_Class_set_input_offset(hg_class, sizeof(uint64_t));
-    if (hret != HG_SUCCESS) {
-        MARGO_ERROR(0, "Could not set input offset in hg_class");
-        goto error;
-    }
-
     // allocate margo instance
     MARGO_TRACE(0, "Allocating margo instance");
     mid = calloc(1, sizeof(*mid));
@@ -1564,7 +1556,7 @@ static void confirm_argobots_configuration(struct json_object* config)
     /* retrieve expected values according to Margo configuration */
     struct json_object* argobots = json_object_object_get(config, "argobots");
     int                 abt_thread_stacksize = json_object_get_int64(
-                        json_object_object_get(argobots, "abt_thread_stacksize"));
+        json_object_object_get(argobots, "abt_thread_stacksize"));
 
     /* NOTE: we skip checking num_stacks; this cannot be retrieved with
      * ABT_info_query_config(). Fortunately it also is not as crucial as the
