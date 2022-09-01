@@ -1380,6 +1380,32 @@ hg_context_t* margo_get_context(margo_instance_id mid);
 hg_class_t* margo_get_class(margo_instance_id mid);
 
 /**
+ * @brief Get the data that was associated with the handle using
+ * margo_set_data.
+ *
+ * @param h Handle.
+ *
+ * @return Data associated with the handle (NULL is no data attached).
+ */
+void* margo_get_data(hg_handle_t h);
+
+/**
+ * @brief Attach data with the handle. Any previously-attached data will
+ * be freed using the previously-attached free_callback, before being
+ * replaced with the new data.
+ *
+ * The free_callback with be called when the handle is destroyed.
+ *
+ * @param h Handle.
+ * @param data Data to attach.
+ * @param free_callback Free callback.
+ *
+ * @return HG_SUCCESS or HG error code.
+ */
+hg_return_t
+margo_set_data(hg_handle_t h, void* data, void (*free_callback)(void*));
+
+/**
  * @brief Get the margo_instance_id from a received RPC handle.
  *
  * @param [in] h RPC handle.
@@ -1395,7 +1421,9 @@ margo_instance_id margo_hg_handle_get_instance(hg_handle_t h);
  *
  * @return Margo instance.
  */
-margo_instance_id margo_hg_info_get_instance(const struct hg_info* info);
+margo_instance_id margo_hg_info_get_instance(const struct hg_info* info)
+    DEPRECATED(
+        "use margo_handle_get_instance to get mid directory from handle");
 
 /**
  * @brief Sets configurable parameters/hints.
@@ -1691,6 +1719,13 @@ void __margo_internal_post_wrapper_hooks(margo_instance_id mid);
 void __margo_respond_with_error(hg_handle_t handle, hg_return_t ret);
 
 /**
+ * @private
+ * Internal function used by DEFINE_MARGO_RPC_HANDLER, not supposed to be
+ * called by users!
+ */
+hg_return_t __margo_internal_set_handle_data(hg_handle_t handle);
+
+/**
  * @brief Macro that registers a function as an RPC.
  *
  * @param __mid Margo instance id.
@@ -1757,6 +1792,15 @@ hg_return_t _handler_for_NULL(hg_handle_t);
     int               __ret;                                                   \
     ABT_pool          __pool;                                                  \
     margo_instance_id __mid;                                                   \
+    hg_return_t       __hret;                                                  \
+    __hret = __margo_internal_set_handle_data(handle);                         \
+    if (__hret != HG_SUCCESS) {                                                \
+        margo_error(NULL,                                                      \
+                    "Could not associate RPC data with handle in " #__name);   \
+        __margo_respond_with_error(handle, __hret);                            \
+        margo_destroy(handle);                                                 \
+        return __hret;                                                         \
+    }                                                                          \
     __mid = margo_hg_handle_get_instance(handle);                              \
     if (__mid == MARGO_INSTANCE_NULL) {                                        \
         margo_error(                                                           \

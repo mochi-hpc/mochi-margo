@@ -751,6 +751,9 @@ hg_return_t margo_create(margo_instance_id mid,
         /* else try creating a new handle */
         hret = HG_Create(mid->hg_context, addr, id, handle);
     }
+    if (hret != HG_SUCCESS) return hret;
+
+    hret = __margo_internal_set_handle_data(*handle);
 
     return hret;
 }
@@ -769,14 +772,24 @@ hg_return_t margo_destroy(hg_handle_t handle)
     margo_instance_id mid;
     hg_return_t       hret = HG_OTHER_ERROR;
 
-    /* use the handle to get the associated mid */
+    /* use the handle to get the associated mid
+     * Note: we need to do that before cleaning handle_data */
     mid = margo_hg_handle_get_instance(handle);
+
+    /* remove the margo_handle_data associated with the handle */
+    struct margo_handle_data* handle_data = HG_Get_data(handle);
+    if (handle_data) {
+        if (handle_data->user_free_callback) {
+            handle_data->user_free_callback(handle_data->user_data);
+        }
+        memset(handle_data, 0, sizeof(*handle_data));
+    }
 
     if (mid) {
         /* recycle this handle if it came from the handle cache */
         hret = __margo_handle_cache_put(mid, handle);
         if (hret != HG_SUCCESS) {
-            /* else destroy the handle manually */
+            /* else destroy the handle manually and free the handle data */
             hret = HG_Destroy(handle);
         }
     } else {
@@ -848,24 +861,34 @@ static hg_return_t margo_provider_iforward_internal(
     void*         in_struct,
     margo_request req) /* the request should have been allocated */
 {
-    hg_return_t           hret = HG_TIMEOUT;
-    margo_eventual_t      eventual;
-    int                   ret;
-    const struct hg_info* hgi;
-    hg_id_t               id;
-    hg_proc_cb_t          in_cb, out_cb;
-    margo_instance_id     mid = margo_hg_handle_get_instance(handle);
-    uint64_t*             rpc_breadcrumb;
-    char                  addr_string[128];
-    hg_size_t             addr_string_sz = 128;
+    hg_return_t               hret = HG_TIMEOUT;
+    margo_eventual_t          eventual;
+    int                       ret;
+    const struct hg_info*     hgi;
+    struct margo_handle_data* handle_data;
+    hg_id_t                   client_id, server_id;
+    hg_proc_cb_t              in_cb, out_cb;
+    margo_instance_id         mid;
+
+    uint64_t* rpc_breadcrumb;
+    char      addr_string[128];
+    hg_size_t addr_string_sz = 128;
+
+    hgi         = HG_Get_info(handle);
+    handle_data = (struct margo_handle_data*)HG_Get_data(handle);
+
+    if (!handle_data) return HG_NO_MATCH;
+
+    mid       = handle_data->mid;
+    in_cb     = handle_data->in_proc_cb;
+    out_cb    = handle_data->out_proc_cb;
+    client_id = hgi->id;
+    server_id = mux_id(client_id, provider_id);
 
     if (!mid) { return (HG_OTHER_ERROR); }
 
-    hgi = HG_Get_info(handle);
-    id  = mux_id(hgi->id, provider_id);
-
     hg_bool_t is_registered;
-    ret = HG_Registered(hgi->hg_class, id, &is_registered);
+    ret = HG_Registered(mid->hg_class, server_id, &is_registered);
     if (ret != HG_SUCCESS) return (ret);
 
     if (!is_registered) {
@@ -873,38 +896,24 @@ static hg_return_t margo_provider_iforward_internal(
         /* if Mercury does not recognize this ID (with provider id included)
          * then register it now
          */
-        /* find encoders for base ID */
-        struct margo_rpc_data* rpc_data
-            = (struct margo_rpc_data*)HG_Registered_data(hgi->hg_class,
-                                                         hgi->id);
-        if (!rpc_data) return HG_NO_MATCH;
-        in_cb  = rpc_data->in_proc_cb;
-        out_cb = rpc_data->out_proc_cb;
 
         /* find out if disable_response was called for this RPC */
+        // TODO this information could be added to margo_handle_data
         hg_bool_t response_disabled;
-        ret = HG_Registered_disabled_response(hgi->hg_class, hgi->id,
+        ret = HG_Registered_disabled_response(mid->hg_class, client_id,
                                               &response_disabled);
         if (ret != HG_SUCCESS) return (ret);
 
         /* register new ID that includes provider id */
-        ret = margo_register_internal(margo_hg_info_get_instance(hgi), id,
-                                      in_cb, out_cb, _handler_for_NULL,
-                                      ABT_POOL_NULL);
+        ret = margo_register_internal(mid, server_id, in_cb, out_cb,
+                                      _handler_for_NULL, ABT_POOL_NULL);
         if (ret == 0) return (HG_OTHER_ERROR);
-        ret = HG_Registered_disable_response(hgi->hg_class, id,
+        ret = HG_Registered_disable_response(hgi->hg_class, server_id,
                                              response_disabled);
         if (ret != HG_SUCCESS) return (ret);
-
-    } else {
-        // it is registered, we still need to extract in_cb for later
-        struct margo_rpc_data* rpc_data
-            = (struct margo_rpc_data*)HG_Registered_data(hgi->hg_class, id);
-        if (!rpc_data) return HG_NO_MATCH;
-        in_cb = rpc_data->in_proc_cb;
     }
 
-    ret = HG_Reset(handle, hgi->addr, id);
+    ret = HG_Reset(handle, hgi->addr, server_id);
     if (ret != HG_SUCCESS) return (ret);
 
     ret = MARGO_EVENTUAL_CREATE(&eventual);
@@ -1071,10 +1080,10 @@ margo_irespond_internal(hg_handle_t   handle,
     hg_proc_cb_t          out_cb = NULL;
     const struct hg_info* hgi    = HG_Get_info(handle);
 
-    struct margo_rpc_data* rpc_data
-        = (struct margo_rpc_data*)HG_Registered_data(hgi->hg_class, hgi->id);
-    if (!rpc_data) return HG_NO_MATCH;
-    out_cb = rpc_data->out_proc_cb;
+    struct margo_handle_data* handle_data
+        = (struct margo_handle_data*)HG_Get_data(handle);
+    if (!handle_data) return HG_NO_MATCH;
+    out_cb = handle_data->out_proc_cb;
 
     ret = MARGO_EVENTUAL_CREATE(&(req->eventual));
     if (ret != 0) { return (HG_NOMEM_ERROR); }
@@ -1154,13 +1163,12 @@ margo_irespond(hg_handle_t handle, void* out_struct, margo_request* req)
 
 hg_return_t margo_get_input(hg_handle_t handle, void* in_struct)
 {
-    hg_proc_cb_t          in_cb = NULL;
-    const struct hg_info* hgi   = HG_Get_info(handle);
+    hg_proc_cb_t in_cb = NULL;
 
-    struct margo_rpc_data* rpc_data
-        = (struct margo_rpc_data*)HG_Registered_data(hgi->hg_class, hgi->id);
-    if (!rpc_data) return HG_NO_MATCH;
-    in_cb = rpc_data->in_proc_cb;
+    struct margo_handle_data* handle_data
+        = (struct margo_handle_data*)HG_Get_data(handle);
+    if (!handle_data) return HG_NO_MATCH;
+    in_cb = handle_data->in_proc_cb;
 
     // create the margo_forward_proc_args for the serializer
     struct margo_forward_proc_args forward_args
@@ -1171,13 +1179,12 @@ hg_return_t margo_get_input(hg_handle_t handle, void* in_struct)
 
 hg_return_t margo_free_input(hg_handle_t handle, void* in_struct)
 {
-    hg_proc_cb_t          in_cb = NULL;
-    const struct hg_info* hgi   = HG_Get_info(handle);
+    hg_proc_cb_t in_cb = NULL;
 
-    struct margo_rpc_data* rpc_data
-        = (struct margo_rpc_data*)HG_Registered_data(hgi->hg_class, hgi->id);
-    if (!rpc_data) return HG_NO_MATCH;
-    in_cb = rpc_data->in_proc_cb;
+    struct margo_handle_data* handle_data
+        = (struct margo_handle_data*)HG_Get_data(handle);
+    if (!handle_data) return HG_NO_MATCH;
+    in_cb = handle_data->in_proc_cb;
 
     // create the margo_forward_proc_args for the serializer
     struct margo_forward_proc_args forward_args
@@ -1188,13 +1195,12 @@ hg_return_t margo_free_input(hg_handle_t handle, void* in_struct)
 
 hg_return_t margo_get_output(hg_handle_t handle, void* out_struct)
 {
-    hg_proc_cb_t          out_cb = NULL;
-    const struct hg_info* hgi    = HG_Get_info(handle);
+    hg_proc_cb_t out_cb = NULL;
 
-    struct margo_rpc_data* rpc_data
-        = (struct margo_rpc_data*)HG_Registered_data(hgi->hg_class, hgi->id);
-    if (!rpc_data) return HG_NO_MATCH;
-    out_cb = rpc_data->out_proc_cb;
+    struct margo_handle_data* handle_data
+        = (struct margo_handle_data*)HG_Get_data(handle);
+    if (!handle_data) return HG_NO_MATCH;
+    out_cb = handle_data->out_proc_cb;
 
     // create the margo_respond_proc_args for the serializer
     struct margo_respond_proc_args respond_args
@@ -1213,13 +1219,12 @@ hg_return_t margo_get_output(hg_handle_t handle, void* out_struct)
 
 hg_return_t margo_free_output(hg_handle_t handle, void* out_struct)
 {
-    hg_proc_cb_t          out_cb = NULL;
-    const struct hg_info* hgi    = HG_Get_info(handle);
+    hg_proc_cb_t out_cb = NULL;
 
-    struct margo_rpc_data* rpc_data
-        = (struct margo_rpc_data*)HG_Registered_data(hgi->hg_class, hgi->id);
-    if (!rpc_data) return HG_NO_MATCH;
-    out_cb = rpc_data->out_proc_cb;
+    struct margo_handle_data* handle_data
+        = (struct margo_handle_data*)HG_Get_data(handle);
+    if (!handle_data) return HG_NO_MATCH;
+    out_cb = handle_data->out_proc_cb;
 
     // create the margo_respond_proc_args for the serializer
     struct margo_respond_proc_args respond_args
@@ -1228,6 +1233,32 @@ hg_return_t margo_free_output(hg_handle_t handle, void* out_struct)
            .header    = {.hg_ret = HG_SUCCESS}};
 
     return HG_Free_output(handle, (void*)&respond_args);
+}
+
+void* margo_get_data(hg_handle_t h)
+{
+    struct margo_handle_data* handle_data
+        = (struct margo_handle_data*)HG_Get_data(h);
+    if (!handle_data) return NULL;
+
+    return handle_data->user_data;
+}
+
+hg_return_t
+margo_set_data(hg_handle_t h, void* data, void (*free_callback)(void*))
+{
+    struct margo_handle_data* handle_data
+        = (struct margo_handle_data*)HG_Get_data(h);
+    if (!handle_data) return HG_NO_MATCH;
+
+    if (handle_data->user_free_callback) {
+        handle_data->user_free_callback(handle_data->user_data);
+    }
+
+    handle_data->user_data          = data;
+    handle_data->user_free_callback = free_callback;
+
+    return HG_SUCCESS;
 }
 
 hg_return_t margo_bulk_create(margo_instance_id mid,
@@ -1481,14 +1512,10 @@ hg_class_t* margo_get_class(margo_instance_id mid) { return (mid->hg_class); }
 
 ABT_pool margo_hg_handle_get_handler_pool(hg_handle_t h)
 {
-    struct margo_rpc_data* data;
-    const struct hg_info*  info;
-    ABT_pool               pool;
+    struct margo_handle_data* data;
+    ABT_pool                  pool;
 
-    info = HG_Get_info(h);
-    if (!info) return ABT_POOL_NULL;
-
-    data = (struct margo_rpc_data*)HG_Registered_data(info->hg_class, info->id);
+    data = (struct margo_handle_data*)HG_Get_data(h);
     if (!data) return ABT_POOL_NULL;
 
     pool = data->pool;
@@ -1507,15 +1534,8 @@ margo_instance_id margo_hg_info_get_instance(const struct hg_info* info)
 
 margo_instance_id margo_hg_handle_get_instance(hg_handle_t h)
 {
-    struct margo_rpc_data* data;
-    const struct hg_info*  info;
-
-    info = HG_Get_info(h);
-    if (!info) return MARGO_INSTANCE_NULL;
-
-    data = (struct margo_rpc_data*)HG_Registered_data(info->hg_class, info->id);
+    struct margo_handle_data* data = (struct margo_handle_data*)HG_Get_data(h);
     if (!data) return MARGO_INSTANCE_NULL;
-
     return data->mid;
 }
 
@@ -1867,6 +1887,41 @@ void __margo_internal_post_wrapper_hooks(margo_instance_id mid)
 {
     __margo_internal_decr_pending(mid);
     if (__margo_internal_finalize_requested(mid)) { margo_finalize(mid); }
+}
+
+static void margo_handle_data_free(void* args)
+{
+    /* Note: normally this function should not be called by Mercury
+     * because we are manually freeing the handle's data and calling
+     * HG_Set_data(handle, NULL, NULL) in margo_destroy.
+     */
+    struct margo_handle_data* handle_data = (struct margo_handle_data*)args;
+    if (!handle_data) return;
+    if (handle_data->user_free_callback)
+        handle_data->user_free_callback(handle_data->user_data);
+    free(handle_data);
+}
+
+hg_return_t __margo_internal_set_handle_data(hg_handle_t handle)
+{
+    struct margo_rpc_data* rpc_data;
+    const struct hg_info*  info = HG_Get_info(handle);
+    if (!info) return HG_OTHER_ERROR;
+    rpc_data
+        = (struct margo_rpc_data*)HG_Registered_data(info->hg_class, info->id);
+    if (!rpc_data) return HG_OTHER_ERROR;
+    struct margo_handle_data* handle_data;
+    handle_data               = HG_Get_data(handle);
+    bool handle_data_attached = handle_data != NULL;
+    if (!handle_data) handle_data = calloc(1, sizeof(*handle_data));
+    handle_data->mid         = rpc_data->mid;
+    handle_data->pool        = rpc_data->pool;
+    handle_data->in_proc_cb  = rpc_data->in_proc_cb;
+    handle_data->out_proc_cb = rpc_data->out_proc_cb;
+    if (!handle_data_attached)
+        return HG_Set_data(handle, handle_data, margo_handle_data_free);
+    else
+        return HG_SUCCESS;
 }
 
 char* margo_get_config(margo_instance_id mid)

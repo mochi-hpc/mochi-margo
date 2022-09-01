@@ -35,11 +35,11 @@ static void test_rpc_ult(hg_handle_t handle)
     if(in.dereg_flag) {
         hret = margo_deregister(mid, test_rpc_id);
         /* munit_assert_int(hret, ==, HG_SUCCESS); */
+    } else {
+        // it is undefined behavior to call margo_respond
+        // after the RPC has been deregistered
+        hret = margo_respond(handle, NULL);
     }
-
-    hret = margo_respond(handle, NULL);
-    if(hret != HG_SUCCESS)
-        fprintf(stderr, "margo_respond() failure (expected).\n");
 
     margo_destroy(handle);
 
