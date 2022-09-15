@@ -1548,6 +1548,13 @@ void margo_breadcrumb_snapshot(margo_instance_id                 mid,
 void margo_breadcrumb_snapshot_destroy(margo_instance_id                 mid,
                                        struct margo_breadcrumb_snapshot* snap);
 
+
+/**
+ * @brief Get breadcrumb representing the current callpath context.
+ * The breadcrumb is a unique value representing a given sequence of RPCs.
+ */
+uint64_t margo_get_current_breadcrumb(margo_instance_id mid);
+
 /**
  * @brief Retrieves complete configuration of margo instance, incoded as json.
  *

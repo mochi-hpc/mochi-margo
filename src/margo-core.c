@@ -941,12 +941,10 @@ static hg_return_t margo_provider_iforward_internal(
     req->provider_id    = provider_id;
     req->start_time     = 0;
 
-    uint64_t rpc_breadcrumb = 0;
-
     if (mid->profile_enabled) {
         req->rpc_breadcrumb = __margo_breadcrumb_set(hgi->id);
         /* LE encoding */
-        rpc_breadcrumb  = htole64(req->rpc_breadcrumb);
+        req->rpc_breadcrumb  = htole64(req->rpc_breadcrumb);
         req->start_time = ABT_get_wtime();
 
         char      addr_string[128];
@@ -963,7 +961,7 @@ static hg_return_t margo_provider_iforward_internal(
     struct margo_forward_proc_args forward_args
         = {.user_args = (void*)in_struct,
            .user_cb   = in_cb,
-           .header    = {.rpc_breadcrumb = rpc_breadcrumb}};
+           .header    = {.rpc_breadcrumb = req->rpc_breadcrumb}};
 
     hret = HG_Forward(handle, margo_cb, (void*)req, (void*)&forward_args);
 
@@ -1929,6 +1927,18 @@ char* margo_get_config(margo_instance_id mid)
         mid->json_cfg,
         JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_NOSLASHESCAPE);
     return strdup(content);
+}
+
+uint64_t margo_get_current_breadcrumb(margo_instance_id mid)
+{
+    (void)mid;
+    struct margo_request_struct* treq;
+    ABT_key_get(g_margo_target_timing_key, (void**)(&treq));
+    if(treq == NULL) {
+        printf("AAA\n");
+        return 0;
+    }
+    return treq->rpc_breadcrumb;
 }
 
 hg_return_t check_error_in_output(hg_handle_t handle)
