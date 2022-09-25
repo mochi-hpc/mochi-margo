@@ -1423,7 +1423,7 @@ margo_instance_id margo_hg_handle_get_instance(hg_handle_t h);
  */
 margo_instance_id margo_hg_info_get_instance(const struct hg_info* info)
     DEPRECATED(
-        "use margo_handle_get_instance to get mid directory from handle");
+        "use margo_hg_handle_get_instance to get mid directly from handle");
 
 /**
  * @brief Sets configurable parameters/hints.
