@@ -4,9 +4,12 @@
  * See COPYRIGHT in top-level directory.
  */
 
-/* TODO: autoconf test */
-#define _GNU_SOURCE
-#include <link.h>
+#include <margo-config.h>
+
+#ifdef HAVE_DL_ITERATE_PHDR
+    #define _GNU_SOURCE
+    #include <link.h>
+#endif /* HAVE_DL_ITERATE_PHDR */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -82,18 +85,22 @@ static const char* const margo_protos[] = {MARGO_KNOWN_HG_PLUGINS};
 static const char* const margo_descs[] = {MARGO_KNOWN_HG_PLUGINS};
 #undef X
 
+#ifdef HAVE_DL_ITERATE_PHDR
 /* list of strings that are likely to appear in relevant communication
  * libraries
  */
 static const char* comm_lib_strings[] = {
     "mercury.so", "margo.so", "libfabric.so", "ucx", "ucp", "uct", "ucs", "psm",
     "verbs",      "rdma",     "gni",          "cxi", "opx", "bmi", NULL};
+#endif
 
 static void parse_args(int argc, char** argv, struct options* opts);
 static void usage(void);
 static void set_verbose_logging(void);
 static void emit_results(struct json_object* json_result_array, char* hostname);
-static int  dl_callback(struct dl_phdr_info* info, size_t size, void* data);
+#ifdef HAVE_DL_ITERATE_PHDR
+static int dl_callback(struct dl_phdr_info* info, size_t size, void* data);
+#endif /* HAVE_DL_ITERATE_PHDR */
 
 int main(int argc, char** argv)
 {
@@ -308,9 +315,9 @@ int main(int argc, char** argv)
         "####################################################################"
         "\n");
 
+#ifdef HAVE_DL_ITERATE_PHDR
     printf("# List of dynamic libraries used by the margo-info utility:\n");
 
-    /* TODO: autoconf test */
     dl_iterate_phdr(dl_callback, &opts);
 
     if (!opts.all_libraries_flag) {
@@ -326,6 +333,7 @@ int main(int argc, char** argv)
     printf(
         "####################################################################"
         "\n");
+#endif /* HAVE_DL_ITERATE_PHDR */
 
 cleanup:
     if (json_result_array) json_object_put(json_result_array);
@@ -336,6 +344,7 @@ cleanup:
     return (ret);
 }
 
+#ifdef HAVE_DL_ITERATE_PHDR
 static int dl_callback(struct dl_phdr_info* info, size_t size, void* data)
 {
     struct options* opts = data;
@@ -359,6 +368,7 @@ static int dl_callback(struct dl_phdr_info* info, size_t size, void* data)
 
     return (0);
 }
+#endif /* HAVE_DL_ITERATE_PHDR */
 
 static void usage(void)
 {
