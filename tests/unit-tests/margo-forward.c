@@ -95,7 +95,6 @@ cleanup:
 
     hret[4] = margo_addr_free(ctx->mid, addr);
 
-check:
     munit_assert_int_goto(hret[0], ==, HG_SUCCESS, error);
     munit_assert_int_goto(hret[1], ==, HG_SUCCESS, error);
     munit_assert_int_goto(hret[2], ==, HG_SUCCESS, error);
@@ -183,7 +182,6 @@ cleanup:
 
     hret[4] = margo_addr_free(ctx->mid, addr);
 
-check:
     munit_assert_int_goto(hret[0], ==, HG_SUCCESS, error);
     munit_assert_int_goto(hret[1], ==, HG_SUCCESS, error);
     munit_assert_int_goto(hret[2], ==, HG_NO_MATCH, error);
@@ -222,7 +220,6 @@ cleanup:
     hret[3] = margo_destroy(handle);
     hret[4] = margo_addr_free(ctx->mid, addr);
 
-check:
     munit_assert_int_goto(hret[0], ==, HG_SUCCESS, error);
     munit_assert_int_goto(hret[1], ==, HG_SUCCESS, error);
     munit_assert_int_goto(hret[2], ==, HG_NO_MATCH, error);
@@ -261,7 +258,6 @@ cleanup:
     hret[3] = margo_destroy(handle);
     hret[4] = margo_addr_free(ctx->mid, addr);
 
-check:
     munit_assert_int_goto(hret[0], ==, HG_SUCCESS, error);
     munit_assert_int_goto(hret[1], ==, HG_SUCCESS, error);
     munit_assert_int_goto(hret[2], ==, HG_NO_MATCH, error);
@@ -300,7 +296,6 @@ cleanup:
     hret[3] = margo_destroy(handle);
     hret[4] = margo_addr_free(ctx->mid, addr);
 
-check:
     munit_assert_int_goto(hret[0], ==, HG_SUCCESS, error);
     munit_assert_int_goto(hret[1], ==, HG_SUCCESS, error);
     munit_assert_int_goto(hret[2], ==, HG_SUCCESS, error);
@@ -340,7 +335,6 @@ cleanup:
     hret[3] = margo_destroy(handle);
     hret[4] = margo_addr_free(ctx->mid, addr);
 
-check:
     munit_assert_int_goto(hret[0], ==, HG_SUCCESS, error);
     munit_assert_int_goto(hret[1], ==, HG_SUCCESS, error);
     munit_assert_int_goto(hret[2], ==, HG_NO_MATCH, error);
@@ -381,7 +375,6 @@ cleanup:
     hret[3] = margo_destroy(handle);
     hret[4] = margo_addr_free(ctx->mid, addr);
 
-check:
     munit_assert_int_goto(hret[0], ==, HG_SUCCESS, error);
     munit_assert_int_goto(hret[1], ==, HG_SUCCESS, error);
     munit_assert_int_goto(hret[2], ==, HG_NO_MATCH, error);

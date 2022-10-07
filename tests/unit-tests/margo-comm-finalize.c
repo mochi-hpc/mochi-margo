@@ -27,18 +27,31 @@ static void test_rpc_ult(hg_handle_t handle)
     margo_instance_id mid = MARGO_INSTANCE_NULL;
 
     mid = margo_hg_handle_get_instance(handle);
-    /* munit_assert_not_null(mid); */
+    if(!mid) {
+        munit_error("margo_hg_handle_get_instance() failure");
+        return;
+    }
 
     hret = margo_get_input(handle, &in);
-    /* munit_assert_int(hret, ==, HG_SUCCESS); */
+    if(hret != HG_SUCCESS) {
+        munit_error("margo_get_input() failure");
+        return;
+    }
 
     if(in.dereg_flag) {
         hret = margo_deregister(mid, test_rpc_id);
-        /* munit_assert_int(hret, ==, HG_SUCCESS); */
+        if(hret != HG_SUCCESS) {
+            munit_error("margo_deregister() failure");
+            return;
+        }
     } else {
         // it is undefined behavior to call margo_respond
         // after the RPC has been deregistered
         hret = margo_respond(handle, NULL);
+        if(hret != HG_SUCCESS) {
+            munit_error("margo_respond() failure");
+            return;
+        }
     }
 
     margo_destroy(handle);

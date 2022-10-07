@@ -132,12 +132,14 @@ static void my_rpc_hang_ult(hg_handle_t handle)
            in.input_val);
     out.ret = 0;
 
-    /* get margo instance */
+    /* get handle info and margo instance */
+    hgi = margo_get_info(handle);
+    assert(hgi);
     mid = margo_hg_handle_get_instance(handle);
     assert(mid != MARGO_INSTANCE_NULL);
 
-    /* sleep for an hour (to allow client to test timeout capability) */
-    margo_thread_sleep(mid, 1000 * 60 * 60);
+    /* sleep for 5 seconds (to allow client to test timeout capability) */
+    margo_thread_sleep(mid, 5000);
 
     /* set up target buffer for bulk transfer */
     size   = 512;
