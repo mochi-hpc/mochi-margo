@@ -106,6 +106,7 @@ static MunitResult test_margo_bulk_create(const MunitParameter params[],
 error:
     margo_bulk_free(bulk_handle);
     free(buffer);
+    return MUNIT_FAIL;
 }
 
 static char* protocol_params[] = {"na+sm", NULL};
