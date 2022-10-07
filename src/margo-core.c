@@ -1076,9 +1076,8 @@ margo_irespond_internal(hg_handle_t   handle,
                         void*         out_struct,
                         margo_request req) /* should have been allocated */
 {
-    int                   ret;
-    hg_proc_cb_t          out_cb = NULL;
-    const struct hg_info* hgi    = HG_Get_info(handle);
+    int          ret;
+    hg_proc_cb_t out_cb = NULL;
 
     struct margo_handle_data* handle_data
         = (struct margo_handle_data*)HG_Get_data(handle);
@@ -1360,8 +1359,8 @@ hg_return_t margo_bulk_transfer(margo_instance_id mid,
 {
     struct margo_request_struct reqs;
     hg_return_t                 hret = margo_bulk_itransfer_internal(
-        mid, op, origin_addr, origin_handle, origin_offset, local_handle,
-        local_offset, size, &reqs);
+                        mid, op, origin_addr, origin_handle, origin_offset, local_handle,
+                        local_offset, size, &reqs);
     if (hret != HG_SUCCESS) return hret;
     return margo_wait_internal(&reqs);
 }
