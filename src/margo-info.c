@@ -4,6 +4,13 @@
  * See COPYRIGHT in top-level directory.
  */
 
+#include <margo-config.h>
+
+#ifdef HAVE_DL_ITERATE_PHDR
+    #define _GNU_SOURCE
+    #include <link.h>
+#endif /* HAVE_DL_ITERATE_PHDR */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -12,6 +19,11 @@
 
 #include "margo.h"
 #include "margo-logging.h"
+
+struct options {
+    int   all_libraries_flag;
+    char* target_addr;
+};
 
 /* ansi terminal color helpers */
 #define ANSI_COLOR_RED     "\x1b[31m"
@@ -73,9 +85,22 @@ static const char* const margo_protos[] = {MARGO_KNOWN_HG_PLUGINS};
 static const char* const margo_descs[] = {MARGO_KNOWN_HG_PLUGINS};
 #undef X
 
+#ifdef HAVE_DL_ITERATE_PHDR
+/* list of strings that are likely to appear in relevant communication
+ * libraries
+ */
+static const char* comm_lib_strings[] = {
+    "mercury.so", "margo.so", "libfabric.so", "ucx", "ucp", "uct", "ucs", "psm",
+    "verbs",      "rdma",     "gni",          "cxi", "opx", "bmi", NULL};
+#endif
+
+static void parse_args(int argc, char** argv, struct options* opts);
 static void usage(void);
 static void set_verbose_logging(void);
 static void emit_results(struct json_object* json_result_array, char* hostname);
+#ifdef HAVE_DL_ITERATE_PHDR
+static int dl_callback(struct dl_phdr_info* info, size_t size, void* data);
+#endif /* HAVE_DL_ITERATE_PHDR */
 
 int main(int argc, char** argv)
 {
@@ -89,7 +114,6 @@ int main(int argc, char** argv)
     FILE*               tmp_stderr_stream = NULL;
     hg_size_t           addr_str_size     = 256;
     int                 i;
-    char*               target_addr       = NULL;
     int                 target_addr_match = 0;
     int                 ret;
     struct json_object* json_result_array = NULL;
@@ -97,15 +121,12 @@ int main(int argc, char** argv)
     char                json_template[256];
     int                 json_fd;
     FILE*               json_stream = NULL;
+    struct options      opts;
 
-    if (argc > 2 || (argc == 2 && !strcmp("-h", argv[1]))) {
-        usage();
-        return (-1);
-    }
+    parse_args(argc, argv, &opts);
 
-    /* track if the user wants us to limit the query to one protocol */
-    if (argc == 2) {
-        target_addr = strdup(argv[1]);
+    if (opts.target_addr) {
+        /* The user wants us to limit the query to one protocol */
         /* In this case we also go ahead and enable verbose logging, with
          * everything going to stderr.  This will be redirected for
          * capture/display.
@@ -155,10 +176,11 @@ int main(int argc, char** argv)
         /* skip iteration if we are looking for a specific addr and this
          * isn't it.
          */
-        if (target_addr && strcmp(target_addr, margo_addrs[i])) continue;
+        if (opts.target_addr && strcmp(opts.target_addr, margo_addrs[i]))
+            continue;
 
         /* note if we found a match */
-        if (target_addr) target_addr_match = 1;
+        if (opts.target_addr) target_addr_match = 1;
 
         /* create json object to hold this specific result */
         json_result = json_object_new_object();
@@ -216,12 +238,12 @@ int main(int argc, char** argv)
     /* The user asked us to query a particular address specifier, but we
      * couldn't find it.
      */
-    if (target_addr && !target_addr_match) {
+    if (opts.target_addr && !target_addr_match) {
         printf(
             "# \"%s\" not supported by margo-info.  Try one of the "
             "following or run\n# margo-info with no arguments to probe for "
             "supported address types:\n",
-            target_addr);
+            opts.target_addr);
         for (i = 0; margo_addrs[i]; i++) printf("      %s\n", margo_addrs[i]);
         ret = -1;
         goto cleanup;
@@ -293,26 +315,73 @@ int main(int argc, char** argv)
         "####################################################################"
         "\n");
 
+#ifdef HAVE_DL_ITERATE_PHDR
+    printf("# List of dynamic libraries used by the margo-info utility:\n");
+
+    dl_iterate_phdr(dl_callback, &opts);
+
+    if (!opts.all_libraries_flag) {
+        printf("# \n");
+        printf(
+            "# Note: the above list was filtered display only those libraries "
+            "likely related\n");
+        printf(
+            "#       to communication. Run margo-info with -l to display all "
+            "libraries.\n");
+    }
+    printf("# \n");
+    printf(
+        "####################################################################"
+        "\n");
+#endif /* HAVE_DL_ITERATE_PHDR */
+
 cleanup:
     if (json_result_array) json_object_put(json_result_array);
     if (tmp_stderr_stream) fclose(tmp_stderr_stream);
     if (json_stream) fclose(json_stream);
-    if (target_addr) free(target_addr);
+    if (opts.target_addr) free(opts.target_addr);
 
     return (ret);
 }
+
+#ifdef HAVE_DL_ITERATE_PHDR
+static int dl_callback(struct dl_phdr_info* info, size_t size, void* data)
+{
+    struct options* opts = data;
+    int             i;
+
+    /* display all libraries; no filter */
+    if (opts->all_libraries_flag && strlen(info->dlpi_name) > 1) {
+        printf("# - %s\n", info->dlpi_name);
+        return (0);
+    }
+
+    /* only display libraries that contain a substring we expect to see in a
+     * communication library
+     */
+    for (i = 0; comm_lib_strings[i] != NULL; i++) {
+        if (strstr(info->dlpi_name, comm_lib_strings[i])) {
+            printf("# - %s\n", info->dlpi_name);
+            return (0);
+        }
+    }
+
+    return (0);
+}
+#endif /* HAVE_DL_ITERATE_PHDR */
 
 static void usage(void)
 {
     int i;
 
-    fprintf(stderr, "Usage: margo-info [address specifier]\n");
+    fprintf(stderr, "Usage: margo-info [address specifier] [-l]\n");
     fprintf(stderr, "   Run with no arguments to query available protocols.\n");
     fprintf(stderr,
             "   Run one of the following arguments for more detail on a "
             "specific protocol:\n");
     for (i = 0; margo_addrs[i]; i++)
         fprintf(stderr, "      %s\n", margo_addrs[i]);
+    fprintf(stderr, "   -l to list all runtime libraries.\n");
     return;
 }
 
@@ -401,6 +470,34 @@ static void emit_results(struct json_object* json_result_array, char* hostname)
                json_object_get_string(
                    json_object_object_get(result, "example_runtime_addr")));
     }
+
+    return;
+}
+
+static void parse_args(int argc, char** argv, struct options* opts)
+{
+    int opt;
+
+    memset(opts, 0, sizeof(*opts));
+
+    while ((opt = getopt(argc, argv, "l")) != -1) {
+        switch (opt) {
+        case 'l':
+            opts->all_libraries_flag = 1;
+            break;
+        default:
+            usage();
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    if ((argc - optind) > 1) {
+        usage();
+        exit(EXIT_FAILURE);
+    }
+
+    /* one optional argument with no flags: address to query */
+    if ((argc - optind) == 1) { opts->target_addr = strdup(argv[optind]); }
 
     return;
 }

@@ -146,6 +146,19 @@ AC_DEFINE(HAVE_ABT_INFO_QUERY_KIND_ENABLED_LAZY_STACK_ALLOC, 1, [can query lazy 
 AC_MSG_RESULT(no)
 )
 
+# check if dl_iterate_phdr() is available
+AC_MSG_CHECKING(for dl_iterate_phdr)
+AC_TRY_LINK([
+#define _GNU_SOURCE
+#include <link.h>
+#include <stdio.h>
+], [
+dl_iterate_phdr(NULL, NULL);
+],
+AC_MSG_RESULT(yes)
+AC_DEFINE(HAVE_DL_ITERATE_PHDR, 1, [dl_iterate_phdr function is available]),
+AC_MSG_RESULT(no)
+)
 
 AC_ARG_ENABLE(coverage,
               [AS_HELP_STRING([--enable-coverage],[Enable code coverage @<:@default=no@:>@])],
