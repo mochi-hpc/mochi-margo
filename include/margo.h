@@ -1790,21 +1790,25 @@ hg_return_t __margo_internal_set_handle_data(hg_handle_t handle);
 
 hg_return_t _handler_for_NULL(hg_handle_t);
 
-#define __MARGO_INTERNAL_RPC_WRAPPER_BODY(__name)                              \
-    margo_instance_id __mid;                                                   \
-    __mid = margo_hg_handle_get_instance(handle);                              \
-    if (__mid == MARGO_INSTANCE_NULL) {                                        \
-        margo_error(                                                           \
-            __mid, "Could not get margo instance when entering RPC " #__name); \
-        margo_destroy(handle);                                                 \
-        return;                                                                \
-    }                                                                          \
-    __margo_internal_pre_wrapper_hooks(__mid, handle);                         \
-    margo_trace(__mid, "Starting RPC " #__name " (handle = %p)",               \
-                (void*)handle);                                                \
-    __name(handle);                                                            \
-    margo_trace(__mid, "RPC " #__name " completed (handle = %p)",              \
-                (void*)handle);                                                \
+#define __MARGO_INTERNAL_RPC_WRAPPER_BODY(__name)                             \
+    margo_instance_id __mid;                                                  \
+    __mid                  = margo_hg_handle_get_instance(handle);            \
+    const char* __rpc_name = margo_handle_get_name(handle);                   \
+    __rpc_name             = __rpc_name ? __rpc_name : "???";                 \
+    if (__mid == MARGO_INSTANCE_NULL) {                                       \
+        margo_error(__mid,                                                    \
+                    "Could not get margo instance when entering ULT " #__name \
+                    " for RPC %s",                                            \
+                    __rpc_name);                                              \
+        margo_destroy(handle);                                                \
+        return;                                                               \
+    }                                                                         \
+    __margo_internal_pre_wrapper_hooks(__mid, handle);                        \
+    margo_trace(__mid, "Starting RPC %s (handle = %p)", __rpc_name,           \
+                (void*)handle);                                               \
+    __name(handle);                                                           \
+    margo_trace(__mid, "RPC %s completed (handle = %p)", __rpc_name,          \
+                (void*)handle);                                               \
     __margo_internal_post_wrapper_hooks(__mid);
 
 #define __MARGO_INTERNAL_RPC_WRAPPER(__name)       \
@@ -1841,18 +1845,17 @@ hg_return_t _handler_for_NULL(hg_handle_t);
         margo_destroy(handle);                                                 \
         return (HG_CANCELED);                                                  \
     }                                                                          \
-    __pool = margo_hg_handle_get_handler_pool(handle);                         \
-    margo_trace(__mid,                                                         \
-                "Spawning ULT for " #__name                                    \
-                " RPC "                                                        \
-                "(handle = %p)",                                               \
-                (void*)handle);                                                \
+    __pool                 = margo_hg_handle_get_handler_pool(handle);         \
+    const char* __rpc_name = margo_handle_get_name(handle);                    \
+    __rpc_name             = __rpc_name ? __rpc_name : #__name;                \
+    margo_trace(__mid, "Spawning ULT " #__name " for RPC %s (handle = %p)",    \
+                __rpc_name, (void*)handle);                                    \
     __ret = ABT_thread_create(__pool, (void (*)(void*))_wrapper_for_##__name,  \
                               handle, ABT_THREAD_ATTR_NULL, NULL);             \
     if (__ret != 0) {                                                          \
         margo_error(__mid,                                                     \
-                    "Could not create ULT for " #__name " RPC (ret = %d)",     \
-                    __ret);                                                    \
+                    "Could not create ULT" #__name " for RPC %s (ret = %d)",   \
+                    __rpc_name, __ret);                                        \
         __margo_respond_with_error(handle, HG_OTHER_ERROR);                    \
         margo_destroy(handle);                                                 \
         __margo_internal_decr_pending(__mid);                                  \
