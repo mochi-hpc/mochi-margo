@@ -87,6 +87,7 @@ static inline hg_id_t gen_id(const char* func_name, uint16_t provider_id)
 }
 
 static hg_id_t margo_register_internal(margo_instance_id mid,
+                                       const char*       name,
                                        hg_id_t           id,
                                        hg_proc_cb_t      in_proc_cb,
                                        hg_proc_cb_t      out_proc_cb,
@@ -571,8 +572,8 @@ hg_id_t margo_provider_register_name(margo_instance_id mid,
     mid->registered_rpcs = tmp_rpc;
     mid->num_registered_rpcs++;
 
-    ret = margo_register_internal(mid, id, in_proc_cb, out_proc_cb, rpc_cb,
-                                  pool);
+    ret = margo_register_internal(mid, func_name, id, in_proc_cb, out_proc_cb,
+                                  rpc_cb, pool);
     if (ret == 0) {
         mid->registered_rpcs = tmp_rpc->next;
         free(tmp_rpc);
@@ -905,8 +906,9 @@ static hg_return_t margo_provider_iforward_internal(
         if (ret != HG_SUCCESS) return (ret);
 
         /* register new ID that includes provider id */
-        ret = margo_register_internal(mid, server_id, in_cb, out_cb,
-                                      _handler_for_NULL, ABT_POOL_NULL);
+        ret = margo_register_internal(mid, handle_data->rpc_name, server_id,
+                                      in_cb, out_cb, _handler_for_NULL,
+                                      ABT_POOL_NULL);
         if (ret == 0) return (HG_OTHER_ERROR);
         ret = HG_Registered_disable_response(hgi->hg_class, server_id,
                                              response_disabled);
@@ -1359,8 +1361,8 @@ hg_return_t margo_bulk_transfer(margo_instance_id mid,
 {
     struct margo_request_struct reqs;
     hg_return_t                 hret = margo_bulk_itransfer_internal(
-                        mid, op, origin_addr, origin_handle, origin_offset, local_handle,
-                        local_offset, size, &reqs);
+        mid, op, origin_addr, origin_handle, origin_offset, local_handle,
+        local_offset, size, &reqs);
     if (hret != HG_SUCCESS) return hret;
     return margo_wait_internal(&reqs);
 }
@@ -1544,7 +1546,8 @@ static void margo_rpc_data_free(void* ptr)
     if (data->user_data && data->user_free_callback) {
         data->user_free_callback(data->user_data);
     }
-    free(ptr);
+    free(data->rpc_name);
+    free(data);
 }
 
 /* dedicated thread function to drive Mercury progress */
@@ -1747,6 +1750,7 @@ int margo_set_param(margo_instance_id mid, const char* key, const char* value)
 }
 
 static hg_id_t margo_register_internal(margo_instance_id mid,
+                                       const char*       name,
                                        hg_id_t           id,
                                        hg_proc_cb_t      in_proc_cb,
                                        hg_proc_cb_t      out_proc_cb,
@@ -1768,6 +1772,7 @@ static hg_id_t margo_register_internal(margo_instance_id mid,
         if (!margo_data) return (0);
         margo_data->mid                = mid;
         margo_data->pool               = pool;
+        margo_data->rpc_name           = name ? strdup(name) : NULL;
         margo_data->in_proc_cb         = in_proc_cb;
         margo_data->out_proc_cb        = out_proc_cb;
         margo_data->user_data          = NULL;
@@ -1915,6 +1920,7 @@ hg_return_t __margo_internal_set_handle_data(hg_handle_t handle)
     if (!handle_data) handle_data = calloc(1, sizeof(*handle_data));
     handle_data->mid         = rpc_data->mid;
     handle_data->pool        = rpc_data->pool;
+    handle_data->rpc_name    = rpc_data->rpc_name;
     handle_data->in_proc_cb  = rpc_data->in_proc_cb;
     handle_data->out_proc_cb = rpc_data->out_proc_cb;
     if (!handle_data_attached)
@@ -1929,6 +1935,22 @@ char* margo_get_config(margo_instance_id mid)
         mid->json_cfg,
         JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_NOSLASHESCAPE);
     return strdup(content);
+}
+
+const char* margo_rpc_get_name(margo_instance_id mid, hg_id_t id)
+{
+    struct margo_rpc_data* data
+        = (struct margo_rpc_data*)HG_Registered_data(margo_get_class(mid), id);
+    if (!data)
+        return NULL;
+    else
+        return data->rpc_name;
+}
+
+const char* margo_handle_get_name(hg_handle_t handle)
+{
+    struct margo_handle_data* handle_data = HG_Get_data(handle);
+    return handle_data ? handle_data->rpc_name : NULL;
 }
 
 hg_return_t check_error_in_output(hg_handle_t handle)

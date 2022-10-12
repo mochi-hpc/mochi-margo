@@ -907,6 +907,31 @@ hg_return_t margo_get_output(hg_handle_t handle, void* out_struct);
 hg_return_t margo_free_output(hg_handle_t handle, void* out_struct);
 
 /**
+ * @brief Get the name with which an RPC id was registered
+ * (NULL if the RPC id is invalid or wasn't registered with a name).
+ *
+ * @param [in] mid Margo instance
+ * @param [in] rpc_id RPC id
+ *
+ * @return Registered name of the RPC.
+ */
+const char* margo_rpc_get_name(margo_instance_id mid, hg_id_t rpc_id);
+
+/**
+ * @brief Get the name of the RPC corresponding to this handle
+ * (NULL if the handle is invalid or the RPC wasn't registered with a name).
+ *
+ * Note: this function is more efficient than margo_rpc_get_name if you
+ * have a handle at hand, as opposed to calling margo_get_info to get the
+ * RPC id followed by margo_rpc_get_name to get the name from the id.
+ *
+ * @param [in] handle Handle.
+ *
+ * @return Registered name of the RPC.
+ */
+const char* margo_handle_get_name(hg_handle_t handle);
+
+/**
  * @brief Forward an RPC request to a remote provider.
  *
  * @param [in] provider_id Provider ID (may be MARGO_DEFAULT_PROVIDER_ID).

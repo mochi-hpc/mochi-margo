@@ -5,6 +5,7 @@
  */
 #include <stdio.h>
 #include <margo.h>
+#include <mercury_proc_string.h>
 #include "helper-server.h"
 #include "munit/munit.h"
 #include "munit/munit-goto.h"
@@ -19,11 +20,22 @@ static void rpc_ult(hg_handle_t handle)
 }
 DEFINE_MARGO_RPC_HANDLER(rpc_ult)
 
+DECLARE_MARGO_RPC_HANDLER(get_name_ult)
+static void get_name_ult(hg_handle_t handle)
+{
+    const char* name = margo_handle_get_name(handle);
+    margo_respond(handle, &name);
+    margo_destroy(handle);
+    return;
+}
+DEFINE_MARGO_RPC_HANDLER(get_name_ult)
+
 static int svr_init_fn(margo_instance_id mid, void* arg)
 {
     MARGO_REGISTER(mid, "rpc", void, void, rpc_ult);
     MARGO_REGISTER(mid, "null_rpc", void, void, NULL);
     MARGO_REGISTER_PROVIDER(mid, "provider_rpc", void, void, rpc_ult, 42, ABT_POOL_NULL);
+    MARGO_REGISTER(mid, "get_name", void, hg_string_t, get_name_ult);
     return (0);
 }
 
@@ -106,6 +118,61 @@ error:
     return MUNIT_FAIL;
 }
 
+static MunitResult test_get_name(const MunitParameter params[],
+                                 void*                data)
+{
+    (void)params;
+    (void)data;
+    hg_return_t hret[5] = {0,0,0,0,0};
+    hg_handle_t handle = HG_HANDLE_NULL;
+    hg_addr_t   addr = HG_ADDR_NULL;
+
+    struct test_context* ctx = (struct test_context*)data;
+
+    // "rpc" is registered on the server, everything should be fine
+    hg_id_t rpc_id = MARGO_REGISTER(ctx->mid, "get_name", void, hg_string_t, NULL);
+
+    munit_assert_string_equal_goto(
+        margo_rpc_get_name(ctx->mid, rpc_id),
+        "get_name", error);
+
+    hret[0] = margo_addr_lookup(ctx->mid, ctx->remote_addr, &addr);
+    if(hret[0] != HG_SUCCESS) goto cleanup;
+
+    hret[1] = margo_create(ctx->mid, addr, rpc_id, &handle);
+    if(hret[1] != HG_SUCCESS) goto cleanup;
+
+    munit_assert_string_equal_goto(
+        margo_handle_get_name(handle),
+        "get_name", error);
+
+    hret[2] = margo_forward(handle, NULL);
+
+    char* rpc_name = NULL;
+    hret[3] = margo_get_output(handle, &rpc_name);
+
+    munit_assert_not_null_goto(rpc_name, error);
+    munit_assert_string_equal_goto(
+        rpc_name, "get_name", error);
+
+    margo_free_output(handle, &rpc_name);
+
+cleanup:
+    hret[4] = margo_destroy(handle);
+
+    hret[5] = margo_addr_free(ctx->mid, addr);
+
+    munit_assert_int_goto(hret[0], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[1], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[2], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[3], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[4], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[5], ==, HG_SUCCESS, error);
+    return MUNIT_OK;
+
+error:
+    return MUNIT_FAIL;
+}
 static MunitResult test_stress_handle_cache(const MunitParameter params[],
                                             void*                data)
 {
@@ -407,6 +474,8 @@ static MunitTest test_suite_tests[] = {
     {(char*)"/self_provider_forward_invalid", test_self_provider_forward_invalid, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {(char*)"/stress_handle_cache", test_stress_handle_cache, test_context_setup,
+     test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
+    {(char*)"/get_name", test_get_name, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
 
