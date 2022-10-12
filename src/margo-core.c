@@ -260,12 +260,13 @@ void margo_finalize(margo_instance_id mid)
     int pending;
     ABT_mutex_lock(mid->pending_operations_mtx);
     pending = mid->pending_operations;
-    ABT_mutex_unlock(mid->pending_operations_mtx);
     if (pending) {
-        MARGO_TRACE(mid, "Pending operations, exiting margo_finalize");
         mid->finalize_requested = 1;
+        ABT_mutex_unlock(mid->pending_operations_mtx);
+        MARGO_TRACE(mid, "Pending operations, exiting margo_finalize");
         return;
     }
+    ABT_mutex_unlock(mid->pending_operations_mtx);
 
     MARGO_TRACE(mid, "Executing pre-finalize callbacks");
     /* before exiting the progress loop, pre-finalize callbacks need to be
@@ -317,6 +318,35 @@ void margo_finalize(margo_instance_id mid)
     if (do_cleanup) margo_cleanup(mid);
 
     MARGO_TRACE(NULL, "Finalize completed");
+    return;
+}
+
+void margo_finalize_and_wait(margo_instance_id mid)
+{
+    MARGO_TRACE(mid, "Start to finalize and wait");
+    int do_cleanup;
+
+    ABT_mutex_lock(mid->finalize_mutex);
+    mid->finalize_requested = 1;
+    mid->refcount++;
+    ABT_mutex_unlock(mid->finalize_mutex);
+
+    // try finalizing
+    margo_finalize(mid);
+
+    ABT_mutex_lock(mid->finalize_mutex);
+
+    while (!mid->finalize_flag)
+        ABT_cond_wait(mid->finalize_cond, mid->finalize_mutex);
+
+    mid->refcount--;
+    do_cleanup = mid->refcount == 0;
+
+    ABT_mutex_unlock(mid->finalize_mutex);
+
+    if (do_cleanup) margo_cleanup(mid);
+
+    MARGO_TRACE(NULL, "Done finalizing and waiting");
     return;
 }
 
@@ -1359,8 +1389,8 @@ hg_return_t margo_bulk_transfer(margo_instance_id mid,
 {
     struct margo_request_struct reqs;
     hg_return_t                 hret = margo_bulk_itransfer_internal(
-                        mid, op, origin_addr, origin_handle, origin_offset, local_handle,
-                        local_offset, size, &reqs);
+        mid, op, origin_addr, origin_handle, origin_offset, local_handle,
+        local_offset, size, &reqs);
     if (hret != HG_SUCCESS) return hret;
     return margo_wait_internal(&reqs);
 }

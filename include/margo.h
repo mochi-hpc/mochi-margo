@@ -327,7 +327,16 @@ margo_instance_id margo_init_pool(ABT_pool      progress_pool,
     DEPRECATED("use margo_init_ext instead");
 
 /**
- * @brief Shuts down margo library and its underlying abt and mercury resources.
+ * @brief Requests the margo instance to shut down and free its resources.
+ *
+ * @note This function does not guarantee that the margo instance will be
+ * finalized immediately. When called in a server, where RPCs may be
+ * executing, for example, this call will only margo the margo instance
+ * as finalizing, preventing further RPCs from being scheduled, however
+ * the margo instance will effectively be destroyed only when all the
+ * RPCs have completed.
+ *
+ * @note This function is safe to use within an RPC handler.
  *
  * @param [in] mid Margo instance.
  */
@@ -335,7 +344,7 @@ void margo_finalize(margo_instance_id mid);
 
 /**
  * @brief Suspends the caller until some other entity (e.g. an RPC, thread, or
- * signal handler) invokes margo_finalize().
+ * signal handler) invokes margo_finalize() or margo_finalize_and_wait().
  *
  * @param [in] mid Margo instance.
  *
@@ -344,6 +353,19 @@ void margo_finalize(margo_instance_id mid);
  * progress engine.
  */
 void margo_wait_for_finalize(margo_instance_id mid);
+
+/**
+ * @brief Requests the margo instance to shut down and free its
+ * resources, and wait until it actually does.
+ *
+ * Contrary to margo_finalize(), this function guarantees that
+ * the margo instance has been freed upon returning.
+ *
+ * @note This function should not be called from within an RPC handler.
+ *
+ * @param [in] mid Margo instance.
+ */
+void margo_finalize_and_wait(margo_instance_id mid);
 
 /**
  * @brief Checks whether a Margo instance we initialized is a server
