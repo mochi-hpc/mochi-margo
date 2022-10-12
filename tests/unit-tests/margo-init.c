@@ -89,6 +89,8 @@ static MunitResult finalize_and_wait(const MunitParameter params[], void* data)
 
     struct test_context* ctx = (struct test_context*)data;
 
+    ABT_init(0, NULL);
+
     /* init and finalize_and_wait */
     ctx->mid = margo_init(protocol, MARGO_SERVER_MODE,
                           use_progress_thread, rpc_thread_count);
@@ -113,7 +115,12 @@ static MunitResult finalize_and_wait(const MunitParameter params[], void* data)
     margo_forward(handle, NULL);
     margo_destroy(handle);
 
+    double t1 = ABT_get_wtime();
     margo_finalize_and_wait(ctx->mid);
+    double t2 = ABT_get_wtime();
+    munit_assert_double(t2-t1, >=, 0.5);
+
+    ABT_finalize();
 
     return MUNIT_OK;
 }
