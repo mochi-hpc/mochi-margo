@@ -29,10 +29,9 @@ struct margo_global_breadcrumb_key {
                              identifier */
 };
 
-enum margo_breadcrumb_type
-{
-    origin,
-    target
+enum margo_breadcrumb_type {
+    MARGO_BREADCRUMB_ORIGIN,
+    MARGO_BREADCRUMB_TARGET
 };
 
 typedef enum margo_breadcrumb_type margo_breadcrumb_type;

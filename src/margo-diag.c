@@ -132,7 +132,7 @@ void __margo_breadcrumb_measure(margo_instance_id     mid,
 {
     struct diag_data* stat;
     double            end, elapsed;
-    uint16_t          t = (type == origin) ? 2 : 1;
+    uint16_t          t = (type == MARGO_BREADCRUMB_ORIGIN) ? 2 : 1;
     uint64_t          hash_;
 
     __uint128_t x = 0;
