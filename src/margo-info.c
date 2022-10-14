@@ -244,12 +244,36 @@ int main(int argc, char** argv)
      */
     if (opts.target_addr && !target_addr_match) {
         printf(
-            "# \"%s\" not supported by margo-info.  Try one of the "
+            "# WARNING: \"%s\" not supported by margo-info.  Try one of the "
             "following or run\n# margo-info with no arguments to probe for "
             "supported address types:\n",
             opts.target_addr);
-        for (i = 0; margo_addrs[i]; i++) printf("      %s\n", margo_addrs[i]);
-        ret = -1;
+        for (i = 0; margo_addrs[i]; i++) printf("    %s\n", margo_addrs[i]);
+        printf("\n");
+        printf(
+            "# WARNING: attempting to intialize margo library with \"%s\" "
+            "anyway:\n",
+            opts.target_addr);
+        mid = margo_init(opts.target_addr, MARGO_SERVER_MODE, 0, 0);
+        if (mid) {
+            /* query local address */
+            hret = margo_addr_self(mid, &addr);
+            if (hret == HG_SUCCESS) {
+                hret
+                    = margo_addr_to_string(mid, addr_str, &addr_str_size, addr);
+                margo_addr_free(mid, addr);
+            }
+            if (hret != HG_SUCCESS) sprintf(addr_str, "UNKNOWN");
+            margo_finalize(mid);
+            printf(ANSI_COLOR_GREEN
+                   "%s\tYES\truntime address: %s\n" ANSI_COLOR_RESET,
+                   opts.target_addr, addr_str);
+            ret = 0;
+        } else {
+            printf(ANSI_COLOR_RED "%s\tNO\n" ANSI_COLOR_RESET,
+                   opts.target_addr);
+            ret = -1;
+        }
         goto cleanup;
     }
 
