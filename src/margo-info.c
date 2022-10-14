@@ -288,10 +288,16 @@ int main(int argc, char** argv)
         "# - This utility queries software stack capability, not hardware "
         "availability.\n");
     printf(
-        "# - UCX does not directly expose which underlying transport plugins "
-        "are available.\n   The \"dc\" protocol type is only available for "
-        "Mellanox InfiniBand adapters, however.\n   See \"ucx_info -d\" for "
-        "more information about transportws available in the UCX library.\n");
+        "# - UCX does not directly expose which underlying network plugins "
+        "are\n"
+        "#   available. The \"dc\" protocol type is only supported on "
+        "Mellanox\n"
+        "#   InfiniBand adapters, however. See \"ucx_info -d\" for more "
+        "information \n"
+        "#   about transports available in your UCX library.\n");
+    printf(
+        "# - UCX will automatically choose a transport if you select the\n"
+        "#   \"ucx+all://\" address string.\n");
     printf(
         "# - For more information about a particular address specifier, "
         "please\n");
