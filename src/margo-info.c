@@ -62,9 +62,13 @@ struct options {
     X("psm2+psm2://", "psm2", "psm2", "integrated PSM2 plugin (OmniPath)")     \
     X("na+sm://", "na", "sm", "integrated sm plugin (shared memory)")          \
     X("bmi+tcp://", "bmi", "tcp", "BMI tcp module (TCP/IP)")                   \
-    X("ucx+tcp://", "ucx", "tcp", "UCX TCP/IP")                                \
-    X("ucx+verbs://", "ucx", "verbs", "UCX Verbs")                             \
-    X("ucx+all://", "ucx", "<any>", "UCX automatic transport")                 \
+    X("ucx+tcp://", "ucx", "tcp", "UCX TCP/IP over SOCK_STREAM sockets")       \
+    X("ucx+rc://", "ucx", "rc", "UCX RC (reliable connection)")                \
+    X("ucx+ud://", "ucx", "ud", "UCX UD (unreliable datagram)")                \
+    X("ucx+dc://", "ucx", "dc",                                                \
+      "UCX DC (dynamic connection, only available on Mellanox adapters)")      \
+    X("ucx+all://", "ucx", "<any>",                                            \
+      "UCX default/automatic transport selection")                             \
     X("tcp://", "<any>", "tcp", "TCP/IP protocol, transport not specified")    \
     X("verbs://", "<any>", "verbs", "Verbs protocol, transport not specified") \
     X("sm://", "<any>", "sm",                                                  \
@@ -259,6 +263,11 @@ int main(int argc, char** argv)
     printf(
         "# - This utility queries software stack capability, not hardware "
         "availability.\n");
+    printf(
+        "# - UCX does not directly expose which underlying transport plugins "
+        "are available.\n   The \"dc\" protocol type is only available for "
+        "Mellanox InfiniBand adapters, however.\n   See \"ucx_info -d\" for "
+        "more information about transportws available in the UCX library.\n");
     printf(
         "# - For more information about a particular address specifier, "
         "please\n");
