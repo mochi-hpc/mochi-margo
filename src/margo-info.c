@@ -62,9 +62,13 @@ struct options {
     X("psm2+psm2://", "psm2", "psm2", "integrated PSM2 plugin (OmniPath)")     \
     X("na+sm://", "na", "sm", "integrated sm plugin (shared memory)")          \
     X("bmi+tcp://", "bmi", "tcp", "BMI tcp module (TCP/IP)")                   \
-    X("ucx+tcp://", "ucx", "tcp", "UCX TCP/IP")                                \
-    X("ucx+verbs://", "ucx", "verbs", "UCX Verbs")                             \
-    X("ucx+all://", "ucx", "<any>", "UCX automatic transport")                 \
+    X("ucx+tcp://", "ucx", "tcp", "UCX TCP/IP over SOCK_STREAM sockets")       \
+    X("ucx+rc://", "ucx", "rc", "UCX RC (reliable connection)")                \
+    X("ucx+ud://", "ucx", "ud", "UCX UD (unreliable datagram)")                \
+    X("ucx+dc://", "ucx", "dc",                                                \
+      "UCX DC (dynamic connection, only available on Mellanox adapters)")      \
+    X("ucx+all://", "ucx", "<any>",                                            \
+      "UCX default/automatic transport selection")                             \
     X("tcp://", "<any>", "tcp", "TCP/IP protocol, transport not specified")    \
     X("verbs://", "<any>", "verbs", "Verbs protocol, transport not specified") \
     X("sm://", "<any>", "sm",                                                  \
@@ -240,12 +244,36 @@ int main(int argc, char** argv)
      */
     if (opts.target_addr && !target_addr_match) {
         printf(
-            "# \"%s\" not supported by margo-info.  Try one of the "
+            "# WARNING: \"%s\" not supported by margo-info.  Try one of the "
             "following or run\n# margo-info with no arguments to probe for "
             "supported address types:\n",
             opts.target_addr);
-        for (i = 0; margo_addrs[i]; i++) printf("      %s\n", margo_addrs[i]);
-        ret = -1;
+        for (i = 0; margo_addrs[i]; i++) printf("    %s\n", margo_addrs[i]);
+        printf("\n");
+        printf(
+            "# WARNING: attempting to intialize margo library with \"%s\" "
+            "anyway:\n",
+            opts.target_addr);
+        mid = margo_init(opts.target_addr, MARGO_SERVER_MODE, 0, 0);
+        if (mid) {
+            /* query local address */
+            hret = margo_addr_self(mid, &addr);
+            if (hret == HG_SUCCESS) {
+                hret
+                    = margo_addr_to_string(mid, addr_str, &addr_str_size, addr);
+                margo_addr_free(mid, addr);
+            }
+            if (hret != HG_SUCCESS) sprintf(addr_str, "UNKNOWN");
+            margo_finalize(mid);
+            printf(ANSI_COLOR_GREEN
+                   "%s\tYES\truntime address: %s\n" ANSI_COLOR_RESET,
+                   opts.target_addr, addr_str);
+            ret = 0;
+        } else {
+            printf(ANSI_COLOR_RED "%s\tNO\n" ANSI_COLOR_RESET,
+                   opts.target_addr);
+            ret = -1;
+        }
         goto cleanup;
     }
 
@@ -259,6 +287,17 @@ int main(int argc, char** argv)
     printf(
         "# - This utility queries software stack capability, not hardware "
         "availability.\n");
+    printf(
+        "# - UCX does not directly expose which underlying network plugins "
+        "are\n"
+        "#   available. The \"dc\" protocol type is only supported on "
+        "Mellanox\n"
+        "#   InfiniBand adapters, however. See \"ucx_info -d\" for more "
+        "information \n"
+        "#   about transports available in your UCX library.\n");
+    printf(
+        "# - UCX will automatically choose a transport if you select the\n"
+        "#   \"ucx+all://\" address string.\n");
     printf(
         "# - For more information about a particular address specifier, "
         "please\n");
