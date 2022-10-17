@@ -71,6 +71,60 @@ static MunitResult init_cycle_client(const MunitParameter params[], void* data)
     return MUNIT_OK;
 }
 
+DECLARE_MARGO_RPC_HANDLER(rpc_ult)
+static void rpc_ult(hg_handle_t handle)
+{
+    margo_instance_id mid = margo_hg_handle_get_instance(handle);
+    margo_thread_sleep(mid, 1000.0);
+    margo_destroy(handle);
+    return;
+}
+DEFINE_MARGO_RPC_HANDLER(rpc_ult)
+
+static MunitResult finalize_and_wait(const MunitParameter params[], void* data)
+{
+    const char* protocol = munit_parameters_get(params, "protocol");
+    int use_progress_thread = atoi(munit_parameters_get(params, "use_progress_thread"));
+    int rpc_thread_count = atoi(munit_parameters_get(params, "rpc_thread_count"));
+
+    struct test_context* ctx = (struct test_context*)data;
+
+    ABT_init(0, NULL);
+
+    /* init and finalize_and_wait */
+    ctx->mid = margo_init(protocol, MARGO_SERVER_MODE,
+                          use_progress_thread, rpc_thread_count);
+    munit_assert_not_null(ctx->mid);
+
+    margo_finalize_and_wait(ctx->mid);
+
+    /* init and finalize_and_wait but issue a slow RPC first */
+    ctx->mid = margo_init(protocol, MARGO_SERVER_MODE,
+                          use_progress_thread, rpc_thread_count);
+    munit_assert_not_null(ctx->mid);
+
+    hg_id_t rpc_id = MARGO_REGISTER(ctx->mid, "rpc", void, void, rpc_ult);
+    margo_registered_disable_response(ctx->mid, rpc_id, HG_TRUE);
+
+    hg_handle_t handle = HG_HANDLE_NULL;
+    hg_addr_t addr = HG_ADDR_NULL;
+
+    margo_addr_self(ctx->mid, &addr);
+    margo_create(ctx->mid, addr, rpc_id, &handle);
+    margo_addr_free(ctx->mid, addr);
+    margo_forward(handle, NULL);
+    margo_destroy(handle);
+
+    double t1 = ABT_get_wtime();
+    margo_finalize_and_wait(ctx->mid);
+    double t2 = ABT_get_wtime();
+    munit_assert_double(t2-t1, >=, 0.5);
+
+    ABT_finalize();
+
+    return MUNIT_OK;
+}
+
 static char* protocol_params[] = {
     "na+sm", NULL
 };
@@ -93,6 +147,7 @@ static MunitParameterEnum test_params[] = {
 static MunitTest tests[] = {
     { "/init-cycle-client", init_cycle_client, test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     { "/init-cycle-server", init_cycle_server, test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
+    { "/finalize-and-wait", finalize_and_wait, test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
 };
 
