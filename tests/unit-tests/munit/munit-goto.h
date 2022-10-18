@@ -120,7 +120,7 @@ extern "C" {
   MUNIT_POP_DISABLE_MSVC_C4127_
 
 #include <string.h>
-#define munit_assert_string_equa_gotol(a, b, label) \
+#define munit_assert_string_equal_goto(a, b, label) \
   do { \
     const char* munit_tmp_a_ = a; \
     const char* munit_tmp_b_ = b; \
