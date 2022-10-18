@@ -123,7 +123,7 @@ static MunitResult test_get_name(const MunitParameter params[],
 {
     (void)params;
     (void)data;
-    hg_return_t hret[5] = {0,0,0,0,0};
+    hg_return_t hret[6] = {0};
     hg_handle_t handle = HG_HANDLE_NULL;
     hg_addr_t   addr = HG_ADDR_NULL;
 
@@ -226,7 +226,7 @@ static MunitResult test_forward_to_null(const MunitParameter params[],
 {
     (void)params;
     (void)data;
-    hg_return_t hret[5] = {0,0,0,0,0};
+    hg_return_t hret[5] = {0};
     hg_handle_t handle = HG_HANDLE_NULL;
     hg_addr_t   addr = HG_ADDR_NULL;
 
@@ -265,7 +265,7 @@ static MunitResult test_self_forward_to_null(const MunitParameter params[],
 {
     (void)params;
     (void)data;
-    hg_return_t hret[5] = {0,0,0,0,0};
+    hg_return_t hret[5] = {0};
     hg_handle_t handle = HG_HANDLE_NULL;
     hg_addr_t   addr = HG_ADDR_NULL;
 
@@ -303,7 +303,7 @@ static MunitResult test_forward_invalid(const MunitParameter params[],
 {
     (void)params;
     (void)data;
-    hg_return_t hret[5] = {0, 0, 0, 0, 0};
+    hg_return_t hret[5] = {0};
     hg_handle_t handle = HG_HANDLE_NULL;
     hg_addr_t   addr = HG_ADDR_NULL;
 
@@ -341,7 +341,7 @@ static MunitResult test_provider_forward(const MunitParameter params[],
 {
     (void)params;
     (void)data;
-    hg_return_t hret[5] = {0,0,0,0,0};
+    hg_return_t hret[5] = {0};
     hg_handle_t handle = HG_HANDLE_NULL;
     hg_addr_t   addr = HG_ADDR_NULL;
 
@@ -380,7 +380,7 @@ static MunitResult test_provider_forward_invalid(const MunitParameter params[],
 {
     (void)params;
     (void)data;
-    hg_return_t hret[5] = {0,0,0,0,0};
+    hg_return_t hret[5] = {0};
     hg_handle_t handle = HG_HANDLE_NULL;
     hg_addr_t   addr = HG_ADDR_NULL;
 
@@ -418,7 +418,7 @@ static MunitResult test_self_provider_forward_invalid(const MunitParameter param
 {
     (void)params;
     (void)data;
-    hg_return_t hret[5] = {0,0,0,0,0};
+    hg_return_t hret[5] = {0};
     hg_handle_t handle = HG_HANDLE_NULL;
     hg_addr_t   addr = HG_ADDR_NULL;
 
