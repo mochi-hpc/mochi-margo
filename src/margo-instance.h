@@ -184,6 +184,7 @@ struct margo_request_struct {
 struct margo_rpc_data {
     margo_instance_id mid;
     ABT_pool          pool;
+    char*             rpc_name;
     hg_proc_cb_t      in_proc_cb;  /* user-provided input proc */
     hg_proc_cb_t      out_proc_cb; /* user-provided output proc */
     void*             user_data;
@@ -194,9 +195,11 @@ struct margo_rpc_data {
 struct margo_handle_data {
     margo_instance_id mid;
     ABT_pool          pool;
-    hg_proc_cb_t      in_proc_cb;  /* user-provided input proc */
-    hg_proc_cb_t      out_proc_cb; /* user-provided output proc */
-    void*             user_data;
+    const char*       rpc_name; /* note: same pointer as in margo_rpc_data,
+                                   not the responsibility of the handle to free it */
+    hg_proc_cb_t in_proc_cb;    /* user-provided input proc */
+    hg_proc_cb_t out_proc_cb;   /* user-provided output proc */
+    void*        user_data;
     void (*user_free_callback)(void*);
 };
 
