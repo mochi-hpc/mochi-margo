@@ -57,10 +57,7 @@ typedef struct margo_monitor_finalize_args*      margo_monitor_finalize_args_t;
 
 /* clang-format off */
 struct margo_monitor {
-    bool (*validate_config)(const char*);
-    void* (*init)(margo_instance_id, const char*);
-    char* (*get_config)(void*);
-    void (*free)(void*);
+    void* uargs;
     void (*on_register)(void*, double, margo_monitor_event_t, margo_monitor_register_args_t);
     void (*on_deregister)(void*, double, margo_monitor_event_t, margo_monitor_deregister_args_t);
     void (*on_lookup)(void*, double, margo_monitor_event_t, margo_monitor_lookup_args_t);

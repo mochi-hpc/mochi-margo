@@ -371,7 +371,12 @@ margo_instance_id margo_init_ext(const char*                   address,
     hret                  = __margo_handle_cache_init(mid, handle_cache_size);
     if (hret != HG_SUCCESS) goto error;
 
-    margo_set_logger(mid, NULL);
+    margo_set_logger(mid, args.logger);
+
+    if (args.monitor) {
+        mid->monitor = (struct margo_monitor*)malloc(sizeof(*(mid->monitor)));
+        memcpy(mid->monitor, args.monitor, sizeof(*(mid->monitor)));
+    }
 
     mid->shutdown_rpc_id = MARGO_REGISTER(
         mid, "__shutdown__", void, margo_shutdown_out_t, remote_shutdown_ult);
@@ -1564,7 +1569,7 @@ static void confirm_argobots_configuration(struct json_object* config)
     /* retrieve expected values according to Margo configuration */
     struct json_object* argobots = json_object_object_get(config, "argobots");
     int                 abt_thread_stacksize = json_object_get_int64(
-                        json_object_object_get(argobots, "abt_thread_stacksize"));
+        json_object_object_get(argobots, "abt_thread_stacksize"));
 
     /* NOTE: we skip checking num_stacks; this cannot be retrieved with
      * ABT_info_query_config(). Fortunately it also is not as crucial as the

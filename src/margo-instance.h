@@ -140,7 +140,6 @@ struct margo_instance {
 
     /* monitoring */
     struct margo_monitor* monitor;
-    void*                 monitor_ctx;
 
     /* optional diagnostics data tracking */
     /* NOTE: technically the following fields are subject to races if they

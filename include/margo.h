@@ -97,12 +97,14 @@ typedef void (*margo_finalize_callback_t)(void*);
  * will fall back to default.
  */
 struct margo_init_info {
-    const char*          json_config;   /*!< JSON-formatted string */
-    ABT_pool             progress_pool; /*!< Progress pool         */
-    ABT_pool             rpc_pool;      /*!< RPC handler pool      */
-    hg_class_t*          hg_class;      /*!< Mercury class         */
-    hg_context_t*        hg_context;    /*!< Mercury context       */
-    struct hg_init_info* hg_init_info;  /*!< Mercury init info     */
+    const char*           json_config;   /*!< JSON-formatted string */
+    ABT_pool              progress_pool; /*!< Progress pool         */
+    ABT_pool              rpc_pool;      /*!< RPC handler pool      */
+    hg_class_t*           hg_class;      /*!< Mercury class         */
+    hg_context_t*         hg_context;    /*!< Mercury context       */
+    struct hg_init_info*  hg_init_info;  /*!< Mercury init info     */
+    struct margo_logger*  logger;        /*!< User-provided logger  */
+    struct margo_monitor* monitor;       /*!< User-provided monitor */
 };
 
 /**
