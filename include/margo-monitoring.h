@@ -45,6 +45,8 @@ typedef enum margo_monitor_event_t
 } margo_monitor_event_t;
 
 /* clang-format off */
+typedef struct margo_monitor_progress_args*      margo_monitor_progress_args_t;
+typedef struct margo_monitor_trigger_args*       margo_monitor_trigger_args_t;
 typedef struct margo_monitor_register_args*      margo_monitor_register_args_t;
 typedef struct margo_monitor_deregister_args*    margo_monitor_deregister_args_t;
 typedef struct margo_monitor_lookup_args*        margo_monitor_lookup_args_t;
@@ -77,6 +79,8 @@ struct margo_monitor {
     void* uargs;
     void* (*initialize)(margo_instance_id mid, void*, const char*);
     void (*finalize)(void* uargs);
+    void (*on_progress)(void*, double, margo_monitor_event_t, margo_monitor_progress_args_t);
+    void (*on_trigger)(void*, double, margo_monitor_event_t, margo_monitor_trigger_args_t);
     void (*on_register)(void*, double, margo_monitor_event_t, margo_monitor_register_args_t);
     void (*on_deregister)(void*, double, margo_monitor_event_t, margo_monitor_deregister_args_t);
     void (*on_lookup)(void*, double, margo_monitor_event_t, margo_monitor_lookup_args_t);
@@ -105,6 +109,24 @@ struct margo_monitor {
     void (*on_user)(void*, double, margo_monitor_event_t, void*);
 };
 /* clang-format on */
+
+struct margo_monitor_progress_args {
+    margo_monitor_data_t uctx;
+    /* input */
+    unsigned int timeout_ms;
+    /* output */
+    hg_return_t ret;
+};
+
+struct margo_monitor_trigger_args {
+    margo_monitor_data_t uctx;
+    /* input */
+    unsigned int timeout_ms;
+    unsigned int max_count;
+    /* output */
+    unsigned int actual_count;
+    hg_return_t  ret;
+};
 
 struct margo_monitor_register_args {
     margo_monitor_data_t uctx;

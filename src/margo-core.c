@@ -1921,6 +1921,49 @@ static void margo_rpc_data_free(void* ptr)
     free(data);
 }
 
+static inline hg_return_t margo_internal_progress(margo_instance_id mid,
+                                                  unsigned int      timeout_ms)
+{
+    /* monitoring */
+    struct margo_monitor_progress_args monitoring_args
+        = {.timeout_ms = timeout_ms, .ret = HG_SUCCESS};
+    __MARGO_MONITOR(mid, FN_START, progress, monitoring_args);
+
+    hg_return_t hret = HG_Progress(mid->hg_context, timeout_ms);
+
+    /* monitoring */
+    monitoring_args.ret = hret;
+    __MARGO_MONITOR(mid, FN_END, progress, monitoring_args);
+
+    return hret;
+}
+
+static inline hg_return_t margo_internal_trigger(margo_instance_id mid,
+                                                 unsigned int      timeout_ms,
+                                                 unsigned int      max_count,
+                                                 unsigned int*     actual_count)
+{
+    /* monitoring */
+    struct margo_monitor_trigger_args monitoring_args
+        = {.timeout_ms   = timeout_ms,
+           .max_count    = max_count,
+           .actual_count = 0,
+           .ret          = HG_SUCCESS};
+    __MARGO_MONITOR(mid, FN_START, trigger, monitoring_args);
+
+    unsigned int count = 0;
+    hg_return_t  hret
+        = HG_Trigger(mid->hg_context, timeout_ms, max_count, &count);
+    if (hret == HG_SUCCESS && actual_count) *actual_count = count;
+
+    /* monitoring */
+    monitoring_args.ret          = hret;
+    monitoring_args.actual_count = count;
+    __MARGO_MONITOR(mid, FN_END, trigger, monitoring_args);
+
+    return hret;
+}
+
 /* dedicated thread function to drive Mercury progress */
 void __margo_hg_progress_fn(void* foo)
 {
@@ -1942,7 +1985,7 @@ void __margo_hg_progress_fn(void* foo)
             diag_enabled = mid->diag_enabled;
 
             if (diag_enabled) tm1 = ABT_get_wtime();
-            ret = HG_Trigger(mid->hg_context, 0, 1, &actual_count);
+            ret = margo_internal_trigger(mid, 0, 1, &actual_count);
             if (diag_enabled) {
                 tm2 = ABT_get_wtime();
                 __DIAG_UPDATE(mid->diag_trigger_elapsed, (tm2 - tm1));
@@ -1997,8 +2040,9 @@ void __margo_hg_progress_fn(void* foo)
              * been given a chance to execute.  This will often happen
              * anyway, but not guaranteed.
              */
+
             if (diag_enabled) tm1 = ABT_get_wtime();
-            ret = HG_Progress(mid->hg_context, 0);
+            ret = margo_internal_progress(mid, 0);
             if (diag_enabled) {
                 tm2 = ABT_get_wtime();
                 __DIAG_UPDATE(mid->diag_progress_elapsed_zero_timeout,
@@ -2035,7 +2079,7 @@ void __margo_hg_progress_fn(void* foo)
                 }
             }
             if (diag_enabled) tm1 = ABT_get_wtime();
-            ret = HG_Progress(mid->hg_context, hg_progress_timeout);
+            ret = margo_internal_progress(mid, hg_progress_timeout);
             if (diag_enabled) {
                 tm2 = ABT_get_wtime();
                 if (hg_progress_timeout == 0)

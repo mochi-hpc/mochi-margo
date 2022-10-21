@@ -21,6 +21,8 @@ static void margo_default_monitor_finalize(void* uargs) {}
         void* uargs, double timestamp, margo_monitor_event_t event_type, \
         margo_monitor_##__event__##_args_t event_args)
 
+__MONITOR_FN(progress) {}
+__MONITOR_FN(trigger) {}
 __MONITOR_FN(register) {}
 __MONITOR_FN(deregister) {}
 __MONITOR_FN(lookup) {}
@@ -57,6 +59,8 @@ struct margo_monitor __margo_default_monitor
     = {.uargs               = NULL,
        .initialize          = margo_default_monitor_initialize,
        .finalize            = margo_default_monitor_finalize,
+       .on_progress         = margo_default_monitor_on_progress,
+       .on_trigger          = margo_default_monitor_on_trigger,
        .on_register         = margo_default_monitor_on_register,
        .on_deregister       = margo_default_monitor_on_deregister,
        .on_lookup           = margo_default_monitor_on_lookup,
