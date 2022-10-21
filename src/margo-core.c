@@ -1146,7 +1146,10 @@ static hg_return_t margo_provider_iforward_internal(
 
     // create the margo_forward_proc_args for the serializer
     struct margo_forward_proc_args forward_args
-        = {.user_args = (void*)in_struct, .user_cb = in_cb};
+        = {.handle    = handle,
+           .request   = req,
+           .user_args = (void*)in_struct,
+           .user_cb   = in_cb};
 
     hret = HG_Forward(handle, margo_cb, (void*)req, (void*)&forward_args);
 
@@ -1304,7 +1307,9 @@ margo_irespond_internal(hg_handle_t   handle,
 
     // create the margo_respond_proc_args for the serializer
     struct margo_respond_proc_args respond_args
-        = {.user_args = (void*)out_struct,
+        = {.handle    = handle,
+           .request   = req,
+           .user_args = (void*)out_struct,
            .user_cb   = out_cb,
            .header    = {.hg_ret = HG_SUCCESS}};
 
@@ -1380,76 +1385,139 @@ margo_irespond(hg_handle_t handle, void* out_struct, margo_request* req)
 
 hg_return_t margo_get_input(hg_handle_t handle, void* in_struct)
 {
-    hg_proc_cb_t in_cb = NULL;
+    hg_proc_cb_t      in_cb = NULL;
+    margo_instance_id mid   = MARGO_INSTANCE_NULL;
 
     struct margo_handle_data* handle_data
         = (struct margo_handle_data*)HG_Get_data(handle);
     if (!handle_data) return HG_NO_MATCH;
     in_cb = handle_data->in_proc_cb;
+    mid   = handle_data->mid;
+
+    /* monitoring */
+    struct margo_monitor_get_input_args monitoring_args
+        = {.handle = handle, .data = in_struct, .ret = HG_SUCCESS};
+    __MARGO_MONITOR(mid, FN_START, get_input, monitoring_args);
 
     // create the margo_forward_proc_args for the serializer
     struct margo_forward_proc_args forward_args
-        = {.user_args = (void*)in_struct, .user_cb = in_cb, .header = {}};
+        = {.handle    = handle,
+           .request   = NULL,
+           .user_args = (void*)in_struct,
+           .user_cb   = in_cb,
+           .header    = {}};
 
-    return HG_Get_input(handle, (void*)&forward_args);
+    hg_return_t hret = HG_Get_input(handle, (void*)&forward_args);
+
+    /* monitoring */
+    monitoring_args.ret = hret;
+    __MARGO_MONITOR(mid, FN_END, get_input, monitoring_args);
+
+    return hret;
 }
 
 hg_return_t margo_free_input(hg_handle_t handle, void* in_struct)
 {
-    hg_proc_cb_t in_cb = NULL;
+    hg_proc_cb_t      in_cb = NULL;
+    margo_instance_id mid   = MARGO_INSTANCE_NULL;
 
     struct margo_handle_data* handle_data
         = (struct margo_handle_data*)HG_Get_data(handle);
     if (!handle_data) return HG_NO_MATCH;
     in_cb = handle_data->in_proc_cb;
+    mid   = handle_data->mid;
+
+    /* monitoring */
+    struct margo_monitor_free_input_args monitoring_args
+        = {.handle = handle, .data = in_struct, .ret = HG_SUCCESS};
+    __MARGO_MONITOR(mid, FN_START, free_input, monitoring_args);
 
     // create the margo_forward_proc_args for the serializer
     struct margo_forward_proc_args forward_args
-        = {.user_args = (void*)in_struct, .user_cb = in_cb, .header = {}};
+        = {.handle    = handle,
+           .request   = NULL,
+           .user_args = (void*)in_struct,
+           .user_cb   = in_cb,
+           .header    = {}};
 
-    return HG_Free_input(handle, (void*)&forward_args);
+    hg_return_t hret = HG_Free_input(handle, (void*)&forward_args);
+
+    /* monitoring */
+    monitoring_args.ret = hret;
+    __MARGO_MONITOR(mid, FN_END, free_input, monitoring_args);
+
+    return hret;
 }
 
 hg_return_t margo_get_output(hg_handle_t handle, void* out_struct)
 {
-    hg_proc_cb_t out_cb = NULL;
+    hg_proc_cb_t      out_cb = NULL;
+    margo_instance_id mid    = MARGO_INSTANCE_NULL;
 
     struct margo_handle_data* handle_data
         = (struct margo_handle_data*)HG_Get_data(handle);
     if (!handle_data) return HG_NO_MATCH;
     out_cb = handle_data->out_proc_cb;
+    mid    = handle_data->mid;
+
+    /* monitoring */
+    struct margo_monitor_get_output_args monitoring_args
+        = {.handle = handle, .data = out_struct, .ret = HG_SUCCESS};
+    __MARGO_MONITOR(mid, FN_START, get_output, monitoring_args);
 
     // create the margo_respond_proc_args for the serializer
     struct margo_respond_proc_args respond_args
-        = {.user_args = (void*)out_struct,
+        = {.handle    = handle,
+           .request   = NULL,
+           .user_args = (void*)out_struct,
            .user_cb   = out_cb,
            .header    = {.hg_ret = HG_SUCCESS}};
 
     hg_return_t hret = HG_Get_output(handle, (void*)&respond_args);
-    if (hret != HG_SUCCESS)
-        return hret;
-    else
-        hret = respond_args.header.hg_ret;
+    if (hret != HG_SUCCESS) goto finish;
+    hret = respond_args.header.hg_ret;
     if (hret != HG_SUCCESS) HG_Free_output(handle, (void*)&respond_args);
+
+finish:
+
+    /* monitoring */
+    monitoring_args.ret = hret;
+    __MARGO_MONITOR(mid, FN_END, get_output, monitoring_args);
+
     return hret;
 }
 
 hg_return_t margo_free_output(hg_handle_t handle, void* out_struct)
 {
-    hg_proc_cb_t out_cb = NULL;
+    hg_proc_cb_t      out_cb = NULL;
+    margo_instance_id mid    = MARGO_INSTANCE_NULL;
 
     struct margo_handle_data* handle_data
         = (struct margo_handle_data*)HG_Get_data(handle);
     if (!handle_data) return HG_NO_MATCH;
     out_cb = handle_data->out_proc_cb;
+    mid    = handle_data->mid;
+
+    /* monitoring */
+    struct margo_monitor_free_output_args monitoring_args
+        = {.handle = handle, .ret = HG_SUCCESS};
+    __MARGO_MONITOR(mid, FN_START, free_output, monitoring_args);
 
     // create the margo_respond_proc_args for the serializer
     struct margo_respond_proc_args respond_args
-        = {.user_args = (void*)out_struct,
+        = {.handle    = handle,
+           .request   = NULL,
+           .user_args = (void*)out_struct,
            .user_cb   = out_cb,
            .header    = {.hg_ret = HG_SUCCESS}};
 
-    return HG_Free_output(handle, (void*)&respond_args);
+    hg_return_t hret = HG_Free_output(handle, (void*)&respond_args);
+
+    /* monitoring */
+    monitoring_args.ret = hret;
+    __MARGO_MONITOR(mid, FN_END, free_output, monitoring_args);
+
+    return hret;
 }
 
 void* margo_get_data(hg_handle_t h)

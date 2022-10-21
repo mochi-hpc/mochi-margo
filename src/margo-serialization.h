@@ -7,6 +7,8 @@
 #define __MARGO_SERIALIZATION_H
 
 #include "margo.h"
+#include "margo-instance.h"
+#include "margo-monitoring-internal.h"
 
 // This file provides the serialization mechanism that Margo injects into
 // Mercury in order to add a header to every RPC and response.
@@ -29,16 +31,20 @@
 // will make serialization stop at the error code.
 
 typedef struct margo_forward_proc_args {
-    void*        user_args;
-    hg_proc_cb_t user_cb;
+    hg_handle_t   handle;
+    margo_request request;
+    void*         user_args;
+    hg_proc_cb_t  user_cb;
     struct {
         // nothing here yet
     } header;
 } * margo_forward_proc_args_t;
 
 typedef struct margo_respond_proc_args {
-    void*        user_args;
-    hg_proc_cb_t user_cb;
+    hg_handle_t   handle;
+    margo_request request;
+    void*         user_args;
+    hg_proc_cb_t  user_cb;
     struct {
         hg_return_t hg_ret;
     } header;
@@ -47,27 +53,71 @@ typedef struct margo_respond_proc_args {
 static inline hg_return_t margo_forward_proc(hg_proc_t proc, void* args)
 {
     margo_forward_proc_args_t sargs = (margo_forward_proc_args_t)args;
-    hg_return_t               ret   = HG_SUCCESS;
-    ret = hg_proc_memcpy(proc, (void*)(&sargs->header), sizeof(sargs->header));
-    if (ret != HG_SUCCESS) return ret;
+    hg_return_t               hret  = HG_SUCCESS;
+    margo_instance_id         mid   = MARGO_INSTANCE_NULL;
+
+    /* monitoring */
+    /* Note: sargs->request is set only in the margo_forward path,
+     * not in margo_get_input or margo_free_input, so if it set we
+     * know we are encoding the input (set_input) and should monitor.
+     */
+    if (sargs->request) mid = sargs->request->mid;
+    struct margo_monitor_set_input_args monitoring_args
+        = {.handle  = sargs->handle,
+           .request = sargs->request,
+           .data    = sargs->user_args,
+           .ret     = HG_SUCCESS};
+    __MARGO_MONITOR(mid, FN_START, set_input, monitoring_args);
+
+    hret = hg_proc_memcpy(proc, (void*)(&sargs->header), sizeof(sargs->header));
+    if (hret != HG_SUCCESS) goto finish;
     if (sargs && sargs->user_cb) {
-        ret = sargs->user_cb(proc, sargs->user_args);
-        return ret;
-    } else
-        return HG_SUCCESS;
+        hret = sargs->user_cb(proc, sargs->user_args);
+        goto finish;
+    }
+
+finish:
+
+    /* monitoring */
+    monitoring_args.ret = hret;
+    __MARGO_MONITOR(mid, FN_END, set_input, monitoring_args);
+
+    return hret;
 }
 
 static inline hg_return_t margo_respond_proc(hg_proc_t proc, void* args)
 {
     margo_respond_proc_args_t sargs = (margo_respond_proc_args_t)args;
-    hg_return_t               ret
-        = hg_proc_memcpy(proc, (void*)(&sargs->header), sizeof(sargs->header));
-    if (ret != HG_SUCCESS) return ret;
-    if (sargs->header.hg_ret != HG_SUCCESS) return HG_SUCCESS;
+    hg_return_t               hret  = HG_SUCCESS;
+    margo_instance_id         mid   = MARGO_INSTANCE_NULL;
+
+    /* monitoring */
+    /* Note: sargs->request is set only in margo_respond, not in
+     * margo_get_output or margo_free_output, so if it set we know
+     * we are encoding the output (set_output) and should monitor.
+     */
+    if (sargs->request) mid = sargs->request->mid;
+    struct margo_monitor_set_output_args monitoring_args
+        = {.handle  = sargs->handle,
+           .request = sargs->request,
+           .data    = sargs->user_args,
+           .ret     = HG_SUCCESS};
+    __MARGO_MONITOR(mid, FN_START, set_output, monitoring_args);
+
+    hret = hg_proc_memcpy(proc, (void*)(&sargs->header), sizeof(sargs->header));
+    if (hret != HG_SUCCESS) goto finish;
+    if (sargs->header.hg_ret != HG_SUCCESS) goto finish;
     if (sargs && sargs->user_cb) {
-        return sargs->user_cb(proc, sargs->user_args);
-    } else
-        return HG_SUCCESS;
+        hret = sargs->user_cb(proc, sargs->user_args);
+    }
+
+finish:
+
+    /* monitoring */
+    monitoring_args.ret = hret;
+    __MARGO_MONITOR(mid, FN_END, set_output, monitoring_args);
+
+    return hret;
 }
 
 #endif

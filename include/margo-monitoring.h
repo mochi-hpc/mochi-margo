@@ -213,16 +213,18 @@ struct margo_monitor_sleep_args {
 
 struct margo_monitor_set_input_args {
     /* input */
-    hg_handle_t handle;
-    const void* data;
+    hg_handle_t   handle;
+    margo_request request;
+    const void*   data;
     /* output */
     hg_return_t ret;
 };
 
 struct margo_monitor_set_output_args {
     /* input */
-    hg_handle_t handle;
-    const void* data;
+    hg_handle_t   handle;
+    margo_request request;
+    const void*   data;
     /* output */
     hg_return_t ret;
 };
