@@ -24,6 +24,13 @@ typedef struct margo_request_struct* margo_request;
 
 extern const struct margo_monitor* margo_default_monitor;
 
+/**
+ * The margo_monitor_data_t union is used in all the
+ * margo_monitor_*_args structures so that developers
+ * of a custom monitoring system can pass some data
+ * between a MARGO_MONITOR_FN_START event and its
+ * corresponding MARGO_MONITOR_FN_END.
+ */
 typedef union {
     int64_t i;
     double  f;
@@ -313,6 +320,11 @@ struct margo_monitor_cb_args {
  * @brief Set a monitor structure for Margo to use. The structure will be
  * internally copied and the user may free the input argument after the call.
  * Passing NULL as monitor is valid and will disable monitor altogether.
+ *
+ * Note: if a monitor is already in place, its finalize function pointer will
+ * be called before the new monitor is installed. If provided, The initialize
+ * function of the new monitor will be called and the monitor's uargs will be
+ * replaced internally with the returned value of the initialize call.
  *
  * @param mid Margo instance
  * @param monitor Monitor structure
