@@ -374,8 +374,8 @@ margo_instance_id margo_init_ext(const char*                   address,
     margo_set_logger(mid, args.logger);
 
     if (args.monitor) {
-        mid->monitor = (struct margo_monitor*)malloc(sizeof(*(mid->monitor)));
-        memcpy(mid->monitor, args.monitor, sizeof(*(mid->monitor)));
+        const char* monitor_config = NULL; // TODO
+        margo_set_monitor(mid, args.monitor, monitor_config);
     }
 
     mid->shutdown_rpc_id = MARGO_REGISTER(

@@ -8,6 +8,7 @@
 #ifndef __MARGO_MONITORING_H
 #define __MARGO_MONITORING_H
 
+#include <abt.h>
 #include <mercury.h>
 #include <mercury_types.h>
 #include <mercury_bulk.h>
@@ -16,9 +17,18 @@
 extern "C" {
 #endif
 
+struct hg_bulk_attr;
 struct margo_instance;
 typedef struct margo_instance*       margo_instance_id;
 typedef struct margo_request_struct* margo_request;
+
+extern const struct margo_monitor* margo_default_monitor;
+
+typedef union {
+    int64_t i;
+    double  f;
+    void*   p;
+} margo_monitor_data_t;
 
 typedef enum margo_monitor_event_t
 {
@@ -58,6 +68,8 @@ typedef struct margo_monitor_finalize_args*      margo_monitor_finalize_args_t;
 /* clang-format off */
 struct margo_monitor {
     void* uargs;
+    void* (*initialize)(margo_instance_id mid, void*, const char*);
+    void (*finalize)(void* uargs);
     void (*on_register)(void*, double, margo_monitor_event_t, margo_monitor_register_args_t);
     void (*on_deregister)(void*, double, margo_monitor_event_t, margo_monitor_deregister_args_t);
     void (*on_lookup)(void*, double, margo_monitor_event_t, margo_monitor_lookup_args_t);
@@ -88,6 +100,7 @@ struct margo_monitor {
 /* clang-format on */
 
 struct margo_monitor_register_args {
+    margo_monitor_data_t uctx;
     /* input */
     const char* name;
     ABT_pool    pool;
@@ -97,6 +110,7 @@ struct margo_monitor_register_args {
 };
 
 struct margo_monitor_deregister_args {
+    margo_monitor_data_t uctx;
     /* input */
     hg_id_t id;
     /* output */
@@ -104,6 +118,7 @@ struct margo_monitor_deregister_args {
 };
 
 struct margo_monitor_lookup_args {
+    margo_monitor_data_t uctx;
     /* input */
     const char* name;
     /* output */
@@ -112,6 +127,7 @@ struct margo_monitor_lookup_args {
 };
 
 struct margo_monitor_create_args {
+    margo_monitor_data_t uctx;
     /* input */
     hg_addr_t addr;
     hg_id_t   id;
@@ -121,6 +137,7 @@ struct margo_monitor_create_args {
 };
 
 struct margo_monitor_forward_args {
+    margo_monitor_data_t uctx;
     /* input */
     uint16_t      provider_id;
     hg_handle_t   handle;
@@ -132,6 +149,7 @@ struct margo_monitor_forward_args {
 };
 
 struct margo_monitor_respond_args {
+    margo_monitor_data_t uctx;
     /* input */
     hg_handle_t   handle;
     const void*   data;
@@ -143,6 +161,7 @@ struct margo_monitor_respond_args {
 };
 
 struct margo_monitor_destroy_args {
+    margo_monitor_data_t uctx;
     /* input */
     hg_handle_t handle;
     /* output */
@@ -150,6 +169,7 @@ struct margo_monitor_destroy_args {
 };
 
 struct margo_monitor_bulk_create_args {
+    margo_monitor_data_t uctx;
     /* input */
     uint32_t                   count;
     const void* const*         ptrs;
@@ -162,6 +182,7 @@ struct margo_monitor_bulk_create_args {
 };
 
 struct margo_monitor_bulk_transfer_args {
+    margo_monitor_data_t uctx;
     /* input */
     hg_bulk_op_t  op;
     hg_addr_t     origin_addr;
@@ -177,6 +198,7 @@ struct margo_monitor_bulk_transfer_args {
 };
 
 struct margo_monitor_bulk_free_args {
+    margo_monitor_data_t uctx;
     /* input */
     hg_bulk_t handle;
     /* output */
@@ -184,6 +206,7 @@ struct margo_monitor_bulk_free_args {
 };
 
 struct margo_monitor_rpc_handler_args {
+    margo_monitor_data_t uctx;
     /* input */
     hg_handle_t handle;
     /* output */
@@ -192,12 +215,14 @@ struct margo_monitor_rpc_handler_args {
 };
 
 struct margo_monitor_rpc_ult_args {
+    margo_monitor_data_t uctx;
     /* input */
     hg_handle_t handle;
     /* output */
 };
 
 struct margo_monitor_wait_args {
+    margo_monitor_data_t uctx;
     /* input */
     margo_request request;
     /* output */
@@ -205,12 +230,14 @@ struct margo_monitor_wait_args {
 };
 
 struct margo_monitor_sleep_args {
+    margo_monitor_data_t uctx;
     /* input */
     double timeout_ms;
     /* output */
 };
 
 struct margo_monitor_set_input_args {
+    margo_monitor_data_t uctx;
     /* input */
     hg_handle_t   handle;
     margo_request request;
@@ -220,6 +247,7 @@ struct margo_monitor_set_input_args {
 };
 
 struct margo_monitor_set_output_args {
+    margo_monitor_data_t uctx;
     /* input */
     hg_handle_t   handle;
     margo_request request;
@@ -229,6 +257,7 @@ struct margo_monitor_set_output_args {
 };
 
 struct margo_monitor_get_input_args {
+    margo_monitor_data_t uctx;
     /* input */
     hg_handle_t handle;
     const void* data;
@@ -237,6 +266,7 @@ struct margo_monitor_get_input_args {
 };
 
 struct margo_monitor_get_output_args {
+    margo_monitor_data_t uctx;
     /* input */
     hg_handle_t handle;
     const void* data;
@@ -245,6 +275,7 @@ struct margo_monitor_get_output_args {
 };
 
 struct margo_monitor_free_input_args {
+    margo_monitor_data_t uctx;
     /* input */
     hg_handle_t handle;
     const void* data;
@@ -253,6 +284,7 @@ struct margo_monitor_free_input_args {
 };
 
 struct margo_monitor_free_output_args {
+    margo_monitor_data_t uctx;
     /* input */
     hg_handle_t handle;
     const void* data;
@@ -260,11 +292,16 @@ struct margo_monitor_free_output_args {
     hg_return_t ret;
 };
 
-struct margo_monitor_prefinalize_args {};
+struct margo_monitor_prefinalize_args {
+    margo_monitor_data_t uctx;
+};
 
-struct margo_monitor_finalize_args {};
+struct margo_monitor_finalize_args {
+    margo_monitor_data_t uctx;
+};
 
 struct margo_monitor_cb_args {
+    margo_monitor_data_t uctx;
     /* input */
     const struct hg_cb_info* info;
     margo_request            request;
@@ -279,11 +316,13 @@ struct margo_monitor_cb_args {
  *
  * @param mid Margo instance
  * @param monitor Monitor structure
+ * @param config JSON-formatted configuration or NULL
  *
  * @return 0 in case of success, -1 otherwise
  */
 int margo_set_monitor(margo_instance_id           mid,
-                      const struct margo_monitor* monitor);
+                      const struct margo_monitor* monitor,
+                      const char*                 config);
 
 /**
  * @brief Invokes the on_user callback of the monitor registered with the

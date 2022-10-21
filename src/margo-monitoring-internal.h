@@ -19,4 +19,6 @@
             MARGO_MONITOR_##__mevent__, &__args__);             \
     } while (0)
 
+extern struct margo_monitor __margo_default_monitor;
+
 #endif
