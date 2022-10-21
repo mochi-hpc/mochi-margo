@@ -10,6 +10,7 @@
 
 #define __MARGO_MONITOR(__mid__, __mevent__, __fun__, __args__)               \
     do {                                                                      \
+        if ((__mid__) == MARGO_INSTANCE_NULL) break;                          \
         struct margo_monitor* __monitor__ = &(__mid__)->monitor;              \
         if (__monitor__->on_##__fun__) {                                      \
             double __timestamp__ = ABT_get_wtime();                           \

@@ -155,6 +155,10 @@ static void margo_cleanup(margo_instance_id mid)
     MARGO_TRACE(mid, "Entering margo_cleanup");
     struct margo_registered_rpc* next_rpc;
 
+    /* monitoring */
+    struct margo_monitor_finalize_args monitoring_args = {};
+    __MARGO_MONITOR(mid, FN_START, finalize, monitoring_args);
+
     /* call finalize callbacks */
     MARGO_TRACE(mid, "Calling finalize callbacks");
     struct margo_finalize_cb* fcb = mid->finalize_cb;
@@ -165,6 +169,13 @@ static void margo_cleanup(margo_instance_id mid)
         fcb                           = mid->finalize_cb;
         free(tmp);
     }
+
+    /* monitoring */
+    /* Note: Monitoring called before everything is actually
+     * finalized because we need the margo instance to still
+     * be valid at this point.
+     */
+    __MARGO_MONITOR(mid, FN_END, finalize, monitoring_args);
 
     MARGO_TRACE(mid, "Destroying mutex and condition variables");
     ABT_mutex_free(&mid->finalize_mutex);
@@ -273,6 +284,11 @@ void margo_finalize(margo_instance_id mid)
     MARGO_TRACE(mid, "Executing pre-finalize callbacks");
     /* before exiting the progress loop, pre-finalize callbacks need to be
      * called */
+
+    /* monitoring */
+    struct margo_monitor_prefinalize_args monitoring_args = {};
+    __MARGO_MONITOR(mid, FN_START, prefinalize, monitoring_args);
+
     struct margo_finalize_cb* fcb = mid->prefinalize_cb;
     while (fcb) {
         mid->prefinalize_cb = fcb->next;
@@ -281,6 +297,9 @@ void margo_finalize(margo_instance_id mid)
         fcb                           = mid->prefinalize_cb;
         free(tmp);
     }
+
+    /* monitoring */
+    __MARGO_MONITOR(mid, FN_END, prefinalize, monitoring_args);
 
     /* tell progress thread to wrap things up */
     mid->hg_progress_shutdown_flag = 1;
@@ -843,6 +862,11 @@ hg_return_t margo_destroy(hg_handle_t handle)
      * Note: we need to do that before cleaning handle_data */
     mid = margo_hg_handle_get_instance(handle);
 
+    /* monitoring */
+    struct margo_monitor_destroy_args monitoring_args
+        = {.handle = handle, .ret = HG_SUCCESS};
+    __MARGO_MONITOR(mid, FN_START, destroy, monitoring_args);
+
     /* remove the margo_handle_data associated with the handle */
     struct margo_handle_data* handle_data = HG_Get_data(handle);
     if (handle_data) {
@@ -862,6 +886,10 @@ hg_return_t margo_destroy(hg_handle_t handle)
     } else {
         hret = HG_OTHER_ERROR;
     }
+
+    /* monitoring */
+    monitoring_args.ret = hret;
+    __MARGO_MONITOR(mid, FN_END, destroy, monitoring_args);
 
     return hret;
 }
@@ -937,12 +965,29 @@ static hg_return_t margo_cb(const struct hg_cb_info* info)
 
 static hg_return_t margo_wait_internal(margo_request req)
 {
+    hg_return_t hret = HG_SUCCESS;
+
+    /* monitoring */
+    struct margo_monitor_wait_args monitoring_args
+        = {.request = req, .ret = HG_SUCCESS};
+    __MARGO_MONITOR(req->mid, FN_START, wait, monitoring_args);
+
     MARGO_EVENTUAL_WAIT(req->eventual);
     MARGO_EVENTUAL_FREE(&(req->eventual));
-    if (req->hret != HG_SUCCESS) return req->hret;
+    if (req->hret != HG_SUCCESS) {
+        hret = req->hret;
+        goto finish;
+    }
     if (req->type == MARGO_FORWARD_REQUEST)
-        return check_error_in_output(req->handle);
-    return HG_SUCCESS;
+        hret = check_error_in_output(req->handle);
+
+finish:
+
+    /* monitoring */
+    monitoring_args.ret = hret;
+    __MARGO_MONITOR(req->mid, FN_END, wait, monitoring_args);
+
+    return hret;
 }
 
 static void margo_forward_timeout_cb(void* arg)
@@ -1444,6 +1489,17 @@ hg_return_t margo_bulk_create(margo_instance_id mid,
     double      tm1, tm2;
     int         diag_enabled = mid->diag_enabled;
 
+    /* monitoring */
+    struct margo_monitor_bulk_create_args monitoring_args
+        = {.count  = count,
+           .ptrs   = (const void* const*)buf_ptrs,
+           .sizes  = buf_sizes,
+           .flags  = flags,
+           .attrs  = NULL,
+           .handle = HG_BULK_NULL,
+           .ret    = HG_SUCCESS};
+    __MARGO_MONITOR(mid, FN_START, bulk_create, monitoring_args);
+
     if (diag_enabled) tm1 = ABT_get_wtime();
     hret = HG_Bulk_create(mid->hg_class, count, buf_ptrs, buf_sizes, flags,
                           handle);
@@ -1452,7 +1508,12 @@ hg_return_t margo_bulk_create(margo_instance_id mid,
         __DIAG_UPDATE(mid->diag_bulk_create_elapsed, (tm2 - tm1));
     }
 
-    return (hret);
+    /* monitoring */
+    monitoring_args.handle = handle ? *handle : HG_BULK_NULL;
+    monitoring_args.ret    = hret;
+    __MARGO_MONITOR(mid, FN_END, bulk_create, monitoring_args);
+
+    return hret;
 }
 
 #if (HG_VERSION_MAJOR > 2) || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR > 1) \
@@ -1470,6 +1531,17 @@ hg_return_t margo_bulk_create_attr(margo_instance_id          mid,
     double      tm1, tm2;
     int         diag_enabled = mid->diag_enabled;
 
+    /* monitoring */
+    struct margo_monitor_bulk_create_args monitoring_args
+        = {.count  = count,
+           .ptrs   = (const void* const*)buf_ptrs,
+           .sizes  = buf_sizes,
+           .flags  = flags,
+           .attrs  = attrs,
+           .handle = HG_BULK_NULL,
+           .ret    = HG_SUCCESS};
+    __MARGO_MONITOR(mid, FN_START, bulk_create, monitoring_args);
+
     if (diag_enabled) tm1 = ABT_get_wtime();
     hret = HG_Bulk_create_attr(mid->hg_class, count, buf_ptrs, buf_sizes, flags,
                                attrs, handle);
@@ -1478,11 +1550,39 @@ hg_return_t margo_bulk_create_attr(margo_instance_id          mid,
         __DIAG_UPDATE(mid->diag_bulk_create_elapsed, (tm2 - tm1));
     }
 
-    return (hret);
+    /* monitoring */
+    monitoring_args.handle = handle ? *handle : HG_BULK_NULL;
+    monitoring_args.ret    = hret;
+    __MARGO_MONITOR(mid, FN_END, bulk_create, monitoring_args);
+
+    return hret;
 }
 #endif
 
-hg_return_t margo_bulk_free(hg_bulk_t handle) { return (HG_Bulk_free(handle)); }
+hg_return_t margo_bulk_free(hg_bulk_t handle)
+{
+    hg_return_t       hret = HG_SUCCESS;
+    margo_instance_id mid  = MARGO_INSTANCE_NULL;
+
+    /* Note: until Mercury provides us with a way of attaching
+     * data to hg_bulk_t handles, we cannot retrieve the
+     * margo_instance_id that was used to create the bulk handle.
+     * The monitoring bellow will therefore not work.
+     */
+
+    /* monitoring */
+    struct margo_monitor_bulk_free_args monitoring_args
+        = {.handle = handle, .ret = HG_SUCCESS};
+    __MARGO_MONITOR(mid, FN_START, bulk_free, monitoring_args);
+
+    hret = HG_Bulk_free(handle);
+
+    /* monitoring */
+    monitoring_args.ret = hret;
+    __MARGO_MONITOR(mid, FN_END, bulk_free, monitoring_args);
+
+    return hret;
+}
 
 hg_return_t margo_bulk_deserialize(margo_instance_id mid,
                                    hg_bulk_t*        handle,
@@ -1506,8 +1606,25 @@ static hg_return_t margo_bulk_itransfer_internal(
     hg_return_t hret = HG_TIMEOUT;
     int         ret;
 
+    /* monitoring */
+    struct margo_monitor_bulk_transfer_args monitoring_args
+        = {.op            = op,
+           .origin_addr   = origin_addr,
+           .origin_handle = origin_handle,
+           .origin_offset = origin_offset,
+           .local_handle  = local_handle,
+           .local_offset  = local_offset,
+           .size          = size,
+           .timeout_ms    = 0.0,
+           .request       = req,
+           .ret           = HG_SUCCESS};
+    __MARGO_MONITOR(mid, FN_START, bulk_transfer, monitoring_args);
+
     ret = MARGO_EVENTUAL_CREATE(&(req->eventual));
-    if (ret != 0) { return (HG_NOMEM_ERROR); }
+    if (ret != 0) {
+        hret = HG_NOMEM_ERROR;
+        goto finish;
+    }
     req->type           = MARGO_BULK_REQUEST;
     req->timer          = NULL;
     req->handle         = HG_HANDLE_NULL;
@@ -1519,7 +1636,12 @@ static hg_return_t margo_bulk_itransfer_internal(
                             origin_addr, origin_handle, origin_offset,
                             local_handle, local_offset, size, HG_OP_ID_IGNORE);
 
-    return (hret);
+finish:
+
+    monitoring_args.ret = hret;
+    __MARGO_MONITOR(mid, FN_END, bulk_transfer, monitoring_args);
+
+    return hret;
 }
 
 hg_return_t margo_bulk_transfer(margo_instance_id mid,
@@ -1634,6 +1756,14 @@ void margo_thread_sleep(margo_instance_id mid, double timeout_ms)
     margo_timer               sleep_timer;
     margo_thread_sleep_cb_dat sleep_cb_dat;
 
+    /* monitoring */
+    struct margo_monitor_sleep_args monitoring_args = {
+        .timeout_ms = timeout_ms,
+    };
+    __MARGO_MONITOR(mid, FN_START, sleep, monitoring_args);
+
+    // TODO: the mechanism bellow would be better off using an ABT_eventual
+
     /* set data needed for sleep callback */
     ABT_mutex_create(&(sleep_cb_dat.mutex));
     ABT_cond_create(&(sleep_cb_dat.cond));
@@ -1653,7 +1783,8 @@ void margo_thread_sleep(margo_instance_id mid, double timeout_ms)
     ABT_mutex_free(&sleep_cb_dat.mutex);
     ABT_cond_free(&sleep_cb_dat.cond);
 
-    return;
+    /* monitoring */
+    __MARGO_MONITOR(mid, FN_END, sleep, monitoring_args);
 }
 
 int margo_get_handler_pool(margo_instance_id mid, ABT_pool* pool)

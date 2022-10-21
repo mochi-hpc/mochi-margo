@@ -164,17 +164,17 @@ struct margo_monitor_bulk_create_args {
 
 struct margo_monitor_bulk_transfer_args {
     /* input */
-    hg_bulk_op_t op;
-    hg_addr_t    origin_addr;
-    hg_bulk_t    origin_handle;
-    size_t       origin_offset;
-    hg_bulk_t    local_handle;
-    size_t       local_offset;
-    size_t       size;
-    double       timeout_ms;
-    /* output */
+    hg_bulk_op_t  op;
+    hg_addr_t     origin_addr;
+    hg_bulk_t     origin_handle;
+    size_t        origin_offset;
+    hg_bulk_t     local_handle;
+    size_t        local_offset;
+    size_t        size;
+    double        timeout_ms;
     margo_request request;
-    hg_return_t   ret;
+    /* output */
+    hg_return_t ret;
 };
 
 struct margo_monitor_bulk_free_args {
@@ -209,7 +209,6 @@ struct margo_monitor_sleep_args {
     /* input */
     double timeout_ms;
     /* output */
-    hg_return_t ret;
 };
 
 struct margo_monitor_set_input_args {
@@ -271,10 +270,6 @@ struct margo_monitor_cb_args {
     /* output */
     hg_return_t ret;
 };
-
-struct margo_monitor_respond_cb_args {};
-
-struct margo_monitor_bulk_transfer_cb_args {};
 
 /**
  * @brief Set a monitor structure for Margo to use. The structure will be
