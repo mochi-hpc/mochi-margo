@@ -8,15 +8,15 @@
 
 #include "margo-monitoring.h"
 
-#define __MARGO_MONITOR(__mid__, __mevent__, __fun__, __args__)               \
-    do {                                                                      \
-        if ((__mid__) == MARGO_INSTANCE_NULL) break;                          \
-        struct margo_monitor* __monitor__ = &(__mid__)->monitor;              \
-        if (__monitor__->on_##__fun__) {                                      \
-            double __timestamp__ = ABT_get_wtime();                           \
-            __monitor__->on_##__fun__(__monitor__->uargs, __timestamp__,      \
-                                      MARGO_MONITOR_##__mevent__, &__args__); \
-        }                                                                     \
+#define __MARGO_MONITOR(__mid__, __mevent__, __fun__, __args__)                \
+    do {                                                                       \
+        if (!(__mid__) || !(__mid__)->monitor                                  \
+            || !((__mid__)->monitor->on_##__fun__))                            \
+            break;                                                             \
+        double __timestamp__ = ABT_get_wtime();                                \
+        (__mid__)->monitor->on_##__fun__(                                      \
+            (__mid__)->monitor_ctx, __timestamp__, MARGO_MONITOR_##__mevent__, \
+            &__args__);                                                        \
     } while (0)
 
 #endif

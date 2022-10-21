@@ -139,7 +139,8 @@ struct margo_instance {
     margo_log_level     log_level;
 
     /* monitoring */
-    struct margo_monitor monitor;
+    struct margo_monitor* monitor;
+    void*                 monitor_ctx;
 
     /* optional diagnostics data tracking */
     /* NOTE: technically the following fields are subject to races if they
