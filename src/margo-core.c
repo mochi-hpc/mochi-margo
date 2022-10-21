@@ -2236,13 +2236,37 @@ static void margo_internal_breadcrumb_handler_set(uint64_t rpc_breadcrumb)
     return;
 }
 
-void __margo_internal_pre_wrapper_hooks(margo_instance_id mid,
-                                        hg_handle_t       handle)
+void __margo_internal_pre_handler_hooks(
+    margo_instance_id                      mid,
+    hg_handle_t                            handle,
+    struct margo_monitor_rpc_handler_args* monitoring_args)
+{
+    (void)handle;
+
+    /* monitoring */
+    __MARGO_MONITOR(mid, FN_START, rpc_handler, (*monitoring_args));
+}
+
+void __margo_internal_post_handler_hooks(
+    margo_instance_id                      mid,
+    struct margo_monitor_rpc_handler_args* monitoring_args)
+{
+    /* monitoring */
+    __MARGO_MONITOR(mid, FN_END, rpc_handler, (*monitoring_args));
+}
+
+void __margo_internal_pre_wrapper_hooks(
+    margo_instance_id                  mid,
+    hg_handle_t                        handle,
+    struct margo_monitor_rpc_ult_args* monitoring_args)
 {
     hg_return_t                  ret;
     uint64_t*                    rpc_breadcrumb;
     const struct hg_info*        info;
     struct margo_request_struct* req;
+
+    /* monitoring */
+    __MARGO_MONITOR(mid, FN_START, rpc_ult, (*monitoring_args));
 
     ret = HG_Get_input_buf(handle, (void**)&rpc_breadcrumb, NULL);
     if (ret != HG_SUCCESS) {
@@ -2286,8 +2310,12 @@ void __margo_internal_pre_wrapper_hooks(margo_instance_id mid,
     }
 }
 
-void __margo_internal_post_wrapper_hooks(margo_instance_id mid)
+void __margo_internal_post_wrapper_hooks(
+    margo_instance_id mid, struct margo_monitor_rpc_ult_args* monitoring_args)
 {
+    /* monitoring */
+    __MARGO_MONITOR(mid, FN_END, rpc_ult, (*monitoring_args));
+
     __margo_internal_decr_pending(mid);
     if (__margo_internal_finalize_requested(mid)) { margo_finalize(mid); }
 }
