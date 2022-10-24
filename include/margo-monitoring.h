@@ -72,43 +72,58 @@ typedef struct margo_monitor_free_input_args*    margo_monitor_free_input_args_t
 typedef struct margo_monitor_free_output_args*   margo_monitor_free_output_args_t;
 typedef struct margo_monitor_prefinalize_args*   margo_monitor_prefinalize_args_t;
 typedef struct margo_monitor_finalize_args*      margo_monitor_finalize_args_t;
+typedef void*                                    margo_monitor_user_args_t;
 /* clang-format on */
 
 /* clang-format off */
+#define MARGO_EXPAND_MONITOR_MACROS       \
+    X(PROGRESS,         progress)         \
+    X(TRIGGER,          trigger)          \
+    X(REGISTER,         register)         \
+    X(DEREGISTER,       deregister)       \
+    X(LOOKUP,           lookup)           \
+    X(CREATE,           create)           \
+    X(FORWARD,          forward)          \
+    X(FORWARD_CB,       forward_cb)       \
+    X(RESPOND,          respond)          \
+    X(RESPOND_CB,       respond_cb)       \
+    X(DESTROY,          destroy)          \
+    X(BULK_CREATE,      bulk_create)      \
+    X(BULK_TRANSFER,    bulk_transfer)    \
+    X(BULK_TRANSFER_CB, bulk_transfer_cb) \
+    X(BULK_FREE,        bulk_free)        \
+    X(RPC_HANDLER,      rpc_handler)      \
+    X(RPC_ULT,          rpc_ult)          \
+    X(WAIT,             wait)             \
+    X(SLEEP,            sleep)            \
+    X(SET_INPUT,        set_input)        \
+    X(SET_OUTPUT,       set_output)       \
+    X(GET_INPUT,        get_input)        \
+    X(GET_OUTPUT,       get_output)       \
+    X(FREE_INPUT,       free_input)       \
+    X(FREE_OUTPUT,      free_output)      \
+    X(PREFINALIZE,      prefinalize)      \
+    X(FINALIZE,         finalize)         \
+    X(USER,             user)
+/* clang-format on */
+
 struct margo_monitor {
     void* uargs;
     void* (*initialize)(margo_instance_id mid, void*, const char*);
     void (*finalize)(void* uargs);
-    void (*on_progress)(void*, double, margo_monitor_event_t, margo_monitor_progress_args_t);
-    void (*on_trigger)(void*, double, margo_monitor_event_t, margo_monitor_trigger_args_t);
-    void (*on_register)(void*, double, margo_monitor_event_t, margo_monitor_register_args_t);
-    void (*on_deregister)(void*, double, margo_monitor_event_t, margo_monitor_deregister_args_t);
-    void (*on_lookup)(void*, double, margo_monitor_event_t, margo_monitor_lookup_args_t);
-    void (*on_create)(void*, double, margo_monitor_event_t, margo_monitor_create_args_t);
-    void (*on_forward)(void*, double, margo_monitor_event_t, margo_monitor_forward_args_t);
-    void (*on_forward_cb)(void*, double, margo_monitor_event_t, margo_monitor_forward_cb_args_t);
-    void (*on_respond)(void*, double, margo_monitor_event_t, margo_monitor_respond_args_t);
-    void (*on_respond_cb)(void*, double, margo_monitor_event_t, margo_monitor_respond_cb_args_t);
-    void (*on_destroy)(void*, double, margo_monitor_event_t, margo_monitor_destroy_args_t);
-    void (*on_bulk_create)(void*, double, margo_monitor_event_t, margo_monitor_bulk_create_args_t);
-    void (*on_bulk_transfer)(void*, double, margo_monitor_event_t, margo_monitor_bulk_transfer_args_t);
-    void (*on_bulk_transfer_cb)(void*, double, margo_monitor_event_t, margo_monitor_bulk_transfer_cb_args_t);
-    void (*on_bulk_free)(void*, double, margo_monitor_event_t, margo_monitor_bulk_free_args_t);
-    void (*on_rpc_handler)(void*, double, margo_monitor_event_t, margo_monitor_rpc_handler_args_t);
-    void (*on_rpc_ult)(void*, double, margo_monitor_event_t, margo_monitor_rpc_ult_args_t);
-    void (*on_wait)(void*, double, margo_monitor_event_t, margo_monitor_wait_args_t);
-    void (*on_sleep)(void*, double, margo_monitor_event_t, margo_monitor_sleep_args_t);
-    void (*on_set_input)(void*, double, margo_monitor_event_t, margo_monitor_set_input_args_t);
-    void (*on_set_output)(void*, double, margo_monitor_event_t, margo_monitor_set_output_args_t);
-    void (*on_get_input)(void*, double, margo_monitor_event_t, margo_monitor_get_input_args_t);
-    void (*on_get_output)(void*, double, margo_monitor_event_t, margo_monitor_get_output_args_t);
-    void (*on_free_input)(void*, double, margo_monitor_event_t, margo_monitor_free_input_args_t);
-    void (*on_free_output)(void*, double, margo_monitor_event_t, margo_monitor_free_output_args_t);
-    void (*on_prefinalize)(void*, double, margo_monitor_event_t, margo_monitor_prefinalize_args_t);
-    void (*on_finalize)(void*, double, margo_monitor_event_t, margo_monitor_finalize_args_t);
-    void (*on_user)(void*, double, margo_monitor_event_t, void*);
+#define X(__x__, __y__)                                      \
+    void (*on_##__y__)(void*, double, margo_monitor_event_t, \
+                       margo_monitor_##__y__##_args_t);
+    MARGO_EXPAND_MONITOR_MACROS
+#undef X
 };
-/* clang-format on */
+
+#define X(__x__, __y__) MARGO_MONITOR_ON_##__x__,
+enum
+{
+    MARGO_EXPAND_MONITOR_MACROS
+};
+#undef X
 
 struct margo_monitor_progress_args {
     margo_monitor_data_t uctx;
