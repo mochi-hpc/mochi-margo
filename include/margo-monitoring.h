@@ -167,7 +167,7 @@ struct margo_monitor_deregister_args {
 struct margo_monitor_lookup_args {
     margo_monitor_data_t uctx;
     /* input */
-    const char* name;
+    const char* name; /* warning: NULL if called from margo_addr_self */
     /* output */
     hg_addr_t   addr;
     hg_return_t ret;
