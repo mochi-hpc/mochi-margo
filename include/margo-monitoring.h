@@ -122,6 +122,7 @@ struct margo_monitor {
 enum
 {
     MARGO_EXPAND_MONITOR_MACROS
+    MARGO_MONITOR_MAX
 };
 #undef X
 

@@ -784,7 +784,21 @@ hg_return_t margo_addr_free(margo_instance_id mid, hg_addr_t addr)
 
 hg_return_t margo_addr_self(margo_instance_id mid, hg_addr_t* addr)
 {
-    return (HG_Addr_self(mid->hg_class, addr));
+    hg_return_t hret = HG_SUCCESS;
+
+    /* monitoring */
+    struct margo_monitor_lookup_args monitoring_args
+        = {.name = NULL, .addr = HG_ADDR_NULL, .ret = HG_SUCCESS};
+    __MARGO_MONITOR(mid, FN_START, lookup, monitoring_args);
+
+    hret = HG_Addr_self(mid->hg_class, addr);
+
+    /* monitoring */
+    monitoring_args.addr = addr ? *addr : HG_ADDR_NULL;
+    monitoring_args.ret  = hret;
+    __MARGO_MONITOR(mid, FN_END, lookup, monitoring_args);
+
+    return hret;
 }
 
 hg_return_t
