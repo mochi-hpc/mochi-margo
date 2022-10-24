@@ -56,37 +56,13 @@ static void margo_default_monitor_on_user(void*                 uargs,
 {}
 
 struct margo_monitor __margo_default_monitor
-    = {.uargs               = NULL,
-       .initialize          = margo_default_monitor_initialize,
-       .finalize            = margo_default_monitor_finalize,
-       .on_progress         = margo_default_monitor_on_progress,
-       .on_trigger          = margo_default_monitor_on_trigger,
-       .on_register         = margo_default_monitor_on_register,
-       .on_deregister       = margo_default_monitor_on_deregister,
-       .on_lookup           = margo_default_monitor_on_lookup,
-       .on_create           = margo_default_monitor_on_create,
-       .on_forward          = margo_default_monitor_on_forward,
-       .on_forward_cb       = margo_default_monitor_on_forward_cb,
-       .on_respond          = margo_default_monitor_on_respond,
-       .on_respond_cb       = margo_default_monitor_on_respond_cb,
-       .on_destroy          = margo_default_monitor_on_destroy,
-       .on_bulk_create      = margo_default_monitor_on_bulk_create,
-       .on_bulk_transfer    = margo_default_monitor_on_bulk_transfer,
-       .on_bulk_transfer_cb = margo_default_monitor_on_bulk_transfer_cb,
-       .on_bulk_free        = margo_default_monitor_on_bulk_free,
-       .on_rpc_handler      = margo_default_monitor_on_rpc_handler,
-       .on_rpc_ult          = margo_default_monitor_on_rpc_ult,
-       .on_wait             = margo_default_monitor_on_wait,
-       .on_sleep            = margo_default_monitor_on_sleep,
-       .on_set_input        = margo_default_monitor_on_set_input,
-       .on_set_output       = margo_default_monitor_on_set_output,
-       .on_get_input        = margo_default_monitor_on_get_input,
-       .on_get_output       = margo_default_monitor_on_get_output,
-       .on_free_input       = margo_default_monitor_on_free_input,
-       .on_free_output      = margo_default_monitor_on_free_output,
-       .on_prefinalize      = margo_default_monitor_on_prefinalize,
-       .on_finalize         = margo_default_monitor_on_finalize,
-       .on_user             = margo_default_monitor_on_user};
+    = {.uargs      = NULL,
+       .initialize = margo_default_monitor_initialize,
+       .finalize   = margo_default_monitor_finalize,
+#define X(__x__, __y__) .on_##__y__ = margo_default_monitor_on_##__y__,
+       MARGO_EXPAND_MONITOR_MACROS
+#undef X
+};
 
 const struct margo_monitor* margo_default_monitor = &__margo_default_monitor;
 
