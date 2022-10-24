@@ -177,6 +177,10 @@ static void margo_cleanup(margo_instance_id mid)
      */
     __MARGO_MONITOR(mid, FN_END, finalize, monitoring_args);
 
+    if (mid->monitor && mid->monitor->finalize)
+        mid->monitor->finalize(mid->monitor->uargs);
+    free(mid->monitor);
+
     MARGO_TRACE(mid, "Destroying mutex and condition variables");
     ABT_mutex_free(&mid->finalize_mutex);
     ABT_cond_free(&mid->finalize_cond);
