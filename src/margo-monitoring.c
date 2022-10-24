@@ -7,6 +7,17 @@
 #include "margo-instance.h"
 #include "margo-monitoring.h"
 
+hg_return_t margo_monitor_call_user(margo_instance_id     mid,
+                                    margo_monitor_event_t ev,
+                                    void*                 args)
+{
+    if (!mid) return HG_INVALID_ARG;
+    if (!mid->monitor) return HG_SUCCESS;
+    if (!mid->monitor->on_user) return HG_SUCCESS;
+    mid->monitor->on_user(mid->monitor->uargs, ABT_get_wtime(), ev, args);
+    return HG_SUCCESS;
+}
+
 static void* margo_default_monitor_initialize(margo_instance_id mid,
                                               void*             uargs,
                                               const char*       config)
@@ -66,11 +77,11 @@ struct margo_monitor __margo_default_monitor
 
 const struct margo_monitor* margo_default_monitor = &__margo_default_monitor;
 
-int margo_set_monitor(margo_instance_id           mid,
-                      const struct margo_monitor* monitor,
-                      const char*                 config)
+hg_return_t margo_set_monitor(margo_instance_id           mid,
+                              const struct margo_monitor* monitor,
+                              const char*                 config)
 {
-    if (!mid) return -1;
+    if (!mid) return HG_INVALID_ARG;
     if (mid->monitor) {
         if (mid->monitor->finalize) {
             mid->monitor->finalize(mid->monitor->uargs);
@@ -87,5 +98,5 @@ int margo_set_monitor(margo_instance_id           mid,
             mid->monitor->uargs
                 = mid->monitor->initialize(mid, mid->monitor->uargs, config);
     }
-    return 0;
+    return HG_SUCCESS;
 }

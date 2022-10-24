@@ -48,6 +48,10 @@ static void test_monitor_finalize(void* uargs)
     (void)uargs;
 }
 
+MERCURY_GEN_PROC(echo_in_t,
+    ((hg_string_t)(str))\
+    ((hg_bulk_t)(blk)))
+
 DECLARE_MARGO_RPC_HANDLER(echo_ult)
 static void echo_ult(hg_handle_t handle)
 {
@@ -64,7 +68,7 @@ static void echo_ult(hg_handle_t handle)
     munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_RPC_ULT].fn_start, ==, 1);
     munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_RPC_ULT].fn_end, ==, 0);
 
-    char* input      = NULL;
+    echo_in_t   input;
     hg_return_t hret = HG_SUCCESS;
 
     hret = margo_get_input(handle, &input);
@@ -72,15 +76,40 @@ static void echo_ult(hg_handle_t handle)
     munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_GET_INPUT].fn_start, ==, 1);
     munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_GET_INPUT].fn_end, ==, 1);
 
+    char      buffer[256];
+    void*     ptrs[1]  = { (void*)buffer };
+    hg_size_t sizes[1] = { 256 };
+    hg_bulk_t bulk     = HG_BULK_NULL;
+    hret = margo_bulk_create(mid, 1, ptrs, sizes, HG_BULK_WRITE_ONLY, &bulk);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_BULK_CREATE].fn_start, ==, 2);
+    munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_BULK_CREATE].fn_end, ==, 2);
+
+    hret = margo_bulk_transfer(mid, HG_BULK_PULL, info->addr, input.blk, 0, bulk, 0, 256);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_BULK_TRANSFER].fn_start, ==, 1);
+    munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_BULK_TRANSFER].fn_end, ==, 1);
+    /* there is a wait that also started in the caller */
+    munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_WAIT].fn_start, ==, 2);
+    munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_WAIT].fn_end, ==, 1);
+    munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_BULK_TRANSFER_CB].fn_start, ==, 1);
+    munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_BULK_TRANSFER_CB].fn_end, ==, 1);
+
+    hret = margo_bulk_free(bulk);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+    /* for now bulk_free is not called because there is no way to retrieve the
+     * margo instance in margo_bulk_free */
+    munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_BULK_FREE].fn_start, ==, 0);
+    munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_BULK_FREE].fn_end, ==, 0);
+
     hret = margo_respond(handle, &input);
     munit_assert_int(hret, ==, HG_SUCCESS);
     munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_RESPOND].fn_start, ==, 1);
     munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_RESPOND].fn_end, ==, 1);
     munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_SET_OUTPUT].fn_start, ==, 1);
     munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_SET_OUTPUT].fn_end, ==, 1);
-    /* there is a wait that also started in the caller */
-    munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_WAIT].fn_start, ==, 2);
-    munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_WAIT].fn_end, ==, 1);
+    munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_WAIT].fn_start, ==, 3);
+    munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_WAIT].fn_end, ==, 2);
     munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_RESPOND_CB].fn_start, ==, 1);
     munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_RESPOND_CB].fn_end, ==, 1);
 
@@ -139,17 +168,33 @@ static MunitResult test_monitoring(const MunitParameter params[],
     margo_instance_id mid = margo_init_ext(protocol, MARGO_SERVER_MODE, &init_info);
     munit_assert_not_null(mid);
 
-    hg_id_t echo_id = MARGO_REGISTER(mid, "echo", hg_string_t, hg_string_t, echo_ult);
+    hg_id_t echo_id = MARGO_REGISTER(mid, "echo", echo_in_t, hg_string_t, echo_ult);
     munit_assert_int(echo_id, !=, 0);
-
-    hret = margo_register_data(mid, echo_id, &monitor_data, NULL);
-    munit_assert_int(hret, ==, HG_SUCCESS);
-
     /* note: because of the __shutdown__ RPC, the count will be at 2 */
     munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_REGISTER].fn_start, ==, 2);
     munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_REGISTER].fn_end, ==, 2);
 
+    margo_thread_sleep(mid, 1);
+    munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_SLEEP].fn_start, ==, 1);
+    munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_SLEEP].fn_end, ==, 1);
+
+    hret = margo_register_data(mid, echo_id, &monitor_data, NULL);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    char      buffer[256];
+    void*     ptrs[1]  = { (void*)buffer };
+    hg_size_t sizes[1] = { 256 };
+    hg_bulk_t bulk     = HG_BULK_NULL;
+    hret = margo_bulk_create(mid, 1, ptrs, sizes, HG_BULK_READ_ONLY, &bulk);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_BULK_CREATE].fn_start, ==, 1);
+    munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_BULK_CREATE].fn_end, ==, 1);
+
     const char* input  = "hello world";
+    echo_in_t in = {
+        .str = (char*)input,
+        .blk = bulk
+    };
     hg_addr_t addr     = HG_ADDR_NULL;
     hg_handle_t handle = HG_HANDLE_NULL;
 
@@ -165,16 +210,23 @@ static MunitResult test_monitoring(const MunitParameter params[],
     munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_CREATE].fn_start, ==, 1);
     munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_CREATE].fn_end, ==, 1);
 
-    hret = margo_forward(handle, &input);
+    hret = margo_forward(handle, &in);
     munit_assert_int(hret, ==, HG_SUCCESS);
     munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_FORWARD].fn_start, ==, 1);
     munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_FORWARD].fn_end, ==, 1);
     munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_SET_INPUT].fn_start, ==, 1);
     munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_SET_INPUT].fn_end, ==, 1);
-    munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_WAIT].fn_start, ==, 2);
-    munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_WAIT].fn_end, ==, 2);
+    munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_WAIT].fn_start, ==, 3);
+    munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_WAIT].fn_end, ==, 3);
     munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_FORWARD_CB].fn_start, ==, 1);
     munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_FORWARD_CB].fn_end, ==, 1);
+
+    hret = margo_bulk_free(bulk);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+    /* for now bulk_free is not called because there is no way to retrieve the
+     * margo instance in margo_bulk_free */
+    munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_BULK_FREE].fn_start, ==, 0);
+    munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_BULK_FREE].fn_end, ==, 0);
 
     char* output = NULL;
     hret = margo_get_output(handle, &output);
@@ -202,11 +254,20 @@ static MunitResult test_monitoring(const MunitParameter params[],
     munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_DEREGISTER].fn_start, ==, 1);
     munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_DEREGISTER].fn_end, ==, 1);
 
+    hret = margo_monitor_call_user(mid, MARGO_MONITOR_FN_START, NULL);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_USER].fn_start, ==, 1);
+
     margo_finalize(mid);
     munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_PREFINALIZE].fn_start, ==, 1);
     munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_PREFINALIZE].fn_end, ==, 1);
     munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_FINALIZE].fn_start, ==, 1);
     munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_FINALIZE].fn_end, ==, 1);
+
+    munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_PROGRESS].fn_start, >, 0);
+    munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_PROGRESS].fn_end, >, 0);
+    munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_TRIGGER].fn_start, >, 0);
+    munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_TRIGGER].fn_end, >, 0);
 
     return MUNIT_OK;
 }

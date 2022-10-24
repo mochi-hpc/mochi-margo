@@ -370,11 +370,11 @@ struct margo_monitor_cb_args {
  * @param monitor Monitor structure
  * @param config JSON-formatted configuration or NULL
  *
- * @return 0 in case of success, -1 otherwise
+ * @return HG_SUCCESS or other error code
  */
-int margo_set_monitor(margo_instance_id           mid,
-                      const struct margo_monitor* monitor,
-                      const char*                 config);
+hg_return_t margo_set_monitor(margo_instance_id           mid,
+                              const struct margo_monitor* monitor,
+                              const char*                 config);
 
 /**
  * @brief Invokes the on_user callback of the monitor registered with the
@@ -384,11 +384,11 @@ int margo_set_monitor(margo_instance_id           mid,
  * @param margo_monitor_event_t Type of event
  * @param args User-defined args for the event
  *
- * @return 0 in case of success, -1 otherwise
+ * @return HG_SUCCESS or other error code
  */
-int margo_monitor_call_user(margo_instance_id mid,
-                            margo_monitor_event_t,
-                            void* args);
+hg_return_t margo_monitor_call_user(margo_instance_id mid,
+                                    margo_monitor_event_t,
+                                    void* args);
 
 #ifdef __cplusplus
 }
