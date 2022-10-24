@@ -118,6 +118,7 @@ struct margo_monitor {
 #undef X
 };
 
+/* clang-format off */
 #define X(__x__, __y__) MARGO_MONITOR_ON_##__x__,
 enum
 {
@@ -125,6 +126,7 @@ enum
     MARGO_MONITOR_MAX
 };
 #undef X
+/* clang-format on */
 
 struct margo_monitor_progress_args {
     margo_monitor_data_t uctx;
