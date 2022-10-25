@@ -20,6 +20,7 @@
 #include "margo.h"
 #include "margo-abt-macros.h"
 #include "margo-logging.h"
+#include "margo-monitoring.h"
 #include "margo-bulk-util.h"
 #include "margo-timer-private.h"
 #include "utlist.h"
@@ -137,6 +138,9 @@ struct margo_instance {
     struct margo_logger logger;
     margo_log_level     log_level;
 
+    /* monitoring */
+    struct margo_monitor* monitor;
+
     /* optional diagnostics data tracking */
     /* NOTE: technically the following fields are subject to races if they
      * are updated from more than one thread at a time.  We will be careful
@@ -167,17 +171,20 @@ typedef enum
 } margo_request_type;
 
 struct margo_request_struct {
-    margo_eventual_t eventual;
-    hg_return_t      hret;
-    margo_timer*     timer;
-    hg_handle_t      handle;
-    double           start_time; /* timestamp of when the operation started */
+    margo_eventual_t     eventual;
+    hg_return_t          hret;
+    margo_timer*         timer;
+    margo_instance_id    mid;
+    hg_handle_t          handle;
+    margo_request_type   type;
+    margo_monitor_data_t monitor_data;
+
+    double   start_time;     /* timestamp of when the operation started */
     uint64_t rpc_breadcrumb; /* statistics tracking identifier, if applicable */
     uint64_t server_addr_hash; /* hash of globally unique string addr of margo
                                   server instance */
     uint16_t provider_id; /* id of the provider servicing the request, local to
                              the margo server instance */
-    margo_request_type type;
 };
 
 // Data registered to an RPC id with HG_Register_data

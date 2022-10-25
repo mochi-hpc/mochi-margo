@@ -11,6 +11,13 @@
 #
 # To enable this hook, rename this file to "pre-commit".
 
+if command -v clang-format-11 &> /dev/null
+then
+	CLANG_FORMAT=clang-format-11
+else
+	CLANG_FORMAT=clang-format
+fi
+
 # If we have a STDIN, use it, otherwise get one
 if tty >/dev/null 2>&1; then
     TTY=$(tty)
@@ -115,7 +122,7 @@ do
     if [[ ($file == *.c || $file == *.h || $file == *.c.in || $file == *.h.in) &&
     !($file == *margo-config.h.in || $file == scripts/* || $file == doc/* || $file == */abtx_prof.h || $file == tests/*) ]]; then
         cp ${file} ${TMP_FILENAME}
-        clang-format ${file} > ${TMP_FILENAME}
+        ${CLANG_FORMAT} ${file} > ${TMP_FILENAME}
         git --no-pager diff ${file} ${TMP_FILENAME}
         if [ $? != 0 ] ; then
             if ! ask "${file} does not satisfy clang-format, commit anyway?" "N" ; then

@@ -19,6 +19,7 @@ extern "C" {
 #include <abt.h>
 #include <margo-diag.h>
 #include <margo-logging.h>
+#include <margo-monitoring.h>
 
 #define DEPRECATED(msg) __attribute__((deprecated(msg)))
 
@@ -96,12 +97,14 @@ typedef void (*margo_finalize_callback_t)(void*);
  * will fall back to default.
  */
 struct margo_init_info {
-    const char*          json_config;   /*!< JSON-formatted string */
-    ABT_pool             progress_pool; /*!< Progress pool         */
-    ABT_pool             rpc_pool;      /*!< RPC handler pool      */
-    hg_class_t*          hg_class;      /*!< Mercury class         */
-    hg_context_t*        hg_context;    /*!< Mercury context       */
-    struct hg_init_info* hg_init_info;  /*!< Mercury init info     */
+    const char*           json_config;   /*!< JSON-formatted string */
+    ABT_pool              progress_pool; /*!< Progress pool         */
+    ABT_pool              rpc_pool;      /*!< RPC handler pool      */
+    hg_class_t*           hg_class;      /*!< Mercury class         */
+    hg_context_t*         hg_context;    /*!< Mercury context       */
+    struct hg_init_info*  hg_init_info;  /*!< Mercury init info     */
+    struct margo_logger*  logger;        /*!< User-provided logger  */
+    struct margo_monitor* monitor;       /*!< User-provided monitor */
 };
 
 /**
@@ -1748,15 +1751,37 @@ void __margo_internal_decr_pending(margo_instance_id mid);
  * Internal function used by DEFINE_MARGO_RPC_HANDLER, not supposed to be
  * called by users!
  */
-void __margo_internal_pre_wrapper_hooks(margo_instance_id mid,
-                                        hg_handle_t       handle);
+void __margo_internal_pre_wrapper_hooks(
+    margo_instance_id                  mid,
+    hg_handle_t                        handle,
+    struct margo_monitor_rpc_ult_args* monitoring_args);
 
 /**
  * @private
  * Internal function used by DEFINE_MARGO_RPC_HANDLER, not supposed to be
  * called by users!
  */
-void __margo_internal_post_wrapper_hooks(margo_instance_id mid);
+void __margo_internal_post_wrapper_hooks(
+    margo_instance_id mid, struct margo_monitor_rpc_ult_args* monitoring_args);
+
+/**
+ * @private
+ * Internal function used by DEFINE_MARGO_RPC_HANDLER, not supposed to be
+ * called by users!
+ */
+void __margo_internal_pre_handler_hooks(
+    margo_instance_id                      mid,
+    hg_handle_t                            handle,
+    struct margo_monitor_rpc_handler_args* monitoring_args);
+
+/**
+ * @private
+ * Internal function used by DEFINE_MARGO_RPC_HANDLER, not supposed to be
+ * called by users!
+ */
+void __margo_internal_post_handler_hooks(
+    margo_instance_id                      mid,
+    struct margo_monitor_rpc_handler_args* monitoring_args);
 
 /**
  * @private
@@ -1825,13 +1850,14 @@ hg_return_t _handler_for_NULL(hg_handle_t);
         margo_destroy(handle);                                                \
         return;                                                               \
     }                                                                         \
-    __margo_internal_pre_wrapper_hooks(__mid, handle);                        \
+    struct margo_monitor_rpc_ult_args __monitoring_args = {.handle = handle}; \
+    __margo_internal_pre_wrapper_hooks(__mid, handle, &__monitoring_args);    \
     margo_trace(__mid, "Starting RPC %s (handle = %p)", __rpc_name,           \
                 (void*)handle);                                               \
     __name(handle);                                                           \
     margo_trace(__mid, "RPC %s completed (handle = %p)", __rpc_name,          \
                 (void*)handle);                                               \
-    __margo_internal_post_wrapper_hooks(__mid);
+    __margo_internal_post_wrapper_hooks(__mid, &__monitoring_args);
 
 #define __MARGO_INTERNAL_RPC_WRAPPER(__name)       \
     void _wrapper_for_##__name(hg_handle_t handle) \
@@ -1850,7 +1876,7 @@ hg_return_t _handler_for_NULL(hg_handle_t);
                     "Could not associate RPC data with handle in " #__name);   \
         __margo_respond_with_error(handle, __hret);                            \
         margo_destroy(handle);                                                 \
-        return __hret;                                                         \
+        goto __finish;                                                         \
     }                                                                          \
     __mid = margo_hg_handle_get_instance(handle);                              \
     if (__mid == MARGO_INSTANCE_NULL) {                                        \
@@ -1858,16 +1884,21 @@ hg_return_t _handler_for_NULL(hg_handle_t);
             __mid, "Could not get margo instance when entering RPC " #__name); \
         __margo_respond_with_error(handle, HG_NOENTRY);                        \
         margo_destroy(handle);                                                 \
-        return (HG_OTHER_ERROR);                                               \
+        __hret = HG_OTHER_ERROR;                                               \
+        goto __finish;                                                         \
     }                                                                          \
     if (!__margo_internal_incr_pending(__mid)) {                               \
         margo_warning(__mid,                                                   \
                       "Ignoring " #__name " RPC because margo is finalizing"); \
         __margo_respond_with_error(handle, HG_PERMISSION);                     \
         margo_destroy(handle);                                                 \
-        return (HG_CANCELED);                                                  \
+        __hret = HG_CANCELED;                                                  \
+        goto __finish;                                                         \
     }                                                                          \
-    __pool                 = margo_hg_handle_get_handler_pool(handle);         \
+    __pool = margo_hg_handle_get_handler_pool(handle);                         \
+    struct margo_monitor_rpc_handler_args __monitoring_args                    \
+        = {.handle = handle, .pool = __pool, .ret = HG_SUCCESS};               \
+    __margo_internal_pre_handler_hooks(__mid, handle, &__monitoring_args);     \
     const char* __rpc_name = margo_handle_get_name(handle);                    \
     __rpc_name             = __rpc_name ? __rpc_name : #__name;                \
     margo_trace(__mid, "Spawning ULT " #__name " for RPC %s (handle = %p)",    \
@@ -1881,9 +1912,13 @@ hg_return_t _handler_for_NULL(hg_handle_t);
         __margo_respond_with_error(handle, HG_OTHER_ERROR);                    \
         margo_destroy(handle);                                                 \
         __margo_internal_decr_pending(__mid);                                  \
-        return (HG_NOMEM_ERROR);                                               \
+        __hret = HG_NOMEM_ERROR;                                               \
+        goto __finish;                                                         \
     }                                                                          \
-    return (HG_SUCCESS);
+__finish:                                                                      \
+    __monitoring_args.ret = __hret;                                            \
+    __margo_internal_post_handler_hooks(__mid, &__monitoring_args);            \
+    return __hret;
 
 #define __MARGO_INTERNAL_RPC_HANDLER(__name)              \
     hg_return_t _handler_for_##__name(hg_handle_t handle) \
