@@ -7,9 +7,9 @@
 #include "margo-instance.h"
 #include "margo-monitoring.h"
 
-hg_return_t margo_monitor_call_user(margo_instance_id     mid,
-                                    margo_monitor_event_t ev,
-                                    void*                 args)
+hg_return_t margo_monitor_call_user(margo_instance_id         mid,
+                                    margo_monitor_event_t     ev,
+                                    margo_monitor_user_args_t args)
 {
     if (!mid) return HG_INVALID_ARG;
     if (!mid->monitor) return HG_SUCCESS;
@@ -59,12 +59,7 @@ __MONITOR_FN(free_input) {}
 __MONITOR_FN(free_output) {}
 __MONITOR_FN(prefinalize) {}
 __MONITOR_FN(finalize) {}
-
-static void margo_default_monitor_on_user(void*                 uargs,
-                                          double                timestamp,
-                                          margo_monitor_event_t event_type,
-                                          void*                 args)
-{}
+__MONITOR_FN(user) {}
 
 struct margo_monitor __margo_default_monitor
     = {.uargs      = NULL,
@@ -98,5 +93,22 @@ hg_return_t margo_set_monitor(margo_instance_id           mid,
             mid->monitor->uargs
                 = mid->monitor->initialize(mid, mid->monitor->uargs, config);
     }
+    return HG_SUCCESS;
+}
+
+hg_return_t margo_set_monitoring_data(margo_request        req,
+                                      margo_monitor_data_t data)
+{
+    if (!req) return HG_INVALID_ARG;
+    req->monitor_data = data;
+    return HG_SUCCESS;
+}
+
+hg_return_t margo_get_monitoring_data(margo_request         req,
+                                      margo_monitor_data_t* data)
+{
+
+    if (!req) return HG_INVALID_ARG;
+    if (data) *data = req->monitor_data;
     return HG_SUCCESS;
 }

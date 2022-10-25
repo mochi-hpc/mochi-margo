@@ -17,11 +17,92 @@
 extern "C" {
 #endif
 
-struct hg_bulk_attr;
+/**
+ * Margo's monitoring subsystem consists of a margo_monitor structure
+ * with pointers to functions that will be called when executing some
+ * Margo functions. These functions all have the following prototype:
+ *
+ * ```
+ * void (*)(void* state, double ts, margo_monitor_event_t type,
+ * margo_monitor_X_args_t args)
+ * ```
+ *
+ * For instance the on_forward function will be called at the beginning
+ * of a forward call, and at the end, first with MARGO_MONITOR_FN_START
+ * as event, type, then with MARGO_MONITOR_FN_END.
+ *
+ * The margo_monitor_X_args_t (replace X with the function name) argument
+ * contains the argument(s) of the function, and its return value(s). The
+ * return values (marked as output in the structures hereafter) are only
+ * valid when the event type is MARGO_MONITOR_FN_END. Each of these
+ * structures also conain a margo_monitor_data_t field that can be used
+ * by the monitor to attach data to the margo_monitor_X_args_t argument
+ * in between a call with MARGO_MONITOR_FN_START and the corresponding
+ * call with MARGO_MONITOR_FN_END. This structure is a union with an int64_t
+ * field, a double field, and a void* field. The latter can be used to
+ * attach a pointer to data that wouldn't fit in 8 bytes, if necessary.
+ * An example of application would be to attach the starting timestamp
+ * as a double when the function is called with MARGO_MONITOR_FN_START,
+ * and retrieve it to compute a call duration when the function is called
+ * with MARGO_MONITOR_FN_END.
+ *
+ * This header also provides an enum of values of MARGO_MONITOR_ON_X
+ * constants. These constants can be useful for indexing an array, for
+ * example:
+ *
+ * ```
+ * double call_times[MARGO_MONITOR_MAX];
+ * ...
+ * call_times[MARGO_MONITOR_ON_FORWARD] += duration;
+ * ```
+ *
+ * Important: blocking functions (margo_forward, margo_provider_forward,
+ * margo_respond, margo_bulk_transfer, etc.) are internally implemented
+ * using their non-blocking counterpart. Hence, measuring the time between
+ * on_forward calls with MARGO_MONITOR_FN_START and MARGO_MONITOR_FN_END
+ * will not give the duration of the corresponding margo_forward call.
+ * A margo_forward call will lead to the following sequence of monitoring
+ * function calls:
+ * - on_forward(MARGO_MONITOR_FN_START)
+ * - on_set_input(MARGO_MONITOR_FN_START)
+ * - on_set_input(MARGO_MONITOR_FN_END)
+ * - on_forward(MARGO_MONITOR_FN_END)
+ * - on_wait(MARGO_MONITOR_FN_START)
+ * - on_forward_cb(MARGO_MONITOR_FN_START)
+ * - on_forward_cb(MARGO_MONITOR_FN_END)
+ * - on_wait(MARGO_MONITOR_FN_END)
+ * A margo_request field in the argument structures of all these
+ * function will be common to all of them for a given magro_forward call.
+ * Attaching monitoring data to a margo_request is possible via the
+ * margo_set_monitoring_data and margo_get_monitoring_data functions.
+ *
+ * Similarly, a call to margo_respond will trigger a similar sequence
+ * of monitoring calls (with on_respond, on_set_output, and on_respond_cb
+ * instead of on_forward, on_set_input and on_forward_cb respectively),
+ * and a call to margo_bulk_transfer will trigger a sequence of
+ * on_bulk_transfer, on_wait, on_bulk_transfer_cb, on_wait.
+ *
+ * User-defined events: the margo_monitor_call_user function may be
+ * used to trigger the on_user callback. Because custom monitor
+ * implementations cannot make any assumption on the format of the data
+ * being passed to this function by the user, such data has to be
+ * a null-terminated string (for instance a name). We recommend
+ * that margo_monitor_call_user be used sparingly, e.g. only when
+ * debugging or profiling a program, to have extra information appear
+ * in the resulting trace file.
+ */
+
+struct hg_bulk_attr; /* forward declaration needed for Mercury < 2.2.0 */
 struct margo_instance;
 typedef struct margo_instance*       margo_instance_id;
 typedef struct margo_request_struct* margo_request;
 
+/**
+ * The margo_default_monitor constant can be used in the margo_init_info
+ * structure passed to margo_init_ext to install the default monitoring
+ * system in the margo instance. If the monitor field is left NULL, no
+ * monitoring will be performed.
+ */
 extern const struct margo_monitor* margo_default_monitor;
 
 /**
@@ -72,7 +153,7 @@ typedef struct margo_monitor_free_input_args*    margo_monitor_free_input_args_t
 typedef struct margo_monitor_free_output_args*   margo_monitor_free_output_args_t;
 typedef struct margo_monitor_prefinalize_args*   margo_monitor_prefinalize_args_t;
 typedef struct margo_monitor_finalize_args*      margo_monitor_finalize_args_t;
-typedef void*                                    margo_monitor_user_args_t;
+typedef const char*                              margo_monitor_user_args_t;
 /* clang-format on */
 
 /* clang-format off */
@@ -388,8 +469,34 @@ hg_return_t margo_set_monitor(margo_instance_id           mid,
  */
 hg_return_t margo_monitor_call_user(margo_instance_id mid,
                                     margo_monitor_event_t,
-                                    void* args);
+                                    margo_monitor_user_args_t args);
 
+/**
+ * @brief Attach custom monitoring data to the margo_request.
+ *
+ * Note that the last call related to a particular margo_request
+ * before it is freed will always be on_wait(MARGO_MONITOR_FN_END).
+ * This information can be used to properly release any attached
+ * data if necessary.
+ *
+ * @param req Request to which to attach data.
+ * @param data Data to attach.
+ *
+ * @return HG_SUCCESS or HG_INVALID_ARG if req is NULL.
+ */
+hg_return_t margo_set_monitoring_data(margo_request        req,
+                                      margo_monitor_data_t data);
+
+/**
+ * @brief Retrieve custom monitoring data from the margo_request.
+ *
+ * @param req Request to which the data is attached.
+ * @param data Pointer to data.
+ *
+ * @return HG_SUCCESS or HG_INVALID_ARG if req is NULL.
+ */
+hg_return_t margo_get_monitoring_data(margo_request         req,
+                                      margo_monitor_data_t* data);
 #ifdef __cplusplus
 }
 #endif
