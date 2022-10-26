@@ -24,7 +24,8 @@ src_libmargo_la_SOURCES += \
  src/margo-timer.c \
  src/margo-util.c \
  src/margo-prio-pool.c \
- src/margo-monitoring.c
+ src/margo-monitoring.c \
+ src/margo-default-monitoring.c
 
 bin_PROGRAMS += src/margo-info
 
