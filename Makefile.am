@@ -24,7 +24,8 @@ include_HEADERS = \
  include/margo-bulk-pool.h \
  include/margo-util.h \
  include/margo-bulk-util.h \
- include/margo-timer.h
+ include/margo-timer.h \
+ include/margo-monitoring.h
 
 TESTS_ENVIRONMENT =
 
