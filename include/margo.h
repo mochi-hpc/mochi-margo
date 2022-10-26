@@ -1866,10 +1866,12 @@ hg_return_t _handler_for_NULL(hg_handle_t);
     }
 
 #define __MARGO_INTERNAL_RPC_HANDLER_BODY(__name)                              \
-    int               __ret;                                                   \
-    ABT_pool          __pool;                                                  \
-    margo_instance_id __mid;                                                   \
-    hg_return_t       __hret;                                                  \
+    int                                   __ret;                               \
+    ABT_pool                              __pool;                              \
+    margo_instance_id                     __mid;                               \
+    hg_return_t                           __hret;                              \
+    const char*                           __rpc_name;                          \
+    struct margo_monitor_rpc_handler_args __monitoring_args;                   \
     __hret = __margo_internal_set_handle_data(handle);                         \
     if (__hret != HG_SUCCESS) {                                                \
         margo_error(NULL,                                                      \
@@ -1895,12 +1897,13 @@ hg_return_t _handler_for_NULL(hg_handle_t);
         __hret = HG_CANCELED;                                                  \
         goto __finish;                                                         \
     }                                                                          \
-    __pool = margo_hg_handle_get_handler_pool(handle);                         \
-    struct margo_monitor_rpc_handler_args __monitoring_args                    \
-        = {.handle = handle, .pool = __pool, .ret = HG_SUCCESS};               \
+    __pool                   = margo_hg_handle_get_handler_pool(handle);       \
+    __monitoring_args.handle = handle;                                         \
+    __monitoring_args.pool   = __pool;                                         \
+    __monitoring_args.ret    = HG_SUCCESS;                                     \
     __margo_internal_pre_handler_hooks(__mid, handle, &__monitoring_args);     \
-    const char* __rpc_name = margo_handle_get_name(handle);                    \
-    __rpc_name             = __rpc_name ? __rpc_name : #__name;                \
+    __rpc_name = margo_handle_get_name(handle);                                \
+    __rpc_name = __rpc_name ? __rpc_name : #__name;                            \
     margo_trace(__mid, "Spawning ULT " #__name " for RPC %s (handle = %p)",    \
                 __rpc_name, (void*)handle);                                    \
     __ret = ABT_thread_create(__pool, (void (*)(void*))_wrapper_for_##__name,  \
