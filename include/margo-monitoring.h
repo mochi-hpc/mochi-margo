@@ -438,26 +438,6 @@ struct margo_monitor_cb_args {
 };
 
 /**
- * @brief Set a monitor structure for Margo to use. The structure will be
- * internally copied and the user may free the input argument after the call.
- * Passing NULL as monitor is valid and will disable monitor altogether.
- *
- * Note: if a monitor is already in place, its finalize function pointer will
- * be called before the new monitor is installed. If provided, The initialize
- * function of the new monitor will be called and the monitor's uargs will be
- * replaced internally with the returned value of the initialize call.
- *
- * @param mid Margo instance
- * @param monitor Monitor structure
- * @param config JSON-formatted configuration or NULL
- *
- * @return HG_SUCCESS or other error code
- */
-hg_return_t margo_set_monitor(margo_instance_id           mid,
-                              const struct margo_monitor* monitor,
-                              const char*                 config);
-
-/**
  * @brief Invokes the on_user callback of the monitor registered with the
  * margo instance.
  *
