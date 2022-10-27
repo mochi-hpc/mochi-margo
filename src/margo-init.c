@@ -374,8 +374,13 @@ margo_instance_id margo_init_ext(const char*                   address,
     margo_set_logger(mid, args.logger);
 
     if (args.monitor) {
-        const char* monitor_config = NULL; // TODO
-        margo_set_monitor(mid, args.monitor, monitor_config);
+        struct json_object* monitor_config
+            = json_object_object_get(config, "monitoring");
+        const char* monitor_config_str = NULL;
+        if (monitor_config
+            && json_object_is_type(monitor_config, json_type_object))
+            monitor_config_str = json_object_to_json_string(monitor_config);
+        margo_set_monitor(mid, args.monitor, monitor_config_str);
     }
 
     mid->shutdown_rpc_id = MARGO_REGISTER(

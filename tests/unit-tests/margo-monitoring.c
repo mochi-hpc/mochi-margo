@@ -5,6 +5,7 @@
  */
 #include <stdio.h>
 #include <margo.h>
+#include <unistd.h>
 #include <mercury_proc_string.h>
 #include "munit/munit.h"
 #include "munit/munit-goto.h"
@@ -54,6 +55,47 @@ MERCURY_GEN_PROC(echo_in_t,
 
 DECLARE_MARGO_RPC_HANDLER(echo_ult)
 static void echo_ult(hg_handle_t handle)
+{
+    margo_instance_id mid = margo_hg_handle_get_instance(handle);
+    munit_assert_not_null(mid);
+
+    const struct hg_info* info = margo_get_info(handle);
+    struct test_monitor_data* monitor_data =
+        (struct test_monitor_data*)margo_registered_data(mid, info->id);
+    munit_assert_not_null(mid);
+
+    echo_in_t   input;
+    hg_return_t hret = HG_SUCCESS;
+
+    hret = margo_get_input(handle, &input);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    char      buffer[256];
+    void*     ptrs[1]  = { (void*)buffer };
+    hg_size_t sizes[1] = { 256 };
+    hg_bulk_t bulk     = HG_BULK_NULL;
+    hret = margo_bulk_create(mid, 1, ptrs, sizes, HG_BULK_WRITE_ONLY, &bulk);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_bulk_transfer(mid, HG_BULK_PULL, info->addr, input.blk, 0, bulk, 0, 256);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_bulk_free(bulk);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_respond(handle, &input);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_free_input(handle, &input);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_destroy(handle);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+}
+DEFINE_MARGO_RPC_HANDLER(echo_ult)
+
+DECLARE_MARGO_RPC_HANDLER(custom_echo_ult)
+static void custom_echo_ult(hg_handle_t handle)
 {
     margo_instance_id mid = margo_hg_handle_get_instance(handle);
     munit_assert_not_null(mid);
@@ -125,7 +167,7 @@ static void echo_ult(hg_handle_t handle)
     munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_DESTROY].fn_start, ==, 0);
     munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_DESTROY].fn_end, ==, 0);
 }
-DEFINE_MARGO_RPC_HANDLER(echo_ult)
+DEFINE_MARGO_RPC_HANDLER(custom_echo_ult)
 
 static void* test_context_setup(const MunitParameter params[], void* user_data)
 {
@@ -139,13 +181,13 @@ static void test_context_tear_down(void* fixture)
     (void)fixture;
 }
 
-static MunitResult test_monitoring(const MunitParameter params[],
-                                   void*                data)
+static MunitResult test_custom_monitoring(const MunitParameter params[],
+                                          void*                data)
 {
     hg_return_t hret                      = HG_SUCCESS;
     struct test_monitor_data monitor_data = {0};
 
-    struct margo_monitor test_monitor = {
+    struct margo_monitor custom_monitor = {
         .uargs      = (void*)&monitor_data,
         .initialize = test_monitor_initialize,
         .finalize   = test_monitor_finalize,
@@ -163,12 +205,12 @@ static MunitResult test_monitoring(const MunitParameter params[],
         .hg_context    = NULL,
         .hg_init_info  = NULL,
         .logger        = NULL,
-        .monitor       = &test_monitor
+        .monitor       = &custom_monitor
     };
     margo_instance_id mid = margo_init_ext(protocol, MARGO_SERVER_MODE, &init_info);
     munit_assert_not_null(mid);
 
-    hg_id_t echo_id = MARGO_REGISTER(mid, "echo", echo_in_t, hg_string_t, echo_ult);
+    hg_id_t echo_id = MARGO_REGISTER(mid, "custom_echo", echo_in_t, hg_string_t, custom_echo_ult);
     munit_assert_int(echo_id, !=, 0);
     /* note: because of the __shutdown__ RPC, the count will be at 2 */
     munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_REGISTER].fn_start, ==, 2);
@@ -272,13 +314,105 @@ static MunitResult test_monitoring(const MunitParameter params[],
     return MUNIT_OK;
 }
 
+static MunitResult test_default_monitoring(const MunitParameter params[],
+                                           void*                data)
+{
+    hg_return_t hret                      = HG_SUCCESS;
+    const char* protocol = munit_parameters_get(params, "protocol");
+    const char* json_config =
+        "{\"monitoring\":{\"statistics\":{\"filename\":\"test\",\"precision\":9}}}";
+    struct margo_init_info init_info = {
+        .json_config   = json_config,
+        .progress_pool = ABT_POOL_NULL,
+        .rpc_pool      = ABT_POOL_NULL,
+        .hg_class      = NULL,
+        .hg_context    = NULL,
+        .hg_init_info  = NULL,
+        .logger        = NULL,
+        .monitor       = margo_default_monitor
+    };
+    margo_instance_id mid = margo_init_ext(protocol, MARGO_SERVER_MODE, &init_info);
+    munit_assert_not_null(mid);
+
+    hg_id_t echo_id = MARGO_REGISTER(mid, "echo", echo_in_t, hg_string_t, echo_ult);
+    munit_assert_int(echo_id, !=, 0);
+
+    margo_thread_sleep(mid, 1);
+
+    char      buffer[256];
+    void*     ptrs[1]  = { (void*)buffer };
+    hg_size_t sizes[1] = { 256 };
+    hg_bulk_t bulk     = HG_BULK_NULL;
+    hret = margo_bulk_create(mid, 1, ptrs, sizes, HG_BULK_READ_ONLY, &bulk);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    const char* input  = "hello world";
+    echo_in_t in = {
+        .str = (char*)input,
+        .blk = bulk
+    };
+    hg_addr_t addr     = HG_ADDR_NULL;
+    hg_handle_t handle = HG_HANDLE_NULL;
+
+    hret = margo_addr_self(mid, &addr);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_create(mid, addr, echo_id, &handle);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_forward(handle, &in);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_bulk_free(bulk);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    char* output = NULL;
+    hret = margo_get_output(handle, &output);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_free_output(handle, &output);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_destroy(handle);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_addr_free(mid, addr);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_deregister(mid, echo_id);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_monitor_call_user(mid, MARGO_MONITOR_FN_START, NULL);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    margo_finalize(mid);
+
+    // TODO check file was written and is valid
+    char* filename = NULL;
+    {
+        char hostname[1024];
+        hostname[1023] = '\0';
+        gethostname(hostname, 1023);
+        pid_t pid = getpid();
+        size_t fullname_size = snprintf(NULL, 0, "test.%s.%d.json", hostname, pid);
+        filename = calloc(1, fullname_size+1);
+        sprintf(filename, "test.%s.%d.json", hostname, pid);
+    }
+    munit_assert_int(access(filename, F_OK), ==, 0);
+
+    free(filename);
+    return MUNIT_OK;
+}
+
 static char* protocol_params[] = {"na+sm", NULL};
 
 static MunitParameterEnum test_params[]
     = {{"protocol", protocol_params}, {NULL, NULL}};
 
 static MunitTest test_suite_tests[] = {
-    {(char*)"/monitoring", test_monitoring, test_context_setup,
+    {(char*)"/monitoring/default", test_default_monitoring, test_context_setup,
+     test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
+    {(char*)"/monitoring/custom", test_custom_monitoring, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
 

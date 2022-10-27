@@ -103,7 +103,7 @@ typedef struct margo_request_struct* margo_request;
  * system in the margo instance. If the monitor field is left NULL, no
  * monitoring will be performed.
  */
-extern const struct margo_monitor* margo_default_monitor;
+extern struct margo_monitor* margo_default_monitor;
 
 /**
  * The margo_monitor_data_t union is used in all the
