@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <margo.h>
 #include <unistd.h>
+#include <json-c/json.h>
 #include <mercury_proc_string.h>
 #include "munit/munit.h"
 #include "munit/munit-goto.h"
@@ -400,6 +401,47 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
     }
     munit_assert_int(access(filename, F_OK), ==, 0);
 
+    FILE* file = fopen(filename, "r");
+    munit_assert_not_null(file);
+    fseek(file, 0L, SEEK_END);
+    long int file_size = ftell(file);
+    fseek(file, 0L, SEEK_SET);
+    munit_assert_int(file_size, >, 0);
+    char* file_content = malloc(file_size);
+    munit_assert_int(file_size, ==, fread(file_content, 1, file_size, file));
+    fclose(file);
+
+    struct json_object* json_content = NULL;
+    struct json_tokener* tokener     = json_tokener_new();
+    enum json_tokener_error jerr;
+    json_content = json_tokener_parse_ex(tokener, file_content, file_size);
+    json_tokener_free(tokener);
+    munit_assert_not_null(json_content);
+
+    munit_assert(json_object_is_type(json_content, json_type_object));
+
+#define ASSERT_JSON_HAS(parent, key, type) \
+    struct json_object* key = json_object_object_get(parent, #key); \
+    munit_assert_not_null(key); \
+    munit_assert(json_object_is_type(key, json_type_##type))
+
+#define ASSERT_JSON_HAS_STATS(parent, key) \
+    do { \
+        ASSERT_JSON_HAS(parent, key, object); \
+        ASSERT_JSON_HAS(key, num, int); \
+        ASSERT_JSON_HAS(key, min, double); \
+        ASSERT_JSON_HAS(key, max, double); \
+        ASSERT_JSON_HAS(key, avg, double); \
+        ASSERT_JSON_HAS(key, var, double); \
+        ASSERT_JSON_HAS(key, sum, double); \
+    } while(0)
+
+    ASSERT_JSON_HAS(json_content, progress_loop, object);
+    ASSERT_JSON_HAS_STATS(progress_loop, progress_with_timeout);
+    ASSERT_JSON_HAS_STATS(progress_loop, progress_without_timeout);
+    ASSERT_JSON_HAS_STATS(progress_loop, trigger);
+
+    free(file_content);
     free(filename);
     return MUNIT_OK;
 }
