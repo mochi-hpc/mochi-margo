@@ -45,11 +45,7 @@
  * callpath.
  *
  * An attempt will be made, using the same mechanism as callpath tracking
- * (i.e, an ABT_key), to track the context in which a bulk operation
- * happens. If such a context can be found, the statistics that will be
- * updated is the one in the target_rpc_statistics structure of that
- * context. Otherwise, the bulk operation statistics will be tracked
- * using a single bulk_statistics at the root of the monitor's state.
+ * (i.e, an ABT_key), to track the context in which a bulk operation happens.
  */
 
 typedef struct statistics {
@@ -91,6 +87,13 @@ typedef struct hg_statistics {
     statistics_t trigger;
 } hg_statistics_t;
 
+/* Some statistics fields in the following structures will be
+ * a pair of "duration" statistics (duration of the operation)
+ * and "timestamp" statistics (timestamp of the operation
+ * relative to another, earlier operation). In the latter case,
+ * the reference operation used for the timestamp is marked with
+ * a comment.
+ */
 enum
 {
     DURATION  = 0,
@@ -98,15 +101,26 @@ enum
 };
 
 /* Statistics related to bulk transfers */
+/* Note: the reference timestamp is the transfer
+ * operation rather than the create operation
+ * because it is not unusual for a service to
+ * have pre-created bulk handles.
+ */
 typedef struct bulk_statistics {
-    statistics_t create[2];
-    statistics_t transfer[2];
-    statistics_t transfer_cb[2];
-    statistics_t wait[2];
+    statistics_t create;
+    statistics_t transfer; /* reference timestamp */
+    statistics_t
+        transfer_size; /* size of transfer, not timestamp or duration */
+    statistics_t   transfer_cb[2];
+    statistics_t   wait[2];
+    callpath_t     callpath; /* hash key */
+    UT_hash_handle hh;       /* hash handle */
 } bulk_statistics_t;
 
 /* Statistics related to RPCs at their origin */
 typedef struct origin_rpc_statistics {
+    /* reference timestamp is the create operation,
+     * for which no statistics are collected */
     statistics_t   forward[2];
     statistics_t   forward_cb[2];
     statistics_t   wait[2];
@@ -118,16 +132,15 @@ typedef struct origin_rpc_statistics {
 
 /* Statistics related to RPCs at their target */
 typedef struct target_rpc_statistics {
-    statistics_t       handler[2];
-    statistics_t       ult[2];
-    statistics_t       respond[2];
-    statistics_t       respond_cb[2];
-    statistics_t       wait[2];
-    statistics_t       set_output[2];
-    statistics_t       get_input[2];
-    bulk_statistics_t* bulk;
-    callpath_t         callpath; /* hash key */
-    UT_hash_handle     hh;       /* hash handle */
+    statistics_t   handler; /* reference timestamp */
+    statistics_t   ult[2];
+    statistics_t   respond[2];
+    statistics_t   respond_cb[2];
+    statistics_t   wait[2];
+    statistics_t   set_output[2];
+    statistics_t   get_input[2];
+    callpath_t     callpath; /* hash key */
+    UT_hash_handle hh;       /* hash handle */
 } target_rpc_statistics_t;
 
 /* Structure used to track registered RPCs */
@@ -145,7 +158,8 @@ typedef struct default_monitor_state {
     /* RPC information */
     rpc_info_t* rpc_info;
     /* Argobots keys */
-    ABT_key target_rpc_stats_key;
+    ABT_key bulk_stats_key; /* may be associated with a bulk_statistics_t* */
+    ABT_key callpath_key;   /* mat be associated with a callpath */
     /* Mutex to access data (locked only when
      * adding new entries into hash tables or
      * when writing the state into a file) */
@@ -177,6 +191,11 @@ typedef struct session {
     } target;
 } session_t;
 
+typedef struct bulk_session {
+    double             start_ts;
+    bulk_statistics_t* stats;
+} bulk_session_t;
+
 static void write_monitor_state_to_json_file(default_monitor_state_t* monitor);
 
 static void* margo_default_monitor_initialize(margo_instance_id   mid,
@@ -184,7 +203,8 @@ static void* margo_default_monitor_initialize(margo_instance_id   mid,
                                               struct json_object* config)
 {
     default_monitor_state_t* monitor = calloc(1, sizeof(*monitor));
-    ABT_key_create(NULL, &(monitor->target_rpc_stats_key));
+    ABT_key_create(NULL, &(monitor->bulk_stats_key));
+    ABT_key_create(free, &(monitor->callpath_key));
     monitor->mid = mid;
 
     /* default configuration */
@@ -232,8 +252,36 @@ static void margo_default_monitor_finalize(void* uargs)
             free(p);
         }
     }
+    /* free origin RPC statistics */
+    {
+        origin_rpc_statistics_t *p, *tmp;
+        HASH_ITER(hh, monitor->origin_rpc_stats, p, tmp)
+        {
+            HASH_DEL(monitor->origin_rpc_stats, p);
+            free(p);
+        }
+    }
+    /* free target RPC statistics */
+    {
+        target_rpc_statistics_t *p, *tmp;
+        HASH_ITER(hh, monitor->target_rpc_stats, p, tmp)
+        {
+            HASH_DEL(monitor->target_rpc_stats, p);
+            free(p);
+        }
+    }
+    /* free bulk statistics */
+    {
+        bulk_statistics_t *p, *tmp;
+        HASH_ITER(hh, monitor->bulk_stats, p, tmp)
+        {
+            HASH_DEL(monitor->bulk_stats, p);
+            free(p);
+        }
+    }
     /* free ABT key */
-    ABT_key_free(&(monitor->target_rpc_stats_key));
+    ABT_key_free(&(monitor->bulk_stats_key));
+    ABT_key_free(&(monitor->callpath_key));
     /* free filename */
     free(monitor->filename_prefix);
     free(monitor);
@@ -338,6 +386,15 @@ margo_default_monitor_on_create(void*                       uargs,
         margo_monitor_data_t monitor_data;                                  \
         hg_return_t ret = margo_get_monitoring_data(handle, &monitor_data); \
         session         = (session_t*)monitor_data.p;                       \
+    } while (0)
+
+#define RETRIEVE_BULK_SESSION(request)                                   \
+    bulk_session_t* session = NULL;                                      \
+    do {                                                                 \
+        margo_monitor_data_t monitor_data;                               \
+        hg_return_t          ret                                         \
+            = margo_request_get_monitoring_data(request, &monitor_data); \
+        session = (bulk_session_t*)monitor_data.p;                       \
     } while (0)
 
 static void
@@ -540,25 +597,31 @@ static void margo_default_monitor_on_wait(void*                     uargs,
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     // retrieve the session that was create on on_create
-    hg_handle_t handle = margo_request_get_handle(event_args->request);
-    RETRIEVE_SESSION(handle);
-    statistics_t* duration_stats  = NULL;
-    statistics_t* timestamp_stats = NULL;
-    double        start_ts;
+    statistics_t*   duration_stats  = NULL;
+    statistics_t*   timestamp_stats = NULL;
+    bulk_session_t* bulk_session    = NULL;
+    double          start_ts;
 
     margo_request_type request_type
         = margo_request_get_type(event_args->request);
     if (request_type == MARGO_FORWARD_REQUEST) {
+        hg_handle_t handle = margo_request_get_handle(event_args->request);
+        RETRIEVE_SESSION(handle);
         start_ts        = session->origin.start_ts;
         duration_stats  = &(session->origin.stats->wait[DURATION]);
         timestamp_stats = &(session->origin.stats->wait[TIMESTAMP]);
     } else if (request_type == MARGO_RESPONSE_REQUEST) {
+        hg_handle_t handle = margo_request_get_handle(event_args->request);
+        RETRIEVE_SESSION(handle);
         start_ts        = session->target.start_ts;
         duration_stats  = &(session->target.stats->wait[DURATION]);
         timestamp_stats = &(session->target.stats->wait[TIMESTAMP]);
-    } else {
-        // TODO
-        return;
+    } else if (request_type == MARGO_BULK_REQUEST) {
+        RETRIEVE_BULK_SESSION(event_args->request);
+        start_ts        = session->start_ts;
+        duration_stats  = &(session->stats->wait[DURATION]);
+        timestamp_stats = &(session->stats->wait[TIMESTAMP]);
+        bulk_session    = session;
     }
 
     if (event_type == MARGO_MONITOR_FN_START) {
@@ -569,6 +632,8 @@ static void margo_default_monitor_on_wait(void*                     uargs,
         double t = timestamp - event_args->uctx.f;
         UPDATE_STATISTICS_WITH(*duration_stats, t);
     }
+
+    if (event_type == MARGO_MONITOR_FN_END) { free(bulk_session); }
 }
 
 static void margo_default_monitor_on_rpc_handler(
@@ -604,17 +669,13 @@ static void margo_default_monitor_on_rpc_handler(
         session->target.stats = rpc_stats;
 
         event_args->uctx.f = timestamp;
-        double t           = 0.0;
-        // note: the timestamp stats will always be 0 because
-        // rpc_handler is the first thing that happens on the target
-        UPDATE_STATISTICS_WITH(rpc_stats->handler[TIMESTAMP], t);
 
     } else {
 
         // update statistics
         rpc_stats = session->target.stats;
         double t  = timestamp - event_args->uctx.f;
-        UPDATE_STATISTICS_WITH(rpc_stats->handler[DURATION], t);
+        UPDATE_STATISTICS_WITH(rpc_stats->handler, t);
     }
 }
 
@@ -630,9 +691,16 @@ margo_default_monitor_on_rpc_ult(void*                        uargs,
     target_rpc_statistics_t* rpc_stats = session->target.stats;
 
     if (event_type == MARGO_MONITOR_FN_START) {
+
         event_args->uctx.f = timestamp;
         double t           = timestamp - session->target.start_ts;
         UPDATE_STATISTICS_WITH(rpc_stats->ult[TIMESTAMP], t);
+        // set callpath key
+        callpath_t* current_callpath = calloc(1, sizeof(*current_callpath));
+        // TODO: get parent_id from breadcrumb
+        current_callpath->rpc_id = margo_get_info(event_args->handle)->id;
+        ABT_key_set(monitor->callpath_key, current_callpath);
+
     } else {
         double t = timestamp - event_args->uctx.f;
         UPDATE_STATISTICS_WITH(rpc_stats->ult[DURATION], t);
@@ -661,9 +729,121 @@ margo_default_monitor_on_destroy(void*                        uargs,
         void* uargs, double timestamp, margo_monitor_event_t event_type, \
         margo_monitor_##__event__##_args_t event_args)
 
-__MONITOR_FN(bulk_create) {}
-__MONITOR_FN(bulk_transfer) {}
-__MONITOR_FN(bulk_transfer_cb) {}
+static void margo_default_monitor_on_bulk_create(
+    void*                            uargs,
+    double                           timestamp,
+    margo_monitor_event_t            event_type,
+    margo_monitor_bulk_create_args_t event_args)
+{
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+
+    bulk_statistics_t* bulk_stats = NULL;
+
+    // try to get current bulk_statistics_t from ABT_key
+    ABT_key_get(monitor->bulk_stats_key, (void**)&bulk_stats);
+
+    if (!bulk_stats) {
+        // no bulk_statistics_t attached to current ULT
+        static const callpath_t default_key = {0};
+        callpath_t*             pkey        = NULL;
+        // try to get current callpath from the installed ABT_key
+        ABT_key_get(monitor->callpath_key, (void**)&pkey);
+        if (!pkey) pkey = (callpath_t*)&default_key;
+
+        ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
+        HASH_FIND(hh, monitor->bulk_stats, pkey, sizeof(*pkey), bulk_stats);
+        if (!bulk_stats) {
+            bulk_stats = (bulk_statistics_t*)calloc(1, sizeof(*bulk_stats));
+            bulk_stats->callpath = *pkey;
+            HASH_ADD(hh, monitor->bulk_stats, callpath, sizeof(*pkey),
+                     bulk_stats);
+        }
+        ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
+    }
+
+    if (event_type == MARGO_MONITOR_FN_START) {
+        event_args->uctx.f = timestamp;
+    } else {
+        double t = timestamp - event_args->uctx.f;
+        UPDATE_STATISTICS_WITH(bulk_stats->create, t);
+    }
+}
+
+static void margo_default_monitor_on_bulk_transfer(
+    void*                              uargs,
+    double                             timestamp,
+    margo_monitor_event_t              event_type,
+    margo_monitor_bulk_transfer_args_t event_args)
+{
+    default_monitor_state_t* monitor    = (default_monitor_state_t*)uargs;
+    bulk_statistics_t*       bulk_stats = NULL;
+
+    if (event_type == MARGO_MONITOR_FN_START) {
+
+        // try to get current bulk_statistics_t from ABT_key
+        ABT_key_get(monitor->bulk_stats_key, (void**)&bulk_stats);
+
+        if (!bulk_stats) {
+            // no bulk_statistics_t attached to current ULT
+            static const callpath_t default_key = {0};
+            callpath_t*             pkey        = NULL;
+            // try to get current callpath from the installed ABT_key
+            ABT_key_get(monitor->callpath_key, (void**)&pkey);
+            if (!pkey) pkey = (callpath_t*)&default_key;
+
+            ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
+            HASH_FIND(hh, monitor->bulk_stats, pkey, sizeof(*pkey), bulk_stats);
+            if (!bulk_stats) {
+                bulk_stats = (bulk_statistics_t*)calloc(1, sizeof(*bulk_stats));
+                bulk_stats->callpath = *pkey;
+                HASH_ADD(hh, monitor->bulk_stats, callpath, sizeof(*pkey),
+                         bulk_stats);
+            }
+            ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
+        }
+
+        event_args->uctx.f = timestamp;
+
+        // TODO use session pool
+        bulk_session_t* session           = calloc(1, sizeof(*session));
+        session->start_ts                 = event_args->uctx.f;
+        session->stats                    = bulk_stats;
+        margo_monitor_data_t monitor_data = {.p = (void*)session};
+        margo_request_set_monitoring_data(event_args->request, monitor_data);
+
+    } else {
+
+        margo_monitor_data_t monitor_data;
+        margo_request_get_monitoring_data(event_args->request, &monitor_data);
+        bulk_stats = ((bulk_session_t*)monitor_data.p)->stats;
+        double t   = timestamp - event_args->uctx.f;
+        UPDATE_STATISTICS_WITH(bulk_stats->transfer, t);
+        UPDATE_STATISTICS_WITH(bulk_stats->transfer_size, event_args->size);
+    }
+}
+
+static void margo_default_monitor_on_bulk_transfer_cb(
+    void*                                 uargs,
+    double                                timestamp,
+    margo_monitor_event_t                 event_type,
+    margo_monitor_bulk_transfer_cb_args_t event_args)
+{
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    // retrieve the session that was create on on_create
+    RETRIEVE_BULK_SESSION(event_args->request);
+    bulk_statistics_t* bulk_stats = session->stats;
+
+    if (event_type == MARGO_MONITOR_FN_START) {
+
+        event_args->uctx.f = timestamp;
+        double t           = timestamp - session->start_ts;
+        UPDATE_STATISTICS_WITH(bulk_stats->transfer_cb[TIMESTAMP], t);
+
+    } else {
+        double t = timestamp - event_args->uctx.f;
+        UPDATE_STATISTICS_WITH(bulk_stats->transfer_cb[DURATION], t);
+    }
+}
 
 __MONITOR_FN(bulk_free) {}
 __MONITOR_FN(deregister) {}

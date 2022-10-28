@@ -481,6 +481,39 @@ hg_return_t margo_set_monitoring_data(hg_handle_t          handle,
  */
 hg_return_t margo_get_monitoring_data(hg_handle_t           handle,
                                       margo_monitor_data_t* data);
+
+/**
+ * @brief Attach custom monitoring data to the margo_request.
+ *
+ * Attaching data to a margo_request shouldn't be necessary for
+ * RPC-related monitoring callbacks, but is necessary for bulk-related
+ * ones, because these functions do not carry a hg_handle_t handle
+ * to which to attach data.
+ *
+ * Note that the last call related to a particular margo_request
+ * before it is freed will always be on_wait(MARGO_MONITOR_FN_END).
+ * This information can be used to properly release any attached
+ * data if necessary.
+ *
+ * @param req Request to which to attach data.
+ * @param data Data to attach.
+ *
+ * @return HG_SUCCESS or HG_INVALID_ARG if req is NULL.
+ */
+hg_return_t margo_request_set_monitoring_data(margo_request        req,
+                                              margo_monitor_data_t data);
+
+/**
+ * @brief Retrieve custom monitoring data from the margo_request.
+ *
+ * @param req Request to which the data is attached.
+ * @param data Pointer to data.
+ *
+ * @return HG_SUCCESS or HG_INVALID_ARG if req is NULL.
+ */
+hg_return_t margo_request_get_monitoring_data(margo_request         req,
+                                              margo_monitor_data_t* data);
+
 #ifdef __cplusplus
 }
 #endif

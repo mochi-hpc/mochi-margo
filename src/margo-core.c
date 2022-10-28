@@ -1667,6 +1667,13 @@ static hg_return_t margo_bulk_itransfer_internal(
     hg_return_t hret = HG_TIMEOUT;
     int         ret;
 
+    req->type           = MARGO_BULK_REQUEST;
+    req->timer          = NULL;
+    req->handle         = HG_HANDLE_NULL;
+    req->mid            = mid;
+    req->start_time     = ABT_get_wtime();
+    req->rpc_breadcrumb = 0;
+
     /* monitoring */
     struct margo_monitor_bulk_transfer_args monitoring_args
         = {.op            = op,
@@ -1686,13 +1693,6 @@ static hg_return_t margo_bulk_itransfer_internal(
         hret = HG_NOMEM_ERROR;
         goto finish;
     }
-    req->type           = MARGO_BULK_REQUEST;
-    req->timer          = NULL;
-    req->handle         = HG_HANDLE_NULL;
-    req->mid            = mid;
-    req->start_time     = ABT_get_wtime();
-    req->rpc_breadcrumb = 0;
-
     hret = HG_Bulk_transfer(mid->hg_context, margo_cb, (void*)req, op,
                             origin_addr, origin_handle, origin_offset,
                             local_handle, local_offset, size, HG_OP_ID_IGNORE);

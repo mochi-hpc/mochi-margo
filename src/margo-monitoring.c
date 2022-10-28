@@ -38,3 +38,20 @@ hg_return_t margo_get_monitoring_data(hg_handle_t           handle,
     if (data) *data = handle_data->monitor_data;
     return HG_SUCCESS;
 }
+
+hg_return_t margo_request_set_monitoring_data(margo_request        req,
+                                              margo_monitor_data_t data)
+{
+    if (!req) return HG_INVALID_ARG;
+    req->monitor_data = data;
+    return HG_SUCCESS;
+}
+
+hg_return_t margo_request_get_monitoring_data(margo_request         req,
+                                              margo_monitor_data_t* data)
+{
+
+    if (!req) return HG_INVALID_ARG;
+    if (data) *data = req->monitor_data;
+    return HG_SUCCESS;
+}

@@ -164,12 +164,13 @@ struct margo_instance {
 };
 
 struct margo_request_struct {
-    margo_eventual_t   eventual;
-    hg_return_t        hret;
-    margo_timer*       timer;
-    margo_instance_id  mid;
-    hg_handle_t        handle;
-    margo_request_type type;
+    margo_eventual_t     eventual;
+    hg_return_t          hret;
+    margo_timer*         timer;
+    margo_instance_id    mid;
+    hg_handle_t          handle;
+    margo_monitor_data_t monitor_data;
+    margo_request_type   type;
 
     double   start_time;     /* timestamp of when the operation started */
     uint64_t rpc_breadcrumb; /* statistics tracking identifier, if applicable */
