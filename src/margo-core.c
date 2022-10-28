@@ -24,6 +24,7 @@
 #include "margo-bulk-util.h"
 #include "margo-timer-private.h"
 #include "margo-serialization.h"
+#include "margo-id.h"
 #include "utlist.h"
 #include "uthash.h"
 #include "abtx_prof.h"
@@ -48,44 +49,6 @@
 #endif /* __APPLE__ */
 
 static void margo_rpc_data_free(void* ptr);
-
-static inline void demux_id(hg_id_t in, hg_id_t* base_id, uint16_t* provider_id)
-{
-    /* retrieve low bits for provider */
-    *provider_id = 0;
-    *provider_id += (in & (((1 << (__MARGO_PROVIDER_ID_SIZE * 8)) - 1)));
-
-    /* clear low order bits */
-    *base_id = (in >> (__MARGO_PROVIDER_ID_SIZE * 8))
-            << (__MARGO_PROVIDER_ID_SIZE * 8);
-    /* set them to 1s */
-    *base_id |= MARGO_MAX_PROVIDER_ID;
-
-    return;
-}
-
-static inline hg_id_t mux_id(hg_id_t base_id, uint16_t provider_id)
-{
-    hg_id_t id;
-
-    id = (base_id >> (__MARGO_PROVIDER_ID_SIZE * 8))
-      << (__MARGO_PROVIDER_ID_SIZE * 8);
-    id |= provider_id;
-
-    return id;
-}
-
-static inline hg_id_t gen_id(const char* func_name, uint16_t provider_id)
-{
-    hg_id_t  id;
-    unsigned hashval;
-
-    HASH_JEN(func_name, strlen(func_name), hashval);
-    id = hashval << (__MARGO_PROVIDER_ID_SIZE * 8);
-    id |= provider_id;
-
-    return id;
-}
 
 static hg_id_t margo_register_internal(margo_instance_id mid,
                                        const char*       name,
@@ -1283,6 +1246,18 @@ try_again:
     return HG_SUCCESS;
 }
 
+hg_handle_t margo_request_get_handle(margo_request req)
+{
+    if (!req) return NULL;
+    return req->handle;
+}
+
+margo_request_type margo_request_get_type(margo_request req)
+{
+    if (!req) return MARGO_INVALID_REQUEST;
+    return req->type;
+}
+
 static hg_return_t
 margo_irespond_internal(hg_handle_t   handle,
                         void*         out_struct,
@@ -1297,7 +1272,13 @@ margo_irespond_internal(hg_handle_t   handle,
         = (struct margo_handle_data*)HG_Get_data(handle);
     if (!handle_data) return HG_NO_MATCH;
 
-    mid = handle_data->mid;
+    mid                 = handle_data->mid;
+    req->type           = MARGO_RESPONSE_REQUEST;
+    req->handle         = handle;
+    req->timer          = NULL;
+    req->mid            = mid;
+    req->start_time     = ABT_get_wtime();
+    req->rpc_breadcrumb = 0;
 
     /* monitoring */
     struct margo_monitor_respond_args monitoring_args = {.handle = handle,
@@ -1316,12 +1297,6 @@ margo_irespond_internal(hg_handle_t   handle,
         hret = HG_NOMEM_ERROR;
         goto finish;
     }
-    req->type           = MARGO_RESPONSE_REQUEST;
-    req->handle         = handle;
-    req->timer          = NULL;
-    req->mid            = mid;
-    req->start_time     = ABT_get_wtime();
-    req->rpc_breadcrumb = 0;
 
     // create the margo_respond_proc_args for the serializer
     struct margo_respond_proc_args respond_args

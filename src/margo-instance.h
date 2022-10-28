@@ -163,13 +163,6 @@ struct margo_instance {
     ABT_mutex         diag_rpc_mutex;
 };
 
-typedef enum
-{
-    MARGO_RESPONSE_REQUEST,
-    MARGO_FORWARD_REQUEST,
-    MARGO_BULK_REQUEST
-} margo_request_type;
-
 struct margo_request_struct {
     margo_eventual_t   eventual;
     hg_return_t        hret;

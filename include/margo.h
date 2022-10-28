@@ -61,6 +61,17 @@ typedef void (*margo_finalize_callback_t)(void*);
 #define MARGO_REQUEST_NULL ((margo_request)NULL)
 
 /**
+ * @brief Type of margo_request.
+ */
+typedef enum
+{
+    MARGO_RESPONSE_REQUEST,
+    MARGO_FORWARD_REQUEST,
+    MARGO_BULK_REQUEST,
+    MARGO_INVALID_REQUEST
+} margo_request_type;
+
+/**
  * Client mode for margo_init.
  */
 #define MARGO_CLIENT_MODE 0
@@ -1119,6 +1130,26 @@ hg_return_t margo_wait_any(size_t count, margo_request* req, size_t* index);
  * @return 0 on success, ABT error code otherwise.
  */
 int margo_test(margo_request req, int* flag);
+
+/**
+ * @brief Retrieve the hg_handle_t (for iforward and irespond
+ * requests) that was used to create the request, or HG_HANDLE_NULL
+ * if the request is null or was created by a bulk transfer.
+ *
+ * @param req Request
+ *
+ * @return an hg_handle_t or HG_HANDLE_NULL.
+ */
+hg_handle_t margo_request_get_handle(margo_request req);
+
+/**
+ * @brief Return the type of the request.
+ *
+ * @param req Request
+ *
+ * @return type of the request
+ */
+margo_request_type margo_request_get_type(margo_request req);
 
 /**
  * @brief Send an RPC response, waiting for completion before returning

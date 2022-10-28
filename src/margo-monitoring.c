@@ -23,7 +23,7 @@ hg_return_t margo_set_monitoring_data(hg_handle_t          handle,
 {
     if (!handle) return HG_INVALID_ARG;
     struct margo_handle_data* handle_data = HG_Get_data(handle);
-    if (handle_data) return HG_OTHER_ERROR;
+    if (!handle_data) return HG_OTHER_ERROR;
     handle_data->monitor_data = data;
     return HG_SUCCESS;
 }
@@ -34,7 +34,7 @@ hg_return_t margo_get_monitoring_data(hg_handle_t           handle,
 
     if (!handle) return HG_INVALID_ARG;
     struct margo_handle_data* handle_data = HG_Get_data(handle);
-    if (handle_data) return HG_OTHER_ERROR;
+    if (!handle_data) return HG_OTHER_ERROR;
     if (data) *data = handle_data->monitor_data;
     return HG_SUCCESS;
 }

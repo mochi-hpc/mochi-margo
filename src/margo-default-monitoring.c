@@ -9,6 +9,7 @@
 #include <abt.h>
 #include "margo-instance.h"
 #include "margo-monitoring.h"
+#include "margo-id.h"
 #include "uthash.h"
 
 /*
@@ -90,34 +91,40 @@ typedef struct hg_statistics {
     statistics_t trigger;
 } hg_statistics_t;
 
+enum
+{
+    DURATION  = 0,
+    TIMESTAMP = 1
+};
+
 /* Statistics related to bulk transfers */
 typedef struct bulk_statistics {
-    statistics_t create;
-    statistics_t transfer;
-    statistics_t transfer_cb;
-    statistics_t wait;
+    statistics_t create[2];
+    statistics_t transfer[2];
+    statistics_t transfer_cb[2];
+    statistics_t wait[2];
 } bulk_statistics_t;
 
 /* Statistics related to RPCs at their origin */
 typedef struct origin_rpc_statistics {
-    statistics_t   forward;
-    statistics_t   forward_cb;
-    statistics_t   wait;
-    statistics_t   set_input;
-    statistics_t   get_output;
+    statistics_t   forward[2];
+    statistics_t   forward_cb[2];
+    statistics_t   wait[2];
+    statistics_t   set_input[2];
+    statistics_t   get_output[2];
     callpath_t     callpath; /* hash key */
     UT_hash_handle hh;       /* hash handle */
 } origin_rpc_statistics_t;
 
 /* Statistics related to RPCs at their target */
 typedef struct target_rpc_statistics {
-    statistics_t       handler;
-    statistics_t       ult;
-    statistics_t       respond;
-    statistics_t       respond_cb;
-    statistics_t       wait;
-    statistics_t       set_output;
-    statistics_t       get_input;
+    statistics_t       handler[2];
+    statistics_t       ult[2];
+    statistics_t       respond[2];
+    statistics_t       respond_cb[2];
+    statistics_t       wait[2];
+    statistics_t       set_output[2];
+    statistics_t       get_input[2];
     bulk_statistics_t* bulk;
     callpath_t         callpath; /* hash key */
     UT_hash_handle     hh;       /* hash handle */
@@ -153,10 +160,21 @@ typedef struct default_monitor_state {
 /* A session is an object that will be associated with an hg_handle_t
  * when on_forward or on_rpc_handler is invoked, and will be destroyed
  * when on_destroy is called on the handle.
+ *
+ * Note that when a process sends an RPC to itself, the hg_handle_t
+ * is the same in the sender logic (forward, forward_cb, etc.) and
+ * in the receiver logic (rpc_handler, respond, etc.), so we cannot
+ * factor the origin and target fields into a union.
  */
 typedef struct session {
-    double      start_timestamp;
-    hg_handle_t handle;
+    struct {
+        double                   start_ts;
+        origin_rpc_statistics_t* stats;
+    } origin;
+    struct {
+        double                   start_ts;
+        target_rpc_statistics_t* stats;
+    } target;
 } session_t;
 
 static void write_monitor_state_to_json_file(default_monitor_state_t* monitor);
@@ -294,31 +312,363 @@ margo_default_monitor_on_trigger(void*                        uargs,
     UPDATE_STATISTICS_WITH(monitor->hg_stats.trigger, t);
 }
 
+static void
+margo_default_monitor_on_create(void*                       uargs,
+                                double                      timestamp,
+                                margo_monitor_event_t       event_type,
+                                margo_monitor_create_args_t event_args)
+{
+    if (event_type == MARGO_MONITOR_FN_START) {
+        event_args->uctx.f = timestamp;
+        return;
+    }
+    // MARGO_MONITOR_FN_END
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    // TODO use a session pool
+    session_t* session = calloc(1, sizeof(*session));
+
+    session->origin.start_ts          = event_args->uctx.f;
+    margo_monitor_data_t monitor_data = {.p = (void*)session};
+    margo_set_monitoring_data(event_args->handle, monitor_data);
+}
+
+#define RETRIEVE_SESSION(handle)                                            \
+    session_t* session = NULL;                                              \
+    do {                                                                    \
+        margo_monitor_data_t monitor_data;                                  \
+        hg_return_t ret = margo_get_monitoring_data(handle, &monitor_data); \
+        session         = (session_t*)monitor_data.p;                       \
+    } while (0)
+
+static void
+margo_default_monitor_on_forward(void*                        uargs,
+                                 double                       timestamp,
+                                 margo_monitor_event_t        event_type,
+                                 margo_monitor_forward_args_t event_args)
+{
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    // retrieve the session that was create on on_create
+    RETRIEVE_SESSION(event_args->handle);
+    origin_rpc_statistics_t* rpc_stats = NULL;
+
+    if (event_type == MARGO_MONITOR_FN_START) {
+        event_args->uctx.f = timestamp;
+        // attach statistics to session
+        hg_id_t id     = margo_get_info(event_args->handle)->id;
+        id             = mux_id(id, event_args->provider_id);
+        callpath_t key = {.rpc_id = id, .parent_id = 0};
+
+        ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
+        HASH_FIND(hh, monitor->origin_rpc_stats, &key, sizeof(key), rpc_stats);
+        if (!rpc_stats) {
+            rpc_stats = (origin_rpc_statistics_t*)calloc(1, sizeof(*rpc_stats));
+            rpc_stats->callpath = key;
+            HASH_ADD(hh, monitor->origin_rpc_stats, callpath, sizeof(key),
+                     rpc_stats);
+        }
+        ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
+        session->origin.stats = rpc_stats;
+
+        double t = timestamp - session->origin.start_ts;
+        UPDATE_STATISTICS_WITH(rpc_stats->forward[TIMESTAMP], t);
+
+    } else if (event_type == MARGO_MONITOR_FN_END) {
+
+        // update statistics
+        rpc_stats = session->origin.stats;
+        double t  = timestamp - event_args->uctx.f;
+        UPDATE_STATISTICS_WITH(rpc_stats->forward[DURATION], t);
+    }
+}
+
+static void
+margo_default_monitor_on_set_input(void*                          uargs,
+                                   double                         timestamp,
+                                   margo_monitor_event_t          event_type,
+                                   margo_monitor_set_input_args_t event_args)
+{
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    // retrieve the session that was create on on_create
+    hg_handle_t handle = margo_request_get_handle(event_args->request);
+    RETRIEVE_SESSION(handle);
+    origin_rpc_statistics_t* rpc_stats = session->origin.stats;
+
+    if (event_type == MARGO_MONITOR_FN_START) {
+        event_args->uctx.f = timestamp;
+        double t           = timestamp - session->origin.start_ts;
+        UPDATE_STATISTICS_WITH(rpc_stats->set_input[TIMESTAMP], t);
+    } else {
+        double t = timestamp - event_args->uctx.f;
+        UPDATE_STATISTICS_WITH(rpc_stats->set_input[DURATION], t);
+    }
+}
+
+static void
+margo_default_monitor_on_set_output(void*                           uargs,
+                                    double                          timestamp,
+                                    margo_monitor_event_t           event_type,
+                                    margo_monitor_set_output_args_t event_args)
+{
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    // retrieve the session that was create on on_create
+    hg_handle_t handle = margo_request_get_handle(event_args->request);
+    RETRIEVE_SESSION(handle);
+    target_rpc_statistics_t* rpc_stats = session->target.stats;
+
+    if (event_type == MARGO_MONITOR_FN_START) {
+        event_args->uctx.f = timestamp;
+        double t           = timestamp - session->target.start_ts;
+        UPDATE_STATISTICS_WITH(rpc_stats->set_output[TIMESTAMP], t);
+    } else {
+        double t = timestamp - event_args->uctx.f;
+        UPDATE_STATISTICS_WITH(rpc_stats->set_output[DURATION], t);
+    }
+}
+
+static void
+margo_default_monitor_on_get_output(void*                           uargs,
+                                    double                          timestamp,
+                                    margo_monitor_event_t           event_type,
+                                    margo_monitor_get_output_args_t event_args)
+{
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    // retrieve the session that was create on on_create
+    RETRIEVE_SESSION(event_args->handle);
+    origin_rpc_statistics_t* rpc_stats = session->origin.stats;
+
+    if (event_type == MARGO_MONITOR_FN_START) {
+        event_args->uctx.f = timestamp;
+        double t           = timestamp - session->origin.start_ts;
+        UPDATE_STATISTICS_WITH(rpc_stats->get_output[TIMESTAMP], t);
+    } else {
+        double t = timestamp - event_args->uctx.f;
+        UPDATE_STATISTICS_WITH(rpc_stats->get_output[DURATION], t);
+    }
+}
+
+static void
+margo_default_monitor_on_get_input(void*                          uargs,
+                                   double                         timestamp,
+                                   margo_monitor_event_t          event_type,
+                                   margo_monitor_get_input_args_t event_args)
+{
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    // retrieve the session that was create on on_create
+    RETRIEVE_SESSION(event_args->handle);
+    target_rpc_statistics_t* rpc_stats = session->target.stats;
+
+    if (event_type == MARGO_MONITOR_FN_START) {
+        event_args->uctx.f = timestamp;
+        double t           = timestamp - session->target.start_ts;
+        UPDATE_STATISTICS_WITH(rpc_stats->get_input[TIMESTAMP], t);
+    } else {
+        double t = timestamp - event_args->uctx.f;
+        UPDATE_STATISTICS_WITH(rpc_stats->get_input[DURATION], t);
+    }
+}
+
+static void
+margo_default_monitor_on_forward_cb(void*                           uargs,
+                                    double                          timestamp,
+                                    margo_monitor_event_t           event_type,
+                                    margo_monitor_forward_cb_args_t event_args)
+{
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    // retrieve the session that was create on on_create
+    hg_handle_t handle = margo_request_get_handle(event_args->request);
+    RETRIEVE_SESSION(handle);
+    origin_rpc_statistics_t* rpc_stats = session->origin.stats;
+
+    if (event_type == MARGO_MONITOR_FN_START) {
+        event_args->uctx.f = timestamp;
+        double t           = timestamp - session->origin.start_ts;
+        UPDATE_STATISTICS_WITH(rpc_stats->forward_cb[TIMESTAMP], t);
+    } else {
+        double t = timestamp - event_args->uctx.f;
+        UPDATE_STATISTICS_WITH(rpc_stats->forward_cb[DURATION], t);
+    }
+}
+
+static void
+margo_default_monitor_on_respond(void*                        uargs,
+                                 double                       timestamp,
+                                 margo_monitor_event_t        event_type,
+                                 margo_monitor_respond_args_t event_args)
+{
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    // retrieve the session that was create on on_create
+    hg_handle_t handle = margo_request_get_handle(event_args->request);
+    RETRIEVE_SESSION(handle);
+    target_rpc_statistics_t* rpc_stats = session->target.stats;
+
+    if (event_type == MARGO_MONITOR_FN_START) {
+        event_args->uctx.f = timestamp;
+        double t           = timestamp - session->target.start_ts;
+        UPDATE_STATISTICS_WITH(rpc_stats->respond[TIMESTAMP], t);
+    } else {
+        double t = timestamp - event_args->uctx.f;
+        UPDATE_STATISTICS_WITH(rpc_stats->respond[DURATION], t);
+    }
+}
+
+static void
+margo_default_monitor_on_respond_cb(void*                           uargs,
+                                    double                          timestamp,
+                                    margo_monitor_event_t           event_type,
+                                    margo_monitor_respond_cb_args_t event_args)
+{
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    // retrieve the session that was create on on_create
+    hg_handle_t handle = margo_request_get_handle(event_args->request);
+    RETRIEVE_SESSION(handle);
+    target_rpc_statistics_t* rpc_stats = session->target.stats;
+
+    if (event_type == MARGO_MONITOR_FN_START) {
+        event_args->uctx.f = timestamp;
+        double t           = timestamp - session->target.start_ts;
+        UPDATE_STATISTICS_WITH(rpc_stats->respond_cb[TIMESTAMP], t);
+    } else {
+        double t = timestamp - event_args->uctx.f;
+        UPDATE_STATISTICS_WITH(rpc_stats->respond_cb[DURATION], t);
+    }
+}
+
+static void margo_default_monitor_on_wait(void*                     uargs,
+                                          double                    timestamp,
+                                          margo_monitor_event_t     event_type,
+                                          margo_monitor_wait_args_t event_args)
+{
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    // retrieve the session that was create on on_create
+    hg_handle_t handle = margo_request_get_handle(event_args->request);
+    RETRIEVE_SESSION(handle);
+    statistics_t* duration_stats  = NULL;
+    statistics_t* timestamp_stats = NULL;
+    double        start_ts;
+
+    margo_request_type request_type
+        = margo_request_get_type(event_args->request);
+    if (request_type == MARGO_FORWARD_REQUEST) {
+        start_ts        = session->origin.start_ts;
+        duration_stats  = &(session->origin.stats->wait[DURATION]);
+        timestamp_stats = &(session->origin.stats->wait[TIMESTAMP]);
+    } else if (request_type == MARGO_RESPONSE_REQUEST) {
+        start_ts        = session->target.start_ts;
+        duration_stats  = &(session->target.stats->wait[DURATION]);
+        timestamp_stats = &(session->target.stats->wait[TIMESTAMP]);
+    } else {
+        // TODO
+        return;
+    }
+
+    if (event_type == MARGO_MONITOR_FN_START) {
+        event_args->uctx.f = timestamp;
+        double t           = timestamp - start_ts;
+        UPDATE_STATISTICS_WITH(*timestamp_stats, t);
+    } else {
+        double t = timestamp - event_args->uctx.f;
+        UPDATE_STATISTICS_WITH(*duration_stats, t);
+    }
+}
+
+static void margo_default_monitor_on_rpc_handler(
+    void*                            uargs,
+    double                           timestamp,
+    margo_monitor_event_t            event_type,
+    margo_monitor_rpc_handler_args_t event_args)
+{
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    RETRIEVE_SESSION(event_args->handle);
+    target_rpc_statistics_t* rpc_stats = NULL;
+
+    if (event_type == MARGO_MONITOR_FN_START) {
+        // TODO use a session pool
+        if (!session) { session = calloc(1, sizeof(*session)); }
+        session->target.start_ts          = timestamp;
+        margo_monitor_data_t monitor_data = {.p = (void*)session};
+        margo_set_monitoring_data(event_args->handle, monitor_data);
+
+        // attach statistics to session
+        hg_id_t    id  = margo_get_info(event_args->handle)->id;
+        callpath_t key = {.rpc_id = id, .parent_id = 0};
+
+        ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
+        HASH_FIND(hh, monitor->target_rpc_stats, &key, sizeof(key), rpc_stats);
+        if (!rpc_stats) {
+            rpc_stats = (target_rpc_statistics_t*)calloc(1, sizeof(*rpc_stats));
+            rpc_stats->callpath = key;
+            HASH_ADD(hh, monitor->target_rpc_stats, callpath, sizeof(key),
+                     rpc_stats);
+        }
+        ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
+        session->target.stats = rpc_stats;
+
+        event_args->uctx.f = timestamp;
+        double t           = 0.0;
+        // note: the timestamp stats will always be 0 because
+        // rpc_handler is the first thing that happens on the target
+        UPDATE_STATISTICS_WITH(rpc_stats->handler[TIMESTAMP], t);
+
+    } else {
+
+        // update statistics
+        rpc_stats = session->target.stats;
+        double t  = timestamp - event_args->uctx.f;
+        UPDATE_STATISTICS_WITH(rpc_stats->handler[DURATION], t);
+    }
+}
+
+static void
+margo_default_monitor_on_rpc_ult(void*                        uargs,
+                                 double                       timestamp,
+                                 margo_monitor_event_t        event_type,
+                                 margo_monitor_rpc_ult_args_t event_args)
+{
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    // retrieve the session that was create on on_create
+    RETRIEVE_SESSION(event_args->handle);
+    target_rpc_statistics_t* rpc_stats = session->target.stats;
+
+    if (event_type == MARGO_MONITOR_FN_START) {
+        event_args->uctx.f = timestamp;
+        double t           = timestamp - session->target.start_ts;
+        UPDATE_STATISTICS_WITH(rpc_stats->ult[TIMESTAMP], t);
+    } else {
+        double t = timestamp - event_args->uctx.f;
+        UPDATE_STATISTICS_WITH(rpc_stats->ult[DURATION], t);
+    }
+}
+
+static void
+margo_default_monitor_on_destroy(void*                        uargs,
+                                 double                       timestamp,
+                                 margo_monitor_event_t        event_type,
+                                 margo_monitor_destroy_args_t event_args)
+{
+    if (event_type == MARGO_MONITOR_FN_END) {
+        // WARNING: handle is no longer valid after destroy
+        return;
+    }
+    // MARGO_MONITOR_FN_START
+    margo_monitor_data_t monitor_data;
+    margo_get_monitoring_data(event_args->handle, &monitor_data);
+    // TODO use a session pool
+    free(monitor_data.p);
+}
+
 #define __MONITOR_FN(__event__)                                          \
     static void margo_default_monitor_on_##__event__(                    \
         void* uargs, double timestamp, margo_monitor_event_t event_type, \
         margo_monitor_##__event__##_args_t event_args)
 
-__MONITOR_FN(deregister) {}
-__MONITOR_FN(lookup) {}
-__MONITOR_FN(create) {}
-__MONITOR_FN(forward) {}
-__MONITOR_FN(forward_cb) {}
-__MONITOR_FN(respond) {}
-__MONITOR_FN(respond_cb) {}
-__MONITOR_FN(destroy) {}
 __MONITOR_FN(bulk_create) {}
 __MONITOR_FN(bulk_transfer) {}
 __MONITOR_FN(bulk_transfer_cb) {}
+
 __MONITOR_FN(bulk_free) {}
-__MONITOR_FN(rpc_handler) {}
-__MONITOR_FN(rpc_ult) {}
-__MONITOR_FN(wait) {}
+__MONITOR_FN(deregister) {}
+__MONITOR_FN(lookup) {}
 __MONITOR_FN(sleep) {}
-__MONITOR_FN(set_input) {}
-__MONITOR_FN(set_output) {}
-__MONITOR_FN(get_input) {}
-__MONITOR_FN(get_output) {}
 __MONITOR_FN(free_input) {}
 __MONITOR_FN(free_output) {}
 __MONITOR_FN(prefinalize) {}
