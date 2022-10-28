@@ -36,9 +36,9 @@ struct test_monitor_data {
 MARGO_EXPAND_MONITOR_MACROS
 #undef X
 
-static void* test_monitor_initialize(margo_instance_id mid,
-                                      void*             uargs,
-                                      const char*       config)
+static void* test_monitor_initialize(margo_instance_id    mid,
+                                      void*               uargs,
+                                      struct json_object* config)
 {
     (void)mid;
     (void)config;
@@ -321,7 +321,7 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
     hg_return_t hret                      = HG_SUCCESS;
     const char* protocol = munit_parameters_get(params, "protocol");
     const char* json_config =
-        "{\"monitoring\":{\"statistics\":{\"filename\":\"test\",\"precision\":9}}}";
+        "{\"monitoring\":{\"config\":{\"statistics\":{\"filename_prefix\":\"test\",\"precision\":9}}}}";
     struct margo_init_info init_info = {
         .json_config   = json_config,
         .progress_pool = ABT_POOL_NULL,

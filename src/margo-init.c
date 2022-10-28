@@ -25,12 +25,13 @@
 // Validates the format of the configuration and
 // fill default values if they are note provided
 static int
-validate_and_complete_config(struct json_object*        _config,
-                             ABT_pool                   _progress_pool,
-                             ABT_pool                   _rpc_pool,
-                             hg_class_t*                _hg_class,
-                             hg_context_t*              _hg_context,
-                             const struct hg_init_info* _hg_init_info);
+validate_and_complete_config(struct json_object*         _config,
+                             ABT_pool                    _progress_pool,
+                             ABT_pool                    _rpc_pool,
+                             hg_class_t*                 _hg_class,
+                             hg_context_t*               _hg_context,
+                             const struct hg_init_info*  _hg_init_info,
+                             const struct margo_monitor* _monitor);
 
 // Checks the eager sizes reported by Mercury at runtime
 static int check_hg_eager_sizes(hg_class_t*         hg_class,
@@ -139,9 +140,9 @@ margo_instance_id margo_init_ext(const char*                   address,
 
     // validate and complete configuration
     MARGO_TRACE(0, "Validating and completing configuration");
-    ret = validate_and_complete_config(config, args.progress_pool,
-                                       args.rpc_pool, args.hg_class,
-                                       args.hg_context, args.hg_init_info);
+    ret = validate_and_complete_config(
+        config, args.progress_pool, args.rpc_pool, args.hg_class,
+        args.hg_context, args.hg_init_info, args.monitor);
     if (ret != 0) {
         MARGO_ERROR(0, "Could not validate and complete configuration");
         goto error;
@@ -374,18 +375,25 @@ margo_instance_id margo_init_ext(const char*                   address,
     margo_set_logger(mid, args.logger);
 
     if (args.monitor) {
-        struct json_object* monitor_config
+        struct json_object* monitoring
             = json_object_object_get(config, "monitoring");
-        const char* monitor_config_str = NULL;
-        if (monitor_config
-            && json_object_is_type(monitor_config, json_type_object))
-            monitor_config_str = json_object_to_json_string(monitor_config);
+        struct json_object* monitoring_config
+            = json_object_object_get(monitoring, "config");
 
         mid->monitor = (struct margo_monitor*)malloc(sizeof(*(mid->monitor)));
         memcpy(mid->monitor, args.monitor, sizeof(*(mid->monitor)));
         if (mid->monitor->initialize)
             mid->monitor->uargs = mid->monitor->initialize(
-                mid, mid->monitor->uargs, monitor_config_str);
+                mid, mid->monitor->uargs, monitoring_config);
+
+        // replace the "config" section with one provided by the monitoring
+        // backend
+        if (mid->monitor->config) {
+            monitoring_config = mid->monitor->config(mid->monitor->uargs);
+            if (monitoring_config) {
+                json_object_object_add(monitoring, "config", monitoring_config);
+            }
+        }
     }
 
     mid->shutdown_rpc_id = MARGO_REGISTER(
@@ -483,12 +491,13 @@ error:
  * complete information.
  */
 static int
-validate_and_complete_config(struct json_object*        _margo,
-                             ABT_pool                   _custom_progress_pool,
-                             ABT_pool                   _custom_rpc_pool,
-                             hg_class_t*                _hg_class,
-                             hg_context_t*              _hg_context,
-                             const struct hg_init_info* _hg_init_info)
+validate_and_complete_config(struct json_object*         _margo,
+                             ABT_pool                    _custom_progress_pool,
+                             ABT_pool                    _custom_rpc_pool,
+                             hg_class_t*                 _hg_class,
+                             hg_context_t*               _hg_context,
+                             const struct hg_init_info*  _hg_init_info,
+                             const struct margo_monitor* _monitor)
 {
     struct json_object* ignore; // to pass as output to macros when we don't
                                 // care ouput the output
@@ -510,6 +519,7 @@ validate_and_complete_config(struct json_object*        _margo,
        1000)
        - [optional] use_progress_thread: bool (default false)
        - [optional] rpc_thread_count: integer (default 0)
+       - [optional] monitoring: object
     */
 
     /* report version number for this component */
@@ -580,6 +590,22 @@ validate_and_complete_config(struct json_object*        _margo,
                                         "profile_sparkline_timeslice_msec");
         MARGO_TRACE(0, "profile_sparkline_timeslice_msec = %d",
                     json_object_get_int64(val));
+    }
+
+    /* find the "monitoring" object in the configuration */
+    struct json_object* _monitoring = NULL;
+    CONFIG_HAS_OR_CREATE_OBJECT(_margo, "monitoring", "monitoring",
+                                _monitoring);
+
+    { // override monitor name
+        const char* monitor_name
+            = (_monitor && _monitor->name) ? _monitor->name() : "<unknown>";
+        CONFIG_OVERRIDE_STRING(_monitoring, "name", monitor_name,
+                               "monitoring.name", 1);
+        MARGO_TRACE(0, "monitoring.name = %s", monitor_name);
+    }
+    { // add or create "config" in monitoring
+        CONFIG_HAS_OR_CREATE_OBJECT(_monitoring, "config", "config", ignore);
     }
 
     /* ------- Mercury configuration ------ */

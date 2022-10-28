@@ -96,6 +96,7 @@ struct hg_bulk_attr; /* forward declaration needed for Mercury < 2.2.0 */
 struct margo_instance;
 typedef struct margo_instance*       margo_instance_id;
 typedef struct margo_request_struct* margo_request;
+struct json_object; /* forward declaration to avoid including json-c */
 
 /**
  * The margo_default_monitor constant can be used in the margo_init_info
@@ -190,8 +191,11 @@ typedef const char*                              margo_monitor_user_args_t;
 
 struct margo_monitor {
     void* uargs;
-    void* (*initialize)(margo_instance_id mid, void*, const char*);
+    void* (*initialize)(margo_instance_id mid, void*, struct json_object*);
     void (*finalize)(void* uargs);
+    const char* (*name)();
+    struct json_object* (*config)(void* uargs);
+
 #define X(__x__, __y__)                                      \
     void (*on_##__y__)(void*, double, margo_monitor_event_t, \
                        margo_monitor_##__y__##_args_t);

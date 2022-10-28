@@ -133,7 +133,7 @@ typedef struct rpc_info {
 /* Root of the monitor's state */
 typedef struct default_monitor_state {
     margo_instance_id mid;
-    char*             filename;
+    char*             filename_prefix;
     int               precision; /* precision used when printing doubles */
     /* RPC information */
     rpc_info_t* rpc_info;
@@ -152,49 +152,38 @@ typedef struct default_monitor_state {
 
 static void write_monitor_state_to_json_file(default_monitor_state_t* monitor);
 
-static void* margo_default_monitor_initialize(margo_instance_id mid,
-                                              void*             uargs,
-                                              const char*       config)
+static void* margo_default_monitor_initialize(margo_instance_id   mid,
+                                              void*               uargs,
+                                              struct json_object* config)
 {
     default_monitor_state_t* monitor = calloc(1, sizeof(*monitor));
     ABT_key_create(NULL, &(monitor->target_rpc_stats_key));
     monitor->mid = mid;
 
     /* default configuration */
-    monitor->filename  = strdup("margo");
-    monitor->precision = 9;
+    char filename_prefix_template[] = "margo-XXXXXX";
+    int  ret                        = mkstemp(filename_prefix_template);
+    monitor->filename_prefix        = strdup(filename_prefix_template);
+    monitor->precision              = 9;
 
     /* read configuration */
-    do {
-        if (!config) break;
-        struct json_object*     json_config = NULL;
-        struct json_tokener*    tokener     = json_tokener_new();
-        enum json_tokener_error jerr;
-        json_config = json_tokener_parse_ex(tokener, config, strlen(config));
-        json_tokener_free(tokener);
-
-        if (!json_object_is_type(json_config, json_type_object)) {
-            json_object_put(json_config);
-            break;
+    struct json_object* statistics
+        = json_object_object_get(config, "statistics");
+    if (statistics && json_object_is_type(statistics, json_type_object)) {
+        struct json_object* filename_prefix
+            = json_object_object_get(statistics, "filename_prefix");
+        if (filename_prefix
+            && json_object_is_type(filename_prefix, json_type_string)) {
+            free(monitor->filename_prefix);
+            monitor->filename_prefix
+                = strdup(json_object_get_string(filename_prefix));
         }
-
-        struct json_object* statistics
-            = json_object_object_get(json_config, "statistics");
-        if (statistics && json_object_is_type(statistics, json_type_object)) {
-            struct json_object* filename
-                = json_object_object_get(statistics, "filename");
-            if (filename && json_object_is_type(filename, json_type_string)) {
-                free(monitor->filename);
-                monitor->filename = strdup(json_object_get_string(filename));
-            }
-            struct json_object* precision
-                = json_object_object_get(statistics, "precision");
-            if (precision && json_object_is_type(precision, json_type_int)) {
-                monitor->precision = json_object_get_int(precision);
-            }
+        struct json_object* precision
+            = json_object_object_get(statistics, "precision");
+        if (precision && json_object_is_type(precision, json_type_int)) {
+            monitor->precision = json_object_get_int(precision);
         }
-        json_object_put(json_config);
-    } while (0);
+    }
 
     return (void*)monitor;
 }
@@ -219,8 +208,29 @@ static void margo_default_monitor_finalize(void* uargs)
     /* free ABT key */
     ABT_key_free(&(monitor->target_rpc_stats_key));
     /* free filename */
-    free(monitor->filename);
+    free(monitor->filename_prefix);
     free(monitor);
+}
+
+static const char* margo_default_monitor_name() { return "default"; }
+
+static struct json_object* margo_default_monitor_config(void* uargs)
+{
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    if (!monitor) return NULL;
+
+    struct json_object* config     = json_object_new_object();
+    struct json_object* statistics = json_object_new_object();
+    json_object_object_add_ex(config, "statistics", statistics,
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(statistics, "filename_prefix",
+                              json_object_new_string(monitor->filename_prefix),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(statistics, "precision",
+                              json_object_new_int(monitor->precision),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+
+    return config;
 }
 
 static void
@@ -310,6 +320,8 @@ struct margo_monitor __margo_default_monitor
     = {.uargs      = NULL,
        .initialize = margo_default_monitor_initialize,
        .finalize   = margo_default_monitor_finalize,
+       .name       = margo_default_monitor_name,
+       .config     = margo_default_monitor_config,
 #define X(__x__, __y__) .on_##__y__ = margo_default_monitor_on_##__y__,
        MARGO_EXPAND_MONITOR_MACROS
 #undef X
@@ -340,7 +352,8 @@ write_hg_statistics(FILE* file, hg_statistics_t* stats, int precision)
 
 static void write_monitor_state_to_json_file(default_monitor_state_t* monitor)
 {
-    if ((!monitor->filename) || (strlen(monitor->filename) == 0)) return;
+    if ((!monitor->filename_prefix) || (strlen(monitor->filename_prefix) == 0))
+        return;
     /* get hostname */
     char hostname[1024];
     hostname[1023] = '\0';
@@ -348,11 +361,11 @@ static void write_monitor_state_to_json_file(default_monitor_state_t* monitor)
     /* get pid */
     pid_t pid = getpid();
     /* compute size needed for the full file name */
-    size_t fullname_size
-        = snprintf(NULL, 0, "%s.%s.%d.json", monitor->filename, hostname, pid);
+    size_t fullname_size = snprintf(NULL, 0, "%s.%s.%d.json",
+                                    monitor->filename_prefix, hostname, pid);
     /* create full file name */
     char* fullname = calloc(1, fullname_size + 1);
-    sprintf(fullname, "%s.%s.%d.json", monitor->filename, hostname, pid);
+    sprintf(fullname, "%s.%s.%d.json", monitor->filename_prefix, hostname, pid);
     /* open the file */
     int   errnum;
     FILE* file = fopen(fullname, "w");
