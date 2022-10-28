@@ -150,6 +150,15 @@ typedef struct default_monitor_state {
     target_rpc_statistics_t* target_rpc_stats;
 } default_monitor_state_t;
 
+/* A session is an object that will be associated with an hg_handle_t
+ * when on_forward or on_rpc_handler is invoked, and will be destroyed
+ * when on_destroy is called on the handle.
+ */
+typedef struct session {
+    double      start_timestamp;
+    hg_handle_t handle;
+} session_t;
+
 static void write_monitor_state_to_json_file(default_monitor_state_t* monitor);
 
 static void* margo_default_monitor_initialize(margo_instance_id   mid,

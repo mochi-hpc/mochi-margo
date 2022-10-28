@@ -171,13 +171,12 @@ typedef enum
 } margo_request_type;
 
 struct margo_request_struct {
-    margo_eventual_t     eventual;
-    hg_return_t          hret;
-    margo_timer*         timer;
-    margo_instance_id    mid;
-    hg_handle_t          handle;
-    margo_request_type   type;
-    margo_monitor_data_t monitor_data;
+    margo_eventual_t   eventual;
+    hg_return_t        hret;
+    margo_timer*       timer;
+    margo_instance_id  mid;
+    hg_handle_t        handle;
+    margo_request_type type;
 
     double   start_time;     /* timestamp of when the operation started */
     uint64_t rpc_breadcrumb; /* statistics tracking identifier, if applicable */
@@ -208,6 +207,7 @@ struct margo_handle_data {
     hg_proc_cb_t out_proc_cb;   /* user-provided output proc */
     void*        user_data;
     void (*user_free_callback)(void*);
+    margo_monitor_data_t monitor_data;
 };
 
 struct lookup_cb_evt {

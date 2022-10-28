@@ -456,30 +456,30 @@ hg_return_t margo_monitor_call_user(margo_instance_id mid,
                                     margo_monitor_user_args_t args);
 
 /**
- * @brief Attach custom monitoring data to the margo_request.
+ * @brief Attach custom monitoring data to the handle.
  *
- * Note that the last call related to a particular margo_request
- * before it is freed will always be on_wait(MARGO_MONITOR_FN_END).
+ * Note that the last call related to a particular handle
+ * before it is freed will always be on_destroy.
  * This information can be used to properly release any attached
  * data if necessary.
  *
- * @param req Request to which to attach data.
+ * @param handle Handle to which to attach data.
  * @param data Data to attach.
  *
  * @return HG_SUCCESS or HG_INVALID_ARG if req is NULL.
  */
-hg_return_t margo_set_monitoring_data(margo_request        req,
+hg_return_t margo_set_monitoring_data(hg_handle_t          handle,
                                       margo_monitor_data_t data);
 
 /**
- * @brief Retrieve custom monitoring data from the margo_request.
+ * @brief Retrieve custom monitoring data from the handle.
  *
  * @param req Request to which the data is attached.
  * @param data Pointer to data.
  *
  * @return HG_SUCCESS or HG_INVALID_ARG if req is NULL.
  */
-hg_return_t margo_get_monitoring_data(margo_request         req,
+hg_return_t margo_get_monitoring_data(hg_handle_t           handle,
                                       margo_monitor_data_t* data);
 #ifdef __cplusplus
 }
