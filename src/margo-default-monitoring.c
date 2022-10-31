@@ -80,12 +80,16 @@ typedef struct callpath {
         ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&((stats).mutex)));   \
     } while (0)
 
+static struct json_object* statistics_to_json(const statistics_t* stats);
+
 /* Statistics related to the Mercury progress loop */
 typedef struct hg_statistics {
     statistics_t progress_with_timeout;
     statistics_t progress_without_timeout;
     statistics_t trigger;
 } hg_statistics_t;
+
+static struct json_object* hg_statistics_to_json(const hg_statistics_t* stats);
 
 /* Some statistics fields in the following structures will be
  * a pair of "duration" statistics (duration of the operation)
@@ -117,6 +121,9 @@ typedef struct bulk_statistics {
     UT_hash_handle hh;       /* hash handle */
 } bulk_statistics_t;
 
+static struct json_object*
+bulk_statistics_to_json(const bulk_statistics_t* stats);
+
 /* Statistics related to RPCs at their origin */
 typedef struct origin_rpc_statistics {
     /* reference timestamp is the create operation,
@@ -130,6 +137,9 @@ typedef struct origin_rpc_statistics {
     UT_hash_handle hh;       /* hash handle */
 } origin_rpc_statistics_t;
 
+static struct json_object*
+origin_rpc_statistics_to_json(const origin_rpc_statistics_t* stats);
+
 /* Statistics related to RPCs at their target */
 typedef struct target_rpc_statistics {
     statistics_t   handler; /* reference timestamp */
@@ -142,6 +152,9 @@ typedef struct target_rpc_statistics {
     callpath_t     callpath; /* hash key */
     UT_hash_handle hh;       /* hash handle */
 } target_rpc_statistics_t;
+
+static struct json_object*
+target_rpc_statistics_to_json(const target_rpc_statistics_t* stats);
 
 /* Structure used to track registered RPCs */
 typedef struct rpc_info {
@@ -171,6 +184,9 @@ typedef struct default_monitor_state {
     target_rpc_statistics_t* target_rpc_stats;
 } default_monitor_state_t;
 
+static struct json_object*
+monitor_state_to_json(const default_monitor_state_t* stats);
+
 /* A session is an object that will be associated with an hg_handle_t
  * when on_forward or on_rpc_handler is invoked, and will be destroyed
  * when on_destroy is called on the handle.
@@ -196,7 +212,8 @@ typedef struct bulk_session {
     bulk_statistics_t* stats;
 } bulk_session_t;
 
-static void write_monitor_state_to_json_file(default_monitor_state_t* monitor);
+static void
+write_monitor_state_to_json_file(const default_monitor_state_t* monitor);
 
 static void* margo_default_monitor_initialize(margo_instance_id   mid,
                                               void*               uargs,
@@ -868,28 +885,8 @@ struct margo_monitor __margo_default_monitor
 
 struct margo_monitor* margo_default_monitor = &__margo_default_monitor;
 
-static void write_statistics(FILE* file, statistics_t* stats, int precision)
-{
-    fprintf(file,
-            "{\"num\":%lu,\"min\":%.*lf,\"max\":%.*lf,\"sum\":%.*lf,\"avg\":%.*"
-            "lf,\"var\":%.*lf}",
-            stats->num, precision, stats->min, precision, stats->max, precision,
-            stats->sum, precision, stats->avg, precision, stats->var);
-}
-
 static void
-write_hg_statistics(FILE* file, hg_statistics_t* stats, int precision)
-{
-    fprintf(file, "{\"progress_with_timeout\":");
-    write_statistics(file, &stats->progress_with_timeout, precision);
-    fprintf(file, ",\"progress_without_timeout\":");
-    write_statistics(file, &stats->progress_without_timeout, precision);
-    fprintf(file, ",\"trigger\":");
-    write_statistics(file, &stats->trigger, precision);
-    fprintf(file, "}");
-}
-
-static void write_monitor_state_to_json_file(default_monitor_state_t* monitor)
+write_monitor_state_to_json_file(const default_monitor_state_t* monitor)
 {
     if ((!monitor->filename_prefix) || (strlen(monitor->filename_prefix) == 0))
         return;
@@ -914,14 +911,158 @@ static void write_monitor_state_to_json_file(default_monitor_state_t* monitor)
                     strerror(errnum));
         goto finish;
     }
-    /* write statistics */
+    /* create JSON statistics */
     ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
-    fprintf(file, "{\"progress_loop\":");
-    write_hg_statistics(file, &monitor->hg_stats, monitor->precision);
-    fprintf(file, "}");
+
+    char double_format[] = "%.Xf";
+    double_format[2]     = (char)(48 + monitor->precision);
+    json_c_set_serialization_double_format(double_format, JSON_C_OPTION_GLOBAL);
+    struct json_object* json = monitor_state_to_json(monitor);
+
+    /* write statistics */
+    size_t      json_len = 0;
+    const char* json_str = json_object_to_json_string_length(
+        json, JSON_C_TO_STRING_PLAIN, &json_len);
+    fwrite(json_str, json_len, 1, file);
+    ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
     /* finish */
 finish:
-    ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
     free(fullname);
     if (file) fclose(file);
+}
+
+static struct json_object* statistics_to_json(const statistics_t* stats)
+{
+    struct json_object* json = json_object_new_object();
+    json_object_object_add_ex(json, "num", json_object_new_int(stats->num),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(json, "min", json_object_new_double(stats->min),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(json, "max", json_object_new_double(stats->max),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(json, "avg", json_object_new_double(stats->avg),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(json, "var", json_object_new_double(stats->var),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(json, "sum", json_object_new_double(stats->sum),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    return json;
+}
+
+static struct json_object*
+duration_and_timestamp_statistics_to_json(const statistics_t* stats)
+{
+    struct json_object* json = json_object_new_object();
+    json_object_object_add_ex(json, "duration", statistics_to_json(stats),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(json, "timestamp", statistics_to_json(stats + 1),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    return json;
+}
+
+static struct json_object* hg_statistics_to_json(const hg_statistics_t* stats)
+{
+    struct json_object* json = json_object_new_object();
+    json_object_object_add_ex(json, "progress_with_timeout",
+                              statistics_to_json(&stats->progress_with_timeout),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(
+        json, "progress_without_timeout",
+        statistics_to_json(&stats->progress_without_timeout),
+        JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(json, "trigger",
+                              statistics_to_json(&stats->trigger),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    return json;
+}
+
+static struct json_object*
+bulk_statistics_to_json(const bulk_statistics_t* stats)
+{
+    struct json_object* json = json_object_new_object();
+    json_object_object_add_ex(json, "create",
+                              statistics_to_json(&stats->create),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(json, "transfer",
+                              statistics_to_json(&stats->transfer),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(json, "size",
+                              statistics_to_json(&stats->transfer_size),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(
+        json, "transfer_cb",
+        duration_and_timestamp_statistics_to_json(stats->transfer_cb),
+        JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(
+        json, "wait", duration_and_timestamp_statistics_to_json(stats->wait),
+        JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    return json;
+}
+
+static struct json_object*
+origin_rpc_statistics_to_json(const origin_rpc_statistics_t* stats)
+{
+    struct json_object* json = json_object_new_object();
+    json_object_object_add_ex(
+        json, "forward",
+        duration_and_timestamp_statistics_to_json(stats->forward),
+        JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(
+        json, "forward_cb",
+        duration_and_timestamp_statistics_to_json(stats->forward_cb),
+        JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(
+        json, "wait", duration_and_timestamp_statistics_to_json(stats->wait),
+        JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(
+        json, "set_input",
+        duration_and_timestamp_statistics_to_json(stats->set_input),
+        JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(
+        json, "get_output",
+        duration_and_timestamp_statistics_to_json(stats->get_output),
+        JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    return json;
+}
+
+static struct json_object*
+target_rpc_statistics_to_json(const target_rpc_statistics_t* stats)
+{
+    struct json_object* json = json_object_new_object();
+    json_object_object_add_ex(json, "handler",
+                              statistics_to_json(&stats->handler),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(
+        json, "ult", duration_and_timestamp_statistics_to_json(stats->ult),
+        JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(
+        json, "respond",
+        duration_and_timestamp_statistics_to_json(stats->respond),
+        JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(
+        json, "respond_cb",
+        duration_and_timestamp_statistics_to_json(stats->respond_cb),
+        JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(
+        json, "wait", duration_and_timestamp_statistics_to_json(stats->wait),
+        JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(
+        json, "set_output",
+        duration_and_timestamp_statistics_to_json(stats->set_output),
+        JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(
+        json, "get_input",
+        duration_and_timestamp_statistics_to_json(stats->get_input),
+        JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    return json;
+}
+
+static struct json_object*
+monitor_state_to_json(const default_monitor_state_t* stats)
+{
+    struct json_object* json = json_object_new_object();
+    json_object_object_add_ex(json, "progress_loop",
+                              hg_statistics_to_json(&stats->hg_stats),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    return json;
 }
