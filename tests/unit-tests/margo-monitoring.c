@@ -321,7 +321,7 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
     hg_return_t hret                      = HG_SUCCESS;
     const char* protocol = munit_parameters_get(params, "protocol");
     const char* json_config =
-        "{\"monitoring\":{\"config\":{\"statistics\":{\"filename_prefix\":\"test\",\"precision\":9}}}}";
+        "{\"monitoring\":{\"config\":{\"statistics\":{\"filename_prefix\":\"test\",\"precision\":9,\"pretty\":true}}}}";
     struct margo_init_info init_info = {
         .json_config   = json_config,
         .progress_pool = ABT_POOL_NULL,
@@ -420,10 +420,12 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
 
     munit_assert(json_object_is_type(json_content, json_type_object));
 
-#define ASSERT_JSON_HAS(parent, key, type) \
-    struct json_object* key = json_object_object_get(parent, #key); \
-    munit_assert_not_null(key); \
-    munit_assert(json_object_is_type(key, json_type_##type))
+#define ASSERT_JSON_HAS_KEY(parent, key_name, key_obj, type) \
+    struct json_object* key_obj = json_object_object_get(parent, key_name); \
+    munit_assert_not_null(key_obj); \
+    munit_assert(json_object_is_type(key_obj, json_type_##type))
+
+#define ASSERT_JSON_HAS(parent, key, type) ASSERT_JSON_HAS_KEY(parent, #key, key, type)
 
 #define ASSERT_JSON_HAS_STATS(parent, key) \
     do { \
@@ -444,17 +446,31 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
     } while(0)
 
     {
+        // check for the "progress_loop" section
         ASSERT_JSON_HAS(json_content, progress_loop, object);
         ASSERT_JSON_HAS_STATS(progress_loop, progress_with_timeout);
         ASSERT_JSON_HAS_STATS(progress_loop, progress_without_timeout);
         ASSERT_JSON_HAS_STATS(progress_loop, trigger);
 
-        ASSERT_JSON_HAS(json_content, bulk, object);
-        ASSERT_JSON_HAS_STATS(bulk, create);
-        ASSERT_JSON_HAS_STATS(bulk, transfer);
-        ASSERT_JSON_HAS_STATS(bulk, size);
-        ASSERT_JSON_HAS_DOUBLE_STATS(bulk, transfer_cb);
-        ASSERT_JSON_HAS_DOUBLE_STATS(bulk, wait);
+        // check for the "rpcs" secions
+        ASSERT_JSON_HAS(json_content, rpcs, object);
+        // must have an "echo" secion for the echo RPC
+        ASSERT_JSON_HAS(rpcs, echo, object);
+        // "echo" section must have an "origin" section
+        ASSERT_JSON_HAS(echo, origin, object);
+        ASSERT_JSON_HAS_DOUBLE_STATS(origin, forward);
+        ASSERT_JSON_HAS_DOUBLE_STATS(origin, forward_cb);
+        ASSERT_JSON_HAS_DOUBLE_STATS(origin, wait);
+        ASSERT_JSON_HAS_DOUBLE_STATS(origin, set_input);
+        ASSERT_JSON_HAS_DOUBLE_STATS(origin, get_output);
+        // "echo" section must have an "target" section
+        ASSERT_JSON_HAS(echo, target, object);
+        ASSERT_JSON_HAS_STATS(target, handler);
+        ASSERT_JSON_HAS_DOUBLE_STATS(target, respond);
+        ASSERT_JSON_HAS_DOUBLE_STATS(target, respond_cb);
+        ASSERT_JSON_HAS_DOUBLE_STATS(target, wait);
+        ASSERT_JSON_HAS_DOUBLE_STATS(target, set_output);
+        ASSERT_JSON_HAS_DOUBLE_STATS(target, get_input);
     }
 
     free(file_content);

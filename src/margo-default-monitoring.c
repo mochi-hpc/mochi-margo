@@ -177,12 +177,13 @@ static const char* get_rpc_name_from_id(rpc_info_t* hash, hg_id_t id)
 typedef struct default_monitor_state {
     margo_instance_id mid;
     char*             filename_prefix;
-    int               precision; /* precision used when printing doubles */
+    int               precision;   /* precision used when printing doubles */
+    int               pretty_json; /* use tabs and stuff in JSON printing */
     /* RPC information */
     rpc_info_t* rpc_info;
     /* Argobots keys */
     ABT_key bulk_stats_key; /* may be associated with a bulk_statistics_t* */
-    ABT_key callpath_key;   /* mat be associated with a callpath */
+    ABT_key callpath_key;   /* may be associated with a callpath */
     /* Mutex to access data (locked only when
      * adding new entries into hash tables or
      * when writing the state into a file) */
@@ -235,10 +236,9 @@ static void* margo_default_monitor_initialize(margo_instance_id   mid,
     monitor->mid = mid;
 
     /* default configuration */
-    char filename_prefix_template[] = "margo-XXXXXX";
-    int  ret                        = mkstemp(filename_prefix_template);
-    monitor->filename_prefix        = strdup(filename_prefix_template);
-    monitor->precision              = 9;
+    monitor->filename_prefix = strdup("margo-statistics");
+    monitor->precision       = 9;
+    monitor->pretty_json     = 0;
 
     /* read configuration */
     struct json_object* statistics
@@ -256,6 +256,12 @@ static void* margo_default_monitor_initialize(margo_instance_id   mid,
             = json_object_object_get(statistics, "precision");
         if (precision && json_object_is_type(precision, json_type_int)) {
             monitor->precision = json_object_get_int(precision);
+        }
+        struct json_object* pretty
+            = json_object_object_get(statistics, "pretty");
+        if (pretty && json_object_is_type(pretty, json_type_boolean)
+            && json_object_get_boolean(pretty)) {
+            monitor->pretty_json = JSON_C_TO_STRING_PRETTY;
         }
     }
 
@@ -441,6 +447,7 @@ margo_default_monitor_on_forward(void*                        uargs,
         hg_id_t id     = margo_get_info(event_args->handle)->id;
         id             = mux_id(id, event_args->provider_id);
         callpath_t key = {.rpc_id = id, .parent_id = 0};
+        key.parent_id  = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
 
         ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
         HASH_FIND(hh, monitor->origin_rpc_stats, &key, sizeof(key), rpc_stats);
@@ -683,6 +690,7 @@ static void margo_default_monitor_on_rpc_handler(
         // attach statistics to session
         hg_id_t    id  = margo_get_info(event_args->handle)->id;
         callpath_t key = {.rpc_id = id, .parent_id = 0};
+        key.parent_id  = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
 
         ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
         HASH_FIND(hh, monitor->target_rpc_stats, &key, sizeof(key), rpc_stats);
@@ -725,7 +733,8 @@ margo_default_monitor_on_rpc_ult(void*                        uargs,
         // set callpath key
         callpath_t* current_callpath = calloc(1, sizeof(*current_callpath));
         // TODO: get parent_id from breadcrumb
-        current_callpath->rpc_id = margo_get_info(event_args->handle)->id;
+        current_callpath->rpc_id    = margo_get_info(event_args->handle)->id;
+        current_callpath->parent_id = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
         ABT_key_set(monitor->callpath_key, current_callpath);
 
     } else {
@@ -771,8 +780,10 @@ static void margo_default_monitor_on_bulk_create(
 
     if (!bulk_stats) {
         // no bulk_statistics_t attached to current ULT
-        static const callpath_t default_key = {0};
-        callpath_t*             pkey        = NULL;
+        callpath_t default_key = {0};
+        default_key.parent_id  = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
+        default_key.rpc_id     = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
+        callpath_t* pkey       = NULL;
         // try to get current callpath from the installed ABT_key
         ABT_key_get(monitor->callpath_key, (void**)&pkey);
         if (!pkey) pkey = (callpath_t*)&default_key;
@@ -786,6 +797,7 @@ static void margo_default_monitor_on_bulk_create(
                      bulk_stats);
         }
         ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
+        ABT_key_set(monitor->bulk_stats_key, bulk_stats);
     }
 
     if (event_type == MARGO_MONITOR_FN_START) {
@@ -812,8 +824,10 @@ static void margo_default_monitor_on_bulk_transfer(
 
         if (!bulk_stats) {
             // no bulk_statistics_t attached to current ULT
-            static const callpath_t default_key = {0};
-            callpath_t*             pkey        = NULL;
+            callpath_t default_key = {0};
+            default_key.parent_id  = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
+            default_key.rpc_id     = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
+            callpath_t* pkey       = NULL;
             // try to get current callpath from the installed ABT_key
             ABT_key_get(monitor->callpath_key, (void**)&pkey);
             if (!pkey) pkey = (callpath_t*)&default_key;
@@ -827,6 +841,7 @@ static void margo_default_monitor_on_bulk_transfer(
                          bulk_stats);
             }
             ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
+            ABT_key_set(monitor->bulk_stats_key, bulk_stats);
         }
 
         event_args->uctx.f = timestamp;
@@ -932,7 +947,7 @@ write_monitor_state_to_json_file(const default_monitor_state_t* monitor)
     /* write statistics */
     size_t      json_len = 0;
     const char* json_str = json_object_to_json_string_length(
-        json, JSON_C_TO_STRING_PLAIN, &json_len);
+        json, monitor->pretty_json, &json_len);
     fwrite(json_str, json_len, 1, file);
     ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
     /* finish */
@@ -1067,18 +1082,130 @@ target_rpc_statistics_to_json(const target_rpc_statistics_t* stats)
     return json;
 }
 
+static char* build_rpc_key(const callpath_t* callpath)
+{
+    uint16_t provider_id;
+    hg_id_t  base_id;
+    uint16_t parent_provider_id;
+    hg_id_t  parent_base_id;
+    demux_id(callpath->rpc_id, &base_id, &provider_id);
+    demux_id(callpath->parent_id, &parent_base_id, &parent_provider_id);
+    size_t len     = snprintf(NULL, 0, "%lu:%d:%lu:%d", parent_base_id,
+                          parent_provider_id, base_id, provider_id);
+    char*  rpc_key = (char*)calloc(len + 1, 1);
+    sprintf(rpc_key, "%lu:%d:%lu:%d", parent_base_id, parent_provider_id,
+            base_id, provider_id);
+    return rpc_key;
+}
+
+static void fill_with_rpc_info(struct json_object* rpc_json,
+                               const callpath_t*   callpath,
+                               rpc_info_t*         info_hash)
+{
+    uint16_t provider_id;
+    hg_id_t  base_id;
+    uint16_t parent_provider_id;
+    hg_id_t  parent_base_id;
+    demux_id(callpath->rpc_id, &base_id, &provider_id);
+    demux_id(callpath->parent_id, &parent_base_id, &parent_provider_id);
+    // add "id" entry
+    json_object_object_add_ex(rpc_json, "id", json_object_new_uint64(base_id),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    // add "provider_id" entry
+    json_object_object_add_ex(rpc_json, "provider_id",
+                              json_object_new_uint64(provider_id),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    // add "parent_id" entry
+    json_object_object_add_ex(rpc_json, "parent_id",
+                              json_object_new_uint64(parent_base_id),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    // add "parent_provider_id" entry
+    json_object_object_add_ex(rpc_json, "parent_provider_id",
+                              json_object_new_uint64(parent_provider_id),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    // add "name" entry
+    const char* rpc_name = get_rpc_name_from_id(info_hash, callpath->rpc_id);
+    rpc_name             = rpc_name ? rpc_name : "";
+    json_object_object_add_ex(rpc_json, "name",
+                              json_object_new_string(rpc_name),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+}
+
 static struct json_object*
-monitor_state_to_json(const default_monitor_state_t* stats)
+monitor_state_to_json(const default_monitor_state_t* state)
 {
     struct json_object* json = json_object_new_object();
+    // mercury progress loop statistics
     json_object_object_add_ex(json, "progress_loop",
-                              hg_statistics_to_json(&stats->hg_stats),
+                              hg_statistics_to_json(&state->hg_stats),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
-    if (stats->bulk_stats) {
-        json_object_object_add_ex(json, "bulk",
-                                  bulk_statistics_to_json(stats->bulk_stats),
-                                  JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    // RPC statistics
+    struct json_object* rpcs = json_object_new_object();
+    json_object_object_add_ex(json, "rpcs", rpcs, JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    // origin statistics
+    {
+        origin_rpc_statistics_t *p, *tmp;
+        HASH_ITER(hh, state->origin_rpc_stats, p, tmp)
+        {
+            // build RPC key
+            char* rpc_key = build_rpc_key(&(p->callpath));
+            // create the entry in the "rpcs" section
+            struct json_object* rpc_json = json_object_new_object();
+            json_object_object_add(rpcs, rpc_key, rpc_json);
+            // fill RPC information
+            fill_with_rpc_info(rpc_json, &(p->callpath), state->rpc_info);
+            // add "origin" statistics
+            json_object_object_add_ex(rpc_json, "origin",
+                                      origin_rpc_statistics_to_json(p),
+                                      JSON_C_OBJECT_ADD_KEY_IS_NEW);
+            free(rpc_key);
+        }
     }
-
+    // target statistics
+    {
+        target_rpc_statistics_t *p, *tmp;
+        HASH_ITER(hh, state->target_rpc_stats, p, tmp)
+        {
+            // build RPC key
+            char* rpc_key = build_rpc_key(&(p->callpath));
+            // find json object corresponding to this RPC
+            struct json_object* rpc_json
+                = json_object_object_get(rpcs, rpc_key);
+            if (!rpc_json) {
+                rpc_json = json_object_new_object();
+                json_object_object_add(rpcs, rpc_key, rpc_json);
+                // fill RPC information
+                fill_with_rpc_info(rpc_json, &(p->callpath), state->rpc_info);
+            }
+            // add "target" statistics
+            json_object_object_add_ex(rpc_json, "target",
+                                      target_rpc_statistics_to_json(p),
+                                      JSON_C_OBJECT_ADD_KEY_IS_NEW);
+            free(rpc_key);
+        }
+    }
+    // bulk statistics
+    {
+        bulk_statistics_t *p, *tmp;
+        HASH_ITER(hh, state->bulk_stats, p, tmp)
+        {
+            // build RPC key
+            char* rpc_key = build_rpc_key(&(p->callpath));
+            // find json object corresponding to this RPC
+            struct json_object* rpc_json
+                = json_object_object_get(rpcs, rpc_key);
+            if (!rpc_json) {
+                rpc_json = json_object_new_object();
+                json_object_object_add(rpcs, rpc_key, rpc_json);
+                // fill RPC information
+                fill_with_rpc_info(rpc_json, &(p->callpath), state->rpc_info);
+            }
+            // add "bulk" statistics
+            json_object_object_add_ex(rpc_json, "bulk",
+                                      bulk_statistics_to_json(p),
+                                      JSON_C_OBJECT_ADD_KEY_IS_NEW);
+            free(rpc_key);
+        }
+    }
     return json;
 }
