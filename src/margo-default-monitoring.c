@@ -163,6 +163,16 @@ typedef struct rpc_info {
     char           name[1];
 } rpc_info_t;
 
+static const char* get_rpc_name_from_id(rpc_info_t* hash, hg_id_t id)
+{
+    rpc_info_t* info = NULL;
+    HASH_FIND(hh, hash, &id, sizeof(id), info);
+    if (!info)
+        return NULL;
+    else
+        return info->name;
+}
+
 /* Root of the monitor's state */
 typedef struct default_monitor_state {
     margo_instance_id mid;
@@ -1064,5 +1074,11 @@ monitor_state_to_json(const default_monitor_state_t* stats)
     json_object_object_add_ex(json, "progress_loop",
                               hg_statistics_to_json(&stats->hg_stats),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    if (stats->bulk_stats) {
+        json_object_object_add_ex(json, "bulk",
+                                  bulk_statistics_to_json(stats->bulk_stats),
+                                  JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    }
+
     return json;
 }

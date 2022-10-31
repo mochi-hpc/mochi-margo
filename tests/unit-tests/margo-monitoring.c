@@ -436,10 +436,26 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
         ASSERT_JSON_HAS(key, sum, double); \
     } while(0)
 
-    ASSERT_JSON_HAS(json_content, progress_loop, object);
-    ASSERT_JSON_HAS_STATS(progress_loop, progress_with_timeout);
-    ASSERT_JSON_HAS_STATS(progress_loop, progress_without_timeout);
-    ASSERT_JSON_HAS_STATS(progress_loop, trigger);
+#define ASSERT_JSON_HAS_DOUBLE_STATS(parent, key) \
+    do { \
+        ASSERT_JSON_HAS(parent, key, object); \
+        ASSERT_JSON_HAS_STATS(key, duration); \
+        ASSERT_JSON_HAS_STATS(key, timestamp); \
+    } while(0)
+
+    {
+        ASSERT_JSON_HAS(json_content, progress_loop, object);
+        ASSERT_JSON_HAS_STATS(progress_loop, progress_with_timeout);
+        ASSERT_JSON_HAS_STATS(progress_loop, progress_without_timeout);
+        ASSERT_JSON_HAS_STATS(progress_loop, trigger);
+
+        ASSERT_JSON_HAS(json_content, bulk, object);
+        ASSERT_JSON_HAS_STATS(bulk, create);
+        ASSERT_JSON_HAS_STATS(bulk, transfer);
+        ASSERT_JSON_HAS_STATS(bulk, size);
+        ASSERT_JSON_HAS_DOUBLE_STATS(bulk, transfer_cb);
+        ASSERT_JSON_HAS_DOUBLE_STATS(bulk, wait);
+    }
 
     free(file_content);
     free(filename);
