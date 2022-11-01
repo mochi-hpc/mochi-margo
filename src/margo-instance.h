@@ -129,6 +129,7 @@ struct margo_instance {
 
     /* timer data */
     struct margo_timer_list* timer_list;
+
     /* linked list of free hg handles and a hash of in-use handles */
     struct margo_handle_cache_el* free_handle_list;
     struct margo_handle_cache_el* used_handle_hash;
@@ -140,6 +141,9 @@ struct margo_instance {
 
     /* monitoring */
     struct margo_monitor* monitor;
+
+    /* callpath tracking */
+    ABT_key parent_rpc_id_key;
 
     /* optional diagnostics data tracking */
     /* NOTE: technically the following fields are subject to races if they

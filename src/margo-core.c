@@ -171,6 +171,8 @@ static void margo_cleanup(margo_instance_id mid)
         HG_Finalize(mid->hg_class);
     }
 
+    ABT_key_free(&(mid->parent_rpc_id_key));
+
     MARGO_TRACE(mid, "Checking if Argobots should be finalized");
     if (g_margo_num_instances_mtx != ABT_MUTEX_NULL) {
         ABT_mutex_lock(g_margo_num_instances_mtx);
@@ -2271,6 +2273,23 @@ static void margo_internal_breadcrumb_handler_set(uint64_t rpc_breadcrumb)
     ABT_key_set(g_margo_rpc_breadcrumb_key, val);
 
     return;
+}
+
+hg_return_t margo_set_parent_rpc_id(margo_instance_id mid, hg_id_t parent_id)
+{
+    if (mid == MARGO_INSTANCE_NULL) return HG_INVALID_ARG;
+    // rely on the fact that sizeof(void*) == sizeof(hg_id_t)
+    int ret = ABT_key_set(mid->parent_rpc_id_key, (void*)parent_id);
+    if (ret != ABT_SUCCESS) return HG_OTHER_ERROR;
+    return HG_SUCCESS;
+}
+
+hg_return_t margo_get_parent_rpc_id(margo_instance_id mid, hg_id_t* parent_id)
+{
+    if (mid == MARGO_INSTANCE_NULL) return HG_INVALID_ARG;
+    int ret = ABT_key_get(mid->parent_rpc_id_key, (void**)parent_id);
+    if (ret != ABT_SUCCESS) return HG_OTHER_ERROR;
+    return HG_SUCCESS;
 }
 
 void __margo_internal_pre_handler_hooks(

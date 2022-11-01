@@ -454,23 +454,65 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
 
         // check for the "rpcs" secions
         ASSERT_JSON_HAS(json_content, rpcs, object);
-        // must have an "echo" secion for the echo RPC
-        ASSERT_JSON_HAS(rpcs, echo, object);
-        // "echo" section must have an "origin" section
-        ASSERT_JSON_HAS(echo, origin, object);
-        ASSERT_JSON_HAS_DOUBLE_STATS(origin, forward);
-        ASSERT_JSON_HAS_DOUBLE_STATS(origin, forward_cb);
-        ASSERT_JSON_HAS_DOUBLE_STATS(origin, wait);
-        ASSERT_JSON_HAS_DOUBLE_STATS(origin, set_input);
-        ASSERT_JSON_HAS_DOUBLE_STATS(origin, get_output);
-        // "echo" section must have an "target" section
-        ASSERT_JSON_HAS(echo, target, object);
-        ASSERT_JSON_HAS_STATS(target, handler);
-        ASSERT_JSON_HAS_DOUBLE_STATS(target, respond);
-        ASSERT_JSON_HAS_DOUBLE_STATS(target, respond_cb);
-        ASSERT_JSON_HAS_DOUBLE_STATS(target, wait);
-        ASSERT_JSON_HAS_DOUBLE_STATS(target, set_output);
-        ASSERT_JSON_HAS_DOUBLE_STATS(target, get_input);
+        // must have an "65535:65535:2924675071:65535" secion for the echo RPC
+        ASSERT_JSON_HAS_KEY(rpcs, "65535:65535:2924675071:65535", echo, object);
+        {
+            // check RPC info
+            ASSERT_JSON_HAS(echo, id, int);
+            munit_assert_long(2924675071, ==, json_object_get_uint64(id));
+            ASSERT_JSON_HAS(echo, parent_id, int);
+            munit_assert_long(65535, ==, json_object_get_uint64(parent_id));
+            ASSERT_JSON_HAS(echo, provider_id, int);
+            munit_assert_long(65535, ==, json_object_get_uint64(provider_id));
+            ASSERT_JSON_HAS(echo, parent_provider_id, int);
+            munit_assert_long(65535, ==, json_object_get_uint64(parent_provider_id));
+            ASSERT_JSON_HAS(echo, name, string);
+            munit_assert_string_equal(json_object_get_string(name), "echo");
+            // RPC must have an "origin" section
+            ASSERT_JSON_HAS(echo, origin, object);
+            ASSERT_JSON_HAS_DOUBLE_STATS(origin, forward);
+            ASSERT_JSON_HAS_DOUBLE_STATS(origin, forward_cb);
+            ASSERT_JSON_HAS_DOUBLE_STATS(origin, wait);
+            ASSERT_JSON_HAS_DOUBLE_STATS(origin, set_input);
+            ASSERT_JSON_HAS_DOUBLE_STATS(origin, get_output);
+            // RPC must have an "target" section
+            ASSERT_JSON_HAS(echo, target, object);
+            ASSERT_JSON_HAS_STATS(target, handler);
+            ASSERT_JSON_HAS_DOUBLE_STATS(target, respond);
+            ASSERT_JSON_HAS_DOUBLE_STATS(target, respond_cb);
+            ASSERT_JSON_HAS_DOUBLE_STATS(target, wait);
+            ASSERT_JSON_HAS_DOUBLE_STATS(target, set_output);
+            ASSERT_JSON_HAS_DOUBLE_STATS(target, get_input);
+            // RPC must have a "bulk" section
+            ASSERT_JSON_HAS(echo, bulk, object);
+            ASSERT_JSON_HAS_STATS(bulk, create);
+            ASSERT_JSON_HAS_STATS(bulk, transfer);
+            ASSERT_JSON_HAS_STATS(bulk, size);
+            ASSERT_JSON_HAS_DOUBLE_STATS(bulk, transfer_cb);
+            ASSERT_JSON_HAS_DOUBLE_STATS(bulk, wait);
+        }
+        // must have an "65535:65535:65535:65535" secion with a bulk create
+        ASSERT_JSON_HAS_KEY(rpcs, "65535:65535:65535:65535", root, object);
+        {
+            // check RPC info
+            ASSERT_JSON_HAS(root, id, int);
+            munit_assert_long(65535, ==, json_object_get_uint64(id));
+            ASSERT_JSON_HAS(root, parent_id, int);
+            munit_assert_long(65535, ==, json_object_get_uint64(parent_id));
+            ASSERT_JSON_HAS(root, provider_id, int);
+            munit_assert_long(65535, ==, json_object_get_uint64(provider_id));
+            ASSERT_JSON_HAS(root, parent_provider_id, int);
+            munit_assert_long(65535, ==, json_object_get_uint64(parent_provider_id));
+            ASSERT_JSON_HAS(root, name, string);
+            munit_assert_string_equal(json_object_get_string(name), "");
+            // RPC must have a "bulk" section
+            ASSERT_JSON_HAS(root, bulk, object);
+            ASSERT_JSON_HAS_STATS(bulk, create);
+            ASSERT_JSON_HAS_STATS(bulk, transfer);
+            ASSERT_JSON_HAS_STATS(bulk, size);
+            ASSERT_JSON_HAS_DOUBLE_STATS(bulk, transfer_cb);
+            ASSERT_JSON_HAS_DOUBLE_STATS(bulk, wait);
+        }
     }
 
     free(file_content);
