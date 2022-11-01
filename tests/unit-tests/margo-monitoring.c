@@ -51,6 +51,7 @@ static void test_monitor_finalize(void* uargs)
 }
 
 MERCURY_GEN_PROC(echo_in_t,
+    ((hg_bool_t)(relay))\
     ((hg_string_t)(str))\
     ((hg_bulk_t)(blk)))
 
@@ -71,6 +72,32 @@ static void echo_ult(hg_handle_t handle)
     hret = margo_get_input(handle, &input);
     munit_assert_int(hret, ==, HG_SUCCESS);
 
+    if(input.relay == HG_TRUE) {
+
+        // resend the same RPC to myself with relay = FALSE
+        // to get an entry with a parent callpath in profiling
+
+        hg_handle_t relay_handle;
+        hret = margo_create(mid, info->addr, info->id, &relay_handle);
+        munit_assert_int(hret, ==, HG_SUCCESS);
+        input.relay = HG_FALSE;
+
+        uint16_t provider_id = info->id & ((1 << (__MARGO_PROVIDER_ID_SIZE * 8)) - 1);
+
+        hret = margo_provider_forward(provider_id, relay_handle, &input);
+        munit_assert_int(hret, ==, HG_SUCCESS);
+
+        char* relay_out = NULL;
+        hret = margo_get_output(relay_handle, &relay_out);
+        munit_assert_int(hret, ==, HG_SUCCESS);
+
+        hret = margo_free_output(relay_handle, &relay_out);
+        munit_assert_int(hret, ==, HG_SUCCESS);
+
+        hret = margo_destroy(relay_handle);
+        munit_assert_int(hret, ==, HG_SUCCESS);
+    }
+
     char      buffer[256];
     void*     ptrs[1]  = { (void*)buffer };
     hg_size_t sizes[1] = { 256 };
@@ -84,7 +111,7 @@ static void echo_ult(hg_handle_t handle)
     hret = margo_bulk_free(bulk);
     munit_assert_int(hret, ==, HG_SUCCESS);
 
-    hret = margo_respond(handle, &input);
+    hret = margo_respond(handle, &input.str);
     munit_assert_int(hret, ==, HG_SUCCESS);
 
     hret = margo_free_input(handle, &input);
@@ -145,7 +172,7 @@ static void custom_echo_ult(hg_handle_t handle)
     munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_BULK_FREE].fn_start, ==, 0);
     munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_BULK_FREE].fn_end, ==, 0);
 
-    hret = margo_respond(handle, &input);
+    hret = margo_respond(handle, &input.str);
     munit_assert_int(hret, ==, HG_SUCCESS);
     munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_RESPOND].fn_start, ==, 1);
     munit_assert_int(monitor_data->call_count[MARGO_MONITOR_ON_RESPOND].fn_end, ==, 1);
@@ -235,6 +262,7 @@ static MunitResult test_custom_monitoring(const MunitParameter params[],
 
     const char* input  = "hello world";
     echo_in_t in = {
+        .relay = HG_FALSE,
         .str = (char*)input,
         .blk = bulk
     };
@@ -320,6 +348,8 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
 {
     hg_return_t hret                      = HG_SUCCESS;
     const char* protocol = munit_parameters_get(params, "protocol");
+    uint16_t provider_id_param = atoi(munit_parameters_get(params, "provider_id"));
+    hg_bool_t relay = strcmp(munit_parameters_get(params, "relay"), "true") == 0 ? HG_TRUE : HG_FALSE;
     const char* json_config =
         "{\"monitoring\":{\"config\":{\"statistics\":{\"filename_prefix\":\"test\",\"precision\":9,\"pretty\":true}}}}";
     struct margo_init_info init_info = {
@@ -335,7 +365,9 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
     margo_instance_id mid = margo_init_ext(protocol, MARGO_SERVER_MODE, &init_info);
     munit_assert_not_null(mid);
 
-    hg_id_t echo_id = MARGO_REGISTER(mid, "echo", echo_in_t, hg_string_t, echo_ult);
+    hg_id_t echo_id = MARGO_REGISTER_PROVIDER(
+        mid, "echo", echo_in_t, hg_string_t, echo_ult,
+        provider_id_param, ABT_POOL_NULL);
     munit_assert_int(echo_id, !=, 0);
 
     margo_thread_sleep(mid, 1);
@@ -349,6 +381,7 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
 
     const char* input  = "hello world";
     echo_in_t in = {
+        .relay = relay,
         .str = (char*)input,
         .blk = bulk
     };
@@ -361,7 +394,7 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
     hret = margo_create(mid, addr, echo_id, &handle);
     munit_assert_int(hret, ==, HG_SUCCESS);
 
-    hret = margo_forward(handle, &in);
+    hret = margo_provider_forward(provider_id_param, handle, &in);
     munit_assert_int(hret, ==, HG_SUCCESS);
 
     hret = margo_bulk_free(bulk);
@@ -454,8 +487,11 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
 
         // check for the "rpcs" secions
         ASSERT_JSON_HAS(json_content, rpcs, object);
-        // must have an "65535:65535:2924675071:65535" secion for the echo RPC
-        ASSERT_JSON_HAS_KEY(rpcs, "65535:65535:2924675071:65535", echo, object);
+
+        char echo_key[256];
+        sprintf(echo_key, "65535:65535:2924675071:%d", provider_id_param);
+        // must have an "65535:65535:2924675071:provider_id" secion for the echo RPC
+        ASSERT_JSON_HAS_KEY(rpcs, echo_key, echo, object);
         {
             // check RPC info
             ASSERT_JSON_HAS(echo, id, int);
@@ -463,7 +499,7 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
             ASSERT_JSON_HAS(echo, parent_id, int);
             munit_assert_long(65535, ==, json_object_get_uint64(parent_id));
             ASSERT_JSON_HAS(echo, provider_id, int);
-            munit_assert_long(65535, ==, json_object_get_uint64(provider_id));
+            munit_assert_long(provider_id_param, ==, json_object_get_uint64(provider_id));
             ASSERT_JSON_HAS(echo, parent_provider_id, int);
             munit_assert_long(65535, ==, json_object_get_uint64(parent_provider_id));
             ASSERT_JSON_HAS(echo, name, string);
@@ -513,6 +549,46 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
             ASSERT_JSON_HAS_DOUBLE_STATS(bulk, transfer_cb);
             ASSERT_JSON_HAS_DOUBLE_STATS(bulk, wait);
         }
+        if(relay == HG_TRUE) {
+            sprintf(echo_key, "2924675071:%d:2924675071:%d", provider_id_param, provider_id_param);
+            // must have an "2924675071:provider_id:2924675071:provider_id" secion for the echo RPC
+            ASSERT_JSON_HAS_KEY(rpcs, echo_key, echo, object);
+            {
+                // check RPC info
+                ASSERT_JSON_HAS(echo, id, int);
+                munit_assert_long(2924675071, ==, json_object_get_uint64(id));
+                ASSERT_JSON_HAS(echo, parent_id, int);
+                munit_assert_long(2924675071, ==, json_object_get_uint64(parent_id));
+                ASSERT_JSON_HAS(echo, provider_id, int);
+                munit_assert_long(provider_id_param, ==, json_object_get_uint64(provider_id));
+                ASSERT_JSON_HAS(echo, parent_provider_id, int);
+                munit_assert_long(provider_id_param, ==, json_object_get_uint64(parent_provider_id));
+                ASSERT_JSON_HAS(echo, name, string);
+                munit_assert_string_equal(json_object_get_string(name), "echo");
+                // RPC must have an "origin" section
+                ASSERT_JSON_HAS(echo, origin, object);
+                ASSERT_JSON_HAS_DOUBLE_STATS(origin, forward);
+                ASSERT_JSON_HAS_DOUBLE_STATS(origin, forward_cb);
+                ASSERT_JSON_HAS_DOUBLE_STATS(origin, wait);
+                ASSERT_JSON_HAS_DOUBLE_STATS(origin, set_input);
+                ASSERT_JSON_HAS_DOUBLE_STATS(origin, get_output);
+                // RPC must have an "target" section
+                ASSERT_JSON_HAS(echo, target, object);
+                ASSERT_JSON_HAS_STATS(target, handler);
+                ASSERT_JSON_HAS_DOUBLE_STATS(target, respond);
+                ASSERT_JSON_HAS_DOUBLE_STATS(target, respond_cb);
+                ASSERT_JSON_HAS_DOUBLE_STATS(target, wait);
+                ASSERT_JSON_HAS_DOUBLE_STATS(target, set_output);
+                ASSERT_JSON_HAS_DOUBLE_STATS(target, get_input);
+                // RPC must have a "bulk" section
+                ASSERT_JSON_HAS(echo, bulk, object);
+                ASSERT_JSON_HAS_STATS(bulk, create);
+                ASSERT_JSON_HAS_STATS(bulk, transfer);
+                ASSERT_JSON_HAS_STATS(bulk, size);
+                ASSERT_JSON_HAS_DOUBLE_STATS(bulk, transfer_cb);
+                ASSERT_JSON_HAS_DOUBLE_STATS(bulk, wait);
+            }
+        }
     }
 
     free(file_content);
@@ -521,15 +597,24 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
 }
 
 static char* protocol_params[] = {"na+sm", NULL};
+static char* provider_id_params[] = {"65535", "42", "0", NULL};
+static char* relay_params[] = {"true", "false", NULL};
+
+static MunitParameterEnum test_params_custom[]
+    = {{"protocol", protocol_params},
+       {NULL, NULL}};
 
 static MunitParameterEnum test_params[]
-    = {{"protocol", protocol_params}, {NULL, NULL}};
+    = {{"protocol", protocol_params},
+       {"provider_id", provider_id_params},
+       {"relay", relay_params},
+       {NULL, NULL}};
 
 static MunitTest test_suite_tests[] = {
     {(char*)"/monitoring/default", test_default_monitoring, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {(char*)"/monitoring/custom", test_custom_monitoring, test_context_setup,
-     test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
+     test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params_custom},
     {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
 
 static const MunitSuite test_suite
