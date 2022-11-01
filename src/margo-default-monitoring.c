@@ -232,7 +232,7 @@ static void* margo_default_monitor_initialize(margo_instance_id   mid,
 {
     default_monitor_state_t* monitor = calloc(1, sizeof(*monitor));
     ABT_key_create(NULL, &(monitor->bulk_stats_key));
-    ABT_key_create(free, &(monitor->callpath_key));
+    ABT_key_create(NULL, &(monitor->callpath_key));
     monitor->mid = mid;
 
     /* default configuration */
@@ -437,6 +437,7 @@ margo_default_monitor_on_forward(void*                        uargs,
                                  margo_monitor_forward_args_t event_args)
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    margo_instance_id mid = margo_hg_handle_get_instance(event_args->handle);
     // retrieve the session that was create on on_create
     RETRIEVE_SESSION(event_args->handle);
     origin_rpc_statistics_t* rpc_stats = NULL;
@@ -447,7 +448,8 @@ margo_default_monitor_on_forward(void*                        uargs,
         hg_id_t id     = margo_get_info(event_args->handle)->id;
         id             = mux_id(id, event_args->provider_id);
         callpath_t key = {.rpc_id = id, .parent_id = 0};
-        key.parent_id  = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
+        // try to get parent RPC id from context
+        margo_get_current_rpc_id(mid, &key.parent_id);
 
         ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
         HASH_FIND(hh, monitor->origin_rpc_stats, &key, sizeof(key), rpc_stats);
@@ -689,8 +691,7 @@ static void margo_default_monitor_on_rpc_handler(
 
         // attach statistics to session
         hg_id_t    id  = margo_get_info(event_args->handle)->id;
-        callpath_t key = {.rpc_id = id, .parent_id = 0};
-        key.parent_id  = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
+        callpath_t key = {.rpc_id = id, .parent_id = event_args->parent_rpc_id};
 
         ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
         HASH_FIND(hh, monitor->target_rpc_stats, &key, sizeof(key), rpc_stats);
@@ -731,10 +732,7 @@ margo_default_monitor_on_rpc_ult(void*                        uargs,
         double t           = timestamp - session->target.start_ts;
         UPDATE_STATISTICS_WITH(rpc_stats->ult[TIMESTAMP], t);
         // set callpath key
-        callpath_t* current_callpath = calloc(1, sizeof(*current_callpath));
-        // TODO: get parent_id from breadcrumb
-        current_callpath->rpc_id    = margo_get_info(event_args->handle)->id;
-        current_callpath->parent_id = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
+        callpath_t* current_callpath = &(session->target.stats->callpath);
         ABT_key_set(monitor->callpath_key, current_callpath);
 
     } else {

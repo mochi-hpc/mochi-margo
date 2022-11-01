@@ -36,7 +36,7 @@ typedef struct margo_forward_proc_args {
     void*         user_args;
     hg_proc_cb_t  user_cb;
     struct {
-        // nothing here yet
+        hg_id_t parent_rpc_id;
     } header;
 } * margo_forward_proc_args_t;
 
@@ -67,7 +67,9 @@ static inline hg_return_t margo_forward_proc(hg_proc_t proc, void* args)
            .request = sargs->request,
            .data    = sargs->user_args,
            .ret     = HG_SUCCESS};
-    __MARGO_MONITOR(mid, FN_START, set_input, monitoring_args);
+    if (sargs->user_cb) {
+        __MARGO_MONITOR(mid, FN_START, set_input, monitoring_args);
+    }
 
     hret = hg_proc_memcpy(proc, (void*)(&sargs->header), sizeof(sargs->header));
     if (hret != HG_SUCCESS) goto finish;
@@ -80,7 +82,9 @@ finish:
 
     /* monitoring */
     monitoring_args.ret = hret;
-    __MARGO_MONITOR(mid, FN_END, set_input, monitoring_args);
+    if (sargs->user_cb) {
+        __MARGO_MONITOR(mid, FN_END, set_input, monitoring_args);
+    }
 
     return hret;
 }
@@ -102,7 +106,9 @@ static inline hg_return_t margo_respond_proc(hg_proc_t proc, void* args)
            .request = sargs->request,
            .data    = sargs->user_args,
            .ret     = HG_SUCCESS};
-    __MARGO_MONITOR(mid, FN_START, set_output, monitoring_args);
+    if (sargs->user_cb) {
+        __MARGO_MONITOR(mid, FN_START, set_output, monitoring_args);
+    }
 
     hret = hg_proc_memcpy(proc, (void*)(&sargs->header), sizeof(sargs->header));
     if (hret != HG_SUCCESS) goto finish;
@@ -115,7 +121,9 @@ finish:
 
     /* monitoring */
     monitoring_args.ret = hret;
-    __MARGO_MONITOR(mid, FN_END, set_output, monitoring_args);
+    if (sargs->user_cb) {
+        __MARGO_MONITOR(mid, FN_END, set_output, monitoring_args);
+    }
 
     return hret;
 }

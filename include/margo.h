@@ -1508,16 +1508,17 @@ margo_instance_id margo_hg_info_get_instance(const struct hg_info* info)
 
 /**
  * @brief Inform Margo that the current ULT has been created
- * as a consequence of the execution of a parent RPC.
+ * as a consequence of the execution of a particular RPC
+ * (represented by its RPC id).
  *
- * Parent ids are used to track call paths in the monitoring
+ * This information is used to track call paths in the monitoring
  * subsystem. Calls to margo_forward or margo_bulk_transfer
  * happening within an RPC handler will automatically detect
  * that they are being called in the context of that RPC handler
  * and set their callpath information accordingly. However, if
- * an RPC handler spawns a ULT and that ULT calls margo_forward
+ * an RPC handler spawns a ULT that calls margo_forward
  * or margo_bulk_transfer, margo will not be able to detect
- * the causality. Calling margo_set_parent_rpc_id at the beginning
+ * the causality. Calling margo_set_current_rpc_id at the beginning
  * of the ULT (or before margo_forward or margo_bulk_transfer
  * are called) mitigates this problem.
  *
@@ -1525,27 +1526,34 @@ margo_instance_id margo_hg_info_get_instance(const struct hg_info* info)
  * the RPC id of a handle within an RPC handler.
  *
  * @param [in] mid Margo instance.
- * @param [in] parent_id Parent RPC id.
+ * @param [in] id Current RPC id.
  *
  * @return HG_SUCCESS or other Mercury error code.
  */
-hg_return_t margo_set_parent_rpc_id(margo_instance_id mid, hg_id_t parent_id);
+hg_return_t margo_set_current_rpc_id(margo_instance_id mid, hg_id_t id);
 
 /**
- * @brief Get the RPC id of the current RPC handler, is within a
- * handler, or the RPC id set by margo_set_parent_rpc_id if
- * margo_set_parent_rpc_id was previously called in the same ULT.
+ * @brief Get the RPC id of the current RPC handler, if within a
+ * handler, or the RPC id set by margo_set_current_rpc_id if
+ * margo_set_current_rpc_id was previously called in the same ULT.
  *
  * Note that outside of any handler and without having called
- * margo_set_parent_rpc_id, parent_id will still be set to a valid
- * value (that is not 0).
+ * margo_set_current_rpc_id, id will still be set to a valid
+ * value (equal to MARGO_DEFAULT_PROVIDER_ID, due to the way
+ * margo encodes its RPC ids and provider ids).
+ *
+ * IMPORTANT: this function does not guarantee to return the
+ * real RPC id of the current RPC, it is a best-effort made by
+ * margo when access to the handle of the RPC is not possible.
+ * Users should use margo_get_info(handle)->id to make sure to
+ * get the id from the handle, when the handle is available.
  *
  * @param [in] mid Margo instance.
- * @param [out] parent_id Parent RPC id.
+ * @param [out] id Current RPC id.
  *
  * @return HG_SUCCESS or other Mercury error code.
  */
-hg_return_t margo_get_parent_rpc_id(margo_instance_id mid, hg_id_t* parent_id);
+hg_return_t margo_get_current_rpc_id(margo_instance_id mid, hg_id_t* id);
 
 /**
  * @brief Sets configurable parameters/hints.

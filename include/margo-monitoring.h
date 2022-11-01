@@ -341,6 +341,7 @@ struct margo_monitor_rpc_handler_args {
     margo_monitor_data_t uctx;
     /* input */
     hg_handle_t handle;
+    hg_id_t     parent_rpc_id;
     /* output */
     ABT_pool    pool;
     hg_return_t ret;

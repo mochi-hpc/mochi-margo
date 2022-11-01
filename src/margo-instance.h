@@ -143,7 +143,7 @@ struct margo_instance {
     struct margo_monitor* monitor;
 
     /* callpath tracking */
-    ABT_key parent_rpc_id_key;
+    ABT_key current_rpc_id_key;
 
     /* optional diagnostics data tracking */
     /* NOTE: technically the following fields are subject to races if they

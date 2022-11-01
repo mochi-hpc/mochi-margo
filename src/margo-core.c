@@ -59,6 +59,8 @@ static hg_id_t margo_register_internal(margo_instance_id mid,
                                        ABT_pool          pool);
 
 static hg_return_t check_error_in_output(hg_handle_t out);
+static hg_return_t check_parent_id_in_input(hg_handle_t handle,
+                                            hg_id_t*    parent_id);
 
 margo_instance_id margo_init(const char* addr_str,
                              int         mode,
@@ -171,7 +173,7 @@ static void margo_cleanup(margo_instance_id mid)
         HG_Finalize(mid->hg_class);
     }
 
-    ABT_key_free(&(mid->parent_rpc_id_key));
+    ABT_key_free(&(mid->current_rpc_id_key));
 
     MARGO_TRACE(mid, "Checking if Argobots should be finalized");
     if (g_margo_num_instances_mtx != ABT_MUTEX_NULL) {
@@ -1127,12 +1129,17 @@ static hg_return_t margo_provider_iforward_internal(
             req->server_addr_hash); /*record server address in the breadcrumb */
     }
 
+    // get parent RPC id
+    hg_id_t parent_rpc_id;
+    margo_get_current_rpc_id(mid, &parent_rpc_id);
+
     // create the margo_forward_proc_args for the serializer
     struct margo_forward_proc_args forward_args
         = {.handle    = handle,
            .request   = req,
            .user_args = (void*)in_struct,
-           .user_cb   = in_cb};
+           .user_cb   = in_cb,
+           .header    = {.parent_rpc_id = parent_rpc_id}};
 
     hret = HG_Forward(handle, margo_cb, (void*)req, (void*)&forward_args);
 
@@ -2275,20 +2282,24 @@ static void margo_internal_breadcrumb_handler_set(uint64_t rpc_breadcrumb)
     return;
 }
 
-hg_return_t margo_set_parent_rpc_id(margo_instance_id mid, hg_id_t parent_id)
+hg_return_t margo_set_current_rpc_id(margo_instance_id mid, hg_id_t parent_id)
 {
     if (mid == MARGO_INSTANCE_NULL) return HG_INVALID_ARG;
     // rely on the fact that sizeof(void*) == sizeof(hg_id_t)
-    int ret = ABT_key_set(mid->parent_rpc_id_key, (void*)parent_id);
+    if (parent_id == 0) parent_id = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
+    int ret = ABT_key_set(mid->current_rpc_id_key, (void*)parent_id);
     if (ret != ABT_SUCCESS) return HG_OTHER_ERROR;
     return HG_SUCCESS;
 }
 
-hg_return_t margo_get_parent_rpc_id(margo_instance_id mid, hg_id_t* parent_id)
+hg_return_t margo_get_current_rpc_id(margo_instance_id mid, hg_id_t* parent_id)
 {
     if (mid == MARGO_INSTANCE_NULL) return HG_INVALID_ARG;
-    int ret = ABT_key_get(mid->parent_rpc_id_key, (void**)parent_id);
-    if (ret != ABT_SUCCESS) return HG_OTHER_ERROR;
+    int ret = ABT_key_get(mid->current_rpc_id_key, (void**)parent_id);
+    if (ret != ABT_SUCCESS || *parent_id == 0) {
+        *parent_id = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
+        return HG_OTHER_ERROR;
+    }
     return HG_SUCCESS;
 }
 
@@ -2297,7 +2308,9 @@ void __margo_internal_pre_handler_hooks(
     hg_handle_t                            handle,
     struct margo_monitor_rpc_handler_args* monitoring_args)
 {
-    (void)handle;
+    hg_id_t parent_id;
+    check_parent_id_in_input(handle, &parent_id);
+    monitoring_args->parent_rpc_id = parent_id;
 
     /* monitoring */
     __MARGO_MONITOR(mid, FN_START, rpc_handler, (*monitoring_args));
@@ -2459,6 +2472,22 @@ hg_return_t check_error_in_output(hg_handle_t handle)
     hret = respond_args.header.hg_ret;
     HG_Free_output(handle, (void*)&respond_args);
     return hret;
+}
+
+hg_return_t check_parent_id_in_input(hg_handle_t handle, hg_id_t* parent_id)
+{
+    struct margo_forward_proc_args forward_args
+        = {.user_args = NULL, .user_cb = NULL};
+
+    hg_return_t hret = HG_Get_input(handle, (void*)&forward_args);
+    // note: if mercury was compiled with +checksum, the call above
+    // will return HG_CHECKSUM_ERROR because we are not reading the
+    // whole input.
+    if (hret != HG_SUCCESS && hret != HG_CHECKSUM_ERROR) return hret;
+    *parent_id = forward_args.header.parent_rpc_id;
+    if (hret == HG_CHECKSUM_ERROR) return HG_SUCCESS;
+    HG_Free_input(handle, (void*)&forward_args);
+    return HG_SUCCESS;
 }
 
 hg_return_t _handler_for_NULL(hg_handle_t handle)
