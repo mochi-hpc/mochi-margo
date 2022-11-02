@@ -1267,6 +1267,12 @@ margo_request_type margo_request_get_type(margo_request req)
     return req->type;
 }
 
+margo_instance_id margo_request_get_instance(margo_request req)
+{
+    if (!req) return MARGO_INSTANCE_NULL;
+    return req->mid;
+}
+
 static hg_return_t
 margo_irespond_internal(hg_handle_t   handle,
                         void*         out_struct,

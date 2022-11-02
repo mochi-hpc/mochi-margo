@@ -49,6 +49,22 @@
  */
 
 /* ========================================================================
+ * Helper JSON-C function
+ * ======================================================================== */
+inline static struct json_object*
+json_object_object_get_or_create_object(struct json_object* root,
+                                        const char*         key)
+{
+    struct json_object* result = json_object_object_get(root, key);
+    if (!result) {
+        result = json_object_new_object();
+        json_object_object_add_ex(root, key, result,
+                                  JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    }
+    return result;
+}
+
+/* ========================================================================
  * Statistics structure definitions
  * ======================================================================== */
 
@@ -70,6 +86,13 @@ typedef struct callpath {
     hg_id_t  parent_id; /* id of the RPC it came from, if any */
     uint64_t addr_id; /* address the current RPC was sent to or received from */
 } callpath_t;
+
+typedef struct bulk_key {
+    callpath_t callpath;
+    uint64_t
+        remote_addr_id; /* address of the peer with which transfer is done */
+    hg_bulk_op_t operation; /* PULL or PUSH */
+} bulk_key_t;
 
 #define UPDATE_STATISTICS_WITH(stats, value)                               \
     do {                                                                   \
@@ -111,26 +134,42 @@ enum
     TIMESTAMP = 1
 };
 
+/**
+ * Statistics related to bulk creation.
+ * This is managed separately from bulk transfers
+ * because (1) creation of bulk handles may be done
+ * to populate a pool of bulk buffers, rather than
+ * when a bulk handle is needed, and (2) bulk
+ * transfers are also indexed by the remote address
+ * and operation used.
+ */
+typedef struct bulk_create_statistics {
+    statistics_t   create;
+    statistics_t   create_size;
+    callpath_t     callpath;
+    UT_hash_handle hh;
+} bulk_create_statistics_t;
+
+static struct json_object*
+bulk_create_statistics_to_json(const bulk_create_statistics_t* stats);
+
 /* Statistics related to bulk transfers */
 /* Note: the reference timestamp is the transfer
  * operation rather than the create operation
  * because it is not unusual for a service to
  * have pre-created bulk handles.
  */
-typedef struct bulk_statistics {
-    statistics_t create;
-    statistics_t create_size; /* size at creation time */
-    statistics_t transfer;    /* reference timestamp */
-    statistics_t
-        transfer_size; /* size of transfer, not timestamp or duration */
+typedef struct bulk_transfer_statistics {
+    statistics_t   transfer; /* reference timestamp */
+    statistics_t   transfer_size;
     statistics_t   transfer_cb[2];
     statistics_t   wait[2];
-    callpath_t     callpath; /* hash key */
+    bulk_key_t     bulk_key; /* hash key */
     UT_hash_handle hh;       /* hash handle */
-} bulk_statistics_t;
+} bulk_transfer_statistics_t;
 
 static struct json_object*
-bulk_statistics_to_json(const bulk_statistics_t* stats);
+bulk_transfer_statistics_to_json(const bulk_transfer_statistics_t* stats);
 
 /* Statistics related to RPCs at their origin */
 typedef struct origin_rpc_statistics {
@@ -204,17 +243,17 @@ typedef struct default_monitor_state {
     uint64_t         addr_info_last_id;
     ABT_mutex_memory addr_info_mtx;
     /* Argobots keys */
-    ABT_key bulk_stats_key; /* may be associated with a bulk_statistics_t* */
-    ABT_key callpath_key;   /* may be associated with a callpath */
+    ABT_key callpath_key; /* may be associated with a callpath */
     /* Mutex to access data (locked only when
      * adding new entries into hash tables or
      * when writing the state into a file) */
     ABT_mutex_memory mutex;
     /* Statistics */
-    hg_statistics_t          hg_stats;
-    bulk_statistics_t*       bulk_stats;
-    origin_rpc_statistics_t* origin_rpc_stats;
-    target_rpc_statistics_t* target_rpc_stats;
+    hg_statistics_t             hg_stats;
+    bulk_create_statistics_t*   bulk_create_stats;
+    bulk_transfer_statistics_t* bulk_transfer_stats;
+    origin_rpc_statistics_t*    origin_rpc_stats;
+    target_rpc_statistics_t*    target_rpc_stats;
 } default_monitor_state_t;
 
 static struct json_object*
@@ -241,8 +280,8 @@ typedef struct session {
 } session_t;
 
 typedef struct bulk_session {
-    double             start_ts;
-    bulk_statistics_t* stats;
+    double                      start_ts;
+    bulk_transfer_statistics_t* stats;
 } bulk_session_t;
 
 static void
@@ -257,7 +296,6 @@ static void* margo_default_monitor_initialize(margo_instance_id   mid,
                                               struct json_object* config)
 {
     default_monitor_state_t* monitor = calloc(1, sizeof(*monitor));
-    ABT_key_create(NULL, &(monitor->bulk_stats_key));
     ABT_key_create(NULL, &(monitor->callpath_key));
     monitor->mid = mid;
 
@@ -328,17 +366,25 @@ static void margo_default_monitor_finalize(void* uargs)
             free(p);
         }
     }
-    /* free bulk statistics */
+    /* free bulk_create statistics */
     {
-        bulk_statistics_t *p, *tmp;
-        HASH_ITER(hh, monitor->bulk_stats, p, tmp)
+        bulk_create_statistics_t *p, *tmp;
+        HASH_ITER(hh, monitor->bulk_create_stats, p, tmp)
         {
-            HASH_DEL(monitor->bulk_stats, p);
+            HASH_DEL(monitor->bulk_create_stats, p);
+            free(p);
+        }
+    }
+    /* free bulk_transfer statistics */
+    {
+        bulk_transfer_statistics_t *p, *tmp;
+        HASH_ITER(hh, monitor->bulk_transfer_stats, p, tmp)
+        {
+            HASH_DEL(monitor->bulk_transfer_stats, p);
             free(p);
         }
     }
     /* free ABT key */
-    ABT_key_free(&(monitor->bulk_stats_key));
     ABT_key_free(&(monitor->callpath_key));
     /* free filename */
     free(monitor->filename_prefix);
@@ -818,32 +864,26 @@ static void margo_default_monitor_on_bulk_create(
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
 
-    bulk_statistics_t* bulk_stats = NULL;
+    bulk_create_statistics_t* bulk_stats = NULL;
 
-    // try to get current bulk_statistics_t from ABT_key
-    ABT_key_get(monitor->bulk_stats_key, (void**)&bulk_stats);
+    // no bulk_statistics_t attached to current ULT
+    callpath_t default_key = {0};
+    default_key.parent_id  = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
+    default_key.rpc_id     = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
+    callpath_t* pkey       = NULL;
+    // try to get current callpath from the installed ABT_key
+    ABT_key_get(monitor->callpath_key, (void**)&pkey);
+    if (!pkey) pkey = (callpath_t*)&default_key;
 
+    ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
+    HASH_FIND(hh, monitor->bulk_create_stats, pkey, sizeof(*pkey), bulk_stats);
     if (!bulk_stats) {
-        // no bulk_statistics_t attached to current ULT
-        callpath_t default_key = {0};
-        default_key.parent_id  = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
-        default_key.rpc_id     = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
-        callpath_t* pkey       = NULL;
-        // try to get current callpath from the installed ABT_key
-        ABT_key_get(monitor->callpath_key, (void**)&pkey);
-        if (!pkey) pkey = (callpath_t*)&default_key;
-
-        ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
-        HASH_FIND(hh, monitor->bulk_stats, pkey, sizeof(*pkey), bulk_stats);
-        if (!bulk_stats) {
-            bulk_stats = (bulk_statistics_t*)calloc(1, sizeof(*bulk_stats));
-            bulk_stats->callpath = *pkey;
-            HASH_ADD(hh, monitor->bulk_stats, callpath, sizeof(*pkey),
-                     bulk_stats);
-        }
-        ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
-        ABT_key_set(monitor->bulk_stats_key, bulk_stats);
+        bulk_stats = (bulk_create_statistics_t*)calloc(1, sizeof(*bulk_stats));
+        bulk_stats->callpath = *pkey;
+        HASH_ADD(hh, monitor->bulk_create_stats, callpath, sizeof(*pkey),
+                 bulk_stats);
     }
+    ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
 
     if (event_type == MARGO_MONITOR_FN_START) {
         event_args->uctx.f = timestamp;
@@ -865,35 +905,44 @@ static void margo_default_monitor_on_bulk_transfer(
     margo_monitor_event_t              event_type,
     margo_monitor_bulk_transfer_args_t event_args)
 {
-    default_monitor_state_t* monitor    = (default_monitor_state_t*)uargs;
-    bulk_statistics_t*       bulk_stats = NULL;
+    default_monitor_state_t*    monitor    = (default_monitor_state_t*)uargs;
+    bulk_transfer_statistics_t* bulk_stats = NULL;
+    margo_instance_id mid = margo_request_get_instance(event_args->request);
 
     if (event_type == MARGO_MONITOR_FN_START) {
 
-        // try to get current bulk_statistics_t from ABT_key
-        ABT_key_get(monitor->bulk_stats_key, (void**)&bulk_stats);
+        // get address info
+        ABT_mutex_spinlock(
+            ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->addr_info_mtx));
+        addr_info_t* addr_info
+            = addr_info_find_or_add(monitor, mid, event_args->origin_addr);
+        ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->addr_info_mtx));
 
-        if (!bulk_stats) {
-            // no bulk_statistics_t attached to current ULT
-            callpath_t default_key = {0};
-            default_key.parent_id  = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
-            default_key.rpc_id     = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
-            callpath_t* pkey       = NULL;
-            // try to get current callpath from the installed ABT_key
-            ABT_key_get(monitor->callpath_key, (void**)&pkey);
-            if (!pkey) pkey = (callpath_t*)&default_key;
-
-            ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
-            HASH_FIND(hh, monitor->bulk_stats, pkey, sizeof(*pkey), bulk_stats);
-            if (!bulk_stats) {
-                bulk_stats = (bulk_statistics_t*)calloc(1, sizeof(*bulk_stats));
-                bulk_stats->callpath = *pkey;
-                HASH_ADD(hh, monitor->bulk_stats, callpath, sizeof(*pkey),
-                         bulk_stats);
-            }
-            ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
-            ABT_key_set(monitor->bulk_stats_key, bulk_stats);
+        // create the bulk_key for the bulk_transfer_statistics in the hash
+        // table
+        bulk_key_t  bulk_key     = {.operation      = event_args->op,
+                               .remote_addr_id = addr_info ? addr_info->id : 0};
+        callpath_t* callpath_ptr = NULL;
+        // try to get current callpath from the installed ABT_key
+        ABT_key_get(monitor->callpath_key, (void**)&callpath_ptr);
+        if (callpath_ptr) {
+            memcpy(&bulk_key.callpath, callpath_ptr, sizeof(*callpath_ptr));
+        } else {
+            bulk_key.callpath.parent_id = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
+            bulk_key.callpath.rpc_id    = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
         }
+
+        ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
+        HASH_FIND(hh, monitor->bulk_transfer_stats, &bulk_key, sizeof(bulk_key),
+                  bulk_stats);
+        if (!bulk_stats) {
+            bulk_stats
+                = (bulk_transfer_statistics_t*)calloc(1, sizeof(*bulk_stats));
+            bulk_stats->bulk_key = bulk_key;
+            HASH_ADD(hh, monitor->bulk_transfer_stats, bulk_key,
+                     sizeof(bulk_key), bulk_stats);
+        }
+        ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
 
         event_args->uctx.f = timestamp;
 
@@ -924,7 +973,7 @@ static void margo_default_monitor_on_bulk_transfer_cb(
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     // retrieve the session that was create on on_create
     RETRIEVE_BULK_SESSION(event_args->request);
-    bulk_statistics_t* bulk_stats = session->stats;
+    bulk_transfer_statistics_t* bulk_stats = session->stats;
 
     if (event_type == MARGO_MONITOR_FN_START) {
 
@@ -1061,7 +1110,7 @@ static struct json_object* hg_statistics_to_json(const hg_statistics_t* stats)
 }
 
 static struct json_object*
-bulk_statistics_to_json(const bulk_statistics_t* stats)
+bulk_create_statistics_to_json(const bulk_create_statistics_t* stats)
 {
     struct json_object* json = json_object_new_object();
     json_object_object_add_ex(json, "create",
@@ -1070,6 +1119,13 @@ bulk_statistics_to_json(const bulk_statistics_t* stats)
     json_object_object_add_ex(json, "create_size",
                               statistics_to_json(&stats->create_size),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    return json;
+}
+
+static struct json_object*
+bulk_transfer_statistics_to_json(const bulk_transfer_statistics_t* stats)
+{
+    struct json_object* json = json_object_new_object();
     json_object_object_add_ex(json, "transfer",
                               statistics_to_json(&stats->transfer),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
@@ -1205,20 +1261,6 @@ static void fill_with_rpc_info(struct json_object*            rpc_json,
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
 }
 
-#if 0
-static void fill_with_addr_info(struct json_object* rpc_json,
-                                const callpath_t*   callpath,
-                                const default_monitor_state_t* monitor)
-{
-    // add "address" entry
-    addr_info_t* addr_info = addr_info_find_by_id(monitor, callpath->addr_id);
-    json_object_object_add_ex(
-        rpc_json, "address",
-        json_object_new_string(addr_info ? addr_info->name : ""),
-        JSON_C_OBJECT_ADD_KEY_IS_NEW);
-}
-#endif
-
 static struct json_object*
 monitor_state_to_json(const default_monitor_state_t* state)
 {
@@ -1248,11 +1290,7 @@ monitor_state_to_json(const default_monitor_state_t* state)
             }
             // find or add "origin" section
             struct json_object* origin
-                = json_object_object_get(rpc_json, "origin");
-            if (!origin) {
-                origin = json_object_new_object();
-                json_object_object_add(rpc_json, "origin", origin);
-            }
+                = json_object_object_get_or_create_object(rpc_json, "origin");
             // get the destination address from the callpath
             addr_info_t* addr_info
                 = addr_info_find_by_id(state, p->callpath.addr_id);
@@ -1285,11 +1323,7 @@ monitor_state_to_json(const default_monitor_state_t* state)
             }
             // find or add "target" section
             struct json_object* target
-                = json_object_object_get(rpc_json, "target");
-            if (!target) {
-                target = json_object_new_object();
-                json_object_object_add(rpc_json, "target", target);
-            }
+                = json_object_object_get_or_create_object(rpc_json, "target");
             // get the source address from the callpath
             addr_info_t* addr_info
                 = addr_info_find_by_id(state, p->callpath.addr_id);
@@ -1304,14 +1338,14 @@ monitor_state_to_json(const default_monitor_state_t* state)
             free(rpc_key);
         }
     }
-    // bulk statistics
+    // bulk create statistics
     {
-        bulk_statistics_t *p, *tmp;
-        HASH_ITER(hh, state->bulk_stats, p, tmp)
+        bulk_create_statistics_t *p, *tmp;
+        HASH_ITER(hh, state->bulk_create_stats, p, tmp)
         {
             // build RPC key
             char* rpc_key = build_rpc_key(&(p->callpath));
-            // find json object corresponding to this RPC
+            // find json object corresponding to the RPC
             struct json_object* rpc_json
                 = json_object_object_get(rpcs, rpc_key);
             if (!rpc_json) {
@@ -1319,6 +1353,43 @@ monitor_state_to_json(const default_monitor_state_t* state)
                 json_object_object_add(rpcs, rpc_key, rpc_json);
                 // fill RPC information
                 fill_with_rpc_info(rpc_json, &(p->callpath), state);
+            }
+            // find or add a "target" section for it
+            struct json_object* target
+                = json_object_object_get_or_create_object(rpc_json, "target");
+            // get the source address from the callpath
+            addr_info_t* addr_info
+                = addr_info_find_by_id(state, p->callpath.addr_id);
+            char addr_key[256];
+            sprintf(addr_key, "received from %s",
+                    addr_info ? addr_info->name : "<unknown>");
+            // find or add the "received from <address>" section
+            struct json_object* received_from
+                = json_object_object_get_or_create_object(target, addr_key);
+            // convert bulk_statistics to json
+            struct json_object* stats = bulk_create_statistics_to_json(p);
+            // add statistics to a "bulk" section
+            json_object_object_add_ex(received_from, "bulk", stats,
+                                      JSON_C_OBJECT_ADD_KEY_IS_NEW);
+            free(rpc_key);
+        }
+    }
+    // bulk transfer statistics
+    {
+        bulk_transfer_statistics_t *p, *tmp;
+        HASH_ITER(hh, state->bulk_transfer_stats, p, tmp)
+        {
+#if 0
+            // build RPC key
+            char* rpc_key = build_rpc_key(&(p->bulk_key.callpath));
+            // find json object corresponding to the RPC
+            struct json_object* rpc_json
+                = json_object_object_get(rpcs, rpc_key);
+            if (!rpc_json) {
+                rpc_json = json_object_new_object();
+                json_object_object_add(rpcs, rpc_key, rpc_json);
+                // fill RPC information
+                fill_with_rpc_info(rpc_json, &(p->bulk_key.callpath), state);
             }
             // find or add "bulk" section
             struct json_object* bulk = json_object_object_get(rpc_json, "bulk");
@@ -1328,14 +1399,60 @@ monitor_state_to_json(const default_monitor_state_t* state)
             }
             // get the source address from the callpath
             addr_info_t* addr_info
-                = addr_info_find_by_id(state, p->callpath.addr_id);
+                = addr_info_find_by_id(state, p->bulk_key.callpath.addr_id);
             char addr_key[256];
             sprintf(addr_key, "received from %s",
                     addr_info ? addr_info->name : "<unknown>");
-            // convert bulk_statistics to json
-            struct json_object* stats = bulk_statistics_to_json(p);
-            // add statistics to "bulk" object with the address as key
-            json_object_object_add_ex(bulk, addr_key, stats,
+            // get or create the object associated with addr_key
+            struct json_object* bulk_stats_by_addr =
+                json_object_object_get(bulk, addr_key);
+            if (!bulk_stats_by_addr) {
+                bulk_stats_by_addr = json_object_new_object();
+                json_object_object_add(bulk, addr_key, bulk_stats_by_addr);
+            }
+#endif
+            // build RPC key
+            char* rpc_key = build_rpc_key(&(p->bulk_key.callpath));
+            // find json object corresponding to the RPC
+            struct json_object* rpc_json
+                = json_object_object_get(rpcs, rpc_key);
+            if (!rpc_json) {
+                rpc_json = json_object_new_object();
+                json_object_object_add(rpcs, rpc_key, rpc_json);
+                // fill RPC information
+                fill_with_rpc_info(rpc_json, &(p->bulk_key.callpath), state);
+            }
+            // find or add a "target" section for it
+            struct json_object* target
+                = json_object_object_get_or_create_object(rpc_json, "target");
+            // get the source address from the callpath
+            addr_info_t* addr_info
+                = addr_info_find_by_id(state, p->bulk_key.callpath.addr_id);
+            char addr_key[256];
+            sprintf(addr_key, "received from %s",
+                    addr_info ? addr_info->name : "<unknown>");
+            // find or add the "received from <address>" section
+            struct json_object* received_from
+                = json_object_object_get_or_create_object(target, addr_key);
+            // find or add the "bulk" section
+            struct json_object* bulk = json_object_object_get_or_create_object(
+                received_from, "bulk");
+            // get the address used in the transfer and the direction of the
+            // transfer
+            addr_info_t* xfer_addr_info
+                = addr_info_find_by_id(state, p->bulk_key.remote_addr_id);
+            char xfer_addr_key[256];
+            if (p->bulk_key.operation == HG_BULK_PULL) {
+                sprintf(xfer_addr_key, "pull from %s",
+                        xfer_addr_info ? xfer_addr_info->name : "<unknown>");
+            } else {
+                sprintf(xfer_addr_key, "push to %s",
+                        xfer_addr_info ? xfer_addr_info->name : "<unknown>");
+            }
+            // convert bulk_transfer_statistics to json
+            struct json_object* stats = bulk_transfer_statistics_to_json(p);
+            // add statistics with the address as key
+            json_object_object_add_ex(bulk, xfer_addr_key, stats,
                                       JSON_C_OBJECT_ADD_KEY_IS_NEW);
             free(rpc_key);
         }

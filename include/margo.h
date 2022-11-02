@@ -1152,6 +1152,15 @@ hg_handle_t margo_request_get_handle(margo_request req);
 margo_request_type margo_request_get_type(margo_request req);
 
 /**
+ * @brief Retrieve the margo_instance_id from a request.
+ *
+ * @param req Request
+ *
+ * @return margo instance id
+ */
+margo_instance_id margo_request_get_instance(margo_request req);
+
+/**
  * @brief Send an RPC response, waiting for completion before returning
  * control to the calling ULT.
  *
