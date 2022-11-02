@@ -48,6 +48,12 @@
  * (i.e, an ABT_key), to track the context in which a bulk operation happens.
  */
 
+/* ========================================================================
+ * Statistics structure definitions
+ * ======================================================================== */
+
+struct default_monitor_state;
+
 typedef struct statistics {
     uint64_t num; /* number of samples  */
     double   min; /* minimum value      */
@@ -60,8 +66,9 @@ typedef struct statistics {
 } statistics_t;
 
 typedef struct callpath {
-    hg_id_t rpc_id;
-    hg_id_t parent_id;
+    hg_id_t  rpc_id;    /* current RPC id */
+    hg_id_t  parent_id; /* id of the RPC it came from, if any */
+    uint64_t addr_id; /* address the current RPC was sent to or received from */
 } callpath_t;
 
 #define UPDATE_STATISTICS_WITH(stats, value)                               \
@@ -169,12 +176,17 @@ static void        rpc_info_clear(rpc_info_t* hash);
 
 /* Structure used to track addresses, hashed by name */
 typedef struct addr_info {
-    UT_hash_handle hh;
+    UT_hash_handle hh_by_id;
+    UT_hash_handle hh_by_name;
+    uint64_t       id;
     char           name[1];
 } addr_info_t;
 
+static addr_info_t* addr_info_find_or_add(struct default_monitor_state* monitor,
+                                          margo_instance_id             mid,
+                                          hg_addr_t                     addr);
 static addr_info_t*
-addr_info_find_or_add(addr_info_t* hash, margo_instance_id mid, hg_addr_t addr);
+addr_info_find_by_id(const struct default_monitor_state* monitor, uint64_t id);
 static void addr_info_clear(addr_info_t* hash);
 
 /* Root of the monitor's state */
@@ -186,7 +198,9 @@ typedef struct default_monitor_state {
     /* RPC information */
     rpc_info_t* rpc_info;
     /* Address info */
-    addr_info_t*     addr_info;
+    addr_info_t*     addr_info_by_name;
+    addr_info_t*     addr_info_by_id;
+    uint64_t         addr_info_last_id;
     ABT_mutex_memory addr_info_mtx;
     /* Argobots keys */
     ABT_key bulk_stats_key; /* may be associated with a bulk_statistics_t* */
@@ -232,6 +246,10 @@ typedef struct bulk_session {
 
 static void
 write_monitor_state_to_json_file(const default_monitor_state_t* monitor);
+
+/* ========================================================================
+ * Functions related to implementing the monitor's callbacks
+ * ======================================================================== */
 
 static void* margo_default_monitor_initialize(margo_instance_id   mid,
                                               void*               uargs,
@@ -287,7 +305,9 @@ static void margo_default_monitor_finalize(void* uargs)
     rpc_info_clear(monitor->rpc_info);
 
     /* free address info */
-    addr_info_clear(monitor->addr_info);
+    addr_info_clear(monitor->addr_info_by_name);
+    monitor->addr_info_by_name = NULL;
+    monitor->addr_info_by_id   = NULL;
 
     /* free origin RPC statistics */
     {
@@ -455,13 +475,14 @@ margo_default_monitor_on_forward(void*                        uargs,
         ABT_mutex_spinlock(
             ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->addr_info_mtx));
         addr_info_t* addr_info
-            = addr_info_find_or_add(monitor->addr_info, mid, handle_info->addr);
+            = addr_info_find_or_add(monitor, mid, handle_info->addr);
         ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->addr_info_mtx));
 
         // attach statistics to session
-        hg_id_t id     = handle_info->id;
-        id             = mux_id(id, event_args->provider_id);
-        callpath_t key = {.rpc_id = id, .parent_id = 0};
+        hg_id_t id = handle_info->id;
+        id         = mux_id(id, event_args->provider_id);
+        callpath_t key
+            = {.rpc_id = id, .parent_id = 0, .addr_id = addr_info->id};
         // try to get parent RPC id from context
         margo_get_current_rpc_id(mid, &key.parent_id);
 
@@ -709,12 +730,14 @@ static void margo_default_monitor_on_rpc_handler(
         ABT_mutex_spinlock(
             ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->addr_info_mtx));
         addr_info_t* addr_info
-            = addr_info_find_or_add(monitor->addr_info, mid, handle_info->addr);
+            = addr_info_find_or_add(monitor, mid, handle_info->addr);
         ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->addr_info_mtx));
 
         // attach statistics to session
         hg_id_t    id  = margo_get_info(event_args->handle)->id;
-        callpath_t key = {.rpc_id = id, .parent_id = event_args->parent_rpc_id};
+        callpath_t key = {.rpc_id    = id,
+                          .parent_id = event_args->parent_rpc_id,
+                          .addr_id   = addr_info->id};
 
         ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
         HASH_FIND(hh, monitor->target_rpc_stats, &key, sizeof(key), rpc_stats);
@@ -931,6 +954,10 @@ struct margo_monitor __margo_default_monitor
 
 struct margo_monitor* margo_default_monitor = &__margo_default_monitor;
 
+/* ========================================================================
+ * Functions related to dumping the monitor's state into a JSON file
+ * ======================================================================== */
+
 static void
 write_monitor_state_to_json_file(const default_monitor_state_t* monitor)
 {
@@ -968,7 +995,7 @@ write_monitor_state_to_json_file(const default_monitor_state_t* monitor)
     /* write statistics */
     size_t      json_len = 0;
     const char* json_str = json_object_to_json_string_length(
-        json, monitor->pretty_json, &json_len);
+        json, monitor->pretty_json | JSON_C_TO_STRING_NOSLASHESCAPE, &json_len);
     fwrite(json_str, json_len, 1, file);
     ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
     /* finish */
@@ -976,6 +1003,10 @@ finish:
     free(fullname);
     if (file) fclose(file);
 }
+
+/* ========================================================================
+ * Functions related to converting statistics into a json_object tree
+ * ======================================================================== */
 
 static struct json_object* statistics_to_json(const statistics_t* stats)
 {
@@ -1103,6 +1134,13 @@ target_rpc_statistics_to_json(const target_rpc_statistics_t* stats)
     return json;
 }
 
+/* This function creates a string in the form "A:B:C:D" where
+ * - A is the parent RPC id
+ * - B is the parent provider id
+ * - C is the current RPC id
+ * - D is the current provider id
+ * The returned string must be freed by the caller.
+ */
 static char* build_rpc_key(const callpath_t* callpath)
 {
     uint16_t provider_id;
@@ -1119,9 +1157,13 @@ static char* build_rpc_key(const callpath_t* callpath)
     return rpc_key;
 }
 
-static void fill_with_rpc_info(struct json_object* rpc_json,
-                               const callpath_t*   callpath,
-                               rpc_info_t*         rpc_info_hash)
+/* This function adds the id, provider_id, parent_id,
+ * parent_provider_id, and name  attributes to a
+ * JSON fragment containing RPC statistics.
+ */
+static void fill_with_rpc_info(struct json_object*            rpc_json,
+                               const callpath_t*              callpath,
+                               const default_monitor_state_t* monitor)
 {
     uint16_t provider_id;
     hg_id_t  base_id;
@@ -1145,13 +1187,27 @@ static void fill_with_rpc_info(struct json_object* rpc_json,
                               json_object_new_uint64(parent_provider_id),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
     // add "name" entry
-    rpc_info_t* rpc_info = rpc_info_find(rpc_info_hash, callpath->rpc_id);
+    rpc_info_t* rpc_info = rpc_info_find(monitor->rpc_info, callpath->rpc_id);
     const char* rpc_name = rpc_info ? rpc_info->name : "";
     rpc_name             = rpc_name ? rpc_name : "";
     json_object_object_add_ex(rpc_json, "name",
                               json_object_new_string(rpc_name),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
 }
+
+#if 0
+static void fill_with_addr_info(struct json_object* rpc_json,
+                                const callpath_t*   callpath,
+                                const default_monitor_state_t* monitor)
+{
+    // add "address" entry
+    addr_info_t* addr_info = addr_info_find_by_id(monitor, callpath->addr_id);
+    json_object_object_add_ex(
+        rpc_json, "address",
+        json_object_new_string(addr_info ? addr_info->name : ""),
+        JSON_C_OBJECT_ADD_KEY_IS_NEW);
+}
+#endif
 
 static struct json_object*
 monitor_state_to_json(const default_monitor_state_t* state)
@@ -1171,14 +1227,32 @@ monitor_state_to_json(const default_monitor_state_t* state)
         {
             // build RPC key
             char* rpc_key = build_rpc_key(&(p->callpath));
-            // create the entry in the "rpcs" section
-            struct json_object* rpc_json = json_object_new_object();
-            json_object_object_add(rpcs, rpc_key, rpc_json);
-            // fill RPC information
-            fill_with_rpc_info(rpc_json, &(p->callpath), state->rpc_info);
-            // add "origin" statistics
-            json_object_object_add_ex(rpc_json, "origin",
-                                      origin_rpc_statistics_to_json(p),
+            // find JSON object corresponding to this RPC key
+            struct json_object* rpc_json
+                = json_object_object_get(rpcs, rpc_key);
+            if (!rpc_json) {
+                rpc_json = json_object_new_object();
+                json_object_object_add(rpcs, rpc_key, rpc_json);
+                // fill RPC information
+                fill_with_rpc_info(rpc_json, &(p->callpath), state);
+            }
+            // find or add "origin" section
+            struct json_object* origin
+                = json_object_object_get(rpc_json, "origin");
+            if (!origin) {
+                origin = json_object_new_object();
+                json_object_object_add(rpc_json, "origin", origin);
+            }
+            // get the destination address from the callpath
+            addr_info_t* addr_info
+                = addr_info_find_by_id(state, p->callpath.addr_id);
+            char addr_key[256];
+            sprintf(addr_key, "sent to %s",
+                    addr_info ? addr_info->name : "<unknown>");
+            // convert origin_rpc_statistics to json
+            struct json_object* stats = origin_rpc_statistics_to_json(p);
+            // add statistics to "origin" object with the address as key
+            json_object_object_add_ex(origin, addr_key, stats,
                                       JSON_C_OBJECT_ADD_KEY_IS_NEW);
             free(rpc_key);
         }
@@ -1197,11 +1271,25 @@ monitor_state_to_json(const default_monitor_state_t* state)
                 rpc_json = json_object_new_object();
                 json_object_object_add(rpcs, rpc_key, rpc_json);
                 // fill RPC information
-                fill_with_rpc_info(rpc_json, &(p->callpath), state->rpc_info);
+                fill_with_rpc_info(rpc_json, &(p->callpath), state);
             }
-            // add "target" statistics
-            json_object_object_add_ex(rpc_json, "target",
-                                      target_rpc_statistics_to_json(p),
+            // find or add "target" section
+            struct json_object* target
+                = json_object_object_get(rpc_json, "target");
+            if (!target) {
+                target = json_object_new_object();
+                json_object_object_add(rpc_json, "target", target);
+            }
+            // get the source address from the callpath
+            addr_info_t* addr_info
+                = addr_info_find_by_id(state, p->callpath.addr_id);
+            char addr_key[256];
+            sprintf(addr_key, "received from %s",
+                    addr_info ? addr_info->name : "<unknown>");
+            // convert target_rpc_statistics to json
+            struct json_object* stats = target_rpc_statistics_to_json(p);
+            // add statistics to "target" object with the address as key
+            json_object_object_add_ex(target, addr_key, stats,
                                       JSON_C_OBJECT_ADD_KEY_IS_NEW);
             free(rpc_key);
         }
@@ -1220,17 +1308,34 @@ monitor_state_to_json(const default_monitor_state_t* state)
                 rpc_json = json_object_new_object();
                 json_object_object_add(rpcs, rpc_key, rpc_json);
                 // fill RPC information
-                fill_with_rpc_info(rpc_json, &(p->callpath), state->rpc_info);
+                fill_with_rpc_info(rpc_json, &(p->callpath), state);
             }
-            // add "bulk" statistics
-            json_object_object_add_ex(rpc_json, "bulk",
-                                      bulk_statistics_to_json(p),
+            // find or add "bulk" section
+            struct json_object* bulk = json_object_object_get(rpc_json, "bulk");
+            if (!bulk) {
+                bulk = json_object_new_object();
+                json_object_object_add(rpc_json, "bulk", bulk);
+            }
+            // get the source address from the callpath
+            addr_info_t* addr_info
+                = addr_info_find_by_id(state, p->callpath.addr_id);
+            char addr_key[256];
+            sprintf(addr_key, "received from %s",
+                    addr_info ? addr_info->name : "<unknown>");
+            // convert bulk_statistics to json
+            struct json_object* stats = bulk_statistics_to_json(p);
+            // add statistics to "bulk" object with the address as key
+            json_object_object_add_ex(bulk, addr_key, stats,
                                       JSON_C_OBJECT_ADD_KEY_IS_NEW);
             free(rpc_key);
         }
     }
     return json;
 }
+
+/* ========================================================================
+ * Functions related to the hash of rpc_info_t maintained by the monitor
+ * ======================================================================== */
 
 static rpc_info_t* rpc_info_find(rpc_info_t* hash, hg_id_t id)
 {
@@ -1249,9 +1354,13 @@ static void rpc_info_clear(rpc_info_t* hash)
     }
 }
 
-static addr_info_t* addr_info_find_or_add(addr_info_t*      addr_info_hash,
-                                          margo_instance_id mid,
-                                          hg_addr_t         addr)
+/* ========================================================================
+ * Functions related to the hash of addr_info_t maintained by the monitor
+ * ======================================================================== */
+
+static addr_info_t* addr_info_find_or_add(default_monitor_state_t* monitor,
+                                          margo_instance_id        mid,
+                                          hg_addr_t                addr)
 {
     addr_info_t* info          = NULL;
     char         addr_str[128] = {0};
@@ -1262,20 +1371,33 @@ static addr_info_t* addr_info_find_or_add(addr_info_t*      addr_info_hash,
         strcpy(addr_str, "<unknown>");
         addr_str_size = 9;
     }
-    HASH_FIND(hh, addr_info_hash, addr_str, addr_str_size, info);
+    HASH_FIND(hh_by_name, monitor->addr_info_by_name, addr_str, addr_str_size,
+              info);
     if (info) return info;
     info = (addr_info_t*)calloc(1, sizeof(*info) + addr_str_size);
+    monitor->addr_info_last_id += 1;
+    info->id = monitor->addr_info_last_id;
     memcpy(info->name, addr_str, addr_str_size);
-    HASH_ADD(hh, addr_info_hash, name[0], addr_str_size, info);
+    HASH_ADD(hh_by_name, monitor->addr_info_by_name, name[0], addr_str_size,
+             info);
+    HASH_ADD(hh_by_id, monitor->addr_info_by_id, id, sizeof(info->id), info);
+    return info;
+}
+
+static addr_info_t* addr_info_find_by_id(const default_monitor_state_t* monitor,
+                                         uint64_t                       id)
+{
+    addr_info_t* info = NULL;
+    HASH_FIND(hh_by_id, monitor->addr_info_by_id, &id, sizeof(id), info);
     return info;
 }
 
 static void addr_info_clear(addr_info_t* hash)
 {
     addr_info_t *p, *tmp;
-    HASH_ITER(hh, hash, p, tmp)
+    HASH_ITER(hh_by_name, hash, p, tmp)
     {
-        HASH_DEL(hash, p);
+        HASH_DELETE(hh_by_name, hash, p);
         free(p);
     }
 }
