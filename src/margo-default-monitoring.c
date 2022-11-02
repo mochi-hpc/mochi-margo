@@ -119,7 +119,8 @@ enum
  */
 typedef struct bulk_statistics {
     statistics_t create;
-    statistics_t transfer; /* reference timestamp */
+    statistics_t create_size; /* size at creation time */
+    statistics_t transfer;    /* reference timestamp */
     statistics_t
         transfer_size; /* size of transfer, not timestamp or duration */
     statistics_t   transfer_cb[2];
@@ -848,7 +849,13 @@ static void margo_default_monitor_on_bulk_create(
         event_args->uctx.f = timestamp;
     } else {
         double t = timestamp - event_args->uctx.f;
+        // compute total size
+        size_t size = 0;
+        for (unsigned i = 0; i < event_args->count; i++) {
+            size += event_args->sizes[i];
+        }
         UPDATE_STATISTICS_WITH(bulk_stats->create, t);
+        UPDATE_STATISTICS_WITH(bulk_stats->create_size, (double)size);
     }
 }
 
@@ -1060,10 +1067,13 @@ bulk_statistics_to_json(const bulk_statistics_t* stats)
     json_object_object_add_ex(json, "create",
                               statistics_to_json(&stats->create),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(json, "create_size",
+                              statistics_to_json(&stats->create_size),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(json, "transfer",
                               statistics_to_json(&stats->transfer),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
-    json_object_object_add_ex(json, "size",
+    json_object_object_add_ex(json, "transfer_size",
                               statistics_to_json(&stats->transfer_size),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(

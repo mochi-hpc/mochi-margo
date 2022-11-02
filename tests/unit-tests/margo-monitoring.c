@@ -546,8 +546,9 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
                 sprintf(addr_key, "received from %s", self_addr_str);
                 ASSERT_JSON_HAS_KEY(bulk, addr_key, src_addr, object);
                 ASSERT_JSON_HAS_STATS(src_addr, create);
+                ASSERT_JSON_HAS_STATS(src_addr, create_size);
                 ASSERT_JSON_HAS_STATS(src_addr, transfer);
-                ASSERT_JSON_HAS_STATS(src_addr, size);
+                ASSERT_JSON_HAS_STATS(src_addr, transfer_size);
                 ASSERT_JSON_HAS_DOUBLE_STATS(src_addr, transfer_cb);
                 ASSERT_JSON_HAS_DOUBLE_STATS(src_addr, wait);
             }
@@ -571,8 +572,9 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
             // bulk section must have a section indexed by source address
             ASSERT_JSON_HAS_KEY(bulk, "received from <unknown>", src_addr, object);
             ASSERT_JSON_HAS_STATS(src_addr, create);
+            ASSERT_JSON_HAS_STATS(src_addr, create_size);
             ASSERT_JSON_HAS_STATS(src_addr, transfer);
-            ASSERT_JSON_HAS_STATS(src_addr, size);
+            ASSERT_JSON_HAS_STATS(src_addr, transfer_size);
             ASSERT_JSON_HAS_DOUBLE_STATS(src_addr, transfer_cb);
             ASSERT_JSON_HAS_DOUBLE_STATS(src_addr, wait);
         }
@@ -624,8 +626,9 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
                     sprintf(addr_key, "received from %s", self_addr_str);
                     ASSERT_JSON_HAS_KEY(bulk, addr_key, src_addr, object);
                     ASSERT_JSON_HAS_STATS(src_addr, create);
+                    ASSERT_JSON_HAS_STATS(src_addr, create_size);
                     ASSERT_JSON_HAS_STATS(src_addr, transfer);
-                    ASSERT_JSON_HAS_STATS(src_addr, size);
+                    ASSERT_JSON_HAS_STATS(src_addr, transfer_size);
                     ASSERT_JSON_HAS_DOUBLE_STATS(src_addr, transfer_cb);
                     ASSERT_JSON_HAS_DOUBLE_STATS(src_addr, wait);
                 }
