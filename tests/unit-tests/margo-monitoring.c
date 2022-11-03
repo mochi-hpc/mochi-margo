@@ -519,38 +519,37 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
             {
                 // "origin" section must have an object corresponding to the address
                 sprintf(addr_key, "sent to %s", self_addr_str);
-                ASSERT_JSON_HAS_KEY(origin, addr_key, dest_addr, object);
-                ASSERT_JSON_HAS_DOUBLE_STATS(dest_addr, forward);
-                ASSERT_JSON_HAS_DOUBLE_STATS(dest_addr, forward_cb);
-                ASSERT_JSON_HAS_DOUBLE_STATS(dest_addr, wait);
-                ASSERT_JSON_HAS_DOUBLE_STATS(dest_addr, set_input);
-                ASSERT_JSON_HAS_DOUBLE_STATS(dest_addr, get_output);
+                ASSERT_JSON_HAS_KEY(origin, addr_key, sent_to, object);
+                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, forward);
+                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, forward_cb);
+                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, wait);
+                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, set_input);
+                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, get_output);
             }
             // RPC must have an "target" section
             ASSERT_JSON_HAS(echo, target, object);
             {
                 // "target" section must have an object corresponding to the source address
                 sprintf(addr_key, "received from %s", self_addr_str);
-                ASSERT_JSON_HAS_KEY(target, addr_key, src_addr, object);
-                ASSERT_JSON_HAS_STATS(src_addr, handler);
-                ASSERT_JSON_HAS_DOUBLE_STATS(src_addr, respond);
-                ASSERT_JSON_HAS_DOUBLE_STATS(src_addr, respond_cb);
-                ASSERT_JSON_HAS_DOUBLE_STATS(src_addr, wait);
-                ASSERT_JSON_HAS_DOUBLE_STATS(src_addr, set_output);
-                ASSERT_JSON_HAS_DOUBLE_STATS(src_addr, get_input);
-            }
-            // RPC must have a "bulk" section
-            ASSERT_JSON_HAS(echo, bulk, object);
-            {
-                // "bulk" section must have an object corresponding to the source address
-                sprintf(addr_key, "received from %s", self_addr_str);
-                ASSERT_JSON_HAS_KEY(bulk, addr_key, src_addr, object);
-                ASSERT_JSON_HAS_STATS(src_addr, create);
-                ASSERT_JSON_HAS_STATS(src_addr, create_size);
-                ASSERT_JSON_HAS_STATS(src_addr, transfer);
-                ASSERT_JSON_HAS_STATS(src_addr, transfer_size);
-                ASSERT_JSON_HAS_DOUBLE_STATS(src_addr, transfer_cb);
-                ASSERT_JSON_HAS_DOUBLE_STATS(src_addr, wait);
+                ASSERT_JSON_HAS_KEY(target, addr_key, received_from, object);
+                ASSERT_JSON_HAS_STATS(received_from, handler);
+                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, respond);
+                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, respond_cb);
+                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, wait);
+                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, set_output);
+                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, get_input);
+                // "received from ..." section must have a "bulk" section
+                ASSERT_JSON_HAS(received_from, bulk, object);
+                ASSERT_JSON_HAS_STATS(bulk, create);
+                ASSERT_JSON_HAS_STATS(bulk, create_size);
+                // "bulk" section must have a "pull from ..." section
+                char pull_from_key[512];
+                sprintf(pull_from_key, "pull from %s", self_addr_str);
+                ASSERT_JSON_HAS_KEY(bulk, pull_from_key, pull_from, object);
+                ASSERT_JSON_HAS_STATS(pull_from, transfer);
+                ASSERT_JSON_HAS_STATS(pull_from, transfer_size);
+                ASSERT_JSON_HAS_DOUBLE_STATS(pull_from, transfer_cb);
+                ASSERT_JSON_HAS_DOUBLE_STATS(pull_from, wait);
             }
         }
         // must have an "65535:65535:65535:65535" secion with a bulk create
@@ -567,16 +566,14 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
             munit_assert_long(65535, ==, json_object_get_uint64(parent_provider_id));
             ASSERT_JSON_HAS(root, name, string);
             munit_assert_string_equal(json_object_get_string(name), "");
-            // RPC must have a "bulk" section
-            ASSERT_JSON_HAS(root, bulk, object);
-            // bulk section must have a section indexed by source address
-            ASSERT_JSON_HAS_KEY(bulk, "received from <unknown>", src_addr, object);
-            ASSERT_JSON_HAS_STATS(src_addr, create);
-            ASSERT_JSON_HAS_STATS(src_addr, create_size);
-            ASSERT_JSON_HAS_STATS(src_addr, transfer);
-            ASSERT_JSON_HAS_STATS(src_addr, transfer_size);
-            ASSERT_JSON_HAS_DOUBLE_STATS(src_addr, transfer_cb);
-            ASSERT_JSON_HAS_DOUBLE_STATS(src_addr, wait);
+            // RPC must have a "target" section
+            ASSERT_JSON_HAS(root, target, object);
+            // "target" section must have a section indexed by source address
+            ASSERT_JSON_HAS_KEY(target, "received from <unknown>", received_from, object);
+            // "received from ..." section must have a "bulk" section
+            ASSERT_JSON_HAS(received_from, bulk, object);
+            ASSERT_JSON_HAS_STATS(bulk, create);
+            ASSERT_JSON_HAS_STATS(bulk, create_size);
         }
         if(relay == HG_TRUE) {
             sprintf(echo_key, "2924675071:%d:2924675071:%d", provider_id_param, provider_id_param);
@@ -599,38 +596,38 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
                 {
                     // "origin" section must have a section index by destination address
                     sprintf(addr_key, "sent to %s", self_addr_str);
-                    ASSERT_JSON_HAS_KEY(origin, addr_key, dest_addr, object);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(dest_addr, forward);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(dest_addr, forward_cb);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(dest_addr, wait);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(dest_addr, set_input);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(dest_addr, get_output);
+                    ASSERT_JSON_HAS_KEY(origin, addr_key, sent_to, object);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, forward);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, forward_cb);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, wait);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, set_input);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, get_output);
                 }
                 // RPC must have an "target" section
                 ASSERT_JSON_HAS(echo, target, object);
                 {
                     // "target" section must have a section index by source address
                     sprintf(addr_key, "received from %s", self_addr_str);
-                    ASSERT_JSON_HAS_KEY(target, addr_key, src_addr, object);
-                    ASSERT_JSON_HAS_STATS(src_addr, handler);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(src_addr, respond);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(src_addr, respond_cb);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(src_addr, wait);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(src_addr, set_output);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(src_addr, get_input);
-                }
-                // RPC must have a "bulk" section
-                ASSERT_JSON_HAS(echo, bulk, object);
-                {
+                    ASSERT_JSON_HAS_KEY(target, addr_key, received_from, object);
+                    ASSERT_JSON_HAS_STATS(received_from, handler);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, respond);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, respond_cb);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, wait);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, set_output);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, get_input);
+                    // "received from ..." must have a "bulk" section
+                    ASSERT_JSON_HAS(received_from, bulk, object);
                     // "bulk" section must have a section index by source address
-                    sprintf(addr_key, "received from %s", self_addr_str);
-                    ASSERT_JSON_HAS_KEY(bulk, addr_key, src_addr, object);
-                    ASSERT_JSON_HAS_STATS(src_addr, create);
-                    ASSERT_JSON_HAS_STATS(src_addr, create_size);
-                    ASSERT_JSON_HAS_STATS(src_addr, transfer);
-                    ASSERT_JSON_HAS_STATS(src_addr, transfer_size);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(src_addr, transfer_cb);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(src_addr, wait);
+                    ASSERT_JSON_HAS_STATS(bulk, create);
+                    ASSERT_JSON_HAS_STATS(bulk, create_size);
+                    // "bulk" section must have a "pull from ..." section
+                    char pull_from_key[512];
+                    sprintf(pull_from_key, "pull from %s", self_addr_str);
+                    ASSERT_JSON_HAS_KEY(bulk, pull_from_key, pull_from, object);
+                    ASSERT_JSON_HAS_STATS(pull_from, transfer);
+                    ASSERT_JSON_HAS_STATS(pull_from, transfer_size);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(pull_from, transfer_cb);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(pull_from, wait);
                 }
             }
         }
