@@ -31,26 +31,43 @@
  *   target, including handler, ULT, respond, respond callback,
  *   wait, get_input, and set_output.
  *
- * - bulk_statistics: statistics on bulk operations, including
- *   bulk_create, bulk_transfer, and wait.
+ * - bulk_create_statistics: statistics on bulk creation operations
+ *   (size and durations).
  *
- * RPCs statistics can be aggregated differently depending
- * on the value of the "discriminate_by" field in the configuration
- * (this field can contain multiple of the following options).
- * - id: RPCs with distinct ids will use distinct statistics;
- * - provider: RPCs with distinct provider ids will use distinct statistics;
- * - callpath: RPCs with distinct parents will use distinct statistics.
- * If an empty list is provided to "discriminate_by", all the statistics
- * will be aggregated in a single entry regardless of ID, provider, or
- * callpath.
+ * - bulk_transfer_statistics: statistics on bulk transfer operations
+ *   (transfer, transfer callback, wait, and transfer size).
  *
- * An attempt will be made, using the same mechanism as callpath tracking
- * (i.e, an ABT_key), to track the context in which a bulk operation happens.
+ * The reasons bulk creation and transfer operations are tracked
+ * separately are (1) services may create bulk handle ahead of time
+ * and cache them, so their creation may not be linked the the execution
+ * of a particular RPC, and (2) while bulk creation statistics are
+ * maintained per callpath, transfer statistics are further maintained
+ * per remote address and per operation (pull/push).
+ *
+ * RPC statistics are generally maintained on a per-callpath basis.
+ * A callparg is a tuple (parent_rpc_id, rpc_id, address_id).
+ * - rpc_id is the RPC of the currently sent/received RPC.
+ * - parent_rpc_id is the RPC id of the handler from which the
+ *   current sent/received RPC has been sent, if any.
+ * - addr_id is an id pointing to an address maintained by the
+ *   monitoring system, and allows tracking either the sender
+ *   of the RPC (on the receiver side) or the receiver (on the
+ *   sender side).
+ *
+ * Note that RPC ids above contain the encoded provider ids, so
+ * demux_id can be used to further obtain the provider id and base id
+ * from these RPC ids.
  */
 
 /* ========================================================================
  * Helper JSON-C function
  * ======================================================================== */
+
+/* This function checks if a key is present in a json object and, if not,
+ * will create it and associate it with an empty object.
+ * This function does not check that the provided root object is indeed
+ * a JSON object.
+ */
 inline static struct json_object*
 json_object_object_get_or_create_object(struct json_object* root,
                                         const char*         key)
@@ -87,6 +104,10 @@ typedef struct callpath {
     uint64_t addr_id; /* address the current RPC was sent to or received from */
 } callpath_t;
 
+/* Bulk transfer operations are further indexed by
+ * the remote address and the operation, in addition
+ * to their callpath.
+ */
 typedef struct bulk_key {
     callpath_t callpath;
     uint64_t
@@ -134,31 +155,18 @@ enum
     TIMESTAMP = 1
 };
 
-/**
- * Statistics related to bulk creation.
- * This is managed separately from bulk transfers
- * because (1) creation of bulk handles may be done
- * to populate a pool of bulk buffers, rather than
- * when a bulk handle is needed, and (2) bulk
- * transfers are also indexed by the remote address
- * and operation used.
- */
+/* Statistics related to bulk creation. */
 typedef struct bulk_create_statistics {
     statistics_t   create;
     statistics_t   create_size;
-    callpath_t     callpath;
-    UT_hash_handle hh;
+    callpath_t     callpath; /* hash key */
+    UT_hash_handle hh;       /* hash handle */
 } bulk_create_statistics_t;
 
 static struct json_object*
 bulk_create_statistics_to_json(const bulk_create_statistics_t* stats);
 
 /* Statistics related to bulk transfers */
-/* Note: the reference timestamp is the transfer
- * operation rather than the create operation
- * because it is not unusual for a service to
- * have pre-created bulk handles.
- */
 typedef struct bulk_transfer_statistics {
     statistics_t   transfer; /* reference timestamp */
     statistics_t   transfer_size;
@@ -236,24 +244,27 @@ typedef struct default_monitor_state {
     int               precision;   /* precision used when printing doubles */
     int               pretty_json; /* use tabs and stuff in JSON printing */
     /* RPC information */
-    rpc_info_t* rpc_info;
+    rpc_info_t*      rpc_info;
+    ABT_mutex_memory rpc_info_mtx;
     /* Address info */
-    addr_info_t*     addr_info_by_name;
-    addr_info_t*     addr_info_by_id;
-    uint64_t         addr_info_last_id;
-    ABT_mutex_memory addr_info_mtx;
+    addr_info_t* addr_info_by_name; /* hash of addr_info_t by name field */
+    addr_info_t* addr_info_by_id;   /* hash of addr_info_t by id field */
+    uint64_t     addr_info_last_id; /* last id used for addresses */
+    ABT_mutex_memory
+        addr_info_mtx; /* mutex protecting access to the addr_info fields */
     /* Argobots keys */
     ABT_key callpath_key; /* may be associated with a callpath */
-    /* Mutex to access data (locked only when
-     * adding new entries into hash tables or
-     * when writing the state into a file) */
-    ABT_mutex_memory mutex;
-    /* Statistics */
+    /* Statistics and their mutex */
     hg_statistics_t             hg_stats;
+    ABT_mutex_memory            hg_stats_mtx;
     bulk_create_statistics_t*   bulk_create_stats;
+    ABT_mutex_memory            bulk_create_stats_mtx;
     bulk_transfer_statistics_t* bulk_transfer_stats;
+    ABT_mutex_memory            bulk_transfer_stats_mtx;
     origin_rpc_statistics_t*    origin_rpc_stats;
+    ABT_mutex_memory            origin_rpc_stats_mtx;
     target_rpc_statistics_t*    target_rpc_stats;
+    ABT_mutex_memory            target_rpc_stats_mtx;
 } default_monitor_state_t;
 
 static struct json_object*
@@ -408,7 +419,9 @@ static struct json_object* margo_default_monitor_config(void* uargs)
     json_object_object_add_ex(statistics, "precision",
                               json_object_new_int(monitor->precision),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
-
+    json_object_object_add_ex(statistics, "pretty",
+                              json_object_new_boolean(monitor->pretty_json),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
     return config;
 }
 
@@ -424,9 +437,9 @@ margo_default_monitor_on_register(void*                         uargs,
         = (rpc_info_t*)calloc(1, sizeof(*rpc_info) + strlen(event_args->name));
     rpc_info->id = event_args->id;
     strcpy(rpc_info->name, event_args->name);
-    ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
+    ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_info_mtx));
     HASH_ADD(hh, monitor->rpc_info, id, sizeof(hg_id_t), rpc_info);
-    ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
+    ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_info_mtx));
 }
 
 static void
@@ -533,7 +546,8 @@ margo_default_monitor_on_forward(void*                        uargs,
         // try to get parent RPC id from context
         margo_get_current_rpc_id(mid, &key.parent_id);
 
-        ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
+        ABT_mutex_spinlock(
+            ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->origin_rpc_stats_mtx));
         HASH_FIND(hh, monitor->origin_rpc_stats, &key, sizeof(key), rpc_stats);
         if (!rpc_stats) {
             rpc_stats = (origin_rpc_statistics_t*)calloc(1, sizeof(*rpc_stats));
@@ -541,7 +555,8 @@ margo_default_monitor_on_forward(void*                        uargs,
             HASH_ADD(hh, monitor->origin_rpc_stats, callpath, sizeof(key),
                      rpc_stats);
         }
-        ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
+        ABT_mutex_unlock(
+            ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->origin_rpc_stats_mtx));
         session->origin.stats = rpc_stats;
 
         double t = timestamp - session->origin.start_ts;
@@ -786,7 +801,8 @@ static void margo_default_monitor_on_rpc_handler(
                           .parent_id = event_args->parent_rpc_id,
                           .addr_id   = addr_info->id};
 
-        ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
+        ABT_mutex_spinlock(
+            ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->target_rpc_stats_mtx));
         HASH_FIND(hh, monitor->target_rpc_stats, &key, sizeof(key), rpc_stats);
         if (!rpc_stats) {
             rpc_stats = (target_rpc_statistics_t*)calloc(1, sizeof(*rpc_stats));
@@ -794,7 +810,8 @@ static void margo_default_monitor_on_rpc_handler(
             HASH_ADD(hh, monitor->target_rpc_stats, callpath, sizeof(key),
                      rpc_stats);
         }
-        ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
+        ABT_mutex_unlock(
+            ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->target_rpc_stats_mtx));
         session->target.stats = rpc_stats;
 
         event_args->uctx.f = timestamp;
@@ -875,7 +892,8 @@ static void margo_default_monitor_on_bulk_create(
     ABT_key_get(monitor->callpath_key, (void**)&pkey);
     if (!pkey) pkey = (callpath_t*)&default_key;
 
-    ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
+    ABT_mutex_spinlock(
+        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->bulk_create_stats_mtx));
     HASH_FIND(hh, monitor->bulk_create_stats, pkey, sizeof(*pkey), bulk_stats);
     if (!bulk_stats) {
         bulk_stats = (bulk_create_statistics_t*)calloc(1, sizeof(*bulk_stats));
@@ -883,7 +901,8 @@ static void margo_default_monitor_on_bulk_create(
         HASH_ADD(hh, monitor->bulk_create_stats, callpath, sizeof(*pkey),
                  bulk_stats);
     }
-    ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
+    ABT_mutex_unlock(
+        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->bulk_create_stats_mtx));
 
     if (event_type == MARGO_MONITOR_FN_START) {
         event_args->uctx.f = timestamp;
@@ -932,7 +951,8 @@ static void margo_default_monitor_on_bulk_transfer(
             bulk_key.callpath.rpc_id    = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
         }
 
-        ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
+        ABT_mutex_spinlock(
+            ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->bulk_transfer_stats_mtx));
         HASH_FIND(hh, monitor->bulk_transfer_stats, &bulk_key, sizeof(bulk_key),
                   bulk_stats);
         if (!bulk_stats) {
@@ -942,7 +962,8 @@ static void margo_default_monitor_on_bulk_transfer(
             HASH_ADD(hh, monitor->bulk_transfer_stats, bulk_key,
                      sizeof(bulk_key), bulk_stats);
         }
-        ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
+        ABT_mutex_unlock(
+            ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->bulk_transfer_stats_mtx));
 
         event_args->uctx.f = timestamp;
 
@@ -1041,8 +1062,6 @@ write_monitor_state_to_json_file(const default_monitor_state_t* monitor)
         goto finish;
     }
     /* create JSON statistics */
-    ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
-
     char double_format[] = "%.Xf";
     double_format[2]     = (char)(48 + monitor->precision);
     json_c_set_serialization_double_format(double_format, JSON_C_OPTION_GLOBAL);
@@ -1053,7 +1072,6 @@ write_monitor_state_to_json_file(const default_monitor_state_t* monitor)
     const char* json_str = json_object_to_json_string_length(
         json, monitor->pretty_json | JSON_C_TO_STRING_NOSLASHESCAPE, &json_len);
     fwrite(json_str, json_len, 1, file);
-    ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->mutex));
     /* finish */
 finish:
     free(fullname);
@@ -1379,38 +1397,6 @@ monitor_state_to_json(const default_monitor_state_t* state)
         bulk_transfer_statistics_t *p, *tmp;
         HASH_ITER(hh, state->bulk_transfer_stats, p, tmp)
         {
-#if 0
-            // build RPC key
-            char* rpc_key = build_rpc_key(&(p->bulk_key.callpath));
-            // find json object corresponding to the RPC
-            struct json_object* rpc_json
-                = json_object_object_get(rpcs, rpc_key);
-            if (!rpc_json) {
-                rpc_json = json_object_new_object();
-                json_object_object_add(rpcs, rpc_key, rpc_json);
-                // fill RPC information
-                fill_with_rpc_info(rpc_json, &(p->bulk_key.callpath), state);
-            }
-            // find or add "bulk" section
-            struct json_object* bulk = json_object_object_get(rpc_json, "bulk");
-            if (!bulk) {
-                bulk = json_object_new_object();
-                json_object_object_add(rpc_json, "bulk", bulk);
-            }
-            // get the source address from the callpath
-            addr_info_t* addr_info
-                = addr_info_find_by_id(state, p->bulk_key.callpath.addr_id);
-            char addr_key[256];
-            sprintf(addr_key, "received from %s",
-                    addr_info ? addr_info->name : "<unknown>");
-            // get or create the object associated with addr_key
-            struct json_object* bulk_stats_by_addr =
-                json_object_object_get(bulk, addr_key);
-            if (!bulk_stats_by_addr) {
-                bulk_stats_by_addr = json_object_new_object();
-                json_object_object_add(bulk, addr_key, bulk_stats_by_addr);
-            }
-#endif
             // build RPC key
             char* rpc_key = build_rpc_key(&(p->bulk_key.callpath));
             // find json object corresponding to the RPC
