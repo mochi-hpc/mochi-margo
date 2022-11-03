@@ -237,6 +237,9 @@ static addr_info_t*
 addr_info_find_by_id(const struct default_monitor_state* monitor, uint64_t id);
 static void addr_info_clear(addr_info_t* hash);
 
+struct session;
+struct bulk_session;
+
 /* Root of the monitor's state */
 typedef struct default_monitor_state {
     margo_instance_id mid;
@@ -265,10 +268,18 @@ typedef struct default_monitor_state {
     ABT_mutex_memory            origin_rpc_stats_mtx;
     target_rpc_statistics_t*    target_rpc_stats;
     ABT_mutex_memory            target_rpc_stats_mtx;
+    /* session and bulk_session pools */
+    struct session*      session_pool;
+    ABT_mutex_memory     session_pool_mtx;
+    struct bulk_session* bulk_session_pool;
+    ABT_mutex_memory     bulk_session_pool_mtx;
 } default_monitor_state_t;
 
 static struct json_object*
 monitor_state_to_json(const default_monitor_state_t* stats);
+
+static void
+write_monitor_state_to_json_file(const default_monitor_state_t* monitor);
 
 /* A session is an object that will be associated with an hg_handle_t
  * when on_forward or on_rpc_handler is invoked, and will be destroyed
@@ -288,15 +299,92 @@ typedef struct session {
         double                   start_ts;
         target_rpc_statistics_t* stats;
     } target;
+    struct session* next; /* used to managed the session pool */
 } session_t;
 
 typedef struct bulk_session {
     double                      start_ts;
     bulk_transfer_statistics_t* stats;
+    struct bulk_session* next; /* used to managed the bulk_session pool */
 } bulk_session_t;
 
-static void
-write_monitor_state_to_json_file(const default_monitor_state_t* monitor);
+static inline session_t* new_session(default_monitor_state_t* monitor)
+{
+    session_t* result = NULL;
+    ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->session_pool_mtx));
+    if (monitor->session_pool) {
+        result                = monitor->session_pool;
+        monitor->session_pool = result->next;
+        memset(result, 0, sizeof(*result));
+    } else {
+        result = (session_t*)calloc(1, sizeof(*result));
+    }
+    ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->session_pool_mtx));
+    return result;
+}
+
+static inline void release_session(default_monitor_state_t* monitor,
+                                   session_t*               session)
+{
+    ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->session_pool_mtx));
+    session->next         = monitor->session_pool;
+    monitor->session_pool = session;
+    ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->session_pool_mtx));
+}
+
+static inline void clear_session_pool(default_monitor_state_t* monitor)
+{
+    ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->session_pool_mtx));
+    session_t* session = monitor->session_pool;
+    while (session) {
+        session_t* next = session->next;
+        free(session);
+        session = next;
+    }
+    ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->session_pool_mtx));
+}
+
+static inline bulk_session_t* new_bulk_session(default_monitor_state_t* monitor)
+{
+    bulk_session_t* result = NULL;
+    ABT_mutex_spinlock(
+        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->bulk_session_pool_mtx));
+    if (monitor->bulk_session_pool) {
+        result                     = monitor->bulk_session_pool;
+        monitor->bulk_session_pool = result->next;
+        memset(result, 0, sizeof(*result));
+    } else {
+        result = (bulk_session_t*)calloc(1, sizeof(*result));
+    }
+    ABT_mutex_unlock(
+        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->bulk_session_pool_mtx));
+    return result;
+}
+
+static inline void release_bulk_session(default_monitor_state_t* monitor,
+                                        bulk_session_t*          session)
+{
+    ABT_mutex_spinlock(
+        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->bulk_session_pool_mtx));
+    session->next              = monitor->bulk_session_pool;
+    monitor->bulk_session_pool = session;
+    ABT_mutex_unlock(
+        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->bulk_session_pool_mtx));
+}
+
+static inline void clear_bulk_session_pool(default_monitor_state_t* monitor)
+{
+    ABT_mutex_spinlock(
+        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->bulk_session_pool_mtx));
+    bulk_session_t* session = monitor->bulk_session_pool;
+    while (session) {
+        bulk_session_t* next = session->next;
+        free(session);
+        session = next;
+    }
+    ABT_mutex_unlock(
+        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->bulk_session_pool_mtx));
+}
 
 /* ========================================================================
  * Functions related to implementing the monitor's callbacks
@@ -338,6 +426,15 @@ static void* margo_default_monitor_initialize(margo_instance_id   mid,
             && json_object_get_boolean(pretty)) {
             monitor->pretty_json = JSON_C_TO_STRING_PRETTY;
         }
+    }
+
+    /* preinitialize bulk session */
+    for (int i = 0; i < 32; i++) {
+        session_t* session = (session_t*)malloc(sizeof(*session));
+        release_session(monitor, session);
+        bulk_session_t* bulk_session
+            = (bulk_session_t*)malloc(sizeof(*bulk_session));
+        release_bulk_session(monitor, bulk_session);
     }
 
     return (void*)monitor;
@@ -395,6 +492,9 @@ static void margo_default_monitor_finalize(void* uargs)
             free(p);
         }
     }
+    /* free session pools */
+    clear_session_pool(monitor);
+    clear_bulk_session_pool(monitor);
     /* free ABT key */
     ABT_key_free(&(monitor->callpath_key));
     /* free filename */
@@ -489,8 +589,7 @@ margo_default_monitor_on_create(void*                       uargs,
     }
     // MARGO_MONITOR_FN_END
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
-    // TODO use a session pool
-    session_t* session = calloc(1, sizeof(*session));
+    session_t*               session = new_session(monitor);
 
     session->origin.start_ts          = event_args->uctx.f;
     margo_monitor_data_t monitor_data = {.p = (void*)session};
@@ -766,7 +865,9 @@ static void margo_default_monitor_on_wait(void*                     uargs,
         UPDATE_STATISTICS_WITH(*duration_stats, t);
     }
 
-    if (event_type == MARGO_MONITOR_FN_END) { free(bulk_session); }
+    if ((event_type == MARGO_MONITOR_FN_END) && bulk_session) {
+        release_bulk_session(monitor, bulk_session);
+    }
 }
 
 static void margo_default_monitor_on_rpc_handler(
@@ -782,8 +883,7 @@ static void margo_default_monitor_on_rpc_handler(
     target_rpc_statistics_t* rpc_stats = NULL;
 
     if (event_type == MARGO_MONITOR_FN_START) {
-        // TODO use a session pool
-        if (!session) { session = calloc(1, sizeof(*session)); }
+        if (!session) { session = new_session(monitor); }
         session->target.start_ts          = timestamp;
         margo_monitor_data_t monitor_data = {.p = (void*)session};
         margo_set_monitoring_data(event_args->handle, monitor_data);
@@ -857,6 +957,7 @@ margo_default_monitor_on_destroy(void*                        uargs,
                                  margo_monitor_event_t        event_type,
                                  margo_monitor_destroy_args_t event_args)
 {
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     if (event_type == MARGO_MONITOR_FN_END) {
         // WARNING: handle is no longer valid after destroy
         return;
@@ -864,8 +965,7 @@ margo_default_monitor_on_destroy(void*                        uargs,
     // MARGO_MONITOR_FN_START
     margo_monitor_data_t monitor_data;
     margo_get_monitoring_data(event_args->handle, &monitor_data);
-    // TODO use a session pool
-    free(monitor_data.p);
+    release_session(monitor, (session_t*)monitor_data.p);
 }
 
 #define __MONITOR_FN(__event__)                                          \
@@ -967,8 +1067,7 @@ static void margo_default_monitor_on_bulk_transfer(
 
         event_args->uctx.f = timestamp;
 
-        // TODO use session pool
-        bulk_session_t* session           = calloc(1, sizeof(*session));
+        bulk_session_t* session           = new_bulk_session(monitor);
         session->start_ts                 = event_args->uctx.f;
         session->stats                    = bulk_stats;
         margo_monitor_data_t monitor_data = {.p = (void*)session};
