@@ -490,6 +490,7 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
         // check for the "progress_loop" section
         ASSERT_JSON_HAS(json_content, progress_loop, object);
         ASSERT_JSON_HAS_STATS(progress_loop, progress_with_timeout);
+        ASSERT_JSON_HAS_STATS(progress_loop, progress_timeout_value);
         ASSERT_JSON_HAS_STATS(progress_loop, progress_without_timeout);
         ASSERT_JSON_HAS_STATS(progress_loop, trigger);
 

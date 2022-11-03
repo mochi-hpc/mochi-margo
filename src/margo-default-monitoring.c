@@ -137,6 +137,7 @@ static struct json_object* statistics_to_json(const statistics_t* stats);
 typedef struct hg_statistics {
     statistics_t progress_with_timeout;
     statistics_t progress_without_timeout;
+    statistics_t progress_timeout_value;
     statistics_t trigger;
 } hg_statistics_t;
 
@@ -246,6 +247,9 @@ typedef struct default_monitor_state {
     char*             filename_prefix;
     int               precision;   /* precision used when printing doubles */
     int               pretty_json; /* use tabs and stuff in JSON printing */
+    int               sample_progress_every;
+    /* sampling */
+    uint64_t progress_sampling;
     /* RPC information */
     rpc_info_t*      rpc_info;
     ABT_mutex_memory rpc_info_mtx;
@@ -399,9 +403,10 @@ static void* margo_default_monitor_initialize(margo_instance_id   mid,
     monitor->mid = mid;
 
     /* default configuration */
-    monitor->filename_prefix = strdup("margo-statistics");
-    monitor->precision       = 9;
-    monitor->pretty_json     = 0;
+    monitor->filename_prefix       = strdup("margo-statistics");
+    monitor->precision             = 9;
+    monitor->pretty_json           = 0;
+    monitor->sample_progress_every = 1;
 
     /* read configuration */
     struct json_object* statistics
@@ -425,6 +430,13 @@ static void* margo_default_monitor_initialize(margo_instance_id   mid,
         if (pretty && json_object_is_type(pretty, json_type_boolean)
             && json_object_get_boolean(pretty)) {
             monitor->pretty_json = JSON_C_TO_STRING_PRETTY;
+        }
+        struct json_object* sampling
+            = json_object_object_get(sampling, "sample_progress_every");
+        if (pretty && json_object_is_type(pretty, json_type_int)) {
+            monitor->sample_progress_every = json_object_get_int(sampling);
+            if (monitor->sample_progress_every <= 0)
+                monitor->sample_progress_every = 0;
         }
     }
 
@@ -548,17 +560,31 @@ margo_default_monitor_on_progress(void*                         uargs,
                                   margo_monitor_event_t         event_type,
                                   margo_monitor_progress_args_t event_args)
 {
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     if (event_type == MARGO_MONITOR_FN_START) {
+        if (!monitor->sample_progress_every
+            || (monitor->progress_sampling % monitor->sample_progress_every))
+            return;
+
         event_args->uctx.f = timestamp;
         return;
     }
+
+    monitor->progress_sampling += 1;
+    if (!monitor->sample_progress_every
+        || (monitor->progress_sampling - 1 % monitor->sample_progress_every))
+        return;
+    monitor->progress_sampling %= monitor->sample_progress_every;
+
     // MARGO_MONITOR_FN_END
-    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
-    double                   t       = timestamp - event_args->uctx.f;
-    if (event_args->timeout_ms)
+    double t = timestamp - event_args->uctx.f;
+    if (event_args->timeout_ms) {
         UPDATE_STATISTICS_WITH(monitor->hg_stats.progress_with_timeout, t);
-    else
+        UPDATE_STATISTICS_WITH(monitor->hg_stats.progress_timeout_value,
+                               event_args->timeout_ms);
+    } else {
         UPDATE_STATISTICS_WITH(monitor->hg_stats.progress_without_timeout, t);
+    }
 }
 
 static void
@@ -1216,6 +1242,10 @@ static struct json_object* hg_statistics_to_json(const hg_statistics_t* stats)
     json_object_object_add_ex(json, "progress_with_timeout",
                               statistics_to_json(&stats->progress_with_timeout),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(
+        json, "progress_timeout_value",
+        statistics_to_json(&stats->progress_timeout_value),
+        JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "progress_without_timeout",
         statistics_to_json(&stats->progress_without_timeout),
