@@ -148,7 +148,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     }
 
     // handle hg_init_info
-    MARGO_TRACE(0, "Instantating hg_init_info structure");
+    MARGO_TRACE(0, "Instantiating hg_init_info structure");
     fill_hg_init_info_from_config(config, &hg_init_info);
 
     // handle hg_class
