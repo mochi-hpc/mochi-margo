@@ -1412,7 +1412,7 @@ static struct json_object*
 monitor_state_to_json(const default_monitor_state_t* state)
 {
     struct json_object* json = json_object_new_object();
-    // mercury progress loop statistics
+    // mercury progress loop statistic
     json_object_object_add_ex(json, "progress_loop",
                               hg_statistics_to_json(&state->hg_stats),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
@@ -1422,6 +1422,8 @@ monitor_state_to_json(const default_monitor_state_t* state)
     // origin statistics
     {
         origin_rpc_statistics_t *p, *tmp;
+        ABT_mutex_spinlock(
+            ABT_MUTEX_MEMORY_GET_HANDLE(&state->origin_rpc_stats_mtx));
         HASH_ITER(hh, state->origin_rpc_stats, p, tmp)
         {
             // build RPC key
@@ -1451,10 +1453,14 @@ monitor_state_to_json(const default_monitor_state_t* state)
                                       JSON_C_OBJECT_ADD_KEY_IS_NEW);
             free(rpc_key);
         }
+        ABT_mutex_unlock(
+            ABT_MUTEX_MEMORY_GET_HANDLE(&state->origin_rpc_stats_mtx));
     }
     // target statistics
     {
         target_rpc_statistics_t *p, *tmp;
+        ABT_mutex_spinlock(
+            ABT_MUTEX_MEMORY_GET_HANDLE(&state->target_rpc_stats_mtx));
         HASH_ITER(hh, state->target_rpc_stats, p, tmp)
         {
             // build RPC key
@@ -1484,10 +1490,14 @@ monitor_state_to_json(const default_monitor_state_t* state)
                                       JSON_C_OBJECT_ADD_KEY_IS_NEW);
             free(rpc_key);
         }
+        ABT_mutex_unlock(
+            ABT_MUTEX_MEMORY_GET_HANDLE(&state->target_rpc_stats_mtx));
     }
     // bulk create statistics
     {
         bulk_create_statistics_t *p, *tmp;
+        ABT_mutex_spinlock(
+            ABT_MUTEX_MEMORY_GET_HANDLE(&state->bulk_create_stats_mtx));
         HASH_ITER(hh, state->bulk_create_stats, p, tmp)
         {
             // build RPC key
@@ -1520,10 +1530,14 @@ monitor_state_to_json(const default_monitor_state_t* state)
                                       JSON_C_OBJECT_ADD_KEY_IS_NEW);
             free(rpc_key);
         }
+        ABT_mutex_unlock(
+            ABT_MUTEX_MEMORY_GET_HANDLE(&state->bulk_create_stats_mtx));
     }
     // bulk transfer statistics
     {
         bulk_transfer_statistics_t *p, *tmp;
+        ABT_mutex_spinlock(
+            ABT_MUTEX_MEMORY_GET_HANDLE(&state->bulk_transfer_stats_mtx));
         HASH_ITER(hh, state->bulk_transfer_stats, p, tmp)
         {
             // build RPC key
@@ -1571,6 +1585,8 @@ monitor_state_to_json(const default_monitor_state_t* state)
                                       JSON_C_OBJECT_ADD_KEY_IS_NEW);
             free(rpc_key);
         }
+        ABT_mutex_unlock(
+            ABT_MUTEX_MEMORY_GET_HANDLE(&state->bulk_transfer_stats_mtx));
     }
     return json;
 }
