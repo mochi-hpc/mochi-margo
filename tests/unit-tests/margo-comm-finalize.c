@@ -62,6 +62,7 @@ DEFINE_MARGO_RPC_HANDLER(test_rpc_ult)
 
 static int svr_init_fn(margo_instance_id mid, void* arg)
 {
+    (void)arg;
     test_rpc_id
         = MARGO_REGISTER(mid, "test_rpc", test_rpc_in_t, void, test_rpc_ult);
 

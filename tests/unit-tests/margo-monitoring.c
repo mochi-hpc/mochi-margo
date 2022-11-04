@@ -25,6 +25,8 @@ struct test_monitor_data {
         void* uargs, double timestamp,  margo_monitor_event_t event_type, \
         margo_monitor_##__y__##_args_t event_args) \
     { \
+        (void)timestamp; \
+        (void)event_args; \
         struct test_monitor_data* monitor_data = (struct test_monitor_data*)uargs; \
         if(event_type == MARGO_MONITOR_FN_START) { \
             monitor_data->call_count[MARGO_MONITOR_ON_##__x__].fn_start += 1; \
@@ -62,9 +64,7 @@ static void echo_ult(hg_handle_t handle)
     munit_assert_not_null(mid);
 
     const struct hg_info* info = margo_get_info(handle);
-    struct test_monitor_data* monitor_data =
-        (struct test_monitor_data*)margo_registered_data(mid, info->id);
-    munit_assert_not_null(mid);
+    munit_assert_not_null(info);
 
     echo_in_t   input;
     hg_return_t hret = HG_SUCCESS;
@@ -212,6 +212,7 @@ static void test_context_tear_down(void* fixture)
 static MunitResult test_custom_monitoring(const MunitParameter params[],
                                           void*                data)
 {
+    (void)data;
     hg_return_t hret                      = HG_SUCCESS;
     struct test_monitor_data monitor_data = {0};
 
@@ -271,10 +272,8 @@ static MunitResult test_custom_monitoring(const MunitParameter params[],
 
     hret = margo_addr_self(mid, &addr);
     munit_assert_int(hret, ==, HG_SUCCESS);
-    /* margo_addr_self triggers an on_lookup in the monitoring system,
-     * and there is one done in margo_init_ext already */
-    munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_LOOKUP].fn_start, ==, 2);
-    munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_LOOKUP].fn_end, ==, 2);
+    munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_LOOKUP].fn_start, ==, 1);
+    munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_LOOKUP].fn_end, ==, 1);
 
     hret = margo_create(mid, addr, echo_id, &handle);
     munit_assert_int(hret, ==, HG_SUCCESS);
@@ -346,6 +345,7 @@ static MunitResult test_custom_monitoring(const MunitParameter params[],
 static MunitResult test_default_monitoring(const MunitParameter params[],
                                            void*                data)
 {
+    (void)data;
     hg_return_t hret                      = HG_SUCCESS;
     const char* protocol = munit_parameters_get(params, "protocol");
     uint16_t provider_id_param = atoi(munit_parameters_get(params, "provider_id"));
@@ -454,7 +454,6 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
 
     struct json_object* json_content = NULL;
     struct json_tokener* tokener     = json_tokener_new();
-    enum json_tokener_error jerr;
     json_content = json_tokener_parse_ex(tokener, file_content, file_size);
     json_tokener_free(tokener);
     munit_assert_not_null(json_content);

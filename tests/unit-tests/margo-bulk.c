@@ -53,7 +53,7 @@ static MunitResult test_margo_bulk_create_attr(const MunitParameter params[],
     size   = 512;
     buffer = calloc(1, 512);
     munit_assert_not_null_goto(buffer, error);
-    bulk_attr.mem_type = NA_MEM_TYPE_HOST;
+    bulk_attr.mem_type = HG_MEM_TYPE_HOST;
 
     ret = margo_bulk_create_attr(ctx->mid, 1, &buffer, &size, HG_BULK_READWRITE,
                                  &bulk_attr, &bulk_handle);

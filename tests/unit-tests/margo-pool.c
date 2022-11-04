@@ -78,6 +78,7 @@ static void test_context_tear_down(void* data)
 
 static MunitResult bulk_release(const MunitParameter params[], void* data)
 {
+    (void)params;
     struct test_context* ctx = (struct test_context*)data;
     hg_bulk_t            b   = HG_BULK_NULL;
     int                  ret = margo_bulk_pool_release(ctx->testpool, b);
@@ -118,6 +119,7 @@ static MunitResult bulk_pool(const MunitParameter params[], void* data)
 
 static MunitResult bulk_max(const MunitParameter params[], void* data)
 {
+    (void)params;
     struct test_context* ctx = (struct test_context*)data;
 
     hg_size_t max          = 0;

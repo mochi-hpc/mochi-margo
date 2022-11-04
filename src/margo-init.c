@@ -10,7 +10,6 @@
 #include "margo-instance.h"
 #include "margo-progress.h"
 #include "margo-timer.h"
-#include "margo-diag-internal.h"
 #include "margo-handle-cache.h"
 #include "margo-globals.h"
 #include "margo-macros.h"
@@ -325,12 +324,12 @@ margo_instance_id margo_init_ext(const char*                   address,
         json_object_object_get(config, "progress_timeout_ub_msec"));
     int handle_cache_size = json_object_get_int64(
         json_object_object_get(config, "handle_cache_size"));
-    int diag_enabled = json_object_get_boolean(
-        json_object_object_get(config, "enable_diagnostics"));
-    int profile_enabled = json_object_get_boolean(
-        json_object_object_get(config, "enable_profiling"));
+    int abt_profiling_enabled = json_object_get_boolean(
+        json_object_object_get(config, "enable_abt_profiling"));
 
     mid->json_cfg = config;
+
+    mid->abt_profiling_enabled = abt_profiling_enabled;
 
     mid->hg_class      = hg_class;
     mid->hg_context    = hg_context;
@@ -408,40 +407,9 @@ margo_instance_id margo_init_ext(const char*                   address,
                             ABT_THREAD_ATTR_NULL, &mid->hg_progress_tid);
     if (ret != ABT_SUCCESS) goto error;
 
-    /* TODO the initialization code bellow (until END) should probably be put in
-     * a separate module that deals with diagnostics and profiling */
-
-    /* register thread local key to track RPC breadcrumbs across threads */
-    /* NOTE: we are registering a global key, even though init could be called
-     * multiple times for different margo instances.  As of May 2019 this
-     * doesn't seem to be a problem to call ABT_key_create() multiple times.
-     */
-    MARGO_TRACE(0, "Creating ABT keys for profiling");
-    ret = ABT_key_create(free, &g_margo_rpc_breadcrumb_key);
-    if (ret != ABT_SUCCESS) goto error;
-
-    ret = ABT_key_create(free, &g_margo_target_timing_key);
-    if (ret != ABT_SUCCESS) goto error;
-
-    mid->sparkline_data_collection_tid = ABT_THREAD_NULL;
-    mid->diag_enabled                  = diag_enabled;
-    mid->profile_enabled               = profile_enabled;
-    ABT_mutex_create(&mid->diag_rpc_mutex);
-
-    // record own address hash to be used for profiling and diagnostics
-    // NOTE: we do this even if profiling is presently disabled so that the
-    // information will be available if profiling is dynamically enabled
-    GET_SELF_ADDR_STR(mid, mid->self_addr_str);
-    if (!mid->self_addr_str) {
-        MARGO_ERROR(mid, "unable to resolve self address");
-        goto error;
-    }
+    mid->self_addr_str = strdup(self_addr_str);
     HASH_JEN(mid->self_addr_str, strlen(mid->self_addr_str),
              mid->self_addr_hash);
-
-    if (profile_enabled) __margo_sparkline_thread_start(mid);
-
-    /* END diagnostics/profiling initialization */
 
     // increment the number of margo instances
     if (g_margo_num_instances_mtx == ABT_MUTEX_NULL)
@@ -462,7 +430,6 @@ error:
         ABT_mutex_free(&mid->finalize_mutex);
         ABT_cond_free(&mid->finalize_cond);
         ABT_mutex_free(&mid->pending_operations_mtx);
-        ABT_mutex_free(&mid->diag_rpc_mutex);
         if (mid->current_rpc_id_key) ABT_key_free(&(mid->current_rpc_id_key));
         free(mid);
     }
@@ -1621,7 +1588,7 @@ static void confirm_argobots_configuration(struct json_object* config)
     /* query Argobots to see if it is in agreement */
     ABT_info_query_config(ABT_INFO_QUERY_KIND_DEFAULT_THREAD_STACKSIZE,
                           &runtime_abt_thread_stacksize);
-    if (runtime_abt_thread_stacksize != abt_thread_stacksize) {
+    if ((int)runtime_abt_thread_stacksize != abt_thread_stacksize) {
         MARGO_WARNING(
             0,
             "Margo requested an Argobots ULT stack size of %d, but "

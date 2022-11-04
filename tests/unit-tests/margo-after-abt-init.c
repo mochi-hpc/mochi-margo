@@ -63,6 +63,7 @@ static void test_context_tear_down(void* data)
 
 static MunitResult margo_after_abt(const MunitParameter params[], void* data)
 {
+    (void)params;
     struct test_context* ctx = (struct test_context*)data;
     char* protocol = "na+sm";
     int ret;
@@ -89,6 +90,7 @@ error:
 
 static MunitResult margo_after_abt_set_env(const MunitParameter params[], void* data)
 {
+    (void)params;
     struct test_context* ctx = (struct test_context*)data;
     char* protocol = "na+sm";
     int ret;

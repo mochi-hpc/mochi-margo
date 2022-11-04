@@ -13,6 +13,4 @@ bool              g_margo_abt_prof_init     = 0;
 bool              g_margo_abt_prof_started  = 0;
 int               g_margo_abt_prof_mode     = 0;
 ABTX_prof_context g_margo_abt_prof_context;
-ABT_key           g_margo_rpc_breadcrumb_key = ABT_KEY_NULL;
-ABT_key           g_margo_target_timing_key  = ABT_KEY_NULL;
-margo_log_level   g_margo_log_level          = MARGO_LOG_ERROR;
+margo_log_level   g_margo_log_level = MARGO_LOG_ERROR;

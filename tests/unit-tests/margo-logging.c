@@ -72,6 +72,7 @@ static void test_context_tear_down(void* data)
 
 static MunitResult init_quiet_log(const MunitParameter params[], void* data)
 {
+    (void)params;
     struct test_context* ctx = (struct test_context*)data;
     char* protocol = "na+sm";
     int ret;

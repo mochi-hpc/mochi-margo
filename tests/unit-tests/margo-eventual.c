@@ -99,6 +99,7 @@ void waiter_sub_fn(void)
 
 void iter_fn(void* _arg)
 {
+    (void)_arg;
     int i;
 
     for (i = 0; i < N_ITERS; i++) { waiter_sub_fn(); }

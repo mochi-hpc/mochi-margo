@@ -219,7 +219,6 @@ typedef struct rpc_info {
     char           name[1];
 } rpc_info_t;
 
-static void        rpc_info_add(rpc_info_t* hash, hg_id_t id, const char* name);
 static rpc_info_t* rpc_info_find(rpc_info_t* hash, hg_id_t id);
 static void        rpc_info_clear(rpc_info_t* hash);
 
@@ -398,6 +397,7 @@ static void* margo_default_monitor_initialize(margo_instance_id   mid,
                                               void*               uargs,
                                               struct json_object* config)
 {
+    (void)uargs;
     default_monitor_state_t* monitor = calloc(1, sizeof(*monitor));
     ABT_key_create(NULL, &(monitor->callpath_key));
     monitor->mid = mid;
@@ -432,7 +432,7 @@ static void* margo_default_monitor_initialize(margo_instance_id   mid,
             monitor->pretty_json = JSON_C_TO_STRING_PRETTY;
         }
         struct json_object* sampling
-            = json_object_object_get(sampling, "sample_progress_every");
+            = json_object_object_get(statistics, "sample_progress_every");
         if (pretty && json_object_is_type(pretty, json_type_int)) {
             monitor->sample_progress_every = json_object_get_int(sampling);
             if (monitor->sample_progress_every <= 0)
@@ -543,6 +543,7 @@ margo_default_monitor_on_register(void*                         uargs,
                                   margo_monitor_event_t         event_type,
                                   margo_monitor_register_args_t event_args)
 {
+    (void)timestamp;
     if (event_type == MARGO_MONITOR_FN_START) return;
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     rpc_info_t*              rpc_info
@@ -627,7 +628,8 @@ margo_default_monitor_on_create(void*                       uargs,
     do {                                                                    \
         margo_monitor_data_t monitor_data;                                  \
         hg_return_t ret = margo_get_monitoring_data(handle, &monitor_data); \
-        session         = (session_t*)monitor_data.p;                       \
+        (void)ret;                                                          \
+        session = (session_t*)monitor_data.p;                               \
     } while (0)
 
 #define RETRIEVE_BULK_SESSION(request)                                   \
@@ -636,6 +638,7 @@ margo_default_monitor_on_create(void*                       uargs,
         margo_monitor_data_t monitor_data;                               \
         hg_return_t          ret                                         \
             = margo_request_get_monitoring_data(request, &monitor_data); \
+        (void)ret;                                                       \
         session = (bulk_session_t*)monitor_data.p;                       \
     } while (0)
 
@@ -702,7 +705,7 @@ margo_default_monitor_on_set_input(void*                          uargs,
                                    margo_monitor_event_t          event_type,
                                    margo_monitor_set_input_args_t event_args)
 {
-    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    (void)uargs;
     // retrieve the session that was create on on_create
     hg_handle_t handle = margo_request_get_handle(event_args->request);
     RETRIEVE_SESSION(handle);
@@ -724,7 +727,7 @@ margo_default_monitor_on_set_output(void*                           uargs,
                                     margo_monitor_event_t           event_type,
                                     margo_monitor_set_output_args_t event_args)
 {
-    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    (void)uargs;
     // retrieve the session that was create on on_create
     hg_handle_t handle = margo_request_get_handle(event_args->request);
     RETRIEVE_SESSION(handle);
@@ -746,7 +749,7 @@ margo_default_monitor_on_get_output(void*                           uargs,
                                     margo_monitor_event_t           event_type,
                                     margo_monitor_get_output_args_t event_args)
 {
-    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    (void)uargs;
     // retrieve the session that was create on on_create
     RETRIEVE_SESSION(event_args->handle);
     origin_rpc_statistics_t* rpc_stats = session->origin.stats;
@@ -767,7 +770,7 @@ margo_default_monitor_on_get_input(void*                          uargs,
                                    margo_monitor_event_t          event_type,
                                    margo_monitor_get_input_args_t event_args)
 {
-    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    (void)uargs;
     // retrieve the session that was create on on_create
     RETRIEVE_SESSION(event_args->handle);
     target_rpc_statistics_t* rpc_stats = session->target.stats;
@@ -788,7 +791,7 @@ margo_default_monitor_on_forward_cb(void*                           uargs,
                                     margo_monitor_event_t           event_type,
                                     margo_monitor_forward_cb_args_t event_args)
 {
-    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    (void)uargs;
     // retrieve the session that was create on on_create
     hg_handle_t handle = margo_request_get_handle(event_args->request);
     RETRIEVE_SESSION(handle);
@@ -810,7 +813,7 @@ margo_default_monitor_on_respond(void*                        uargs,
                                  margo_monitor_event_t        event_type,
                                  margo_monitor_respond_args_t event_args)
 {
-    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    (void)uargs;
     // retrieve the session that was create on on_create
     hg_handle_t handle = margo_request_get_handle(event_args->request);
     RETRIEVE_SESSION(handle);
@@ -832,7 +835,7 @@ margo_default_monitor_on_respond_cb(void*                           uargs,
                                     margo_monitor_event_t           event_type,
                                     margo_monitor_respond_cb_args_t event_args)
 {
-    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    (void)uargs;
     // retrieve the session that was create on on_create
     hg_handle_t handle = margo_request_get_handle(event_args->request);
     RETRIEVE_SESSION(handle);
@@ -983,6 +986,7 @@ margo_default_monitor_on_destroy(void*                        uargs,
                                  margo_monitor_event_t        event_type,
                                  margo_monitor_destroy_args_t event_args)
 {
+    (void)timestamp;
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     if (event_type == MARGO_MONITOR_FN_END) {
         // WARNING: handle is no longer valid after destroy
@@ -1116,7 +1120,7 @@ static void margo_default_monitor_on_bulk_transfer_cb(
     margo_monitor_event_t                 event_type,
     margo_monitor_bulk_transfer_cb_args_t event_args)
 {
-    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    (void)uargs;
     // retrieve the session that was create on on_create
     RETRIEVE_BULK_SESSION(event_args->request);
     bulk_transfer_statistics_t* bulk_stats = session->stats;
@@ -1133,15 +1137,24 @@ static void margo_default_monitor_on_bulk_transfer_cb(
     }
 }
 
-__MONITOR_FN(bulk_free) {}
-__MONITOR_FN(deregister) {}
-__MONITOR_FN(lookup) {}
-__MONITOR_FN(sleep) {}
-__MONITOR_FN(free_input) {}
-__MONITOR_FN(free_output) {}
-__MONITOR_FN(prefinalize) {}
-__MONITOR_FN(finalize) {}
-__MONITOR_FN(user) {}
+#define __MONITOR_FN_EMPTY(__name__) \
+    __MONITOR_FN(__name__)           \
+    {                                \
+        (void)uargs;                 \
+        (void)timestamp;             \
+        (void)event_args;            \
+        (void)event_type;            \
+    }
+
+__MONITOR_FN_EMPTY(bulk_free)
+__MONITOR_FN_EMPTY(deregister)
+__MONITOR_FN_EMPTY(lookup)
+__MONITOR_FN_EMPTY(sleep)
+__MONITOR_FN_EMPTY(free_input)
+__MONITOR_FN_EMPTY(free_output)
+__MONITOR_FN_EMPTY(prefinalize)
+__MONITOR_FN_EMPTY(finalize)
+__MONITOR_FN_EMPTY(user)
 
 struct margo_monitor __margo_default_monitor
     = {.uargs      = NULL,

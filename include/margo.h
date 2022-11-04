@@ -1619,10 +1619,10 @@ int margo_dump_abt_profiling(margo_instance_id mid,
  *   will be set to point to a string with the fully resolved path to the
  *   state file that was generated. Must be freed by caller.
  */
-int margo_dump_abt_state(margo_instance_id mid,
-                         const char*       file,
-                         int               uniquify,
-                         char**            resolved_file_name);
+int margo_state_dump(margo_instance_id mid,
+                     const char*       file,
+                     int               uniquify,
+                     char**            resolved_file_name);
 
 /**
  * @brief Sets configurable parameters/hints.

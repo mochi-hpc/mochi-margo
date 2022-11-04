@@ -386,6 +386,7 @@ cleanup:
 #ifdef HAVE_DL_ITERATE_PHDR
 static int dl_callback(struct dl_phdr_info* info, size_t size, void* data)
 {
+    (void)size;
     struct options* opts = data;
     int             i;
 

@@ -154,6 +154,7 @@ static void pool_unit_free(ABT_unit* p_unit)
 
 static int pool_init(ABT_pool pool, ABT_pool_config config)
 {
+    (void)config;
     pool_t* p_pool                 = (pool_t*)malloc(sizeof(pool_t));
     p_pool->high_prio_queue.p_tail = NULL;
     p_pool->high_prio_queue.p_head = NULL;

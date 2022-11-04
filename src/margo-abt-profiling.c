@@ -119,6 +119,7 @@ static void margo_abt_profiling_dump_fp(margo_instance_id mid, FILE* outfile)
 
 int margo_start_abt_profiling(margo_instance_id mid, bool detailed)
 {
+    (void)mid;
     if (g_margo_abt_prof_init) {
         if (!g_margo_abt_prof_started) {
             int mode
@@ -133,6 +134,7 @@ int margo_start_abt_profiling(margo_instance_id mid, bool detailed)
 
 int margo_stop_abt_profiling(margo_instance_id mid)
 {
+    (void)mid;
     if (g_margo_abt_prof_init) {
         if (g_margo_abt_prof_started) {
             ABTX_prof_stop(g_margo_abt_prof_context);
@@ -251,7 +253,7 @@ int margo_state_dump(margo_instance_id mid,
     fprintf(outfile, "# ================================================\n");
 
     /* for each pool that margo is aware of */
-    for (i = 0; i < mid->num_abt_pools; i++) {
+    for (i = 0; i < (int)mid->num_abt_pools; i++) {
         /* Display stack trace of ULTs within that pool.  This will not
          * include any ULTs that are presently executing (including the
          * caller).

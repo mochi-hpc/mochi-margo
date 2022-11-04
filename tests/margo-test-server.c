@@ -126,6 +126,7 @@ int main(int argc, char** argv)
 
 static void usage(int argc, char** argv)
 {
+    (void)argc;
     fprintf(stderr, "Usage: %s listen_address [-s] [-f filename]\n", argv[0]);
     fprintf(
         stderr,

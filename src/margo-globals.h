@@ -30,9 +30,4 @@ extern bool              g_margo_abt_prof_started;
 extern int               g_margo_abt_prof_mode;
 extern ABTX_prof_context g_margo_abt_prof_context;
 
-// Keys for Argobots thread-local storage to track RPC breadcrumbs
-// across thread execution.
-extern ABT_key g_margo_rpc_breadcrumb_key;
-extern ABT_key g_margo_target_timing_key;
-
 #endif
