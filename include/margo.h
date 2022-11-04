@@ -1565,67 +1565,29 @@ hg_return_t margo_set_current_rpc_id(margo_instance_id mid, hg_id_t id);
 hg_return_t margo_get_current_rpc_id(margo_instance_id mid, hg_id_t* id);
 
 /**
- * @brief Sets configurable parameters/hints.
+ * @brief Start Argobots profiling. Argobots must have been installed
+ * with the +tool variant.
  *
- * @param [in] mid Margo instance.
- * @param [in] key Parameter name.
- * @param [in] value Parameter value.
+ * @param mid Margo instance.
+ * @param detailed Whether profiling should be detailed or not.
  *
- * @return 0 on success, -1 on failure.
+ * @return 0 on success, -1 on failure (e.g. if ABT profiling was
+ * already started or if Argobots was not compiled with tools).
  */
-int margo_set_param(margo_instance_id mid, const char* key, const char* value);
+int margo_start_abt_profiling(margo_instance_id mid, bool detailed);
 
 /**
- * @brief Enables diagnostic collection on specified Margo instance.
+ * @brief Stops Argobots profiling.
  *
- * @param [in] mid Margo instance.
+ * @param mid Margo instance.
  *
- * @return 0 on success, -1 on failure.
+ * @return 0 on success, -1 on failure (e.g. if ABT profiling was
+ * no started or if Argobots was not compiled with tools).
  */
-static inline int margo_diag_start(margo_instance_id mid)
-{
-    return margo_set_param(mid, "enable_diagnostics", "1");
-}
+int margo_stop_abt_profiling(margo_instance_id mid);
 
 /**
- * @brief Enables profile data collection on specified Margo instance.
- *
- * @param [in] mid Margo instance.
- *
- * @return 0 on success, -1 on failure.
- */
-static inline int margo_profile_start(margo_instance_id mid)
-{
-    return margo_set_param(mid, "enable_profiling", "1");
-}
-
-/**
- * @brief Disables diagnostic collection on specified Margo instance.
- *
- * @param [in] mid Margo instance.
- *
- * @return 0 on success, -1 on failure.
- */
-static inline int margo_diag_stop(margo_instance_id mid)
-{
-    return margo_set_param(mid, "enable_diagnostics", "0");
-}
-
-/**
- * @brief Disables profile data collection on specified Margo instance.
- *
- * @param [in] mid Margo instance.
- *
- * @return 0 on success, -1 on failure.
- */
-static inline int margo_profile_stop(margo_instance_id mid)
-{
-    return margo_set_param(mid, "enable_profiling", "0");
-}
-
-/**
- * @brief Appends diagnostic statistics (enabled via margo_diag_start) to
- * specified output file.
+ * @brief Dump ABT profiling data in a file.
  *
  * @param [in] mid Margo instance.
  * @param [in] file Output file ("-" for stdout).  If string begins with '/'
@@ -1634,8 +1596,16 @@ static inline int margo_profile_stop(margo_instance_id mid)
  *   MARGO_OUTPUT_DIR.
  * @param [in] uniquify Flag indicating if file name should have additional
  *   information added to it to make output from different processes unique.
+ * @param [out] resolved_file_name (ignored if NULL) Pointer to char* that
+ *   will be set to point to a string with the fully resolved path to the
+ *   state file that was generated. Must be freed by caller.
+ *
+ * @return 0 on success, -1 on failure.
  */
-void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify);
+int margo_dump_abt_profiling(margo_instance_id mid,
+                             const char*       file,
+                             int               uniquify,
+                             char**            resolved_file_name);
 
 /**
  * @brief Appends Margo state information (including Argobots stack information)
@@ -1649,43 +1619,21 @@ void margo_diag_dump(margo_instance_id mid, const char* file, int uniquify);
  *   will be set to point to a string with the fully resolved path to the
  *   state file that was generated. Must be freed by caller.
  */
-void margo_state_dump(margo_instance_id mid,
-                      const char*       file,
-                      int               uniquify,
-                      char**            resolved_file_name);
+int margo_dump_abt_state(margo_instance_id mid,
+                         const char*       file,
+                         int               uniquify,
+                         char**            resolved_file_name);
 
 /**
- * @brief Appends profile statistics (enabled via margo_profile_start)
- * to specified output file.
+ * @brief Sets configurable parameters/hints.
  *
  * @param [in] mid Margo instance.
- * @param [in] file Output file ("-" for stdout).  If string begins with '/'
- *   character then it will be treated as an absolute path.  Otherwise the
- *   file will be placed in the directory specified output_dir or
- *   MARGO_OUTPUT_DIR.
- * @param [in] uniquify Flag indicating if file name should have additional
- *   information added to it to make output from different processes unique.
- */
-void margo_profile_dump(margo_instance_id mid, const char* file, int uniquify);
-
-/**
- * @brief Grabs a snapshot of the current state of diagnostics within the margo
- * instance.
+ * @param [in] key Parameter name.
+ * @param [in] value Parameter value.
  *
- * @param [in] mid Margo instance.
- * @param [out] snap Margo diagnostics snapshot.
+ * @return 0 on success, -1 on failure.
  */
-void margo_breadcrumb_snapshot(margo_instance_id                 mid,
-                               struct margo_breadcrumb_snapshot* snap);
-
-/**
- * @brief Releases resources associated with a breadcrumb snapshot.
- *
- * @param [in] mid Margo instance.
- * @param [in] snap Margo diagnostics snapshot.
- */
-void margo_breadcrumb_snapshot_destroy(margo_instance_id                 mid,
-                                       struct margo_breadcrumb_snapshot* snap);
+int margo_set_param(margo_instance_id mid, const char* key, const char* value);
 
 /**
  * @brief Retrieves complete configuration of margo instance, incoded as json.

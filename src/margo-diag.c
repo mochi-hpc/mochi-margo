@@ -553,6 +553,7 @@ void margo_profile_dump(margo_instance_id mid, const char* file, int uniquify)
 
     return;
 }
+#if 0
 void margo_state_dump(margo_instance_id mid,
                       const char*       file,
                       int               uniquify,
@@ -682,7 +683,7 @@ void margo_state_dump(margo_instance_id mid,
 
     return;
 }
-
+#endif
 void __margo_sparkline_thread_stop(margo_instance_id mid)
 {
     if (!mid->profile_enabled) return;

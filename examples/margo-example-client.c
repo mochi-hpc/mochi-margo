@@ -78,13 +78,6 @@ int main(int argc, char** argv)
         fprintf(stderr, "Error: margo_init_ext()\n");
         return (-1);
     }
-    margo_diag_start(mid);
-    /* NOTE: this is necessary for the server to be able to collect complete
-     * profile data, even if we don't plan to use the data on the client in
-     * this example.
-     */
-    margo_profile_start(mid);
-
     /* retrieve current pool to use for ULT creation */
     ret = ABT_xstream_self(&xstream);
     if (ret != 0) {

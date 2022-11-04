@@ -152,6 +152,7 @@ struct margo_instance {
      * which will serialize access.
      */
     ABT_thread        sparkline_data_collection_tid;
+    int               abt_profiling_enabled;
     int               diag_enabled;
     int               profile_enabled;
     char*             self_addr_str;

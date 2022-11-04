@@ -135,6 +135,11 @@ static void margo_cleanup(margo_instance_id mid)
         free(tmp);
     }
 
+    if (mid->abt_profiling_enabled) {
+        MARGO_TRACE(mid, "Dumping ABT profile");
+        margo_dump_abt_profiling(mid, "margo-profile", 1, NULL);
+    }
+
     /* monitoring */
     /* Note: Monitoring called before everything is actually
      * finalized because we need the margo instance to still
@@ -283,18 +288,6 @@ void margo_finalize(margo_instance_id mid)
     /* shut down pending timers */
     MARGO_TRACE(mid, "Cleaning up pending timers");
     __margo_timer_list_free(mid, mid->timer_list);
-
-    if (mid->profile_enabled) {
-        __margo_sparkline_thread_stop(mid);
-
-        MARGO_TRACE(mid, "Dumping profile");
-        margo_profile_dump(mid, "profile", 1);
-    }
-
-    if (mid->diag_enabled) {
-        MARGO_TRACE(mid, "Dumping diagnostics");
-        margo_diag_dump(mid, "profile", 1);
-    }
 
     ABT_mutex_lock(mid->finalize_mutex);
     mid->finalize_flag = 1;
@@ -2115,7 +2108,6 @@ void __margo_hg_progress_fn(void* foo)
 
     return;
 }
-
 int margo_set_param(margo_instance_id mid, const char* key, const char* value)
 {
     int old_enable_profiling = 0;
@@ -2130,46 +2122,8 @@ int margo_set_param(margo_instance_id mid, const char* key, const char* value)
         return (0);
     }
 
-    if (strcmp(key, "enable_diagnostics") == 0) {
-        MARGO_TRACE(0, "Setting enable_diagnistics to %s", value);
-        bool enable_diagnostics = atoi(value);
-        mid->diag_enabled       = enable_diagnostics;
-        json_object_object_add(mid->json_cfg, "enable_diagnostics",
-                               json_object_new_boolean(enable_diagnostics));
-        /* if argobots profiling is available then try to toggle it also */
-        if (g_margo_abt_prof_init) {
-            if (enable_diagnostics && !g_margo_abt_prof_started) {
-                /* TODO: consider supporting PROF_MODE_DETAILED also? */
-                ABTX_prof_start(g_margo_abt_prof_context, ABTX_PROF_MODE_BASIC);
-                g_margo_abt_prof_started = 1;
-            } else if (!enable_diagnostics && g_margo_abt_prof_started) {
-                ABTX_prof_stop(g_margo_abt_prof_context);
-                g_margo_abt_prof_started = 0;
-            }
-        }
-        return (0);
-    }
-
-    /* rpc profiling */
-    if (strcmp(key, "enable_profiling") == 0) {
-        MARGO_TRACE(0, "Setting enable_profiling to %s", value);
-        bool enable_profiling = atoi(value);
-        old_enable_profiling  = mid->profile_enabled;
-        mid->profile_enabled  = enable_profiling;
-        if (!old_enable_profiling && enable_profiling) {
-            /* toggle from off to on */
-            __margo_sparkline_thread_start(mid);
-        } else if (old_enable_profiling && !enable_profiling) {
-            /* toggle from on to off */
-            __margo_sparkline_thread_stop(mid);
-        }
-        json_object_object_add(mid->json_cfg, "enable_profiling",
-                               json_object_new_boolean(enable_profiling));
-        return (0);
-    }
-
     /* unknown key, or at least one that cannot be modified at runtime */
-    return (-1);
+    return -1;
 }
 
 static hg_id_t margo_register_internal(margo_instance_id mid,
