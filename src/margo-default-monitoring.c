@@ -212,6 +212,55 @@ typedef struct target_rpc_statistics {
 static struct json_object*
 target_rpc_statistics_to_json(const target_rpc_statistics_t* stats);
 
+/* ========================================================================
+ * Time series structure definitions
+ * ======================================================================== */
+
+/* uint64_t value associated with a timestamp */
+typedef struct timedval {
+    uint64_t value;
+    double   timestamp;
+} timedval_t;
+
+/* Linked list of arrays of time_uint64_t */
+typedef struct timedval_frame {
+    struct timedval_frame* next;    /* next frame */
+    size_t                 size;    /* current size of the data array */
+    timedval_t             data[1]; /* data */
+} timedval_frame_t;
+
+/* Time series */
+typedef struct time_series {
+    size_t            frame_capacity; /* allocated size of each frame */
+    timedval_frame_t* first_frame;
+    timedval_frame_t* last_frame;
+} time_series_t;
+
+static void time_series_append(time_series_t* series, double ts, uint64_t val);
+static void time_series_clear(time_series_t* series);
+
+/* RPC-related time series */
+typedef struct rpc_time_series {
+    uint64_t       rpc_count;        /* count of RPCs since last added value */
+    time_series_t  rpc_count_series; /* time series of rpc_count */
+    hg_id_t        rpc_id;           /* hash key */
+    UT_hash_handle hh;               /* hash handle */
+    /* mutex protecting accesses */
+    ABT_mutex_memory mutex;
+} rpc_time_series_t;
+
+static rpc_time_series_t*
+find_or_add_time_series_for_rpc(struct default_monitor_state* monitor,
+                                hg_id_t                       rpc_id);
+static void free_all_time_series(struct default_monitor_state* monitor);
+static struct json_object* rpc_time_series_to_json(rpc_time_series_t* rpc_ts);
+static void update_rpc_time_series(struct default_monitor_state* monitor,
+                                   double                        timestamp);
+
+/* ========================================================================
+ * RPC info
+ * ======================================================================== */
+
 /* Structure used to track registered RPCs */
 typedef struct rpc_info {
     hg_id_t        id;
@@ -243,11 +292,14 @@ struct bulk_session;
 /* Root of the monitor's state */
 typedef struct default_monitor_state {
     margo_instance_id mid;
+    bool              enable_statistics;
+    bool              enable_time_series;
     char*             filename_prefix;
-    int               precision;   /* precision used when printing doubles */
-    int               pretty_json; /* use tabs and stuff in JSON printing */
-    int               sample_progress_every;
-    /* sampling */
+    int               precision; /* precision used when printing doubles */
+    int stats_pretty_json;       /* use tabs and stuff in JSON printing */
+    int time_series_pretty_json; /* use tabs and stuff in JSON printing */
+    int sample_progress_every;
+    /* sampling counter */
     uint64_t progress_sampling;
     /* RPC information */
     rpc_info_t*      rpc_info;
@@ -271,15 +323,23 @@ typedef struct default_monitor_state {
     ABT_mutex_memory            origin_rpc_stats_mtx;
     target_rpc_statistics_t*    target_rpc_stats;
     ABT_mutex_memory            target_rpc_stats_mtx;
+    /* Time series and their mutex */
+    rpc_time_series_t* rpc_time_series;
+    ABT_mutex_memory   rpc_time_series_mtx;
+    double             rpc_time_series_last_ts;
+    double             rpc_time_series_interval;
     /* session and bulk_session pools */
     struct session*      session_pool;
     ABT_mutex_memory     session_pool_mtx;
     struct bulk_session* bulk_session_pool;
     ABT_mutex_memory     bulk_session_pool_mtx;
+    /* Time series */
 } default_monitor_state_t;
 
 static struct json_object*
-monitor_state_to_json(const default_monitor_state_t* stats);
+monitor_statistics_to_json(const default_monitor_state_t* monitor);
+static struct json_object*
+monitor_time_series_to_json(const default_monitor_state_t* monitor);
 
 static void
 write_monitor_state_to_json_file(const default_monitor_state_t* monitor);
@@ -403,40 +463,83 @@ static void* margo_default_monitor_initialize(margo_instance_id   mid,
     monitor->mid = mid;
 
     /* default configuration */
-    monitor->filename_prefix       = strdup("margo-statistics");
-    monitor->precision             = 9;
-    monitor->pretty_json           = 0;
-    monitor->sample_progress_every = 1;
+    monitor->filename_prefix          = strdup("margo-statistics");
+    monitor->precision                = 9;
+    monitor->stats_pretty_json        = 0;
+    monitor->time_series_pretty_json  = 0;
+    monitor->sample_progress_every    = 1;
+    monitor->rpc_time_series_interval = 1.0;
+    monitor->enable_statistics        = true;
+    monitor->enable_time_series       = true;
 
     /* read configuration */
+    struct json_object* filename_prefix
+        = json_object_object_get(config, "filename_prefix");
+    if (filename_prefix
+        && json_object_is_type(filename_prefix, json_type_string)) {
+        free(monitor->filename_prefix);
+        monitor->filename_prefix
+            = strdup(json_object_get_string(filename_prefix));
+    }
+    /* statistics configuration */
     struct json_object* statistics
         = json_object_object_get(config, "statistics");
     if (statistics && json_object_is_type(statistics, json_type_object)) {
-        struct json_object* filename_prefix
-            = json_object_object_get(statistics, "filename_prefix");
-        if (filename_prefix
-            && json_object_is_type(filename_prefix, json_type_string)) {
-            free(monitor->filename_prefix);
-            monitor->filename_prefix
-                = strdup(json_object_get_string(filename_prefix));
+        struct json_object* disable
+            = json_object_object_get(statistics, "disable");
+        if (disable && json_object_is_type(disable, json_type_boolean)) {
+            monitor->enable_statistics = !json_object_get_boolean(disable);
         }
         struct json_object* precision
             = json_object_object_get(statistics, "precision");
         if (precision && json_object_is_type(precision, json_type_int)) {
             monitor->precision = json_object_get_int(precision);
         }
-        struct json_object* pretty
-            = json_object_object_get(statistics, "pretty");
-        if (pretty && json_object_is_type(pretty, json_type_boolean)
-            && json_object_get_boolean(pretty)) {
-            monitor->pretty_json = JSON_C_TO_STRING_PRETTY;
-        }
         struct json_object* sampling
             = json_object_object_get(statistics, "sample_progress_every");
-        if (pretty && json_object_is_type(pretty, json_type_int)) {
+        if (sampling && json_object_is_type(sampling, json_type_int)) {
             monitor->sample_progress_every = json_object_get_int(sampling);
             if (monitor->sample_progress_every <= 0)
                 monitor->sample_progress_every = 0;
+        }
+        struct json_object* pretty_json
+            = json_object_object_get(statistics, "pretty_json");
+        if (pretty_json && json_object_is_type(pretty_json, json_type_boolean)
+            && json_object_get_boolean(pretty_json)) {
+            monitor->stats_pretty_json = JSON_C_TO_STRING_PRETTY;
+        }
+    }
+
+    /* time_series configuration */
+    struct json_object* time_series
+        = json_object_object_get(config, "time_series");
+    if (time_series && json_object_is_type(time_series, json_type_object)) {
+        struct json_object* disable
+            = json_object_object_get(time_series, "disable");
+        if (disable && json_object_is_type(disable, json_type_boolean)) {
+            monitor->enable_time_series = !json_object_get_boolean(disable);
+        }
+        struct json_object* precision
+            = json_object_object_get(time_series, "precision");
+        if (precision && json_object_is_type(precision, json_type_int)) {
+            monitor->precision = json_object_get_int(precision);
+        }
+        struct json_object* time_interval
+            = json_object_object_get(time_series, "time_interval_sec");
+        if (time_interval
+            && json_object_is_type(time_interval, json_type_double)) {
+            if (json_object_is_type(time_interval, json_type_double))
+                monitor->rpc_time_series_interval
+                    = json_object_get_double(time_interval);
+            else if (json_object_is_type(time_interval, json_type_int))
+                monitor->rpc_time_series_interval
+                    = (double)json_object_get_int64(time_interval);
+        }
+        struct json_object* pretty_json
+            = json_object_object_get(time_series, "pretty_json");
+        if (pretty_json && json_object_is_type(pretty_json, json_type_boolean)
+            && json_object_get_boolean(pretty_json)) {
+            monitor->time_series_pretty_json = JSON_C_TO_STRING_PRETTY;
         }
     }
 
@@ -456,6 +559,9 @@ static void margo_default_monitor_finalize(void* uargs)
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     if (!monitor) return;
+
+    /* do a final update of time series */
+    update_rpc_time_series(monitor, ABT_get_wtime());
 
     /* write JSON file */
     write_monitor_state_to_json_file(monitor);
@@ -504,6 +610,8 @@ static void margo_default_monitor_finalize(void* uargs)
             free(p);
         }
     }
+    /* free RPC time series */
+    free_all_time_series(monitor);
     /* free session pools */
     clear_session_pool(monitor);
     clear_bulk_session_pool(monitor);
@@ -521,19 +629,39 @@ static struct json_object* margo_default_monitor_config(void* uargs)
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     if (!monitor) return NULL;
 
-    struct json_object* config     = json_object_new_object();
+    struct json_object* config = json_object_new_object();
+    json_object_object_add_ex(config, "filename_prefix",
+                              json_object_new_string(monitor->filename_prefix),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(config, "precision",
+                              json_object_new_int(monitor->precision),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
     struct json_object* statistics = json_object_new_object();
     json_object_object_add_ex(config, "statistics", statistics,
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
-    json_object_object_add_ex(statistics, "filename_prefix",
-                              json_object_new_string(monitor->filename_prefix),
+    json_object_object_add_ex(
+        statistics, "pretty_json",
+        json_object_new_boolean(monitor->stats_pretty_json),
+        JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(
+        statistics, "disable",
+        json_object_new_boolean(!monitor->enable_statistics),
+        JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    struct json_object* time_series = json_object_new_object();
+    json_object_object_add_ex(config, "time_series", time_series,
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
-    json_object_object_add_ex(statistics, "precision",
-                              json_object_new_int(monitor->precision),
-                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
-    json_object_object_add_ex(statistics, "pretty",
-                              json_object_new_boolean(monitor->pretty_json),
-                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(
+        time_series, "pretty_json",
+        json_object_new_boolean(monitor->stats_pretty_json),
+        JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(
+        time_series, "disable",
+        json_object_new_boolean(!monitor->enable_time_series),
+        JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(
+        time_series, "time_interval_sec",
+        json_object_new_double(monitor->rpc_time_series_interval),
+        JSON_C_OBJECT_ADD_KEY_IS_NEW);
     return config;
 }
 
@@ -562,6 +690,15 @@ margo_default_monitor_on_progress(void*                         uargs,
                                   margo_monitor_progress_args_t event_args)
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+
+    /* update time series */
+    if ((event_type == MARGO_MONITOR_FN_END) && monitor->enable_time_series
+        && (timestamp > (monitor->rpc_time_series_last_ts
+                         + monitor->rpc_time_series_interval))) {
+        update_rpc_time_series(monitor, timestamp);
+    }
+
+    /* statistics */
     if (event_type == MARGO_MONITOR_FN_START) {
         if (!monitor->sample_progress_every
             || (monitor->progress_sampling % monitor->sample_progress_every))
@@ -924,12 +1061,13 @@ static void margo_default_monitor_on_rpc_handler(
             = addr_info_find_or_add(monitor, mid, handle_info->addr);
         ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->addr_info_mtx));
 
-        // attach statistics to session
+        // form callpath key
         hg_id_t    id  = margo_get_info(event_args->handle)->id;
         callpath_t key = {.rpc_id    = id,
                           .parent_id = event_args->parent_rpc_id,
                           .addr_id   = addr_info->id};
 
+        // attach statistics to session
         ABT_mutex_spinlock(
             ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->target_rpc_stats_mtx));
         HASH_FIND(hh, monitor->target_rpc_stats, &key, sizeof(key), rpc_stats);
@@ -942,6 +1080,16 @@ static void margo_default_monitor_on_rpc_handler(
         ABT_mutex_unlock(
             ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->target_rpc_stats_mtx));
         session->target.stats = rpc_stats;
+
+        // find the time series associated with
+        // this callpath and increment its count
+        ABT_mutex_spinlock(
+            ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
+        rpc_time_series_t* rpc_ts
+            = find_or_add_time_series_for_rpc(monitor, id);
+        rpc_ts->rpc_count += 1;
+        ABT_mutex_unlock(
+            ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
 
         event_args->uctx.f = timestamp;
 
@@ -1184,36 +1332,81 @@ write_monitor_state_to_json_file(const default_monitor_state_t* monitor)
     gethostname(hostname, 1023);
     /* get pid */
     pid_t pid = getpid();
-    /* compute size needed for the full file name */
-    size_t fullname_size = snprintf(NULL, 0, "%s.%s.%d.json",
-                                    monitor->filename_prefix, hostname, pid);
-    /* create full file name */
-    char* fullname = calloc(1, fullname_size + 1);
-    sprintf(fullname, "%s.%s.%d.json", monitor->filename_prefix, hostname, pid);
-    /* open the file */
-    int   errnum;
-    FILE* file = fopen(fullname, "w");
-    if (!file) {
-        errnum = errno;
-        margo_error(monitor->mid, "Error open file %s: %s", fullname,
-                    strerror(errnum));
-        goto finish;
-    }
-    /* create JSON statistics */
+    /* get printing precision */
     char double_format[] = "%.Xf";
     double_format[2]     = (char)(48 + monitor->precision);
     json_c_set_serialization_double_format(double_format, JSON_C_OPTION_GLOBAL);
-    struct json_object* json = monitor_state_to_json(monitor);
 
-    /* write statistics */
-    size_t      json_len = 0;
-    const char* json_str = json_object_to_json_string_length(
-        json, monitor->pretty_json | JSON_C_TO_STRING_NOSLASHESCAPE, &json_len);
-    fwrite(json_str, json_len, 1, file);
-    /* finish */
-finish:
-    free(fullname);
-    if (file) fclose(file);
+    /* write statistics file */
+    if (monitor->enable_statistics) {
+        /* compute size needed for the full file name */
+        size_t stats_filename_size
+            = snprintf(NULL, 0, "%s.%s.%d.stats.json", monitor->filename_prefix,
+                       hostname, pid);
+        /* create full file name */
+        char* stats_filename = calloc(1, stats_filename_size + 1);
+        sprintf(stats_filename, "%s.%s.%d.stats.json", monitor->filename_prefix,
+                hostname, pid);
+        /* open the file */
+        int   errnum;
+        FILE* file = fopen(stats_filename, "w");
+        if (!file) {
+            errnum = errno;
+            margo_error(monitor->mid, "Error open file %s: %s", stats_filename,
+                        strerror(errnum));
+            goto finish_stats_file;
+        }
+        /* create JSON statistics */
+        struct json_object* json = monitor_statistics_to_json(monitor);
+
+        /* write statistics */
+        size_t      json_len = 0;
+        const char* json_str = json_object_to_json_string_length(
+            json, monitor->stats_pretty_json | JSON_C_TO_STRING_NOSLASHESCAPE,
+            &json_len);
+        fwrite(json_str, json_len, 1, file);
+        json_object_put(json);
+        /* finish */
+finish_stats_file:
+        free(stats_filename);
+        if (file) fclose(file);
+    }
+
+    /* write time series file */
+    if (monitor->enable_time_series) {
+        /* compute size needed for the full file name */
+        size_t series_filename_size
+            = snprintf(NULL, 0, "%s.%s.%d.series.json",
+                       monitor->filename_prefix, hostname, pid);
+        /* create full file name */
+        char* series_filename = calloc(1, series_filename_size + 1);
+        sprintf(series_filename, "%s.%s.%d.series.json",
+                monitor->filename_prefix, hostname, pid);
+        /* open the file */
+        int   errnum;
+        FILE* file = fopen(series_filename, "w");
+        if (!file) {
+            errnum = errno;
+            margo_error(monitor->mid, "Error open file %s: %s", series_filename,
+                        strerror(errnum));
+            goto finish_series_file;
+        }
+        /* create JSON statistics */
+        struct json_object* json = monitor_time_series_to_json(monitor);
+
+        /* write statistics */
+        size_t      json_len = 0;
+        const char* json_str = json_object_to_json_string_length(
+            json,
+            monitor->time_series_pretty_json | JSON_C_TO_STRING_NOSLASHESCAPE,
+            &json_len);
+        fwrite(json_str, json_len, 1, file);
+        json_object_put(json);
+        /* finish */
+finish_series_file:
+        free(series_filename);
+        if (file) fclose(file);
+    }
 }
 
 /* ========================================================================
@@ -1387,9 +1580,9 @@ static char* build_rpc_key(const callpath_t* callpath)
  * parent_provider_id, and name  attributes to a
  * JSON fragment containing RPC statistics.
  */
-static void fill_with_rpc_info(struct json_object*            rpc_json,
-                               const callpath_t*              callpath,
-                               const default_monitor_state_t* monitor)
+static void fill_json_with_rpc_info(struct json_object*            rpc_json,
+                                    const callpath_t*              callpath,
+                                    const default_monitor_state_t* monitor)
 {
     uint16_t provider_id;
     hg_id_t  base_id;
@@ -1422,7 +1615,7 @@ static void fill_with_rpc_info(struct json_object*            rpc_json,
 }
 
 static struct json_object*
-monitor_state_to_json(const default_monitor_state_t* state)
+monitor_statistics_to_json(const default_monitor_state_t* state)
 {
     struct json_object* json = json_object_new_object();
     // mercury progress loop statistic
@@ -1448,7 +1641,7 @@ monitor_state_to_json(const default_monitor_state_t* state)
                 rpc_json = json_object_new_object();
                 json_object_object_add(rpcs, rpc_key, rpc_json);
                 // fill RPC information
-                fill_with_rpc_info(rpc_json, &(p->callpath), state);
+                fill_json_with_rpc_info(rpc_json, &(p->callpath), state);
             }
             // find or add "origin" section
             struct json_object* origin
@@ -1485,7 +1678,7 @@ monitor_state_to_json(const default_monitor_state_t* state)
                 rpc_json = json_object_new_object();
                 json_object_object_add(rpcs, rpc_key, rpc_json);
                 // fill RPC information
-                fill_with_rpc_info(rpc_json, &(p->callpath), state);
+                fill_json_with_rpc_info(rpc_json, &(p->callpath), state);
             }
             // find or add "target" section
             struct json_object* target
@@ -1522,7 +1715,7 @@ monitor_state_to_json(const default_monitor_state_t* state)
                 rpc_json = json_object_new_object();
                 json_object_object_add(rpcs, rpc_key, rpc_json);
                 // fill RPC information
-                fill_with_rpc_info(rpc_json, &(p->callpath), state);
+                fill_json_with_rpc_info(rpc_json, &(p->callpath), state);
             }
             // find or add a "target" section for it
             struct json_object* target
@@ -1562,7 +1755,8 @@ monitor_state_to_json(const default_monitor_state_t* state)
                 rpc_json = json_object_new_object();
                 json_object_object_add(rpcs, rpc_key, rpc_json);
                 // fill RPC information
-                fill_with_rpc_info(rpc_json, &(p->bulk_key.callpath), state);
+                fill_json_with_rpc_info(rpc_json, &(p->bulk_key.callpath),
+                                        state);
             }
             // find or add a "target" section for it
             struct json_object* target
@@ -1600,6 +1794,45 @@ monitor_state_to_json(const default_monitor_state_t* state)
         }
         ABT_mutex_unlock(
             ABT_MUTEX_MEMORY_GET_HANDLE(&state->bulk_transfer_stats_mtx));
+    }
+    return json;
+}
+
+static struct json_object*
+monitor_time_series_to_json(const default_monitor_state_t* monitor)
+{
+    struct json_object* json = json_object_new_object();
+    /* RPC time series */
+    struct json_object* rpcs = json_object_new_object();
+    json_object_object_add_ex(json, "rpcs", rpcs, JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    {
+        rpc_time_series_t *rpc_ts, *tmp;
+        ABT_mutex_spinlock(
+            ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
+        HASH_ITER(hh, monitor->rpc_time_series, rpc_ts, tmp)
+        {
+            // get RPC name
+            rpc_info_t* rpc_info
+                = rpc_info_find(monitor->rpc_info, rpc_ts->rpc_id);
+            // get provider id and base id
+            hg_id_t  base_id;
+            uint16_t provider_id;
+            demux_id(rpc_ts->rpc_id, &base_id, &provider_id);
+            // create the key
+            size_t key_size
+                = snprintf(NULL, 0, "%s:%d", rpc_info->name, provider_id);
+            char* key = malloc(key_size + 1);
+            snprintf(key, key_size + 1, "%s:%d", rpc_info->name, provider_id);
+            // create JSON object corresponding to this RPC's time series
+            struct json_object* json_ts = rpc_time_series_to_json(rpc_ts);
+            // add it to the RPC section
+            json_object_object_add_ex(rpcs, key, json_ts,
+                                      JSON_C_OBJECT_ADD_KEY_IS_NEW);
+            // free the key
+            free(key);
+        }
+        ABT_mutex_unlock(
+            ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
     }
     return json;
 }
@@ -1671,4 +1904,111 @@ static void addr_info_clear(addr_info_t* hash)
         HASH_DELETE(hh_by_name, hash, p);
         free(p);
     }
+}
+
+/* ========================================================================
+ * Time series function definitions
+ * ======================================================================== */
+
+static void time_series_append(time_series_t* series, double ts, uint64_t val)
+{
+    timedval_frame_t* frame = series->last_frame;
+    if (!frame || frame->size == series->frame_capacity) {
+        frame = (timedval_frame_t*)malloc(
+            sizeof(*frame) + sizeof(timedval_t) * (series->frame_capacity - 1));
+        frame->next        = NULL;
+        frame->size        = 0;
+        series->last_frame = frame;
+    }
+    if (!series->first_frame) series->first_frame = frame;
+    frame->data[frame->size].timestamp = ts;
+    frame->data[frame->size].value     = val;
+    frame->size += 1;
+}
+
+static void time_series_clear(time_series_t* series)
+{
+    while (series->first_frame) {
+        timedval_frame_t* next = series->first_frame->next;
+        free(series->first_frame);
+        series->first_frame = next;
+    }
+}
+
+static rpc_time_series_t*
+find_or_add_time_series_for_rpc(default_monitor_state_t* monitor,
+                                hg_id_t                  rpc_id)
+{
+    rpc_time_series_t* ts = NULL;
+    HASH_FIND(hh, monitor->rpc_time_series, &rpc_id, sizeof(rpc_id), ts);
+    if (!ts) {
+        ts         = (rpc_time_series_t*)calloc(1, sizeof(*ts));
+        ts->rpc_id = rpc_id;
+        ts->rpc_count_series.frame_capacity = 256;
+        HASH_ADD(hh, monitor->rpc_time_series, rpc_id, sizeof(rpc_id), ts);
+    }
+    return ts;
+}
+
+static void free_all_time_series(default_monitor_state_t* monitor)
+{
+    ABT_mutex_spinlock(
+        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
+    rpc_time_series_t *p, *tmp;
+    HASH_ITER(hh, monitor->rpc_time_series, p, tmp)
+    {
+        HASH_DEL(monitor->rpc_time_series, p);
+        time_series_clear(&(p->rpc_count_series));
+        free(p);
+    }
+    ABT_mutex_unlock(
+        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
+}
+
+static struct json_object* rpc_time_series_to_json(rpc_time_series_t* rpc_ts)
+{
+    timedval_frame_t* frame      = rpc_ts->rpc_count_series.first_frame;
+    size_t            array_size = 0;
+    while (frame) {
+        array_size += frame->size;
+        frame = frame->next;
+    }
+
+    struct json_object* json       = json_object_new_object();
+    struct json_object* timestamps = json_object_new_array_ext(array_size);
+    struct json_object* values     = json_object_new_array_ext(array_size);
+    json_object_object_add_ex(json, "timestamps", timestamps,
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(json, "count", values,
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+
+    frame = rpc_ts->rpc_count_series.first_frame;
+    while (frame) {
+        for (size_t i = 0; i < frame->size; i++) {
+            json_object_array_add(
+                timestamps, json_object_new_double(frame->data[i].timestamp));
+            json_object_array_add(values,
+                                  json_object_new_uint64(frame->data[i].value));
+        }
+        frame = frame->next;
+    }
+
+    return json;
+}
+
+static void update_rpc_time_series(struct default_monitor_state* monitor,
+                                   double                        timestamp)
+{
+    rpc_time_series_t *rpc_ts, *tmp;
+    ABT_mutex_spinlock(
+        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
+    HASH_ITER(hh, monitor->rpc_time_series, rpc_ts, tmp)
+    {
+        time_series_append(&rpc_ts->rpc_count_series, timestamp,
+                           rpc_ts->rpc_count);
+        rpc_ts->rpc_count = 0;
+    }
+    ABT_mutex_unlock(
+        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
+    monitor->rpc_time_series_last_ts = timestamp;
 }

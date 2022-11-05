@@ -351,7 +351,14 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
     uint16_t provider_id_param = atoi(munit_parameters_get(params, "provider_id"));
     hg_bool_t relay = strcmp(munit_parameters_get(params, "relay"), "true") == 0 ? HG_TRUE : HG_FALSE;
     const char* json_config =
-        "{\"monitoring\":{\"config\":{\"statistics\":{\"filename_prefix\":\"test\",\"precision\":9,\"pretty\":true}}}}";
+        "{\"monitoring\":{"
+            "\"config\":{"
+                "\"filename_prefix\":\"test\","
+                "\"pretty_json\":true,"
+                "\"statistics\":{\"precision\":9, \"disable\":false},"
+                "\"time_series\":{\"precision\":9, \"disable\":false}"
+            "}"
+        "}}";
     struct margo_init_info init_info = {
         .json_config   = json_config,
         .progress_pool = ABT_POOL_NULL,
@@ -429,16 +436,15 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
 
     margo_finalize(mid);
 
-    // TODO check file was written and is valid
     char* filename = NULL;
     {
         char hostname[1024];
         hostname[1023] = '\0';
         gethostname(hostname, 1023);
         pid_t pid = getpid();
-        size_t fullname_size = snprintf(NULL, 0, "test.%s.%d.json", hostname, pid);
+        size_t fullname_size = snprintf(NULL, 0, "test.%s.%d.stats.json", hostname, pid);
         filename = calloc(1, fullname_size+1);
-        sprintf(filename, "test.%s.%d.json", hostname, pid);
+        sprintf(filename, "test.%s.%d.stats.json", hostname, pid);
     }
     munit_assert_int(access(filename, F_OK), ==, 0);
 
