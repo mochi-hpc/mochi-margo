@@ -259,6 +259,11 @@ static struct json_object* rpc_time_series_to_json(rpc_time_series_t* rpc_ts);
 static void update_rpc_time_series(struct default_monitor_state* monitor,
                                    double                        timestamp);
 
+static void update_pool_time_series(struct default_monitor_state* monitor,
+                                    double                        timestamp);
+static struct json_object*
+pool_time_series_to_json(const struct default_monitor_state* monitor);
+
 /* ========================================================================
  * RPC info
  * ======================================================================== */
@@ -326,8 +331,11 @@ typedef struct default_monitor_state {
     target_rpc_statistics_t*    target_rpc_stats;
     ABT_mutex_memory            target_rpc_stats_mtx;
     /* Time series and their mutex */
-    rpc_time_series_t* rpc_time_series;
+    rpc_time_series_t* rpc_time_series; /* hash */
     ABT_mutex_memory   rpc_time_series_mtx;
+    time_series_t*     pool_size_time_series;       /* array */
+    time_series_t*     pool_total_size_time_series; /* array */
+    ABT_mutex_memory   pool_time_series_mtx;
     double             rpc_time_series_last_ts;
     double             rpc_time_series_interval;
     /* session and bulk_session pools */
@@ -545,7 +553,21 @@ static void* margo_default_monitor_initialize(margo_instance_id   mid,
         }
     }
 
-    /* preinitialize bulk session */
+    /* allocate time array for pool size time series */
+    if (monitor->enable_time_series) {
+        size_t num_pools = margo_get_num_pools(monitor->mid);
+        monitor->pool_size_time_series
+            = (time_series_t*)calloc(num_pools, sizeof(time_series_t));
+        monitor->pool_total_size_time_series
+            = (time_series_t*)calloc(num_pools, sizeof(time_series_t));
+        for (size_t i = 0; i < num_pools; i++) {
+            // TODO: make this configurable?
+            monitor->pool_size_time_series[i].frame_capacity       = 256;
+            monitor->pool_total_size_time_series[i].frame_capacity = 256;
+        }
+    }
+
+    /* preinitialize sessions */
     for (int i = 0; i < 32; i++) {
         session_t* session = (session_t*)malloc(sizeof(*session));
         release_session(monitor, session);
@@ -563,7 +585,9 @@ static void margo_default_monitor_finalize(void* uargs)
     if (!monitor) return;
 
     /* do a final update of time series */
-    update_rpc_time_series(monitor, ABT_get_wtime());
+    double ts = ABT_get_wtime();
+    update_rpc_time_series(monitor, ts);
+    update_pool_time_series(monitor, ts);
 
     /* write JSON file */
     write_monitor_state_to_json_file(monitor);
@@ -612,7 +636,7 @@ static void margo_default_monitor_finalize(void* uargs)
             free(p);
         }
     }
-    /* free RPC time series */
+    /* free RPC and bulk time series */
     free_all_time_series(monitor);
     /* free session pools */
     clear_session_pool(monitor);
@@ -698,6 +722,7 @@ margo_default_monitor_on_progress(void*                         uargs,
         && (timestamp > (monitor->rpc_time_series_last_ts
                          + monitor->rpc_time_series_interval))) {
         update_rpc_time_series(monitor, timestamp);
+        update_pool_time_series(monitor, timestamp);
     }
 
     /* statistics */
@@ -1831,10 +1856,18 @@ monitor_time_series_to_json(const default_monitor_state_t* monitor)
             uint16_t provider_id;
             demux_id(rpc_ts->rpc_id, &base_id, &provider_id);
             // create the key
-            size_t key_size
-                = snprintf(NULL, 0, "%s:%d", rpc_info->name, provider_id);
-            char* key = malloc(key_size + 1);
-            snprintf(key, key_size + 1, "%s:%d", rpc_info->name, provider_id);
+            size_t key_size;
+            char*  key;
+            if (rpc_info) {
+                key_size
+                    = snprintf(NULL, 0, "%s:%d", rpc_info->name, provider_id);
+                key = malloc(key_size + 1);
+                snprintf(key, key_size + 1, "%s:%d", rpc_info->name,
+                         provider_id);
+            } else {
+                key = malloc(10);
+                snprintf(key, key_size, "<unknown>");
+            }
             // create JSON object corresponding to this RPC's time series
             struct json_object* json_ts = rpc_time_series_to_json(rpc_ts);
             // add it to the RPC section
@@ -1846,6 +1879,9 @@ monitor_time_series_to_json(const default_monitor_state_t* monitor)
         ABT_mutex_unlock(
             ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
     }
+    struct json_object* pools = pool_time_series_to_json(monitor);
+    json_object_object_add_ex(json, "pools", pools,
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
     return json;
 }
 
@@ -1947,6 +1983,39 @@ static void time_series_clear(time_series_t* series)
     }
 }
 
+/* Free both RPC time series and Pool time series */
+static void free_all_time_series(default_monitor_state_t* monitor)
+{
+    ABT_mutex_spinlock(
+        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
+    rpc_time_series_t *p, *tmp;
+    HASH_ITER(hh, monitor->rpc_time_series, p, tmp)
+    {
+        HASH_DEL(monitor->rpc_time_series, p);
+        time_series_clear(&(p->rpc_count_series));
+        time_series_clear(&(p->bulk_size_series));
+        free(p);
+    }
+    ABT_mutex_unlock(
+        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
+
+    ABT_mutex_spinlock(
+        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->pool_time_series_mtx));
+    size_t num_pools = margo_get_num_pools(monitor->mid);
+    for (size_t i = 0; i < num_pools; i++) {
+        time_series_clear(&(monitor->pool_size_time_series[i]));
+        time_series_clear(&(monitor->pool_total_size_time_series[i]));
+    }
+    free(monitor->pool_size_time_series);
+    free(monitor->pool_total_size_time_series);
+    ABT_mutex_unlock(
+        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
+}
+
+/* ========================================================================
+ * RPC time series function definitions
+ * ======================================================================== */
+
 static rpc_time_series_t*
 find_or_add_time_series_for_rpc(default_monitor_state_t* monitor,
                                 hg_id_t                  rpc_id)
@@ -1963,22 +2032,6 @@ find_or_add_time_series_for_rpc(default_monitor_state_t* monitor,
         HASH_ADD(hh, monitor->rpc_time_series, rpc_id, sizeof(rpc_id), ts);
     }
     return ts;
-}
-
-static void free_all_time_series(default_monitor_state_t* monitor)
-{
-    ABT_mutex_spinlock(
-        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
-    rpc_time_series_t *p, *tmp;
-    HASH_ITER(hh, monitor->rpc_time_series, p, tmp)
-    {
-        HASH_DEL(monitor->rpc_time_series, p);
-        time_series_clear(&(p->rpc_count_series));
-        time_series_clear(&(p->bulk_size_series));
-        free(p);
-    }
-    ABT_mutex_unlock(
-        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
 }
 
 static struct json_object* rpc_time_series_to_json(rpc_time_series_t* rpc_ts)
@@ -2047,4 +2100,95 @@ static void update_rpc_time_series(struct default_monitor_state* monitor,
     ABT_mutex_unlock(
         ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
     monitor->rpc_time_series_last_ts = timestamp;
+}
+
+/* ========================================================================
+ * Pool time series function definitions
+ * ======================================================================== */
+
+static struct json_object*
+pool_time_series_to_json(const default_monitor_state_t* monitor)
+{
+    ABT_mutex_spinlock(
+        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->pool_time_series_mtx));
+
+    struct json_object* json = json_object_new_object();
+
+    size_t num_pools = margo_get_num_pools(monitor->mid);
+    for (size_t i = 0; i < num_pools; i++) {
+
+        time_series_t* pool_size_ts = &monitor->pool_size_time_series[i];
+        time_series_t* pool_total_size_ts
+            = &monitor->pool_total_size_time_series[i];
+
+        timedval_frame_t* frame      = pool_size_ts->first_frame;
+        size_t            array_size = 0;
+        while (frame) {
+            array_size += frame->size;
+            frame = frame->next;
+        }
+
+        struct json_object* pool_json = json_object_new_object();
+        const char*         pool_name = margo_get_pool_name(monitor->mid, i);
+        json_object_object_add_ex(json, pool_name, pool_json,
+                                  JSON_C_OBJECT_ADD_KEY_IS_NEW);
+
+        struct json_object* timestamps = json_object_new_array_ext(array_size);
+        struct json_object* size       = json_object_new_array_ext(array_size);
+        struct json_object* total_size = json_object_new_array_ext(array_size);
+        json_object_object_add_ex(pool_json, "timestamps", timestamps,
+                                  JSON_C_OBJECT_ADD_KEY_IS_NEW);
+        json_object_object_add_ex(pool_json, "size", size,
+                                  JSON_C_OBJECT_ADD_KEY_IS_NEW);
+        json_object_object_add_ex(pool_json, "total_size", total_size,
+                                  JSON_C_OBJECT_ADD_KEY_IS_NEW);
+
+        frame = pool_size_ts->first_frame;
+        while (frame) {
+            for (size_t j = 0; j < frame->size; j++) {
+                json_object_array_add(
+                    timestamps,
+                    json_object_new_double(frame->data[j].timestamp));
+                json_object_array_add(
+                    size, json_object_new_uint64(frame->data[j].value));
+            }
+            frame = frame->next;
+        }
+        frame = pool_total_size_ts->first_frame;
+        while (frame) {
+            for (size_t j = 0; j < frame->size; j++) {
+                json_object_array_add(
+                    total_size, json_object_new_uint64(frame->data[j].value));
+            }
+            frame = frame->next;
+        }
+    }
+
+    ABT_mutex_unlock(
+        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->pool_time_series_mtx));
+
+    return json;
+}
+
+static void update_pool_time_series(struct default_monitor_state* monitor,
+                                    double                        timestamp)
+{
+    ABT_mutex_spinlock(
+        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->pool_time_series_mtx));
+    size_t num_pools = margo_get_num_pools(monitor->mid);
+    for (size_t i = 0; i < num_pools; i++) {
+        ABT_pool pool = ABT_POOL_NULL;
+        if (margo_get_pool_by_index(monitor->mid, i, &pool) != 0) { continue; }
+        size_t pool_size, pool_total_size;
+        if (ABT_pool_get_size(pool, &pool_size) != ABT_SUCCESS) { continue; }
+        if (ABT_pool_get_total_size(pool, &pool_total_size) != ABT_SUCCESS) {
+            continue;
+        }
+        time_series_append(&(monitor->pool_size_time_series[i]), timestamp,
+                           pool_size);
+        time_series_append(&(monitor->pool_total_size_time_series[i]),
+                           timestamp, pool_total_size);
+    }
+    ABT_mutex_unlock(
+        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->pool_time_series_mtx));
 }
