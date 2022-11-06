@@ -241,8 +241,10 @@ static void time_series_clear(time_series_t* series);
 
 /* RPC-related time series */
 typedef struct rpc_time_series {
-    uint64_t       rpc_count;        /* count of RPCs since last added value */
-    time_series_t  rpc_count_series; /* time series of rpc_count */
+    uint64_t      rpc_count;        /* count of RPCs since last added value */
+    time_series_t rpc_count_series; /* time series of rpc_count */
+    uint64_t bulk_size; /* total size bulk-transferred since last added value */
+    time_series_t  bulk_size_series; /* time series of bulk-transferred size */
     hg_id_t        rpc_id;           /* hash key */
     UT_hash_handle hh;               /* hash handle */
     /* mutex protecting accesses */
@@ -1251,6 +1253,16 @@ static void margo_default_monitor_on_bulk_transfer(
         margo_monitor_data_t monitor_data = {.p = (void*)session};
         margo_request_set_monitoring_data(event_args->request, monitor_data);
 
+        // find the time series associated with
+        // this callpath and increment its count
+        ABT_mutex_spinlock(
+            ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
+        rpc_time_series_t* rpc_ts = find_or_add_time_series_for_rpc(
+            monitor, bulk_key.callpath.rpc_id);
+        rpc_ts->bulk_size += event_args->size;
+        ABT_mutex_unlock(
+            ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
+
     } else {
 
         margo_monitor_data_t monitor_data;
@@ -1944,7 +1956,10 @@ find_or_add_time_series_for_rpc(default_monitor_state_t* monitor,
     if (!ts) {
         ts         = (rpc_time_series_t*)calloc(1, sizeof(*ts));
         ts->rpc_id = rpc_id;
-        ts->rpc_count_series.frame_capacity = 256;
+        ts->rpc_count_series.frame_capacity
+            = 256; // TODO: should this be configurable?
+        ts->bulk_size_series.frame_capacity
+            = 256; // TODO: should this be configurable?
         HASH_ADD(hh, monitor->rpc_time_series, rpc_id, sizeof(rpc_id), ts);
     }
     return ts;
@@ -1959,6 +1974,7 @@ static void free_all_time_series(default_monitor_state_t* monitor)
     {
         HASH_DEL(monitor->rpc_time_series, p);
         time_series_clear(&(p->rpc_count_series));
+        time_series_clear(&(p->bulk_size_series));
         free(p);
     }
     ABT_mutex_unlock(
@@ -1976,18 +1992,34 @@ static struct json_object* rpc_time_series_to_json(rpc_time_series_t* rpc_ts)
 
     struct json_object* json       = json_object_new_object();
     struct json_object* timestamps = json_object_new_array_ext(array_size);
-    struct json_object* values     = json_object_new_array_ext(array_size);
+    struct json_object* count      = json_object_new_array_ext(array_size);
+    struct json_object* bulk_size  = json_object_new_array_ext(array_size);
     json_object_object_add_ex(json, "timestamps", timestamps,
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
-    json_object_object_add_ex(json, "count", values,
+    json_object_object_add_ex(json, "count", count,
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
-
+    json_object_object_add_ex(json, "bulk_size", bulk_size,
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
     frame = rpc_ts->rpc_count_series.first_frame;
     while (frame) {
         for (size_t i = 0; i < frame->size; i++) {
             json_object_array_add(
                 timestamps, json_object_new_double(frame->data[i].timestamp));
-            json_object_array_add(values,
+            json_object_array_add(count,
+                                  json_object_new_uint64(frame->data[i].value));
+        }
+        frame = frame->next;
+    }
+
+    // note: count and bulk_size time series are updated at
+    // the same time in the progress callback, so we know
+    // the series of timestamps will be the same. No need to
+    // use the series of timestamps of bulk_size.
+
+    frame = rpc_ts->bulk_size_series.first_frame;
+    while (frame) {
+        for (size_t i = 0; i < frame->size; i++) {
+            json_object_array_add(bulk_size,
                                   json_object_new_uint64(frame->data[i].value));
         }
         frame = frame->next;
@@ -2007,6 +2039,10 @@ static void update_rpc_time_series(struct default_monitor_state* monitor,
         time_series_append(&rpc_ts->rpc_count_series, timestamp,
                            rpc_ts->rpc_count);
         rpc_ts->rpc_count = 0;
+
+        time_series_append(&rpc_ts->bulk_size_series, timestamp,
+                           rpc_ts->bulk_size);
+        rpc_ts->bulk_size = 0;
     }
     ABT_mutex_unlock(
         ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
