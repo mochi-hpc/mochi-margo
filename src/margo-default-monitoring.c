@@ -755,6 +755,8 @@ margo_default_monitor_on_progress(void*                         uargs,
         update_pool_time_series(monitor, timestamp);
     }
 
+    if (event_type == MARGO_MONITOR_FN_START) monitor->progress_sampling += 1;
+
     /* statistics */
     if (event_type == MARGO_MONITOR_FN_START) {
         if (!monitor->sample_progress_every
@@ -765,9 +767,8 @@ margo_default_monitor_on_progress(void*                         uargs,
         return;
     }
 
-    monitor->progress_sampling += 1;
     if (!monitor->sample_progress_every
-        || (monitor->progress_sampling - 1 % monitor->sample_progress_every))
+        || (monitor->progress_sampling % monitor->sample_progress_every))
         return;
     monitor->progress_sampling %= monitor->sample_progress_every;
 
