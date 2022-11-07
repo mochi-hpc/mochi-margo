@@ -89,6 +89,7 @@ static MunitResult finalize_and_wait(const MunitParameter params[], void* data)
 
     struct test_context* ctx = (struct test_context*)data;
 
+    margo_set_environment(NULL);
     ABT_init(0, NULL);
 
     /* init and finalize_and_wait */

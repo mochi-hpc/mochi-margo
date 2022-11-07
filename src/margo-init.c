@@ -115,6 +115,10 @@ margo_instance_id margo_init_ext(const char*                   address,
     ABT_pool               rpc_pool      = ABT_POOL_NULL;
     ABT_bool               tool_enabled;
 
+    if (getenv("MARGO_ENABLE_MONITORING") && !args.monitor) {
+        args.monitor = margo_default_monitor;
+    }
+
     if (args.hg_init_info)
         memcpy(&hg_init_info, args.hg_init_info, sizeof(hg_init_info));
 
