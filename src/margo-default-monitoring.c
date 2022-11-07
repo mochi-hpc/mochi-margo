@@ -1175,7 +1175,6 @@ margo_default_monitor_on_rpc_ult(void*                        uargs,
 
     if (event_type == MARGO_MONITOR_FN_START) {
 
-        margo_ref_incr(event_args->handle);
         event_args->uctx.f = timestamp;
         double t           = timestamp - session->target.start_ts;
         UPDATE_STATISTICS_WITH(rpc_stats->ult[TIMESTAMP], t);
@@ -1184,7 +1183,6 @@ margo_default_monitor_on_rpc_ult(void*                        uargs,
         ABT_key_set(monitor->callpath_key, current_callpath);
 
     } else {
-        margo_destroy(event_args->handle);
         double t = timestamp - event_args->uctx.f;
         UPDATE_STATISTICS_WITH(rpc_stats->ult[DURATION], t);
     }

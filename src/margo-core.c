@@ -2164,6 +2164,8 @@ void __margo_internal_pre_wrapper_hooks(
 
     /* monitoring */
     __MARGO_MONITOR(mid, FN_START, rpc_ult, (*monitoring_args));
+
+    margo_ref_incr(handle);
 }
 
 void __margo_internal_post_wrapper_hooks(
@@ -2171,6 +2173,8 @@ void __margo_internal_post_wrapper_hooks(
 {
     /* monitoring */
     __MARGO_MONITOR(mid, FN_END, rpc_ult, (*monitoring_args));
+
+    margo_destroy(monitoring_args->handle);
 
     __margo_internal_decr_pending(mid);
     if (__margo_internal_finalize_requested(mid)) { margo_finalize(mid); }
