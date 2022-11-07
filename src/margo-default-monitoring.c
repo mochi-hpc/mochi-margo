@@ -25,38 +25,68 @@
  *
  * - origin_rpc_statistics: statistics on calls to an RPC at its
  *   origin, including forward, forward callback, wait, set_input,
- *   and get_output;
+ *   and get_output. This is a UThash indexed by "callpath", which
+ *   represents a tuple (rpc_id, parent_rpc_id, address_id),
+ *   with the address id representing the destination address.
  *
  * - target_rpc_statistics: statistics on calls to an RPC at its
  *   target, including handler, ULT, respond, respond callback,
- *   wait, get_input, and set_output.
+ *   wait, get_input, and set_output. This is a UThash indexed
+ *   by callpath, with the address id representing the source
+ *   of the RPC.
  *
  * - bulk_create_statistics: statistics on bulk creation operations
- *   (size and durations).
+ *   (size and durations). The monitoring system will make a best
+ *   attempt at locating the context (callpath) in which the bulk
+ *   creation is done, using ABT_key. bulk_create_statistics is
+ *   a UThash indexed by such a callpath.
  *
  * - bulk_transfer_statistics: statistics on bulk transfer operations
  *   (transfer, transfer callback, wait, and transfer size).
+ *   This is a UThash indexed by a key formed using the callpath,
+ *   the operation (push or pull) and the remote address of the
+ *   transfer.
  *
  * The reasons bulk creation and transfer operations are tracked
  * separately are (1) services may create bulk handle ahead of time
- * and cache them, so their creation may not be linked the the execution
+ * and cache them, so their creation may not be linked to the execution
  * of a particular RPC, and (2) while bulk creation statistics are
  * maintained per callpath, transfer statistics are further maintained
  * per remote address and per operation (pull/push).
  *
- * RPC statistics are generally maintained on a per-callpath basis.
- * A callparg is a tuple (parent_rpc_id, rpc_id, address_id).
- * - rpc_id is the RPC of the currently sent/received RPC.
- * - parent_rpc_id is the RPC id of the handler from which the
- *   current sent/received RPC has been sent, if any.
- * - addr_id is an id pointing to an address maintained by the
- *   monitoring system, and allows tracking either the sender
- *   of the RPC (on the receiver side) or the receiver (on the
- *   sender side).
- *
  * Note that RPC ids above contain the encoded provider ids, so
  * demux_id can be used to further obtain the provider id and base id
  * from these RPC ids.
+ */
+
+/*
+ * Time series in Margo's default monitoring system
+ * ================================================
+ *
+ * The monitoring system will track time series by periodically
+ * checking some properties of the margo instance, including
+ * properties about the RPCs and about the pools. The time interval
+ * is configurable via the "time_interval_sec" property.
+ *
+ * - RPC time series include the following:
+ *   - Count of RPCs received since the last check;
+ *   - Bulk size transferred in RPCs since last check;
+ * - Pool time series include the following:
+ *   - Size of the pool at the current check (number of
+ *     runnable ULTs in the pool);
+ *   - Total size of the pool at the current check
+ *     (number of runnable and suspended ULTs in the pool);
+ *
+ * Time series also include an array of timestamps at which
+ * the measurements are made. This is because while the system
+ * will make a best effort in satisfying the specified time interval,
+ * if it's busy servicing RPCs, the measurements may be delayed.
+ *
+ * RPC time series are managed by a UThash indexed by RPC id
+ * (not callpath, contrary to statistics, but the RPC id does
+ * include the provider id).
+ * Pool time series are managed by an array initialized with
+ * the number of pools specified in margo's configuration.
  */
 
 /* ========================================================================
@@ -337,7 +367,7 @@ typedef struct default_monitor_state {
     time_series_t*     pool_total_size_time_series; /* array */
     ABT_mutex_memory   pool_time_series_mtx;
     double             rpc_time_series_last_ts;
-    double             rpc_time_series_interval;
+    double             time_series_interval;
     /* session and bulk_session pools */
     struct session*      session_pool;
     ABT_mutex_memory     session_pool_mtx;
@@ -473,14 +503,14 @@ static void* margo_default_monitor_initialize(margo_instance_id   mid,
     monitor->mid = mid;
 
     /* default configuration */
-    monitor->filename_prefix          = strdup("margo-statistics");
-    monitor->precision                = 9;
-    monitor->stats_pretty_json        = 0;
-    monitor->time_series_pretty_json  = 0;
-    monitor->sample_progress_every    = 1;
-    monitor->rpc_time_series_interval = 1.0;
-    monitor->enable_statistics        = true;
-    monitor->enable_time_series       = true;
+    monitor->filename_prefix         = strdup("margo");
+    monitor->precision               = 9;
+    monitor->stats_pretty_json       = 0;
+    monitor->time_series_pretty_json = 0;
+    monitor->sample_progress_every   = 1;
+    monitor->time_series_interval    = 1.0;
+    monitor->enable_statistics       = true;
+    monitor->enable_time_series      = true;
 
     /* read configuration */
     struct json_object* filename_prefix
@@ -539,10 +569,10 @@ static void* margo_default_monitor_initialize(margo_instance_id   mid,
         if (time_interval
             && json_object_is_type(time_interval, json_type_double)) {
             if (json_object_is_type(time_interval, json_type_double))
-                monitor->rpc_time_series_interval
+                monitor->time_series_interval
                     = json_object_get_double(time_interval);
             else if (json_object_is_type(time_interval, json_type_int))
-                monitor->rpc_time_series_interval
+                monitor->time_series_interval
                     = (double)json_object_get_int64(time_interval);
         }
         struct json_object* pretty_json
@@ -686,7 +716,7 @@ static struct json_object* margo_default_monitor_config(void* uargs)
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         time_series, "time_interval_sec",
-        json_object_new_double(monitor->rpc_time_series_interval),
+        json_object_new_double(monitor->time_series_interval),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     return config;
 }
@@ -720,7 +750,7 @@ margo_default_monitor_on_progress(void*                         uargs,
     /* update time series */
     if ((event_type == MARGO_MONITOR_FN_END) && monitor->enable_time_series
         && (timestamp > (monitor->rpc_time_series_last_ts
-                         + monitor->rpc_time_series_interval))) {
+                         + monitor->time_series_interval))) {
         update_rpc_time_series(monitor, timestamp);
         update_pool_time_series(monitor, timestamp);
     }
