@@ -845,6 +845,7 @@ margo_default_monitor_on_forward(void*                        uargs,
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     margo_instance_id mid = margo_hg_handle_get_instance(event_args->handle);
     const struct hg_info* handle_info = margo_get_info(event_args->handle);
+    if (!handle_info) return;
     // retrieve the session that was create on on_create
     RETRIEVE_SESSION(event_args->handle);
     origin_rpc_statistics_t* rpc_stats = NULL;
@@ -1055,7 +1056,7 @@ static void margo_default_monitor_on_wait(void*                     uargs,
     statistics_t*   duration_stats  = NULL;
     statistics_t*   timestamp_stats = NULL;
     bulk_session_t* bulk_session    = NULL;
-    double          start_ts;
+    double          start_ts        = 0.0;
 
     margo_request_type request_type
         = margo_request_get_type(event_args->request);
@@ -1102,6 +1103,7 @@ static void margo_default_monitor_on_rpc_handler(
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     margo_instance_id mid = margo_hg_handle_get_instance(event_args->handle);
     const struct hg_info* handle_info = margo_get_info(event_args->handle);
+    if (!handle_info) return;
     RETRIEVE_SESSION(event_args->handle);
     target_rpc_statistics_t* rpc_stats = NULL;
 
@@ -1896,7 +1898,7 @@ monitor_time_series_to_json(const default_monitor_state_t* monitor)
                          provider_id);
             } else {
                 key = malloc(10);
-                snprintf(key, key_size, "<unknown>");
+                snprintf(key, 10, "<unknown>");
             }
             // create JSON object corresponding to this RPC's time series
             struct json_object* json_ts = rpc_time_series_to_json(rpc_ts);

@@ -2159,6 +2159,7 @@ void __margo_internal_pre_wrapper_hooks(
     struct margo_monitor_rpc_ult_args* monitoring_args)
 {
     const struct hg_info* info = margo_get_info(handle);
+    if (!info) return;
     margo_set_current_rpc_id(mid, info->id);
 
     /* monitoring */

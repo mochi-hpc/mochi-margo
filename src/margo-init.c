@@ -490,7 +490,7 @@ validate_and_complete_config(struct json_object*         _margo,
                              "progress_timeout_ub_msec", val);
         CONFIG_INTEGER_MUST_BE_POSITIVE(_margo, "progress_timeout_ub_msec",
                                         "progress_timeout_ub_msec");
-        MARGO_TRACE(0, "progress_timeout_ub_msec = %d",
+        MARGO_TRACE(0, "progress_timeout_ub_msec = %ld",
                     json_object_get_int64(val));
     }
 
