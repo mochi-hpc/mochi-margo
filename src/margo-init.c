@@ -476,11 +476,7 @@ validate_and_complete_config(struct json_object*         _margo,
        - [required] mercury: object
        - [optional] argobots: object
        - [optional] progress_timeout_ub_msec: integer >= 0 (default 100)
-       - [optional] enable_profiling: bool (default false)
-       - [optional] enable_diagnostics: bool (default false)
        - [optional] handle_cache_size: integer >= 0 (default 32)
-       - [optional] profile_sparkline_timeslice_msec: integer >= 0 (default
-       1000)
        - [optional] use_progress_thread: bool (default false)
        - [optional] rpc_thread_count: integer (default 0)
        - [optional] monitoring: object
@@ -498,62 +494,12 @@ validate_and_complete_config(struct json_object*         _margo,
                     json_object_get_int64(val));
     }
 
-    { // add or override enable_profiling
-        const char* margo_enable_profiling_str
-            = getenv("MARGO_ENABLE_PROFILING");
-        int margo_enable_profiling
-            = margo_enable_profiling_str ? atoi(margo_enable_profiling_str) : 0;
-        CONFIG_HAS_OR_CREATE(_margo, boolean, "enable_profiling",
-                             margo_enable_profiling, "enable_profiling", val);
-        MARGO_TRACE(0, "enable_profiling = %s",
-                    json_object_get_boolean(val) ? "true" : "false");
-    }
-
-    { // add or override enable_diagnostics
-        const char* margo_enable_diagnostics_str
-            = getenv("MARGO_ENABLE_DIAGNOSTICS");
-        int margo_enable_diagnostics = margo_enable_diagnostics_str
-                                         ? atoi(margo_enable_diagnostics_str)
-                                         : 0;
-        CONFIG_HAS_OR_CREATE(_margo, boolean, "enable_diagnostics",
-                             margo_enable_diagnostics, "enable_diagnostics",
-                             val);
-        MARGO_TRACE(0, "enable_diagnostics = %s",
-                    json_object_get_boolean(val) ? "true" : "false");
-    }
-
-    { // add or override output_dir
-        char* margo_output_dir_str = getenv("MARGO_OUTPUT_DIR");
-        if (margo_output_dir_str) {
-            CONFIG_HAS_OR_CREATE(_margo, string, "output_dir",
-                                 margo_output_dir_str, "output_dir", val);
-        } else {
-            margo_output_dir_str = getcwd(NULL, 0);
-            CONFIG_HAS_OR_CREATE(_margo, string, "output_dir",
-                                 margo_output_dir_str, "output_dir", val);
-            /* getwd() mallocs the string if buf is NULL */
-            free(margo_output_dir_str);
-        }
-
-        MARGO_TRACE(0, "output_dir = %s", json_object_get_string(val));
-    }
-
     { // add or override handle_cache_size
         CONFIG_HAS_OR_CREATE(_margo, int64, "handle_cache_size", 32,
                              "handle_cache_size", val);
         CONFIG_INTEGER_MUST_BE_POSITIVE(_margo, "handle_cache_size",
                                         "handle_cache_size");
         MARGO_TRACE(0, "handle_cache_size = %d", json_object_get_int64(val));
-    }
-
-    { // add or override profile_sparkline_timeslice_msec
-        CONFIG_HAS_OR_CREATE(_margo, int64, "profile_sparkline_timeslice_msec",
-                             1000, "profile_sparkline_timeslice_msec", val);
-        CONFIG_INTEGER_MUST_BE_POSITIVE(_margo,
-                                        "profile_sparkline_timeslice_msec",
-                                        "profile_sparkline_timeslice_msec");
-        MARGO_TRACE(0, "profile_sparkline_timeslice_msec = %d",
-                    json_object_get_int64(val));
     }
 
     /* find the "monitoring" object in the configuration */
