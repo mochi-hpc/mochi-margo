@@ -4,6 +4,7 @@
  * See COPYRIGHT in top-level directory.
  */
 #include <margo.h>
+#include <time.h>
 #include "margo-logging.h"
 #include "margo-instance.h"
 #include "margo-globals.h"
@@ -103,9 +104,7 @@ static void margo_abt_profiling_dump_fp(margo_instance_id mid, FILE* outfile)
     fprintf(outfile, "# Margo diagnostics (Argobots profile)\n");
     fprintf(outfile, "# Addr Hash and Address Name: %lu,%s\n",
             mid->self_addr_hash, mid->self_addr_str);
-    char time_str[128] = {0};
-    strftime(time_str, 128, "%c", localtime(&ltime));
-    fprintf(outfile, "# %s\n", time_str);
+    fprintf(outfile, "# %s\n", ctime(&ltime));
 
     if (g_margo_abt_prof_started) {
         /* have to stop profiling briefly to print results */
@@ -186,9 +185,7 @@ int margo_state_dump(margo_instance_id mid,
 
     fprintf(outfile, "# Margo state dump\n");
     fprintf(outfile, "# Mercury address: %s\n", mid->self_addr_str);
-    char time_str[128] = {0};
-    strftime(time_str, 128, "%c", localtime(&ltime));
-    fprintf(outfile, "# %s\n", time_str);
+    fprintf(outfile, "# %s\n", ctime(&ltime));
 
     fprintf(outfile,
             "\n# Margo configuration (JSON)\n"

@@ -499,7 +499,7 @@ validate_and_complete_config(struct json_object*         _margo,
                              "handle_cache_size", val);
         CONFIG_INTEGER_MUST_BE_POSITIVE(_margo, "handle_cache_size",
                                         "handle_cache_size");
-        MARGO_TRACE(0, "handle_cache_size = %d", json_object_get_int64(val));
+        MARGO_TRACE(0, "handle_cache_size = %ld", json_object_get_int64(val));
     }
 
     /* find the "monitoring" object in the configuration */
