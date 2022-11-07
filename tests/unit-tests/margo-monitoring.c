@@ -342,8 +342,8 @@ static MunitResult test_custom_monitoring(const MunitParameter params[],
     return MUNIT_OK;
 }
 
-static MunitResult test_default_monitoring(const MunitParameter params[],
-                                           void*                data)
+static MunitResult test_default_monitoring_statistics(const MunitParameter params[],
+                                                      void*                data)
 {
     (void)data;
     hg_return_t hret                      = HG_SUCCESS;
@@ -356,7 +356,7 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
                 "\"filename_prefix\":\"test\","
                 "\"pretty_json\":true,"
                 "\"statistics\":{\"precision\":9, \"disable\":false},"
-                "\"time_series\":{\"precision\":9, \"disable\":false}"
+                "\"time_series\":{\"precision\":9, \"disable\":true}"
             "}"
         "}}";
     struct margo_init_info init_info = {
@@ -644,6 +644,164 @@ static MunitResult test_default_monitoring(const MunitParameter params[],
     return MUNIT_OK;
 }
 
+static MunitResult test_default_monitoring_time_series(const MunitParameter params[],
+                                                       void*                data)
+{
+    (void)data;
+    hg_return_t hret                      = HG_SUCCESS;
+    const char* protocol = munit_parameters_get(params, "protocol");
+    uint16_t provider_id_param = atoi(munit_parameters_get(params, "provider_id"));
+    hg_bool_t relay = strcmp(munit_parameters_get(params, "relay"), "true") == 0 ? HG_TRUE : HG_FALSE;
+    const char* json_config =
+        "{\"monitoring\":{"
+            "\"config\":{"
+                "\"filename_prefix\":\"test\","
+                "\"pretty_json\":true,"
+                "\"statistics\":{\"precision\":9, \"disable\":true},"
+                "\"time_series\":{\"precision\":9, \"disable\":false}"
+            "}"
+        "}}";
+    struct margo_init_info init_info = {
+        .json_config   = json_config,
+        .progress_pool = ABT_POOL_NULL,
+        .rpc_pool      = ABT_POOL_NULL,
+        .hg_class      = NULL,
+        .hg_context    = NULL,
+        .hg_init_info  = NULL,
+        .logger        = NULL,
+        .monitor       = margo_default_monitor
+    };
+    margo_instance_id mid = margo_init_ext(protocol, MARGO_SERVER_MODE, &init_info);
+    munit_assert_not_null(mid);
+
+    /* self_addr is used later to check the content of the JSON output */
+    char self_addr_str[256];
+    hg_size_t self_addr_size = 256;
+    hg_addr_t self_addr = HG_ADDR_NULL;
+    margo_addr_self(mid, &self_addr);
+    margo_addr_to_string(mid, self_addr_str, &self_addr_size, self_addr);
+    margo_addr_free(mid, self_addr);
+
+    hg_id_t echo_id = MARGO_REGISTER_PROVIDER(
+        mid, "echo", echo_in_t, hg_string_t, echo_ult,
+        provider_id_param, ABT_POOL_NULL);
+    munit_assert_int(echo_id, !=, 0);
+
+    margo_thread_sleep(mid, 1);
+
+    char      buffer[256];
+    void*     ptrs[1]  = { (void*)buffer };
+    hg_size_t sizes[1] = { 256 };
+    hg_bulk_t bulk     = HG_BULK_NULL;
+    hret = margo_bulk_create(mid, 1, ptrs, sizes, HG_BULK_READ_ONLY, &bulk);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    const char* input  = "hello world";
+    echo_in_t in = {
+        .relay = relay,
+        .str = (char*)input,
+        .blk = bulk
+    };
+    hg_addr_t addr     = HG_ADDR_NULL;
+    hg_handle_t handle = HG_HANDLE_NULL;
+
+    hret = margo_addr_self(mid, &addr);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_create(mid, addr, echo_id, &handle);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_provider_forward(provider_id_param, handle, &in);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_bulk_free(bulk);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    char* output = NULL;
+    hret = margo_get_output(handle, &output);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_free_output(handle, &output);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_destroy(handle);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_addr_free(mid, addr);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_deregister(mid, echo_id);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_monitor_call_user(mid, MARGO_MONITOR_FN_START, NULL);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    margo_finalize(mid);
+
+    char* filename = NULL;
+    {
+        char hostname[1024];
+        hostname[1023] = '\0';
+        gethostname(hostname, 1023);
+        pid_t pid = getpid();
+        size_t fullname_size = snprintf(NULL, 0, "test.%s.%d.series.json", hostname, pid);
+        filename = calloc(1, fullname_size+1);
+        sprintf(filename, "test.%s.%d.series.json", hostname, pid);
+    }
+    munit_assert_int(access(filename, F_OK), ==, 0);
+
+    FILE* file = fopen(filename, "r");
+    munit_assert_not_null(file);
+    fseek(file, 0L, SEEK_END);
+    long int file_size = ftell(file);
+    fseek(file, 0L, SEEK_SET);
+    munit_assert_int(file_size, >, 0);
+    char* file_content = malloc(file_size);
+    munit_assert_int(file_size, ==, fread(file_content, 1, file_size, file));
+    fclose(file);
+
+    struct json_object* json_content = NULL;
+    struct json_tokener* tokener     = json_tokener_new();
+    json_content = json_tokener_parse_ex(tokener, file_content, file_size);
+    json_tokener_free(tokener);
+    munit_assert_not_null(json_content);
+
+    munit_assert(json_object_is_type(json_content, json_type_object));
+
+    {
+        // check for the "rpcs" secions
+        ASSERT_JSON_HAS(json_content, rpcs, object);
+        // check for the echo:XXXX section
+        char echo_key[256];
+        sprintf(echo_key, "echo:%d", provider_id_param);
+        ASSERT_JSON_HAS_KEY(rpcs, echo_key, echo, object);
+        {
+            // check for "timestamps" array
+            ASSERT_JSON_HAS(echo, timestamps, array);
+            // check for the "count" array
+            ASSERT_JSON_HAS(echo, count, array);
+            // check for the "bulk_size" array
+            ASSERT_JSON_HAS(echo, bulk_size, array);
+        }
+        // check for the pool section
+        ASSERT_JSON_HAS(json_content, pools, object);
+        // check for the __primary__ section
+        ASSERT_JSON_HAS(pools, __primary__, object);
+        {
+            // check for "timestamps" array
+            ASSERT_JSON_HAS(__primary__, timestamps, array);
+            // check for the "size" array
+            ASSERT_JSON_HAS(__primary__, size, array);
+            // check for the "total_size" array
+            ASSERT_JSON_HAS(__primary__, total_size, array);
+        }
+    }
+
+    free(file_content);
+    free(filename);
+    return MUNIT_OK;
+}
+
 static char* protocol_params[] = {"na+sm", NULL};
 static char* provider_id_params[] = {"65535", "42", "0", NULL};
 static char* relay_params[] = {"true", "false", NULL};
@@ -659,7 +817,9 @@ static MunitParameterEnum test_params[]
        {NULL, NULL}};
 
 static MunitTest test_suite_tests[] = {
-    {(char*)"/monitoring/default", test_default_monitoring, test_context_setup,
+    {(char*)"/monitoring/statistics", test_default_monitoring_statistics, test_context_setup,
+     test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
+    {(char*)"/monitoring/time_series", test_default_monitoring_time_series, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {(char*)"/monitoring/custom", test_custom_monitoring, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params_custom},

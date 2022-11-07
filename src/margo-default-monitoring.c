@@ -1976,6 +1976,7 @@ static void time_series_append(time_series_t* series, double ts, uint64_t val)
 
 static void time_series_clear(time_series_t* series)
 {
+    if (!series) return;
     while (series->first_frame) {
         timedval_frame_t* next = series->first_frame->next;
         free(series->first_frame);
@@ -1986,6 +1987,7 @@ static void time_series_clear(time_series_t* series)
 /* Free both RPC time series and Pool time series */
 static void free_all_time_series(default_monitor_state_t* monitor)
 {
+    if (!monitor->enable_time_series) return;
     ABT_mutex_spinlock(
         ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
     rpc_time_series_t *p, *tmp;
@@ -2084,6 +2086,7 @@ static struct json_object* rpc_time_series_to_json(rpc_time_series_t* rpc_ts)
 static void update_rpc_time_series(struct default_monitor_state* monitor,
                                    double                        timestamp)
 {
+    if (!monitor->enable_time_series) return;
     rpc_time_series_t *rpc_ts, *tmp;
     ABT_mutex_spinlock(
         ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
@@ -2173,6 +2176,7 @@ pool_time_series_to_json(const default_monitor_state_t* monitor)
 static void update_pool_time_series(struct default_monitor_state* monitor,
                                     double                        timestamp)
 {
+    if (!monitor->enable_time_series) return;
     ABT_mutex_spinlock(
         ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->pool_time_series_mtx));
     size_t num_pools = margo_get_num_pools(monitor->mid);
