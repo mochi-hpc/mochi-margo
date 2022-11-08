@@ -1937,11 +1937,6 @@ void __margo_hg_progress_fn(void* foo)
         pending = mid->pending_operations;
         ABT_mutex_unlock(mid->pending_operations_mtx);
 
-        /* Note that if profiling is enabled then there will be one extra
-         * ULT in the progress pool.  We don't need to worry about that one;
-         * a margo timer will wake the progress loop when it needs
-         * attention.
-         */
         if (pending || size > 1) {
             /* TODO: a custom ABT scheduler could optimize this further by
              * delaying Mercury progress until all other runnable ULTs have
