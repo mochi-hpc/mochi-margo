@@ -794,6 +794,7 @@ margo_default_monitor_on_trigger(void*                        uargs,
         return;
     }
     // MARGO_MONITOR_FN_END
+    if (event_args->actual_count == 0) return;
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     double                   t       = timestamp - event_args->uctx.f;
     UPDATE_STATISTICS_WITH(monitor->hg_stats.trigger, t);

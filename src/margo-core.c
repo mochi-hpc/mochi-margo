@@ -1943,10 +1943,6 @@ void __margo_hg_progress_fn(void* foo)
          * attention.
          */
         if (pending || size > 1) {
-#if 0
-            || (mid->profile_enabled && size > 2)
-            || (!mid->profile_enabled && size > 1)) {
-#endif
             /* TODO: a custom ABT scheduler could optimize this further by
              * delaying Mercury progress until all other runnable ULTs have
              * been given a chance to execute.  This will often happen
