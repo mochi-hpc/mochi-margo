@@ -354,9 +354,8 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
         "{\"monitoring\":{"
             "\"config\":{"
                 "\"filename_prefix\":\"test\","
-                "\"pretty_json\":true,"
-                "\"statistics\":{\"precision\":9, \"disable\":false},"
-                "\"time_series\":{\"precision\":9, \"disable\":true}"
+                "\"statistics\":{\"precision\":9, \"disable\":false,\"pretty_json\":true},"
+                "\"time_series\":{\"disable\":true}"
             "}"
         "}}";
     struct margo_init_info init_info = {
@@ -656,9 +655,8 @@ static MunitResult test_default_monitoring_time_series(const MunitParameter para
         "{\"monitoring\":{"
             "\"config\":{"
                 "\"filename_prefix\":\"test\","
-                "\"pretty_json\":true,"
-                "\"statistics\":{\"precision\":9, \"disable\":true},"
-                "\"time_series\":{\"precision\":9, \"disable\":false}"
+                "\"statistics\":{\"disable\":true},"
+                "\"time_series\":{\"precision\":9,\"disable\":false,\"pretty_json\":true}"
             "}"
         "}}";
     struct margo_init_info init_info = {
