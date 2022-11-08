@@ -1689,6 +1689,16 @@ static struct json_object*
 monitor_statistics_to_json(const default_monitor_state_t* state)
 {
     struct json_object* json = json_object_new_object();
+    // add self address
+    char      self_addr_str[256] = {0};
+    hg_size_t self_addr_size     = 256;
+    hg_addr_t self_addr          = HG_ADDR_NULL;
+    margo_addr_self(state->mid, &self_addr);
+    margo_addr_to_string(state->mid, self_addr_str, &self_addr_size, self_addr);
+    margo_addr_free(state->mid, self_addr);
+    json_object_object_add_ex(json, "address",
+                              json_object_new_string(self_addr_str),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
     // mercury progress loop statistic
     json_object_object_add_ex(json, "progress_loop",
                               hg_statistics_to_json(&state->hg_stats),
@@ -1873,6 +1883,17 @@ static struct json_object*
 monitor_time_series_to_json(const default_monitor_state_t* monitor)
 {
     struct json_object* json = json_object_new_object();
+    // add self address
+    char      self_addr_str[256] = {0};
+    hg_size_t self_addr_size     = 256;
+    hg_addr_t self_addr          = HG_ADDR_NULL;
+    margo_addr_self(monitor->mid, &self_addr);
+    margo_addr_to_string(monitor->mid, self_addr_str, &self_addr_size,
+                         self_addr);
+    margo_addr_free(monitor->mid, self_addr);
+    json_object_object_add_ex(json, "address",
+                              json_object_new_string(self_addr_str),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
     /* RPC time series */
     struct json_object* rpcs = json_object_new_object();
     json_object_object_add_ex(json, "rpcs", rpcs, JSON_C_OBJECT_ADD_KEY_IS_NEW);
