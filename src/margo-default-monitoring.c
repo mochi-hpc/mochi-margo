@@ -1551,7 +1551,7 @@ bulk_transfer_statistics_to_json(const bulk_transfer_statistics_t* stats)
 {
     struct json_object* json     = json_object_new_object();
     struct json_object* transfer = json_object_new_object();
-    json_object_object_add_ex(json, "transfer", transfer,
+    json_object_object_add_ex(json, "itransfer", transfer,
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(transfer, "duration",
                               statistics_to_json(&stats->transfer),
@@ -1559,13 +1559,20 @@ bulk_transfer_statistics_to_json(const bulk_transfer_statistics_t* stats)
     json_object_object_add_ex(transfer, "size",
                               statistics_to_json(&stats->transfer_size),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    statistics_t dummy = {0};
+    dummy.num          = stats->transfer.num;
+    json_object_object_add_ex(transfer, "relative_timestamp_from_transfer",
+                              statistics_to_json(&dummy),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "transfer_cb",
-        statistics_pair_to_json(stats->transfer_cb, "duration", "timestamp"),
+        statistics_pair_to_json(stats->transfer_cb, "duration",
+                                "relative_timestamp_from_transfer"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
-        json, "wait",
-        statistics_pair_to_json(stats->wait, "duration", "timestamp"),
+        json, "itransfer_wait",
+        statistics_pair_to_json(stats->wait, "duration",
+                                "relative_timestamp_from_transfer"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     return json;
 }
@@ -1575,24 +1582,29 @@ origin_rpc_statistics_to_json(const origin_rpc_statistics_t* stats)
 {
     struct json_object* json = json_object_new_object();
     json_object_object_add_ex(
-        json, "forward",
-        statistics_pair_to_json(stats->forward, "duration", "timestamp"),
+        json, "iforward",
+        statistics_pair_to_json(stats->forward, "duration",
+                                "relative_timestamp_from_create"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "forward_cb",
-        statistics_pair_to_json(stats->forward_cb, "duration", "timestamp"),
+        statistics_pair_to_json(stats->forward_cb, "duration",
+                                "relative_timestamp_from_create"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
-        json, "wait",
-        statistics_pair_to_json(stats->wait, "duration", "timestamp"),
+        json, "iforward_wait",
+        statistics_pair_to_json(stats->wait, "duration",
+                                "relative_timestamp_from_create"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "set_input",
-        statistics_pair_to_json(stats->set_input, "duration", "timestamp"),
+        statistics_pair_to_json(stats->set_input, "duration",
+                                "relative_timestamp_from_create"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "get_output",
-        statistics_pair_to_json(stats->get_output, "duration", "timestamp"),
+        statistics_pair_to_json(stats->get_output, "duration",
+                                "relative_timestamp_from_create"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     return json;
 }
@@ -1607,31 +1619,38 @@ target_rpc_statistics_to_json(const target_rpc_statistics_t* stats)
     handler_stats[TIMESTAMP].num  = handler_stats[DURATION].num;
     json_object_object_add_ex(
         json, "handler",
-        statistics_pair_to_json(handler_stats, "duration", "timestamp"),
+        statistics_pair_to_json(handler_stats, "duration",
+                                "relative_timestamp_from_handler"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "ult",
-        statistics_pair_to_json(stats->ult, "duration", "timestamp"),
+        statistics_pair_to_json(stats->ult, "duration",
+                                "relative_timestamp_from_handler"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
-        json, "respond",
-        statistics_pair_to_json(stats->respond, "duration", "timestamp"),
+        json, "irespond",
+        statistics_pair_to_json(stats->respond, "duration",
+                                "relative_timestamp_from_handler"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "respond_cb",
-        statistics_pair_to_json(stats->respond_cb, "duration", "timestamp"),
+        statistics_pair_to_json(stats->respond_cb, "duration",
+                                "relative_timestamp_from_handler"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
-        json, "wait",
-        statistics_pair_to_json(stats->wait, "duration", "timestamp"),
+        json, "irespond_wait",
+        statistics_pair_to_json(stats->wait, "duration",
+                                "relative_timestamp_from_handler"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "set_output",
-        statistics_pair_to_json(stats->set_output, "duration", "timestamp"),
+        statistics_pair_to_json(stats->set_output, "duration",
+                                "relative_timestamp_from_handler"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "get_input",
-        statistics_pair_to_json(stats->get_input, "duration", "timestamp"),
+        statistics_pair_to_json(stats->get_input, "duration",
+                                "relative_timestamp_from_handler"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     return json;
 }
@@ -1673,8 +1692,9 @@ static void fill_json_with_rpc_info(struct json_object*            rpc_json,
     hg_id_t  parent_base_id;
     demux_id(callpath->rpc_id, &base_id, &provider_id);
     demux_id(callpath->parent_id, &parent_base_id, &parent_provider_id);
-    // add "id" entry
-    json_object_object_add_ex(rpc_json, "id", json_object_new_uint64(base_id),
+    // add "rpc_id" entry
+    json_object_object_add_ex(rpc_json, "rpc_id",
+                              json_object_new_uint64(base_id),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
     // add "provider_id" entry
     json_object_object_add_ex(rpc_json, "provider_id",

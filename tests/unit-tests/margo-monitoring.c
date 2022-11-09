@@ -483,11 +483,11 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
         ASSERT_JSON_HAS(key, sum, double); \
     } while(0)
 
-#define ASSERT_JSON_HAS_DOUBLE_STATS(parent, key) \
+#define ASSERT_JSON_HAS_DOUBLE_STATS(parent, key, secondary) \
     do { \
         ASSERT_JSON_HAS(parent, key, object); \
         ASSERT_JSON_HAS_STATS(key, duration); \
-        ASSERT_JSON_HAS_STATS(key, timestamp); \
+        ASSERT_JSON_HAS_STATS(key, secondary); \
     } while(0)
 
     {
@@ -509,8 +509,8 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
         ASSERT_JSON_HAS_KEY(rpcs, echo_key, echo, object);
         {
             // check RPC info
-            ASSERT_JSON_HAS(echo, id, int);
-            munit_assert_long(2924675071, ==, json_object_get_uint64(id));
+            ASSERT_JSON_HAS(echo, rpc_id, int);
+            munit_assert_long(2924675071, ==, json_object_get_uint64(rpc_id));
             ASSERT_JSON_HAS(echo, parent_id, int);
             munit_assert_long(65535, ==, json_object_get_uint64(parent_id));
             ASSERT_JSON_HAS(echo, provider_id, int);
@@ -525,11 +525,11 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
                 // "origin" section must have an object corresponding to the address
                 sprintf(addr_key, "sent to %s", self_addr_str);
                 ASSERT_JSON_HAS_KEY(origin, addr_key, sent_to, object);
-                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, forward);
-                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, forward_cb);
-                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, wait);
-                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, set_input);
-                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, get_output);
+                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, iforward, relative_timestamp_from_create);
+                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, forward_cb, relative_timestamp_from_create);
+                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, iforward_wait, relative_timestamp_from_create);
+                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, set_input, relative_timestamp_from_create);
+                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, get_output, relative_timestamp_from_create);
             }
             // RPC must have an "target" section
             ASSERT_JSON_HAS(echo, target, object);
@@ -537,12 +537,12 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
                 // "target" section must have an object corresponding to the source address
                 sprintf(addr_key, "received from %s", self_addr_str);
                 ASSERT_JSON_HAS_KEY(target, addr_key, received_from, object);
-                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, handler);
-                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, respond);
-                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, respond_cb);
-                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, wait);
-                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, set_output);
-                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, get_input);
+                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, handler, relative_timestamp_from_handler);
+                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, irespond, relative_timestamp_from_handler);
+                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, respond_cb, relative_timestamp_from_handler);
+                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, irespond_wait, relative_timestamp_from_handler);
+                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, set_output, relative_timestamp_from_handler);
+                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, get_input, relative_timestamp_from_handler);
                 // "received from ..." section must have a "bulk" section
                 ASSERT_JSON_HAS(received_from, bulk, object);
                 // "bulk" section must have a "create" section
@@ -553,20 +553,21 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
                 char pull_from_key[512];
                 sprintf(pull_from_key, "pull from %s", self_addr_str);
                 ASSERT_JSON_HAS_KEY(bulk, pull_from_key, pull_from, object);
-                // "pull from ..." secion must have a "transfer" section
-                ASSERT_JSON_HAS(pull_from, transfer, object);
-                ASSERT_JSON_HAS_STATS(transfer, duration);
-                ASSERT_JSON_HAS_STATS(transfer, size);
-                ASSERT_JSON_HAS_DOUBLE_STATS(pull_from, transfer_cb);
-                ASSERT_JSON_HAS_DOUBLE_STATS(pull_from, wait);
+                // "pull from ..." secion must have a "itransfer" section
+                ASSERT_JSON_HAS(pull_from, itransfer, object);
+                ASSERT_JSON_HAS_STATS(itransfer, duration);
+                ASSERT_JSON_HAS_STATS(itransfer, size);
+                ASSERT_JSON_HAS_STATS(itransfer, relative_timestamp_from_transfer);
+                ASSERT_JSON_HAS_DOUBLE_STATS(pull_from, transfer_cb, relative_timestamp_from_transfer);
+                ASSERT_JSON_HAS_DOUBLE_STATS(pull_from, itransfer_wait, relative_timestamp_from_transfer);
             }
         }
         // must have an "65535:65535:65535:65535" secion with a bulk create
         ASSERT_JSON_HAS_KEY(rpcs, "65535:65535:65535:65535", root, object);
         {
             // check RPC info
-            ASSERT_JSON_HAS(root, id, int);
-            munit_assert_long(65535, ==, json_object_get_uint64(id));
+            ASSERT_JSON_HAS(root, rpc_id, int);
+            munit_assert_long(65535, ==, json_object_get_uint64(rpc_id));
             ASSERT_JSON_HAS(root, parent_id, int);
             munit_assert_long(65535, ==, json_object_get_uint64(parent_id));
             ASSERT_JSON_HAS(root, provider_id, int);
@@ -592,8 +593,8 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
             ASSERT_JSON_HAS_KEY(rpcs, echo_key, echo, object);
             {
                 // check RPC info
-                ASSERT_JSON_HAS(echo, id, int);
-                munit_assert_long(2924675071, ==, json_object_get_uint64(id));
+                ASSERT_JSON_HAS(echo, rpc_id, int);
+                munit_assert_long(2924675071, ==, json_object_get_uint64(rpc_id));
                 ASSERT_JSON_HAS(echo, parent_id, int);
                 munit_assert_long(2924675071, ==, json_object_get_uint64(parent_id));
                 ASSERT_JSON_HAS(echo, provider_id, int);
@@ -608,11 +609,11 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
                     // "origin" section must have a section index by destination address
                     sprintf(addr_key, "sent to %s", self_addr_str);
                     ASSERT_JSON_HAS_KEY(origin, addr_key, sent_to, object);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, forward);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, forward_cb);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, wait);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, set_input);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, get_output);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, iforward, relative_timestamp_from_create);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, forward_cb, relative_timestamp_from_create);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, iforward_wait, relative_timestamp_from_create);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, set_input, relative_timestamp_from_create);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, get_output, relative_timestamp_from_create);
                 }
                 // RPC must have an "target" section
                 ASSERT_JSON_HAS(echo, target, object);
@@ -620,12 +621,12 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
                     // "target" section must have a section index by source address
                     sprintf(addr_key, "received from %s", self_addr_str);
                     ASSERT_JSON_HAS_KEY(target, addr_key, received_from, object);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, handler);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, respond);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, respond_cb);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, wait);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, set_output);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, get_input);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, handler, relative_timestamp_from_handler);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, irespond, relative_timestamp_from_handler);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, respond_cb, relative_timestamp_from_handler);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, irespond_wait, relative_timestamp_from_handler);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, set_output, relative_timestamp_from_handler);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, get_input, relative_timestamp_from_handler);
                     // "received from ..." must have a "bulk" section
                     ASSERT_JSON_HAS(received_from, bulk, object);
                     // "bulk" secion must have a "create" section
@@ -637,12 +638,13 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
                     char pull_from_key[512];
                     sprintf(pull_from_key, "pull from %s", self_addr_str);
                     ASSERT_JSON_HAS_KEY(bulk, pull_from_key, pull_from, object);
-                    // "pull from..." secion must have a "transfer" secion
-                    ASSERT_JSON_HAS(pull_from, transfer, object);
-                    ASSERT_JSON_HAS_STATS(transfer, duration);
-                    ASSERT_JSON_HAS_STATS(transfer, size);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(pull_from, transfer_cb);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(pull_from, wait);
+                    // "pull from..." secion must have a "itransfer" secion
+                    ASSERT_JSON_HAS(pull_from, itransfer, object);
+                    ASSERT_JSON_HAS_STATS(itransfer, duration);
+                    ASSERT_JSON_HAS_STATS(itransfer, size);
+                    ASSERT_JSON_HAS_STATS(itransfer, relative_timestamp_from_transfer);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(pull_from, transfer_cb, relative_timestamp_from_transfer);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(pull_from, itransfer_wait, relative_timestamp_from_transfer);
                 }
             }
         }
