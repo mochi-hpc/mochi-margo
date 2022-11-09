@@ -18,6 +18,13 @@ extern "C" {
 #endif
 
 /**
+ * Margo's monitoring subsystem is customizable. Users can implement their
+ * own system by creating an instance of margo_monitor with their own
+ * function pointers (any function set to NULL will simply be ignored by
+ * margo) and pass a pointer to the structure as the "monitor" field
+ * of the margo_init_info structure passed to margo_init_ext. The user-
+ * provided margo_monitor will be internally copied.
+ *
  * Margo's monitoring subsystem consists of a margo_monitor structure
  * with pointers to functions that will be called when executing some
  * Margo functions. These functions all have the following prototype:
