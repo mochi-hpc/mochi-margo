@@ -638,6 +638,7 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
         }
     }
 
+    json_object_put(json_content);
     free(file_content);
     free(filename);
     return MUNIT_OK;
@@ -795,6 +796,7 @@ static MunitResult test_default_monitoring_time_series(const MunitParameter para
         }
     }
 
+    json_object_put(json_content);
     free(file_content);
     free(filename);
     return MUNIT_OK;

@@ -321,7 +321,7 @@ static addr_info_t* addr_info_find_or_add(struct default_monitor_state* monitor,
                                           hg_addr_t                     addr);
 static addr_info_t*
 addr_info_find_by_id(const struct default_monitor_state* monitor, uint64_t id);
-static void addr_info_clear(addr_info_t* hash);
+static void addr_info_clear(addr_info_t* hash_by_id, addr_info_t* hash_by_name);
 
 struct session;
 struct bulk_session;
@@ -626,7 +626,7 @@ static void margo_default_monitor_finalize(void* uargs)
     rpc_info_clear(monitor->rpc_info);
 
     /* free address info */
-    addr_info_clear(monitor->addr_info_by_name);
+    addr_info_clear(monitor->addr_info_by_id, monitor->addr_info_by_name);
     monitor->addr_info_by_name = NULL;
     monitor->addr_info_by_id   = NULL;
 
@@ -1999,12 +1999,16 @@ static addr_info_t* addr_info_find_by_id(const default_monitor_state_t* monitor,
     return info;
 }
 
-static void addr_info_clear(addr_info_t* hash)
+static void addr_info_clear(addr_info_t* hash_by_id, addr_info_t* hash_by_name)
 {
     addr_info_t *p, *tmp;
-    HASH_ITER(hh_by_name, hash, p, tmp)
+    HASH_ITER(hh_by_id, hash_by_id, p, tmp)
     {
-        HASH_DELETE(hh_by_name, hash, p);
+        HASH_DELETE(hh_by_id, hash_by_id, p);
+    }
+    HASH_ITER(hh_by_name, hash_by_name, p, tmp)
+    {
+        HASH_DELETE(hh_by_name, hash_by_name, p);
         free(p);
     }
 }
