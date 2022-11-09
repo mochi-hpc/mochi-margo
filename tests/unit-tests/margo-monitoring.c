@@ -537,7 +537,7 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
                 // "target" section must have an object corresponding to the source address
                 sprintf(addr_key, "received from %s", self_addr_str);
                 ASSERT_JSON_HAS_KEY(target, addr_key, received_from, object);
-                ASSERT_JSON_HAS_STATS(received_from, handler);
+                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, handler);
                 ASSERT_JSON_HAS_DOUBLE_STATS(received_from, respond);
                 ASSERT_JSON_HAS_DOUBLE_STATS(received_from, respond_cb);
                 ASSERT_JSON_HAS_DOUBLE_STATS(received_from, wait);
@@ -614,7 +614,7 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
                     // "target" section must have a section index by source address
                     sprintf(addr_key, "received from %s", self_addr_str);
                     ASSERT_JSON_HAS_KEY(target, addr_key, received_from, object);
-                    ASSERT_JSON_HAS_STATS(received_from, handler);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, handler);
                     ASSERT_JSON_HAS_DOUBLE_STATS(received_from, respond);
                     ASSERT_JSON_HAS_DOUBLE_STATS(received_from, respond_cb);
                     ASSERT_JSON_HAS_DOUBLE_STATS(received_from, wait);

@@ -228,7 +228,7 @@ origin_rpc_statistics_to_json(const origin_rpc_statistics_t* stats);
 
 /* Statistics related to RPCs at their target */
 typedef struct target_rpc_statistics {
-    statistics_t   handler; /* reference timestamp */
+    statistics_t   handler[2]; /* handler timestamp isn't used */
     statistics_t   ult[2];
     statistics_t   respond[2];
     statistics_t   respond_cb[2];
@@ -1159,7 +1159,7 @@ static void margo_default_monitor_on_rpc_handler(
         // update statistics
         rpc_stats = session->target.stats;
         double t  = timestamp - event_args->uctx.f;
-        UPDATE_STATISTICS_WITH(rpc_stats->handler, t);
+        UPDATE_STATISTICS_WITH(rpc_stats->handler[DURATION], t);
     }
 }
 
@@ -1596,9 +1596,10 @@ static struct json_object*
 target_rpc_statistics_to_json(const target_rpc_statistics_t* stats)
 {
     struct json_object* json = json_object_new_object();
-    json_object_object_add_ex(json, "handler",
-                              statistics_to_json(&stats->handler),
-                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(
+        json, "handler",
+        duration_and_timestamp_statistics_to_json(stats->handler),
+        JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "ult", duration_and_timestamp_statistics_to_json(stats->ult),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
