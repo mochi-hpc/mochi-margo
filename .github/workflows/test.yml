@@ -51,7 +51,14 @@ jobs:
         eval `spack env activate --sh .` &&
         ./prepare.sh &&
         ./configure --prefix=`pwd` &&
-        make check
+        make check &&
+        make clean
+
+    - name: Rebuild code and run unit tests with ASAN
+      run: |
+        eval `spack env activate --sh .` &&
+        CFLAGS="-fno-omit-frame-pointer -g -Wall -fsanitize=address" LDFLAGS="-fsanitize=address" ./configure --prefix=`pwd` &&
+        ASAN_OPTIONS="abort_on_error=1" make check
 
     - name: Show test output
       if: always()
