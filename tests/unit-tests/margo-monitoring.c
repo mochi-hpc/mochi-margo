@@ -545,8 +545,10 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
                 ASSERT_JSON_HAS_DOUBLE_STATS(received_from, get_input);
                 // "received from ..." section must have a "bulk" section
                 ASSERT_JSON_HAS(received_from, bulk, object);
-                ASSERT_JSON_HAS_STATS(bulk, create);
-                ASSERT_JSON_HAS_STATS(bulk, create_size);
+                // "bulk" section must have a "create" section
+                ASSERT_JSON_HAS(bulk, create, object);
+                ASSERT_JSON_HAS_STATS(create, duration);
+                ASSERT_JSON_HAS_STATS(create, size);
                 // "bulk" section must have a "pull from ..." section
                 char pull_from_key[512];
                 sprintf(pull_from_key, "pull from %s", self_addr_str);
@@ -577,8 +579,10 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
             ASSERT_JSON_HAS_KEY(target, "received from <unknown>", received_from, object);
             // "received from ..." section must have a "bulk" section
             ASSERT_JSON_HAS(received_from, bulk, object);
-            ASSERT_JSON_HAS_STATS(bulk, create);
-            ASSERT_JSON_HAS_STATS(bulk, create_size);
+            // "bulk" secion must have a "create" section
+            ASSERT_JSON_HAS(bulk, create, object);
+            ASSERT_JSON_HAS_STATS(create, duration);
+            ASSERT_JSON_HAS_STATS(create, size);
         }
         if(relay == HG_TRUE) {
             sprintf(echo_key, "2924675071:%d:2924675071:%d", provider_id_param, provider_id_param);
@@ -622,9 +626,11 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
                     ASSERT_JSON_HAS_DOUBLE_STATS(received_from, get_input);
                     // "received from ..." must have a "bulk" section
                     ASSERT_JSON_HAS(received_from, bulk, object);
+                    // "bulk" secion must have a "create" section
+                    ASSERT_JSON_HAS(bulk, create, object);
                     // "bulk" section must have a section index by source address
-                    ASSERT_JSON_HAS_STATS(bulk, create);
-                    ASSERT_JSON_HAS_STATS(bulk, create_size);
+                    ASSERT_JSON_HAS_STATS(create, duration);
+                    ASSERT_JSON_HAS_STATS(create, size);
                     // "bulk" section must have a "pull from ..." section
                     char pull_from_key[512];
                     sprintf(pull_from_key, "pull from %s", self_addr_str);

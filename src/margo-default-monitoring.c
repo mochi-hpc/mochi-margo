@@ -188,8 +188,8 @@ enum
 
 /* Statistics related to bulk creation. */
 typedef struct bulk_create_statistics {
-    statistics_t   create;
-    statistics_t   create_size;
+    statistics_t   duration;
+    statistics_t   size;
     callpath_t     callpath; /* hash key */
     UT_hash_handle hh;       /* hash handle */
 } bulk_create_statistics_t;
@@ -228,7 +228,7 @@ origin_rpc_statistics_to_json(const origin_rpc_statistics_t* stats);
 
 /* Statistics related to RPCs at their target */
 typedef struct target_rpc_statistics {
-    statistics_t   handler[2]; /* handler timestamp isn't used */
+    statistics_t   handler; /* handler timestamp isn't used */
     statistics_t   ult[2];
     statistics_t   respond[2];
     statistics_t   respond_cb[2];
@@ -1159,7 +1159,7 @@ static void margo_default_monitor_on_rpc_handler(
         // update statistics
         rpc_stats = session->target.stats;
         double t  = timestamp - event_args->uctx.f;
-        UPDATE_STATISTICS_WITH(rpc_stats->handler[DURATION], t);
+        UPDATE_STATISTICS_WITH(rpc_stats->handler, t);
     }
 }
 
@@ -1252,8 +1252,8 @@ static void margo_default_monitor_on_bulk_create(
         for (unsigned i = 0; i < event_args->count; i++) {
             size += event_args->sizes[i];
         }
-        UPDATE_STATISTICS_WITH(bulk_stats->create, t);
-        UPDATE_STATISTICS_WITH(bulk_stats->create_size, (double)size);
+        UPDATE_STATISTICS_WITH(bulk_stats->duration, t);
+        UPDATE_STATISTICS_WITH(bulk_stats->size, (double)size);
     }
 }
 
@@ -1537,11 +1537,10 @@ static struct json_object*
 bulk_create_statistics_to_json(const bulk_create_statistics_t* stats)
 {
     struct json_object* json = json_object_new_object();
-    json_object_object_add_ex(json, "create",
-                              statistics_to_json(&stats->create),
+    json_object_object_add_ex(json, "duration",
+                              statistics_to_json(&stats->duration),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
-    json_object_object_add_ex(json, "create_size",
-                              statistics_to_json(&stats->create_size),
+    json_object_object_add_ex(json, "size", statistics_to_json(&stats->size),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
     return json;
 }
@@ -1596,9 +1595,13 @@ static struct json_object*
 target_rpc_statistics_to_json(const target_rpc_statistics_t* stats)
 {
     struct json_object* json = json_object_new_object();
+    // we complete the handler section with a timestamp statistics
+    // that is basically 0, because it's simpler for parsing later
+    statistics_t handler_stats[2] = {stats->handler, {0}};
+    handler_stats[TIMESTAMP].num  = handler_stats[DURATION].num;
     json_object_object_add_ex(
         json, "handler",
-        duration_and_timestamp_statistics_to_json(stats->handler),
+        duration_and_timestamp_statistics_to_json(handler_stats),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "ult", duration_and_timestamp_statistics_to_json(stats->ult),
@@ -1811,10 +1814,13 @@ monitor_statistics_to_json(const default_monitor_state_t* state)
             // find or add the "received from <address>" section
             struct json_object* received_from
                 = json_object_object_get_or_create_object(target, addr_key);
-            // convert bulk_statistics to json
-            struct json_object* stats = bulk_create_statistics_to_json(p);
-            // add statistics to a "bulk" section
-            json_object_object_add_ex(received_from, "bulk", stats,
+            // find or add the "bulk" section in "received_from"
+            struct json_object* bulk = json_object_object_get_or_create_object(
+                received_from, "bulk");
+            // convert bulk_create_statistics to json
+            struct json_object* create = bulk_create_statistics_to_json(p);
+            // add statistics
+            json_object_object_add_ex(bulk, "create", create,
                                       JSON_C_OBJECT_ADD_KEY_IS_NEW);
             free(rpc_key);
         }
