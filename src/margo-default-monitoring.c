@@ -1502,13 +1502,14 @@ static struct json_object* statistics_to_json(const statistics_t* stats)
     return json;
 }
 
-static struct json_object*
-duration_and_timestamp_statistics_to_json(const statistics_t* stats)
+static struct json_object* statistics_pair_to_json(const statistics_t* stats,
+                                                   const char*         name1,
+                                                   const char*         name2)
 {
     struct json_object* json = json_object_new_object();
-    json_object_object_add_ex(json, "duration", statistics_to_json(stats),
+    json_object_object_add_ex(json, name1, statistics_to_json(stats),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
-    json_object_object_add_ex(json, "timestamp", statistics_to_json(stats + 1),
+    json_object_object_add_ex(json, name2, statistics_to_json(stats + 1),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
     return json;
 }
@@ -1548,19 +1549,23 @@ bulk_create_statistics_to_json(const bulk_create_statistics_t* stats)
 static struct json_object*
 bulk_transfer_statistics_to_json(const bulk_transfer_statistics_t* stats)
 {
-    struct json_object* json = json_object_new_object();
-    json_object_object_add_ex(json, "transfer",
+    struct json_object* json     = json_object_new_object();
+    struct json_object* transfer = json_object_new_object();
+    json_object_object_add_ex(json, "transfer", transfer,
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(transfer, "duration",
                               statistics_to_json(&stats->transfer),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
-    json_object_object_add_ex(json, "transfer_size",
+    json_object_object_add_ex(transfer, "size",
                               statistics_to_json(&stats->transfer_size),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "transfer_cb",
-        duration_and_timestamp_statistics_to_json(stats->transfer_cb),
+        statistics_pair_to_json(stats->transfer_cb, "duration", "timestamp"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
-        json, "wait", duration_and_timestamp_statistics_to_json(stats->wait),
+        json, "wait",
+        statistics_pair_to_json(stats->wait, "duration", "timestamp"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     return json;
 }
@@ -1571,22 +1576,23 @@ origin_rpc_statistics_to_json(const origin_rpc_statistics_t* stats)
     struct json_object* json = json_object_new_object();
     json_object_object_add_ex(
         json, "forward",
-        duration_and_timestamp_statistics_to_json(stats->forward),
+        statistics_pair_to_json(stats->forward, "duration", "timestamp"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "forward_cb",
-        duration_and_timestamp_statistics_to_json(stats->forward_cb),
+        statistics_pair_to_json(stats->forward_cb, "duration", "timestamp"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
-        json, "wait", duration_and_timestamp_statistics_to_json(stats->wait),
+        json, "wait",
+        statistics_pair_to_json(stats->wait, "duration", "timestamp"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "set_input",
-        duration_and_timestamp_statistics_to_json(stats->set_input),
+        statistics_pair_to_json(stats->set_input, "duration", "timestamp"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "get_output",
-        duration_and_timestamp_statistics_to_json(stats->get_output),
+        statistics_pair_to_json(stats->get_output, "duration", "timestamp"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     return json;
 }
@@ -1601,29 +1607,31 @@ target_rpc_statistics_to_json(const target_rpc_statistics_t* stats)
     handler_stats[TIMESTAMP].num  = handler_stats[DURATION].num;
     json_object_object_add_ex(
         json, "handler",
-        duration_and_timestamp_statistics_to_json(handler_stats),
+        statistics_pair_to_json(handler_stats, "duration", "timestamp"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
-        json, "ult", duration_and_timestamp_statistics_to_json(stats->ult),
+        json, "ult",
+        statistics_pair_to_json(stats->ult, "duration", "timestamp"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "respond",
-        duration_and_timestamp_statistics_to_json(stats->respond),
+        statistics_pair_to_json(stats->respond, "duration", "timestamp"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "respond_cb",
-        duration_and_timestamp_statistics_to_json(stats->respond_cb),
+        statistics_pair_to_json(stats->respond_cb, "duration", "timestamp"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
-        json, "wait", duration_and_timestamp_statistics_to_json(stats->wait),
+        json, "wait",
+        statistics_pair_to_json(stats->wait, "duration", "timestamp"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "set_output",
-        duration_and_timestamp_statistics_to_json(stats->set_output),
+        statistics_pair_to_json(stats->set_output, "duration", "timestamp"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "get_input",
-        duration_and_timestamp_statistics_to_json(stats->get_input),
+        statistics_pair_to_json(stats->get_input, "duration", "timestamp"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     return json;
 }

@@ -553,8 +553,10 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
                 char pull_from_key[512];
                 sprintf(pull_from_key, "pull from %s", self_addr_str);
                 ASSERT_JSON_HAS_KEY(bulk, pull_from_key, pull_from, object);
-                ASSERT_JSON_HAS_STATS(pull_from, transfer);
-                ASSERT_JSON_HAS_STATS(pull_from, transfer_size);
+                // "pull from ..." secion must have a "transfer" section
+                ASSERT_JSON_HAS(pull_from, transfer, object);
+                ASSERT_JSON_HAS_STATS(transfer, duration);
+                ASSERT_JSON_HAS_STATS(transfer, size);
                 ASSERT_JSON_HAS_DOUBLE_STATS(pull_from, transfer_cb);
                 ASSERT_JSON_HAS_DOUBLE_STATS(pull_from, wait);
             }
@@ -635,8 +637,10 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
                     char pull_from_key[512];
                     sprintf(pull_from_key, "pull from %s", self_addr_str);
                     ASSERT_JSON_HAS_KEY(bulk, pull_from_key, pull_from, object);
-                    ASSERT_JSON_HAS_STATS(pull_from, transfer);
-                    ASSERT_JSON_HAS_STATS(pull_from, transfer_size);
+                    // "pull from..." secion must have a "transfer" secion
+                    ASSERT_JSON_HAS(pull_from, transfer, object);
+                    ASSERT_JSON_HAS_STATS(transfer, duration);
+                    ASSERT_JSON_HAS_STATS(transfer, size);
                     ASSERT_JSON_HAS_DOUBLE_STATS(pull_from, transfer_cb);
                     ASSERT_JSON_HAS_DOUBLE_STATS(pull_from, wait);
                 }
