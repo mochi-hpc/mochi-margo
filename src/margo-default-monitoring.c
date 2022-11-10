@@ -1701,7 +1701,7 @@ static void fill_json_with_rpc_info(struct json_object*            rpc_json,
                               json_object_new_uint64(provider_id),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
     // add "parent_id" entry
-    json_object_object_add_ex(rpc_json, "parent_id",
+    json_object_object_add_ex(rpc_json, "parent_rpc_id",
                               json_object_new_uint64(parent_base_id),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
     // add "parent_provider_id" entry
