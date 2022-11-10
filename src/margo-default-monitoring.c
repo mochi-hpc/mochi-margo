@@ -886,6 +886,8 @@ margo_default_monitor_on_forward(void*                        uargs,
 
         double t = timestamp - session->origin.start_ts;
         UPDATE_STATISTICS_WITH(rpc_stats->forward[TIMESTAMP], t);
+        // change the reference time to be this timestamp
+        session->origin.start_ts = timestamp;
 
     } else if (event_type == MARGO_MONITOR_FN_END) {
 
@@ -1182,6 +1184,8 @@ margo_default_monitor_on_rpc_ult(void*                        uargs,
         // set callpath key
         callpath_t* current_callpath = &(session->target.stats->callpath);
         ABT_key_set(monitor->callpath_key, current_callpath);
+        // set the reference time start_ts to the current timestamp
+        session->target.start_ts = timestamp;
 
     } else {
         double t = timestamp - event_args->uctx.f;
@@ -1589,22 +1593,22 @@ origin_rpc_statistics_to_json(const origin_rpc_statistics_t* stats)
     json_object_object_add_ex(
         json, "forward_cb",
         statistics_pair_to_json(stats->forward_cb, "duration",
-                                "relative_timestamp_from_create"),
+                                "relative_timestamp_from_forward"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "iforward_wait",
         statistics_pair_to_json(stats->wait, "duration",
-                                "relative_timestamp_from_create"),
+                                "relative_timestamp_from_forward"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "set_input",
         statistics_pair_to_json(stats->set_input, "duration",
-                                "relative_timestamp_from_create"),
+                                "relative_timestamp_from_forward"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "get_output",
         statistics_pair_to_json(stats->get_output, "duration",
-                                "relative_timestamp_from_create"),
+                                "relative_timestamp_from_forward"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     return json;
 }
@@ -1630,27 +1634,27 @@ target_rpc_statistics_to_json(const target_rpc_statistics_t* stats)
     json_object_object_add_ex(
         json, "irespond",
         statistics_pair_to_json(stats->respond, "duration",
-                                "relative_timestamp_from_handler"),
+                                "relative_timestamp_from_ult"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "respond_cb",
         statistics_pair_to_json(stats->respond_cb, "duration",
-                                "relative_timestamp_from_handler"),
+                                "relative_timestamp_from_ult"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "irespond_wait",
         statistics_pair_to_json(stats->wait, "duration",
-                                "relative_timestamp_from_handler"),
+                                "relative_timestamp_from_ult"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "set_output",
         statistics_pair_to_json(stats->set_output, "duration",
-                                "relative_timestamp_from_handler"),
+                                "relative_timestamp_from_ult"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "get_input",
         statistics_pair_to_json(stats->get_input, "duration",
-                                "relative_timestamp_from_handler"),
+                                "relative_timestamp_from_ult"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     return json;
 }
