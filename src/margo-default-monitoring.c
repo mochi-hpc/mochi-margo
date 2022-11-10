@@ -765,6 +765,8 @@ margo_default_monitor_on_progress(void*                         uargs,
     if (event_type == MARGO_MONITOR_FN_START) monitor->progress_sampling += 1;
 
     /* statistics */
+    if (!monitor->enable_statistics) return;
+
     if (event_type == MARGO_MONITOR_FN_START) {
         if (!monitor->sample_progress_every
             || (monitor->progress_sampling % monitor->sample_progress_every))
@@ -796,14 +798,16 @@ margo_default_monitor_on_trigger(void*                        uargs,
                                  margo_monitor_event_t        event_type,
                                  margo_monitor_trigger_args_t event_args)
 {
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    if (!monitor->enable_statistics) return;
+
     if (event_type == MARGO_MONITOR_FN_START) {
         event_args->uctx.f = timestamp;
         return;
     }
     // MARGO_MONITOR_FN_END
     if (event_args->actual_count == 0) return;
-    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
-    double                   t       = timestamp - event_args->uctx.f;
+    double t = timestamp - event_args->uctx.f;
     UPDATE_STATISTICS_WITH(monitor->hg_stats.trigger, t);
 }
 
@@ -813,13 +817,15 @@ margo_default_monitor_on_create(void*                       uargs,
                                 margo_monitor_event_t       event_type,
                                 margo_monitor_create_args_t event_args)
 {
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    if (!monitor->enable_statistics) return;
+
     if (event_type == MARGO_MONITOR_FN_START) {
         event_args->uctx.f = timestamp;
         return;
     }
     // MARGO_MONITOR_FN_END
-    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
-    session_t*               session = new_session(monitor);
+    session_t* session = new_session(monitor);
 
     session->origin.create_ts         = timestamp;
     margo_monitor_data_t monitor_data = {.p = (void*)session};
@@ -852,6 +858,8 @@ margo_default_monitor_on_forward(void*                        uargs,
                                  margo_monitor_forward_args_t event_args)
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    if (!monitor->enable_statistics) return;
+
     margo_instance_id mid = margo_hg_handle_get_instance(event_args->handle);
     const struct hg_info* handle_info = margo_get_info(event_args->handle);
     if (!handle_info) return;
@@ -911,7 +919,8 @@ margo_default_monitor_on_set_input(void*                          uargs,
                                    margo_monitor_event_t          event_type,
                                    margo_monitor_set_input_args_t event_args)
 {
-    (void)uargs;
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    if (!monitor->enable_statistics) return;
     // retrieve the session that was create on on_create
     hg_handle_t handle = margo_request_get_handle(event_args->request);
     RETRIEVE_SESSION(handle);
@@ -933,7 +942,8 @@ margo_default_monitor_on_set_output(void*                           uargs,
                                     margo_monitor_event_t           event_type,
                                     margo_monitor_set_output_args_t event_args)
 {
-    (void)uargs;
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    if (!monitor->enable_statistics) return;
     // retrieve the session that was create on on_create
     hg_handle_t handle = margo_request_get_handle(event_args->request);
     RETRIEVE_SESSION(handle);
@@ -955,7 +965,8 @@ margo_default_monitor_on_get_output(void*                           uargs,
                                     margo_monitor_event_t           event_type,
                                     margo_monitor_get_output_args_t event_args)
 {
-    (void)uargs;
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    if (!monitor->enable_statistics) return;
     // retrieve the session that was create on on_create
     RETRIEVE_SESSION(event_args->handle);
     origin_rpc_statistics_t* rpc_stats = session->origin.stats;
@@ -976,7 +987,8 @@ margo_default_monitor_on_get_input(void*                          uargs,
                                    margo_monitor_event_t          event_type,
                                    margo_monitor_get_input_args_t event_args)
 {
-    (void)uargs;
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    if (!monitor->enable_statistics) return;
     // retrieve the session that was create on on_create
     RETRIEVE_SESSION(event_args->handle);
     target_rpc_statistics_t* rpc_stats = session->target.stats;
@@ -997,7 +1009,8 @@ margo_default_monitor_on_forward_cb(void*                           uargs,
                                     margo_monitor_event_t           event_type,
                                     margo_monitor_forward_cb_args_t event_args)
 {
-    (void)uargs;
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    if (!monitor->enable_statistics) return;
     // retrieve the session that was create on on_create
     hg_handle_t handle = margo_request_get_handle(event_args->request);
     RETRIEVE_SESSION(handle);
@@ -1019,7 +1032,8 @@ margo_default_monitor_on_respond(void*                        uargs,
                                  margo_monitor_event_t        event_type,
                                  margo_monitor_respond_args_t event_args)
 {
-    (void)uargs;
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    if (!monitor->enable_statistics) return;
     // retrieve the session that was create on on_create
     hg_handle_t handle = margo_request_get_handle(event_args->request);
     RETRIEVE_SESSION(handle);
@@ -1043,7 +1057,8 @@ margo_default_monitor_on_respond_cb(void*                           uargs,
                                     margo_monitor_event_t           event_type,
                                     margo_monitor_respond_cb_args_t event_args)
 {
-    (void)uargs;
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    if (!monitor->enable_statistics) return;
     // retrieve the session that was create on on_create
     hg_handle_t handle = margo_request_get_handle(event_args->request);
     RETRIEVE_SESSION(handle);
@@ -1065,6 +1080,7 @@ static void margo_default_monitor_on_wait(void*                     uargs,
                                           margo_monitor_wait_args_t event_args)
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    if (!monitor->enable_statistics) return;
     // retrieve the session that was create on on_create
     statistics_t*   duration_stats  = NULL;
     statistics_t*   timestamp_stats = NULL;
@@ -1116,6 +1132,8 @@ static void margo_default_monitor_on_rpc_handler(
     margo_monitor_rpc_handler_args_t event_args)
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    if (!(monitor->enable_statistics || monitor->enable_time_series)) return;
+
     margo_instance_id mid = margo_hg_handle_get_instance(event_args->handle);
     const struct hg_info* handle_info = margo_get_info(event_args->handle);
     if (!handle_info) return;
@@ -1123,11 +1141,6 @@ static void margo_default_monitor_on_rpc_handler(
     target_rpc_statistics_t* rpc_stats = NULL;
 
     if (event_type == MARGO_MONITOR_FN_START) {
-        if (!session) { session = new_session(monitor); }
-        session->target.handler_start_ts  = timestamp;
-        margo_monitor_data_t monitor_data = {.p = (void*)session};
-        margo_set_monitoring_data(event_args->handle, monitor_data);
-
         // get address info
         ABT_mutex_spinlock(
             ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->addr_info_mtx));
@@ -1141,38 +1154,51 @@ static void margo_default_monitor_on_rpc_handler(
                           .parent_id = event_args->parent_rpc_id,
                           .addr_id   = addr_info->id};
 
-        // attach statistics to session
-        ABT_mutex_spinlock(
-            ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->target_rpc_stats_mtx));
-        HASH_FIND(hh, monitor->target_rpc_stats, &key, sizeof(key), rpc_stats);
-        if (!rpc_stats) {
-            rpc_stats = (target_rpc_statistics_t*)calloc(1, sizeof(*rpc_stats));
-            rpc_stats->callpath = key;
-            HASH_ADD(hh, monitor->target_rpc_stats, callpath, sizeof(key),
-                     rpc_stats);
+        /* statistics */
+        if (monitor->enable_statistics) {
+            if (!session) { session = new_session(monitor); }
+            session->target.handler_start_ts  = timestamp;
+            margo_monitor_data_t monitor_data = {.p = (void*)session};
+            margo_set_monitoring_data(event_args->handle, monitor_data);
+
+            ABT_mutex_spinlock(
+                ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->target_rpc_stats_mtx));
+            HASH_FIND(hh, monitor->target_rpc_stats, &key, sizeof(key),
+                      rpc_stats);
+            if (!rpc_stats) {
+                rpc_stats
+                    = (target_rpc_statistics_t*)calloc(1, sizeof(*rpc_stats));
+                rpc_stats->callpath = key;
+                HASH_ADD(hh, monitor->target_rpc_stats, callpath, sizeof(key),
+                         rpc_stats);
+            }
+            ABT_mutex_unlock(
+                ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->target_rpc_stats_mtx));
+            session->target.stats = rpc_stats;
+            event_args->uctx.f    = timestamp;
         }
-        ABT_mutex_unlock(
-            ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->target_rpc_stats_mtx));
-        session->target.stats = rpc_stats;
 
-        // find the time series associated with
-        // this callpath and increment its count
-        ABT_mutex_spinlock(
-            ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
-        rpc_time_series_t* rpc_ts
-            = find_or_add_time_series_for_rpc(monitor, id);
-        rpc_ts->rpc_count += 1;
-        ABT_mutex_unlock(
-            ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
-
-        event_args->uctx.f = timestamp;
+        /* time series */
+        if (monitor->enable_time_series) {
+            // find the time series associated with
+            // this callpath and increment its count
+            ABT_mutex_spinlock(
+                ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
+            rpc_time_series_t* rpc_ts
+                = find_or_add_time_series_for_rpc(monitor, id);
+            rpc_ts->rpc_count += 1;
+            ABT_mutex_unlock(
+                ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
+        }
 
     } else {
 
-        // update statistics
-        rpc_stats = session->target.stats;
-        double t  = timestamp - event_args->uctx.f;
-        UPDATE_STATISTICS_WITH(rpc_stats->handler, t);
+        if (monitor->enable_statistics) {
+            // update statistics
+            rpc_stats = session->target.stats;
+            double t  = timestamp - event_args->uctx.f;
+            UPDATE_STATISTICS_WITH(rpc_stats->handler, t);
+        }
     }
 }
 
@@ -1183,6 +1209,7 @@ margo_default_monitor_on_rpc_ult(void*                        uargs,
                                  margo_monitor_rpc_ult_args_t event_args)
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    if (!monitor->enable_statistics) return;
     // retrieve the session that was create on on_create
     RETRIEVE_SESSION(event_args->handle);
     target_rpc_statistics_t* rpc_stats = session->target.stats;
@@ -1212,6 +1239,7 @@ margo_default_monitor_on_destroy(void*                        uargs,
 {
     (void)timestamp;
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    if (!monitor->enable_statistics) return;
     if (event_type == MARGO_MONITOR_FN_END) {
         // WARNING: handle is no longer valid after destroy
         return;
@@ -1234,6 +1262,7 @@ static void margo_default_monitor_on_bulk_create(
     margo_monitor_bulk_create_args_t event_args)
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    if (!monitor->enable_statistics) return;
 
     bulk_create_statistics_t* bulk_stats = NULL;
 
@@ -1278,7 +1307,9 @@ static void margo_default_monitor_on_bulk_transfer(
     margo_monitor_event_t              event_type,
     margo_monitor_bulk_transfer_args_t event_args)
 {
-    default_monitor_state_t*    monitor    = (default_monitor_state_t*)uargs;
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    if (!(monitor->enable_statistics || monitor->enable_time_series)) return;
+
     bulk_transfer_statistics_t* bulk_stats = NULL;
     margo_instance_id mid = margo_request_get_instance(event_args->request);
 
@@ -1305,48 +1336,58 @@ static void margo_default_monitor_on_bulk_transfer(
             bulk_key.callpath.rpc_id    = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
         }
 
-        ABT_mutex_spinlock(
-            ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->bulk_transfer_stats_mtx));
-        HASH_FIND(hh, monitor->bulk_transfer_stats, &bulk_key, sizeof(bulk_key),
-                  bulk_stats);
-        if (!bulk_stats) {
-            bulk_stats
-                = (bulk_transfer_statistics_t*)calloc(1, sizeof(*bulk_stats));
-            bulk_stats->bulk_key = bulk_key;
-            HASH_ADD(hh, monitor->bulk_transfer_stats, bulk_key,
-                     sizeof(bulk_key), bulk_stats);
+        /* statistics */
+        if (monitor->enable_statistics) {
+            ABT_mutex_spinlock(
+                ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->bulk_transfer_stats_mtx));
+            HASH_FIND(hh, monitor->bulk_transfer_stats, &bulk_key,
+                      sizeof(bulk_key), bulk_stats);
+            if (!bulk_stats) {
+                bulk_stats = (bulk_transfer_statistics_t*)calloc(
+                    1, sizeof(*bulk_stats));
+                bulk_stats->bulk_key = bulk_key;
+                HASH_ADD(hh, monitor->bulk_transfer_stats, bulk_key,
+                         sizeof(bulk_key), bulk_stats);
+            }
+            ABT_mutex_unlock(
+                ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->bulk_transfer_stats_mtx));
+
+            event_args->uctx.f = timestamp;
+
+            bulk_session_t* session           = new_bulk_session(monitor);
+            session->transfer_start_ts        = event_args->uctx.f;
+            session->stats                    = bulk_stats;
+            margo_monitor_data_t monitor_data = {.p = (void*)session};
+            margo_request_set_monitoring_data(event_args->request,
+                                              monitor_data);
         }
-        ABT_mutex_unlock(
-            ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->bulk_transfer_stats_mtx));
 
-        event_args->uctx.f = timestamp;
-
-        bulk_session_t* session           = new_bulk_session(monitor);
-        session->transfer_start_ts        = event_args->uctx.f;
-        session->stats                    = bulk_stats;
-        margo_monitor_data_t monitor_data = {.p = (void*)session};
-        margo_request_set_monitoring_data(event_args->request, monitor_data);
-
-        // find the time series associated with
-        // this callpath and increment its count
-        ABT_mutex_spinlock(
-            ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
-        rpc_time_series_t* rpc_ts = find_or_add_time_series_for_rpc(
-            monitor, bulk_key.callpath.rpc_id);
-        rpc_ts->bulk_size += event_args->size;
-        ABT_mutex_unlock(
-            ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
+        /* time series */
+        if (monitor->enable_time_series) {
+            // find the time series associated with
+            // this callpath and increment its count
+            ABT_mutex_spinlock(
+                ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
+            rpc_time_series_t* rpc_ts = find_or_add_time_series_for_rpc(
+                monitor, bulk_key.callpath.rpc_id);
+            rpc_ts->bulk_size += event_args->size;
+            ABT_mutex_unlock(
+                ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->rpc_time_series_mtx));
+        }
 
     } else {
 
-        margo_monitor_data_t monitor_data;
-        margo_request_get_monitoring_data(event_args->request, &monitor_data);
-        bulk_session_t* session = (bulk_session_t*)monitor_data.p;
-        bulk_stats              = session->stats;
-        double t                = timestamp - event_args->uctx.f;
-        UPDATE_STATISTICS_WITH(bulk_stats->transfer, t);
-        UPDATE_STATISTICS_WITH(bulk_stats->transfer_size, event_args->size);
-        session->transfer_end_ts = timestamp;
+        if (monitor->enable_statistics) {
+            margo_monitor_data_t monitor_data;
+            margo_request_get_monitoring_data(event_args->request,
+                                              &monitor_data);
+            bulk_session_t* session = (bulk_session_t*)monitor_data.p;
+            bulk_stats              = session->stats;
+            double t                = timestamp - event_args->uctx.f;
+            UPDATE_STATISTICS_WITH(bulk_stats->transfer, t);
+            UPDATE_STATISTICS_WITH(bulk_stats->transfer_size, event_args->size);
+            session->transfer_end_ts = timestamp;
+        }
     }
 }
 
@@ -1356,7 +1397,8 @@ static void margo_default_monitor_on_bulk_transfer_cb(
     margo_monitor_event_t                 event_type,
     margo_monitor_bulk_transfer_cb_args_t event_args)
 {
-    (void)uargs;
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    if (!monitor->enable_statistics) return;
     // retrieve the session that was create on on_create
     RETRIEVE_BULK_SESSION(event_args->request);
     bulk_transfer_statistics_t* bulk_stats = session->stats;
