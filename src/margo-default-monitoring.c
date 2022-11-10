@@ -395,18 +395,25 @@ write_monitor_state_to_json_file(const default_monitor_state_t* monitor);
  */
 typedef struct session {
     struct {
-        double                   start_ts;
+        double                   create_ts;
+        double                   forward_start_ts;
+        double                   forward_end_ts;
+        double                   wait_end_ts;
         origin_rpc_statistics_t* stats;
     } origin;
     struct {
-        double                   start_ts;
+        double                   handler_start_ts;
+        double                   ult_start_ts;
+        double                   respond_start_ts;
+        double                   respond_end_ts;
         target_rpc_statistics_t* stats;
     } target;
     struct session* next; /* used to managed the session pool */
 } session_t;
 
 typedef struct bulk_session {
-    double                      start_ts;
+    double                      transfer_start_ts;
+    double                      transfer_end_ts;
     bulk_transfer_statistics_t* stats;
     struct bulk_session* next; /* used to managed the bulk_session pool */
 } bulk_session_t;
@@ -814,7 +821,7 @@ margo_default_monitor_on_create(void*                       uargs,
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     session_t*               session = new_session(monitor);
 
-    session->origin.start_ts          = event_args->uctx.f;
+    session->origin.create_ts         = timestamp;
     margo_monitor_data_t monitor_data = {.p = (void*)session};
     margo_set_monitoring_data(event_args->handle, monitor_data);
 }
@@ -884,10 +891,9 @@ margo_default_monitor_on_forward(void*                        uargs,
             ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->origin_rpc_stats_mtx));
         session->origin.stats = rpc_stats;
 
-        double t = timestamp - session->origin.start_ts;
+        double t = timestamp - session->origin.create_ts;
         UPDATE_STATISTICS_WITH(rpc_stats->forward[TIMESTAMP], t);
-        // change the reference time to be this timestamp
-        session->origin.start_ts = timestamp;
+        session->origin.forward_start_ts = timestamp;
 
     } else if (event_type == MARGO_MONITOR_FN_END) {
 
@@ -895,6 +901,7 @@ margo_default_monitor_on_forward(void*                        uargs,
         rpc_stats = session->origin.stats;
         double t  = timestamp - event_args->uctx.f;
         UPDATE_STATISTICS_WITH(rpc_stats->forward[DURATION], t);
+        session->origin.forward_end_ts = timestamp;
     }
 }
 
@@ -912,7 +919,7 @@ margo_default_monitor_on_set_input(void*                          uargs,
 
     if (event_type == MARGO_MONITOR_FN_START) {
         event_args->uctx.f = timestamp;
-        double t           = timestamp - session->origin.start_ts;
+        double t           = timestamp - session->origin.forward_start_ts;
         UPDATE_STATISTICS_WITH(rpc_stats->set_input[TIMESTAMP], t);
     } else {
         double t = timestamp - event_args->uctx.f;
@@ -934,7 +941,7 @@ margo_default_monitor_on_set_output(void*                           uargs,
 
     if (event_type == MARGO_MONITOR_FN_START) {
         event_args->uctx.f = timestamp;
-        double t           = timestamp - session->target.start_ts;
+        double t           = timestamp - session->target.respond_start_ts;
         UPDATE_STATISTICS_WITH(rpc_stats->set_output[TIMESTAMP], t);
     } else {
         double t = timestamp - event_args->uctx.f;
@@ -955,7 +962,7 @@ margo_default_monitor_on_get_output(void*                           uargs,
 
     if (event_type == MARGO_MONITOR_FN_START) {
         event_args->uctx.f = timestamp;
-        double t           = timestamp - session->origin.start_ts;
+        double t           = timestamp - session->origin.wait_end_ts;
         UPDATE_STATISTICS_WITH(rpc_stats->get_output[TIMESTAMP], t);
     } else {
         double t = timestamp - event_args->uctx.f;
@@ -976,7 +983,7 @@ margo_default_monitor_on_get_input(void*                          uargs,
 
     if (event_type == MARGO_MONITOR_FN_START) {
         event_args->uctx.f = timestamp;
-        double t           = timestamp - session->target.start_ts;
+        double t           = timestamp - session->target.ult_start_ts;
         UPDATE_STATISTICS_WITH(rpc_stats->get_input[TIMESTAMP], t);
     } else {
         double t = timestamp - event_args->uctx.f;
@@ -998,7 +1005,7 @@ margo_default_monitor_on_forward_cb(void*                           uargs,
 
     if (event_type == MARGO_MONITOR_FN_START) {
         event_args->uctx.f = timestamp;
-        double t           = timestamp - session->origin.start_ts;
+        double t           = timestamp - session->origin.forward_start_ts;
         UPDATE_STATISTICS_WITH(rpc_stats->forward_cb[TIMESTAMP], t);
     } else {
         double t = timestamp - event_args->uctx.f;
@@ -1020,11 +1027,13 @@ margo_default_monitor_on_respond(void*                        uargs,
 
     if (event_type == MARGO_MONITOR_FN_START) {
         event_args->uctx.f = timestamp;
-        double t           = timestamp - session->target.start_ts;
+        double t           = timestamp - session->target.ult_start_ts;
         UPDATE_STATISTICS_WITH(rpc_stats->respond[TIMESTAMP], t);
+        session->target.respond_start_ts = timestamp;
     } else {
         double t = timestamp - event_args->uctx.f;
         UPDATE_STATISTICS_WITH(rpc_stats->respond[DURATION], t);
+        session->target.respond_end_ts = timestamp;
     }
 }
 
@@ -1042,7 +1051,7 @@ margo_default_monitor_on_respond_cb(void*                           uargs,
 
     if (event_type == MARGO_MONITOR_FN_START) {
         event_args->uctx.f = timestamp;
-        double t           = timestamp - session->target.start_ts;
+        double t           = timestamp - session->target.respond_start_ts;
         UPDATE_STATISTICS_WITH(rpc_stats->respond_cb[TIMESTAMP], t);
     } else {
         double t = timestamp - event_args->uctx.f;
@@ -1060,25 +1069,27 @@ static void margo_default_monitor_on_wait(void*                     uargs,
     statistics_t*   duration_stats  = NULL;
     statistics_t*   timestamp_stats = NULL;
     bulk_session_t* bulk_session    = NULL;
-    double          start_ts        = 0.0;
+    double          ref_ts          = 0.0;
 
     margo_request_type request_type
         = margo_request_get_type(event_args->request);
     if (request_type == MARGO_FORWARD_REQUEST) {
         hg_handle_t handle = margo_request_get_handle(event_args->request);
         RETRIEVE_SESSION(handle);
-        start_ts        = session->origin.start_ts;
+        ref_ts          = session->origin.forward_end_ts;
         duration_stats  = &(session->origin.stats->wait[DURATION]);
         timestamp_stats = &(session->origin.stats->wait[TIMESTAMP]);
+        if (event_type == MARGO_MONITOR_FN_END)
+            session->origin.wait_end_ts = timestamp;
     } else if (request_type == MARGO_RESPONSE_REQUEST) {
         hg_handle_t handle = margo_request_get_handle(event_args->request);
         RETRIEVE_SESSION(handle);
-        start_ts        = session->target.start_ts;
+        ref_ts          = session->target.respond_end_ts;
         duration_stats  = &(session->target.stats->wait[DURATION]);
         timestamp_stats = &(session->target.stats->wait[TIMESTAMP]);
     } else if (request_type == MARGO_BULK_REQUEST) {
         RETRIEVE_BULK_SESSION(event_args->request);
-        start_ts        = session->start_ts;
+        ref_ts          = session->transfer_end_ts;
         duration_stats  = &(session->stats->wait[DURATION]);
         timestamp_stats = &(session->stats->wait[TIMESTAMP]);
         bulk_session    = session;
@@ -1086,7 +1097,7 @@ static void margo_default_monitor_on_wait(void*                     uargs,
 
     if (event_type == MARGO_MONITOR_FN_START) {
         event_args->uctx.f = timestamp;
-        double t           = timestamp - start_ts;
+        double t           = timestamp - ref_ts;
         UPDATE_STATISTICS_WITH(*timestamp_stats, t);
     } else {
         double t = timestamp - event_args->uctx.f;
@@ -1113,7 +1124,7 @@ static void margo_default_monitor_on_rpc_handler(
 
     if (event_type == MARGO_MONITOR_FN_START) {
         if (!session) { session = new_session(monitor); }
-        session->target.start_ts          = timestamp;
+        session->target.handler_start_ts  = timestamp;
         margo_monitor_data_t monitor_data = {.p = (void*)session};
         margo_set_monitoring_data(event_args->handle, monitor_data);
 
@@ -1179,13 +1190,13 @@ margo_default_monitor_on_rpc_ult(void*                        uargs,
     if (event_type == MARGO_MONITOR_FN_START) {
 
         event_args->uctx.f = timestamp;
-        double t           = timestamp - session->target.start_ts;
+        double t           = timestamp - session->target.handler_start_ts;
         UPDATE_STATISTICS_WITH(rpc_stats->ult[TIMESTAMP], t);
         // set callpath key
         callpath_t* current_callpath = &(session->target.stats->callpath);
         ABT_key_set(monitor->callpath_key, current_callpath);
         // set the reference time start_ts to the current timestamp
-        session->target.start_ts = timestamp;
+        session->target.ult_start_ts = timestamp;
 
     } else {
         double t = timestamp - event_args->uctx.f;
@@ -1311,7 +1322,7 @@ static void margo_default_monitor_on_bulk_transfer(
         event_args->uctx.f = timestamp;
 
         bulk_session_t* session           = new_bulk_session(monitor);
-        session->start_ts                 = event_args->uctx.f;
+        session->transfer_start_ts        = event_args->uctx.f;
         session->stats                    = bulk_stats;
         margo_monitor_data_t monitor_data = {.p = (void*)session};
         margo_request_set_monitoring_data(event_args->request, monitor_data);
@@ -1330,10 +1341,12 @@ static void margo_default_monitor_on_bulk_transfer(
 
         margo_monitor_data_t monitor_data;
         margo_request_get_monitoring_data(event_args->request, &monitor_data);
-        bulk_stats = ((bulk_session_t*)monitor_data.p)->stats;
-        double t   = timestamp - event_args->uctx.f;
+        bulk_session_t* session = (bulk_session_t*)monitor_data.p;
+        bulk_stats              = session->stats;
+        double t                = timestamp - event_args->uctx.f;
         UPDATE_STATISTICS_WITH(bulk_stats->transfer, t);
         UPDATE_STATISTICS_WITH(bulk_stats->transfer_size, event_args->size);
+        session->transfer_end_ts = timestamp;
     }
 }
 
@@ -1351,7 +1364,7 @@ static void margo_default_monitor_on_bulk_transfer_cb(
     if (event_type == MARGO_MONITOR_FN_START) {
 
         event_args->uctx.f = timestamp;
-        double t           = timestamp - session->start_ts;
+        double t           = timestamp - session->transfer_start_ts;
         UPDATE_STATISTICS_WITH(bulk_stats->transfer_cb[TIMESTAMP], t);
 
     } else {
@@ -1563,20 +1576,15 @@ bulk_transfer_statistics_to_json(const bulk_transfer_statistics_t* stats)
     json_object_object_add_ex(transfer, "size",
                               statistics_to_json(&stats->transfer_size),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
-    statistics_t dummy = {0};
-    dummy.num          = stats->transfer.num;
-    json_object_object_add_ex(transfer, "relative_timestamp_from_transfer",
-                              statistics_to_json(&dummy),
-                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "transfer_cb",
         statistics_pair_to_json(stats->transfer_cb, "duration",
-                                "relative_timestamp_from_transfer"),
+                                "relative_timestamp_from_transfer_start"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "itransfer_wait",
         statistics_pair_to_json(stats->wait, "duration",
-                                "relative_timestamp_from_transfer"),
+                                "relative_timestamp_from_transfer_end"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     return json;
 }
@@ -1593,22 +1601,22 @@ origin_rpc_statistics_to_json(const origin_rpc_statistics_t* stats)
     json_object_object_add_ex(
         json, "forward_cb",
         statistics_pair_to_json(stats->forward_cb, "duration",
-                                "relative_timestamp_from_forward"),
+                                "relative_timestamp_from_forward_start"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "iforward_wait",
         statistics_pair_to_json(stats->wait, "duration",
-                                "relative_timestamp_from_forward"),
+                                "relative_timestamp_from_forward_end"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "set_input",
         statistics_pair_to_json(stats->set_input, "duration",
-                                "relative_timestamp_from_forward"),
+                                "relative_timestamp_from_forward_start"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "get_output",
         statistics_pair_to_json(stats->get_output, "duration",
-                                "relative_timestamp_from_forward"),
+                                "relative_timestamp_from_wait_end"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     return json;
 }
@@ -1617,44 +1625,43 @@ static struct json_object*
 target_rpc_statistics_to_json(const target_rpc_statistics_t* stats)
 {
     struct json_object* json = json_object_new_object();
-    // we complete the handler section with a timestamp statistics
-    // that is basically 0, because it's simpler for parsing later
-    statistics_t handler_stats[2] = {stats->handler, {0}};
-    handler_stats[TIMESTAMP].num  = handler_stats[DURATION].num;
-    json_object_object_add_ex(
-        json, "handler",
-        statistics_pair_to_json(handler_stats, "duration",
-                                "relative_timestamp_from_handler"),
-        JSON_C_OBJECT_ADD_KEY_IS_NEW);
+
+    struct json_object* handler = json_object_new_object();
+    json_object_object_add_ex(json, "handler", handler,
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+    json_object_object_add_ex(handler, "duration",
+                              statistics_to_json(&stats->handler),
+                              JSON_C_OBJECT_ADD_KEY_IS_NEW);
+
     json_object_object_add_ex(
         json, "ult",
         statistics_pair_to_json(stats->ult, "duration",
-                                "relative_timestamp_from_handler"),
+                                "relative_timestamp_from_handler_start"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "irespond",
         statistics_pair_to_json(stats->respond, "duration",
-                                "relative_timestamp_from_ult"),
+                                "relative_timestamp_from_ult_start"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "respond_cb",
         statistics_pair_to_json(stats->respond_cb, "duration",
-                                "relative_timestamp_from_ult"),
+                                "relative_timestamp_from_respond_start"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "irespond_wait",
         statistics_pair_to_json(stats->wait, "duration",
-                                "relative_timestamp_from_ult"),
+                                "relative_timestamp_from_respond_end"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "set_output",
         statistics_pair_to_json(stats->set_output, "duration",
-                                "relative_timestamp_from_ult"),
+                                "relative_timestamp_from_respond_start"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "get_input",
         statistics_pair_to_json(stats->get_input, "duration",
-                                "relative_timestamp_from_ult"),
+                                "relative_timestamp_from_ult_start"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     return json;
 }
