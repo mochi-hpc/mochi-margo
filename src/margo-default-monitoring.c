@@ -1580,7 +1580,7 @@ static struct json_object* hg_statistics_to_json(const hg_statistics_t* stats)
                               statistics_to_json(&stats->progress_with_timeout),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
-        json, "progress_timeout_value",
+        json, "progress_timeout_value_msec",
         statistics_to_json(&stats->progress_timeout_value),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
