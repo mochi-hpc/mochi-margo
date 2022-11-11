@@ -1621,12 +1621,12 @@ bulk_transfer_statistics_to_json(const bulk_transfer_statistics_t* stats)
     json_object_object_add_ex(
         json, "transfer_cb",
         statistics_pair_to_json(stats->transfer_cb, "duration",
-                                "relative_timestamp_from_transfer_start"),
+                                "relative_timestamp_from_itransfer_start"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "itransfer_wait",
         statistics_pair_to_json(stats->wait, "duration",
-                                "relative_timestamp_from_transfer_end"),
+                                "relative_timestamp_from_itransfer_end"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     return json;
 }
@@ -1643,17 +1643,17 @@ origin_rpc_statistics_to_json(const origin_rpc_statistics_t* stats)
     json_object_object_add_ex(
         json, "forward_cb",
         statistics_pair_to_json(stats->forward_cb, "duration",
-                                "relative_timestamp_from_forward_start"),
+                                "relative_timestamp_from_iforward_start"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "iforward_wait",
         statistics_pair_to_json(stats->wait, "duration",
-                                "relative_timestamp_from_forward_end"),
+                                "relative_timestamp_from_iforward_end"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "set_input",
         statistics_pair_to_json(stats->set_input, "duration",
-                                "relative_timestamp_from_forward_start"),
+                                "relative_timestamp_from_iforward_start"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "get_output",
@@ -1688,17 +1688,17 @@ target_rpc_statistics_to_json(const target_rpc_statistics_t* stats)
     json_object_object_add_ex(
         json, "respond_cb",
         statistics_pair_to_json(stats->respond_cb, "duration",
-                                "relative_timestamp_from_respond_start"),
+                                "relative_timestamp_from_irespond_start"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "irespond_wait",
         statistics_pair_to_json(stats->wait, "duration",
-                                "relative_timestamp_from_respond_end"),
+                                "relative_timestamp_from_irespond_end"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "set_output",
         statistics_pair_to_json(stats->set_output, "duration",
-                                "relative_timestamp_from_respond_start"),
+                                "relative_timestamp_from_irespond_start"),
         JSON_C_OBJECT_ADD_KEY_IS_NEW);
     json_object_object_add_ex(
         json, "get_input",
