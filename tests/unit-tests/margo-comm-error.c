@@ -36,6 +36,7 @@ DEFINE_MARGO_RPC_HANDLER(error_rpc_ult)
 
 static int svr_init_fn(margo_instance_id mid, void* arg)
 {
+    (void)arg;
     null_rpc_id = MARGO_REGISTER(mid, "null_rpc", void, void, null_rpc_ult);
     error_rpc_id
         = MARGO_REGISTER(mid, "error_rpc", int64_t, int64_t, error_rpc_ult);

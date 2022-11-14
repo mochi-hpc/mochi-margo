@@ -10,7 +10,6 @@
 #include "margo-instance.h"
 #include "margo-progress.h"
 #include "margo-timer.h"
-#include "margo-diag-internal.h"
 #include "margo-handle-cache.h"
 #include "margo-globals.h"
 #include "margo-macros.h"
@@ -25,12 +24,13 @@
 // Validates the format of the configuration and
 // fill default values if they are note provided
 static int
-validate_and_complete_config(struct json_object*        _config,
-                             ABT_pool                   _progress_pool,
-                             ABT_pool                   _rpc_pool,
-                             hg_class_t*                _hg_class,
-                             hg_context_t*              _hg_context,
-                             const struct hg_init_info* _hg_init_info);
+validate_and_complete_config(struct json_object*         _config,
+                             ABT_pool                    _progress_pool,
+                             ABT_pool                    _rpc_pool,
+                             hg_class_t*                 _hg_class,
+                             hg_context_t*               _hg_context,
+                             const struct hg_init_info*  _hg_init_info,
+                             const struct margo_monitor* _monitor);
 
 // Checks the eager sizes reported by Mercury at runtime
 static int check_hg_eager_sizes(hg_class_t*         hg_class,
@@ -115,6 +115,10 @@ margo_instance_id margo_init_ext(const char*                   address,
     ABT_pool               rpc_pool      = ABT_POOL_NULL;
     ABT_bool               tool_enabled;
 
+    if (getenv("MARGO_ENABLE_MONITORING") && !args.monitor) {
+        args.monitor = margo_default_monitor;
+    }
+
     if (args.hg_init_info)
         memcpy(&hg_init_info, args.hg_init_info, sizeof(hg_init_info));
 
@@ -139,9 +143,9 @@ margo_instance_id margo_init_ext(const char*                   address,
 
     // validate and complete configuration
     MARGO_TRACE(0, "Validating and completing configuration");
-    ret = validate_and_complete_config(config, args.progress_pool,
-                                       args.rpc_pool, args.hg_class,
-                                       args.hg_context, args.hg_init_info);
+    ret = validate_and_complete_config(
+        config, args.progress_pool, args.rpc_pool, args.hg_class,
+        args.hg_context, args.hg_init_info, args.monitor);
     if (ret != 0) {
         MARGO_ERROR(0, "Could not validate and complete configuration");
         goto error;
@@ -304,14 +308,6 @@ margo_instance_id margo_init_ext(const char*                   address,
     else
         rpc_pool = pools[rpc_pool_index].pool;
 
-    // set input offset to include breadcrumb information in Mercury requests
-    MARGO_TRACE(0, "Setting input offset in hg_class as %d", sizeof(uint64_t));
-    hret = HG_Class_set_input_offset(hg_class, sizeof(uint64_t));
-    if (hret != HG_SUCCESS) {
-        MARGO_ERROR(0, "Could not set input offset in hg_class");
-        goto error;
-    }
-
     // allocate margo instance
     MARGO_TRACE(0, "Allocating margo instance");
     mid = calloc(1, sizeof(*mid));
@@ -324,12 +320,12 @@ margo_instance_id margo_init_ext(const char*                   address,
         json_object_object_get(config, "progress_timeout_ub_msec"));
     int handle_cache_size = json_object_get_int64(
         json_object_object_get(config, "handle_cache_size"));
-    int diag_enabled = json_object_get_boolean(
-        json_object_object_get(config, "enable_diagnostics"));
-    int profile_enabled = json_object_get_boolean(
-        json_object_object_get(config, "enable_profiling"));
+    int abt_profiling_enabled = json_object_get_boolean(
+        json_object_object_get(config, "enable_abt_profiling"));
 
     mid->json_cfg = config;
+
+    mid->abt_profiling_enabled = abt_profiling_enabled;
 
     mid->hg_class      = hg_class;
     mid->hg_context    = hg_context;
@@ -371,11 +367,32 @@ margo_instance_id margo_init_ext(const char*                   address,
     hret                  = __margo_handle_cache_init(mid, handle_cache_size);
     if (hret != HG_SUCCESS) goto error;
 
+    // create current_rpc_id_key ABT_key
+    ret = ABT_key_create(NULL, &(mid->current_rpc_id_key));
+    if (ret != ABT_SUCCESS) goto error;
+
     margo_set_logger(mid, args.logger);
 
     if (args.monitor) {
-        const char* monitor_config = NULL; // TODO
-        margo_set_monitor(mid, args.monitor, monitor_config);
+        struct json_object* monitoring
+            = json_object_object_get(config, "monitoring");
+        struct json_object* monitoring_config
+            = json_object_object_get(monitoring, "config");
+
+        mid->monitor = (struct margo_monitor*)malloc(sizeof(*(mid->monitor)));
+        memcpy(mid->monitor, args.monitor, sizeof(*(mid->monitor)));
+        if (mid->monitor->initialize)
+            mid->monitor->uargs = mid->monitor->initialize(
+                mid, mid->monitor->uargs, monitoring_config);
+
+        // replace the "config" section with one provided by the monitoring
+        // backend
+        if (mid->monitor->config) {
+            monitoring_config = mid->monitor->config(mid->monitor->uargs);
+            if (monitoring_config) {
+                json_object_object_add(monitoring, "config", monitoring_config);
+            }
+        }
     }
 
     mid->shutdown_rpc_id = MARGO_REGISTER(
@@ -386,40 +403,9 @@ margo_instance_id margo_init_ext(const char*                   address,
                             ABT_THREAD_ATTR_NULL, &mid->hg_progress_tid);
     if (ret != ABT_SUCCESS) goto error;
 
-    /* TODO the initialization code bellow (until END) should probably be put in
-     * a separate module that deals with diagnostics and profiling */
-
-    /* register thread local key to track RPC breadcrumbs across threads */
-    /* NOTE: we are registering a global key, even though init could be called
-     * multiple times for different margo instances.  As of May 2019 this
-     * doesn't seem to be a problem to call ABT_key_create() multiple times.
-     */
-    MARGO_TRACE(0, "Creating ABT keys for profiling");
-    ret = ABT_key_create(free, &g_margo_rpc_breadcrumb_key);
-    if (ret != ABT_SUCCESS) goto error;
-
-    ret = ABT_key_create(free, &g_margo_target_timing_key);
-    if (ret != ABT_SUCCESS) goto error;
-
-    mid->sparkline_data_collection_tid = ABT_THREAD_NULL;
-    mid->diag_enabled                  = diag_enabled;
-    mid->profile_enabled               = profile_enabled;
-    ABT_mutex_create(&mid->diag_rpc_mutex);
-
-    // record own address hash to be used for profiling and diagnostics
-    // NOTE: we do this even if profiling is presently disabled so that the
-    // information will be available if profiling is dynamically enabled
-    GET_SELF_ADDR_STR(mid, mid->self_addr_str);
-    if (!mid->self_addr_str) {
-        MARGO_ERROR(mid, "unable to resolve self address");
-        goto error;
-    }
+    mid->self_addr_str = strdup(self_addr_str);
     HASH_JEN(mid->self_addr_str, strlen(mid->self_addr_str),
              mid->self_addr_hash);
-
-    if (profile_enabled) __margo_sparkline_thread_start(mid);
-
-    /* END diagnostics/profiling initialization */
 
     // increment the number of margo instances
     if (g_margo_num_instances_mtx == ABT_MUTEX_NULL)
@@ -440,7 +426,7 @@ error:
         ABT_mutex_free(&mid->finalize_mutex);
         ABT_cond_free(&mid->finalize_cond);
         ABT_mutex_free(&mid->pending_operations_mtx);
-        ABT_mutex_free(&mid->diag_rpc_mutex);
+        if (mid->current_rpc_id_key) ABT_key_free(&(mid->current_rpc_id_key));
         free(mid);
     }
     for (unsigned i = 0; i < num_xstreams; i++) {
@@ -473,12 +459,13 @@ error:
  * complete information.
  */
 static int
-validate_and_complete_config(struct json_object*        _margo,
-                             ABT_pool                   _custom_progress_pool,
-                             ABT_pool                   _custom_rpc_pool,
-                             hg_class_t*                _hg_class,
-                             hg_context_t*              _hg_context,
-                             const struct hg_init_info* _hg_init_info)
+validate_and_complete_config(struct json_object*         _margo,
+                             ABT_pool                    _custom_progress_pool,
+                             ABT_pool                    _custom_rpc_pool,
+                             hg_class_t*                 _hg_class,
+                             hg_context_t*               _hg_context,
+                             const struct hg_init_info*  _hg_init_info,
+                             const struct margo_monitor* _monitor)
 {
     struct json_object* ignore; // to pass as output to macros when we don't
                                 // care ouput the output
@@ -493,13 +480,10 @@ validate_and_complete_config(struct json_object*        _margo,
        - [required] mercury: object
        - [optional] argobots: object
        - [optional] progress_timeout_ub_msec: integer >= 0 (default 100)
-       - [optional] enable_profiling: bool (default false)
-       - [optional] enable_diagnostics: bool (default false)
        - [optional] handle_cache_size: integer >= 0 (default 32)
-       - [optional] profile_sparkline_timeslice_msec: integer >= 0 (default
-       1000)
        - [optional] use_progress_thread: bool (default false)
        - [optional] rpc_thread_count: integer (default 0)
+       - [optional] monitoring: object
     */
 
     /* report version number for this component */
@@ -510,48 +494,8 @@ validate_and_complete_config(struct json_object*        _margo,
                              "progress_timeout_ub_msec", val);
         CONFIG_INTEGER_MUST_BE_POSITIVE(_margo, "progress_timeout_ub_msec",
                                         "progress_timeout_ub_msec");
-        MARGO_TRACE(0, "progress_timeout_ub_msec = %d",
+        MARGO_TRACE(0, "progress_timeout_ub_msec = %ld",
                     json_object_get_int64(val));
-    }
-
-    { // add or override enable_profiling
-        const char* margo_enable_profiling_str
-            = getenv("MARGO_ENABLE_PROFILING");
-        int margo_enable_profiling
-            = margo_enable_profiling_str ? atoi(margo_enable_profiling_str) : 0;
-        CONFIG_HAS_OR_CREATE(_margo, boolean, "enable_profiling",
-                             margo_enable_profiling, "enable_profiling", val);
-        MARGO_TRACE(0, "enable_profiling = %s",
-                    json_object_get_boolean(val) ? "true" : "false");
-    }
-
-    { // add or override enable_diagnostics
-        const char* margo_enable_diagnostics_str
-            = getenv("MARGO_ENABLE_DIAGNOSTICS");
-        int margo_enable_diagnostics = margo_enable_diagnostics_str
-                                         ? atoi(margo_enable_diagnostics_str)
-                                         : 0;
-        CONFIG_HAS_OR_CREATE(_margo, boolean, "enable_diagnostics",
-                             margo_enable_diagnostics, "enable_diagnostics",
-                             val);
-        MARGO_TRACE(0, "enable_diagnostics = %s",
-                    json_object_get_boolean(val) ? "true" : "false");
-    }
-
-    { // add or override output_dir
-        char* margo_output_dir_str = getenv("MARGO_OUTPUT_DIR");
-        if (margo_output_dir_str) {
-            CONFIG_HAS_OR_CREATE(_margo, string, "output_dir",
-                                 margo_output_dir_str, "output_dir", val);
-        } else {
-            margo_output_dir_str = getcwd(NULL, 0);
-            CONFIG_HAS_OR_CREATE(_margo, string, "output_dir",
-                                 margo_output_dir_str, "output_dir", val);
-            /* getwd() mallocs the string if buf is NULL */
-            free(margo_output_dir_str);
-        }
-
-        MARGO_TRACE(0, "output_dir = %s", json_object_get_string(val));
     }
 
     { // add or override handle_cache_size
@@ -559,17 +503,23 @@ validate_and_complete_config(struct json_object*        _margo,
                              "handle_cache_size", val);
         CONFIG_INTEGER_MUST_BE_POSITIVE(_margo, "handle_cache_size",
                                         "handle_cache_size");
-        MARGO_TRACE(0, "handle_cache_size = %d", json_object_get_int64(val));
+        MARGO_TRACE(0, "handle_cache_size = %ld", json_object_get_int64(val));
     }
 
-    { // add or override profile_sparkline_timeslice_msec
-        CONFIG_HAS_OR_CREATE(_margo, int64, "profile_sparkline_timeslice_msec",
-                             1000, "profile_sparkline_timeslice_msec", val);
-        CONFIG_INTEGER_MUST_BE_POSITIVE(_margo,
-                                        "profile_sparkline_timeslice_msec",
-                                        "profile_sparkline_timeslice_msec");
-        MARGO_TRACE(0, "profile_sparkline_timeslice_msec = %d",
-                    json_object_get_int64(val));
+    /* find the "monitoring" object in the configuration */
+    struct json_object* _monitoring = NULL;
+    CONFIG_HAS_OR_CREATE_OBJECT(_margo, "monitoring", "monitoring",
+                                _monitoring);
+
+    { // override monitor name
+        const char* monitor_name
+            = (_monitor && _monitor->name) ? _monitor->name() : "<unknown>";
+        CONFIG_OVERRIDE_STRING(_monitoring, "name", monitor_name,
+                               "monitoring.name", 1);
+        MARGO_TRACE(0, "monitoring.name = %s", monitor_name);
+    }
+    { // add or create "config" in monitoring
+        CONFIG_HAS_OR_CREATE_OBJECT(_monitoring, "config", "config", ignore);
     }
 
     /* ------- Mercury configuration ------ */
@@ -1580,7 +1530,7 @@ static void confirm_argobots_configuration(struct json_object* config)
     /* query Argobots to see if it is in agreement */
     ABT_info_query_config(ABT_INFO_QUERY_KIND_DEFAULT_THREAD_STACKSIZE,
                           &runtime_abt_thread_stacksize);
-    if (runtime_abt_thread_stacksize != abt_thread_stacksize) {
+    if ((int)runtime_abt_thread_stacksize != abt_thread_stacksize) {
         MARGO_WARNING(
             0,
             "Margo requested an Argobots ULT stack size of %d, but "

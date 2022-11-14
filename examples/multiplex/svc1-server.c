@@ -138,6 +138,9 @@ int svc1_register(margo_instance_id mid, ABT_pool pool, uint32_t provider_id)
 
 void svc1_deregister(margo_instance_id mid, ABT_pool pool, uint32_t provider_id)
 {
+    (void)mid;
+    (void)pool;
+    (void)provider_id;
     /* TODO: undo what was done in svc1_register() */
     return;
 }

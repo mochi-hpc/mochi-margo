@@ -97,6 +97,10 @@ void data_xfer_deregister(margo_instance_id mid,
                           ABT_pool          pool,
                           uint32_t          provider_id)
 {
+    (void)mid;
+    (void)pool;
+    (void)provider_id;
+
     margo_bulk_free(g_buffer_bulk_handle);
     free(g_buffer);
 

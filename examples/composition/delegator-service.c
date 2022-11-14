@@ -106,6 +106,9 @@ void delegator_deregister(margo_instance_id mid,
                           ABT_pool          pool,
                           uint32_t          provider_id)
 {
+    (void)mid;
+    (void)pool;
+    (void)provider_id;
     /* TODO: undo what was done in delegator_register() */
     return;
 }

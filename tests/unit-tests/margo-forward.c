@@ -32,6 +32,7 @@ DEFINE_MARGO_RPC_HANDLER(get_name_ult)
 
 static int svr_init_fn(margo_instance_id mid, void* arg)
 {
+    (void)arg;
     MARGO_REGISTER(mid, "rpc", void, void, rpc_ult);
     MARGO_REGISTER(mid, "null_rpc", void, void, NULL);
     MARGO_REGISTER_PROVIDER(mid, "provider_rpc", void, void, rpc_ult, 42, ABT_POOL_NULL);

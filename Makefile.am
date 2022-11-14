@@ -3,8 +3,6 @@ ACLOCAL_AMFLAGS = -I m4
 
 bin_PROGRAMS =
 bin_SCRIPTS =
-dist_bin_SCRIPTS = scripts/margo-gen-profile
-dist_noinst_SCRIPTS = scripts/margo-gen-profile
 
 noinst_PROGRAMS =
 noinst_HEADERS =

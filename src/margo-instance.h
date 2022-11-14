@@ -29,28 +29,6 @@
 #define MARGO_OWNS_HG_CLASS   0x1
 #define MARGO_OWNS_HG_CONTEXT 0x2
 
-/* Structure to store timing information */
-struct diag_data {
-    /* breadcrumb stats */
-    margo_breadcrumb_stats stats;
-
-    /* origin or target */
-    margo_breadcrumb_type type;
-
-    uint64_t rpc_breadcrumb; /* identifier for rpc and it's ancestors */
-    struct margo_global_breadcrumb_key key;
-
-    /* used to combine rpc_breadcrumb, addr_hash and provider_id to create a
-     * unique key for HASH_ADD inside margo_breadcrumb_measure */
-    __uint128_t x;
-
-    /*sparkline data for breadcrumb */
-    double sparkline_time[100];
-    double sparkline_count[100];
-
-    UT_hash_handle hh; /* hash table link */
-};
-
 struct margo_handle_cache_el; /* defined in margo-handle-cache.c */
 
 struct margo_finalize_cb {
@@ -66,10 +44,9 @@ struct margo_timer_list; /* defined in margo-timer.c */
  * debugging and instrumentation purposes
  */
 struct margo_registered_rpc {
-    hg_id_t  id;                       /* rpc id */
-    uint64_t rpc_breadcrumb_fragment;  /* fragment id used in rpc tracing */
-    char     func_name[64];            /* string name of rpc */
-    struct margo_registered_rpc* next; /* pointer to next in list */
+    hg_id_t                      id;            /* rpc id */
+    char                         func_name[64]; /* string name of rpc */
+    struct margo_registered_rpc* next;          /* pointer to next in list */
 };
 
 /* Struct to track pools created by margo along with a flag indicating if
@@ -129,6 +106,7 @@ struct margo_instance {
 
     /* timer data */
     struct margo_timer_list* timer_list;
+
     /* linked list of free hg handles and a hash of in-use handles */
     struct margo_handle_cache_el* free_handle_list;
     struct margo_handle_cache_el* used_handle_hash;
@@ -141,34 +119,14 @@ struct margo_instance {
     /* monitoring */
     struct margo_monitor* monitor;
 
-    /* optional diagnostics data tracking */
-    /* NOTE: technically the following fields are subject to races if they
-     * are updated from more than one thread at a time.  We will be careful
-     * to only update the counters from the progress_fn,
-     * which will serialize access.
-     */
-    ABT_thread        sparkline_data_collection_tid;
-    int               diag_enabled;
-    int               profile_enabled;
-    char*             self_addr_str;
-    uint64_t          self_addr_hash;
-    double            previous_sparkline_data_collection_time;
-    uint16_t          sparkline_index;
-    struct diag_data  diag_trigger_elapsed;
-    struct diag_data  diag_progress_elapsed_zero_timeout;
-    struct diag_data  diag_progress_elapsed_nonzero_timeout;
-    struct diag_data  diag_progress_timeout_value;
-    struct diag_data  diag_bulk_create_elapsed;
-    struct diag_data* diag_rpc;
-    ABT_mutex         diag_rpc_mutex;
-};
+    /* callpath tracking */
+    ABT_key current_rpc_id_key;
 
-typedef enum
-{
-    MARGO_RESPONSE_REQUEST,
-    MARGO_FORWARD_REQUEST,
-    MARGO_BULK_REQUEST
-} margo_request_type;
+    /* optional diagnostics data tracking */
+    int      abt_profiling_enabled;
+    char*    self_addr_str;
+    uint64_t self_addr_hash;
+};
 
 struct margo_request_struct {
     margo_eventual_t     eventual;
@@ -176,15 +134,8 @@ struct margo_request_struct {
     margo_timer*         timer;
     margo_instance_id    mid;
     hg_handle_t          handle;
-    margo_request_type   type;
     margo_monitor_data_t monitor_data;
-
-    double   start_time;     /* timestamp of when the operation started */
-    uint64_t rpc_breadcrumb; /* statistics tracking identifier, if applicable */
-    uint64_t server_addr_hash; /* hash of globally unique string addr of margo
-                                  server instance */
-    uint16_t provider_id; /* id of the provider servicing the request, local to
-                             the margo server instance */
+    margo_request_type   type;
 };
 
 // Data registered to an RPC id with HG_Register_data
@@ -208,6 +159,7 @@ struct margo_handle_data {
     hg_proc_cb_t out_proc_cb;   /* user-provided output proc */
     void*        user_data;
     void (*user_free_callback)(void*);
+    margo_monitor_data_t monitor_data;
 };
 
 struct lookup_cb_evt {

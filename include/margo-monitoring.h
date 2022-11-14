@@ -18,6 +18,13 @@ extern "C" {
 #endif
 
 /**
+ * Margo's monitoring subsystem is customizable. Users can implement their
+ * own system by creating an instance of margo_monitor with their own
+ * function pointers (any function set to NULL will simply be ignored by
+ * margo) and pass a pointer to the structure as the "monitor" field
+ * of the margo_init_info structure passed to margo_init_ext. The user-
+ * provided margo_monitor will be internally copied.
+ *
  * Margo's monitoring subsystem consists of a margo_monitor structure
  * with pointers to functions that will be called when executing some
  * Margo functions. These functions all have the following prototype:
@@ -96,6 +103,7 @@ struct hg_bulk_attr; /* forward declaration needed for Mercury < 2.2.0 */
 struct margo_instance;
 typedef struct margo_instance*       margo_instance_id;
 typedef struct margo_request_struct* margo_request;
+struct json_object; /* forward declaration to avoid including json-c */
 
 /**
  * The margo_default_monitor constant can be used in the margo_init_info
@@ -103,7 +111,7 @@ typedef struct margo_request_struct* margo_request;
  * system in the margo instance. If the monitor field is left NULL, no
  * monitoring will be performed.
  */
-extern const struct margo_monitor* margo_default_monitor;
+extern struct margo_monitor* margo_default_monitor;
 
 /**
  * The margo_monitor_data_t union is used in all the
@@ -190,8 +198,11 @@ typedef const char*                              margo_monitor_user_args_t;
 
 struct margo_monitor {
     void* uargs;
-    void* (*initialize)(margo_instance_id mid, void*, const char*);
+    void* (*initialize)(margo_instance_id mid, void*, struct json_object*);
     void (*finalize)(void* uargs);
+    const char* (*name)();
+    struct json_object* (*config)(void* uargs);
+
 #define X(__x__, __y__)                                      \
     void (*on_##__y__)(void*, double, margo_monitor_event_t, \
                        margo_monitor_##__y__##_args_t);
@@ -337,6 +348,7 @@ struct margo_monitor_rpc_handler_args {
     margo_monitor_data_t uctx;
     /* input */
     hg_handle_t handle;
+    hg_id_t     parent_rpc_id;
     /* output */
     ABT_pool    pool;
     hg_return_t ret;
@@ -438,26 +450,6 @@ struct margo_monitor_cb_args {
 };
 
 /**
- * @brief Set a monitor structure for Margo to use. The structure will be
- * internally copied and the user may free the input argument after the call.
- * Passing NULL as monitor is valid and will disable monitor altogether.
- *
- * Note: if a monitor is already in place, its finalize function pointer will
- * be called before the new monitor is installed. If provided, The initialize
- * function of the new monitor will be called and the monitor's uargs will be
- * replaced internally with the returned value of the initialize call.
- *
- * @param mid Margo instance
- * @param monitor Monitor structure
- * @param config JSON-formatted configuration or NULL
- *
- * @return HG_SUCCESS or other error code
- */
-hg_return_t margo_set_monitor(margo_instance_id           mid,
-                              const struct margo_monitor* monitor,
-                              const char*                 config);
-
-/**
  * @brief Invokes the on_user callback of the monitor registered with the
  * margo instance.
  *
@@ -472,7 +464,39 @@ hg_return_t margo_monitor_call_user(margo_instance_id mid,
                                     margo_monitor_user_args_t args);
 
 /**
+ * @brief Attach custom monitoring data to the handle.
+ *
+ * Note that the last call related to a particular handle
+ * before it is freed will always be on_destroy.
+ * This information can be used to properly release any attached
+ * data if necessary.
+ *
+ * @param handle Handle to which to attach data.
+ * @param data Data to attach.
+ *
+ * @return HG_SUCCESS or HG_INVALID_ARG if req is NULL.
+ */
+hg_return_t margo_set_monitoring_data(hg_handle_t          handle,
+                                      margo_monitor_data_t data);
+
+/**
+ * @brief Retrieve custom monitoring data from the handle.
+ *
+ * @param req Request to which the data is attached.
+ * @param data Pointer to data.
+ *
+ * @return HG_SUCCESS or HG_INVALID_ARG if req is NULL.
+ */
+hg_return_t margo_get_monitoring_data(hg_handle_t           handle,
+                                      margo_monitor_data_t* data);
+
+/**
  * @brief Attach custom monitoring data to the margo_request.
+ *
+ * Attaching data to a margo_request shouldn't be necessary for
+ * RPC-related monitoring callbacks, but is necessary for bulk-related
+ * ones, because these functions do not carry a hg_handle_t handle
+ * to which to attach data.
  *
  * Note that the last call related to a particular margo_request
  * before it is freed will always be on_wait(MARGO_MONITOR_FN_END).
@@ -484,8 +508,8 @@ hg_return_t margo_monitor_call_user(margo_instance_id mid,
  *
  * @return HG_SUCCESS or HG_INVALID_ARG if req is NULL.
  */
-hg_return_t margo_set_monitoring_data(margo_request        req,
-                                      margo_monitor_data_t data);
+hg_return_t margo_request_set_monitoring_data(margo_request        req,
+                                              margo_monitor_data_t data);
 
 /**
  * @brief Retrieve custom monitoring data from the margo_request.
@@ -495,8 +519,9 @@ hg_return_t margo_set_monitoring_data(margo_request        req,
  *
  * @return HG_SUCCESS or HG_INVALID_ARG if req is NULL.
  */
-hg_return_t margo_get_monitoring_data(margo_request         req,
-                                      margo_monitor_data_t* data);
+hg_return_t margo_request_get_monitoring_data(margo_request         req,
+                                              margo_monitor_data_t* data);
+
 #ifdef __cplusplus
 }
 #endif

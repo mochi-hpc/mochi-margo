@@ -153,7 +153,7 @@ inline static struct json_object* json_object_copy(struct json_object* in)
             if (!json_object_is_type(_tmp, json_type_int))                     \
                 MARGO_WARNING(0, "Overriding field \"%s\" with value %d",      \
                               __field_name, (int)__value);                     \
-            else if (json_object_get_int64(_tmp) != __value)                   \
+            else if (json_object_get_int64(_tmp) != (int64_t)(__value))        \
                 MARGO_WARNING(0, "Overriding field \"%s\" (%d) with value %d", \
                               __field_name, json_object_get_int64(_tmp),       \
                               __value);                                        \
