@@ -122,11 +122,6 @@ documentation](http://mercury-hpc.github.io/documentation/) for details.
 Margo is compatible with any Mercury transport and uses the same address
 format.
 
-## Instrumentation
-
-See the [Instrumentation documentation](doc/instrumentation.md) for
-information on how to extract diagnostic instrumentation from Margo.
-
 ## Debugging
 
 See the [Debugging documentation](doc/debugging.md) for Margo debugging
