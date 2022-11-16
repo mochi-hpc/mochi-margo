@@ -3,7 +3,7 @@
 *.i
 *.s
 *.swp
-margo-config.h
+margo-config-private.h
 autom4te.cache/
 config.log
 config.status
