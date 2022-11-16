@@ -16,7 +16,7 @@ AM_INIT_AUTOMAKE([foreign subdir-objects -Wall])
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 
 AC_CONFIG_SRCDIR([README.md])
-AC_CONFIG_HEADERS([margo-config.h])
+AC_CONFIG_HEADERS([margo-config-private.h])
 
 # Checks for programs.
 AC_PROG_CC

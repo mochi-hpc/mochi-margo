@@ -4,7 +4,7 @@
  * See COPYRIGHT in top-level directory.
  */
 
-#include <margo-config.h>
+#include <margo-config-private.h>
 
 #ifdef HAVE_DL_ITERATE_PHDR
     #define _GNU_SOURCE
