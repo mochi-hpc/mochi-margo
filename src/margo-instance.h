@@ -66,22 +66,38 @@ struct margo_abt_xstream {
     bool margo_free_flag; /* flag if Margo is responsible for freeing */
 };
 
+/* Argobots environment */
+struct margo_abt {
+    struct margo_abt_pool*    pools;
+    struct margo_abt_xstream* xstreams;
+    unsigned                  num_pools;
+    unsigned                  num_xstreams;
+};
+
+/* Mercury environment */
+struct margo_hg {
+    struct hg_init_info hg_init_info;
+    hg_class_t*         hg_class;
+    hg_context_t*       hg_context;
+    hg_addr_t           self_addr;
+    char*               self_addr_str;
+    /* bitwise OR of MARGO_OWNS_HG_CLASS and MARGO_OWNS_HG_CONTEXT */
+    uint8_t hg_ownership;
+};
+
 struct margo_instance {
     /* json config */
     struct json_object* json_cfg;
 
-    /* mercury/argobots state */
-    hg_class_t*   hg_class;
-    hg_context_t* hg_context;
-    uint8_t       hg_ownership;
-    ABT_pool      progress_pool;
-    ABT_pool      rpc_pool;
+    /* Argobots environment */
+    struct margo_abt abt;
 
-    /* xstreams and pools built from argobots config */
-    struct margo_abt_pool*    abt_pools;
-    struct margo_abt_xstream* abt_xstreams;
-    unsigned                  num_abt_pools;
-    unsigned                  num_abt_xstreams;
+    /* Mercury environment */
+    struct margo_hg hg;
+
+    /* Progress pool and default handler pool */
+    ABT_pool progress_pool;
+    ABT_pool rpc_pool;
 
     /* internal to margo for this particular instance */
     ABT_thread hg_progress_tid;
@@ -131,9 +147,7 @@ struct margo_instance {
     ABT_key current_rpc_id_key;
 
     /* optional diagnostics data tracking */
-    int      abt_profiling_enabled;
-    char*    self_addr_str;
-    uint64_t self_addr_hash;
+    int abt_profiling_enabled;
 };
 
 struct margo_request_struct {

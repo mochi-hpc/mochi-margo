@@ -102,25 +102,19 @@ margo_instance_id margo_init_ext(const char*                   address,
     hg_return_t         hret;
     margo_instance_id   mid = MARGO_INSTANCE_NULL;
 
-    hg_class_t*               hg_class      = NULL;
-    hg_context_t*             hg_context    = NULL;
-    uint8_t                   hg_ownership  = 0;
-    struct hg_init_info       hg_init_info  = HG_INIT_INFO_INITIALIZER;
-    hg_addr_t                 self_addr     = HG_ADDR_NULL;
-    struct margo_abt_pool*    pools         = NULL;
-    size_t                    num_pools     = 0;
-    struct margo_abt_xstream* xstreams      = NULL;
-    size_t                    num_xstreams  = 0;
-    ABT_pool                  progress_pool = ABT_POOL_NULL;
-    ABT_pool                  rpc_pool      = ABT_POOL_NULL;
-    ABT_bool                  tool_enabled;
+    struct margo_hg  hg  = {HG_INIT_INFO_INITIALIZER, NULL, NULL, 0};
+    struct margo_abt abt = {0};
+
+    ABT_pool progress_pool = ABT_POOL_NULL;
+    ABT_pool rpc_pool      = ABT_POOL_NULL;
+    ABT_bool tool_enabled;
 
     if (getenv("MARGO_ENABLE_MONITORING") && !args.monitor) {
         args.monitor = margo_default_monitor;
     }
 
     if (args.hg_init_info)
-        memcpy(&hg_init_info, args.hg_init_info, sizeof(hg_init_info));
+        memcpy(&hg.hg_init_info, args.hg_init_info, sizeof(hg.hg_init_info));
 
     if (args.json_config && strlen(args.json_config) > 0) {
         // read JSON config from provided string argument
@@ -153,21 +147,21 @@ margo_instance_id margo_init_ext(const char*                   address,
 
     // handle hg_init_info
     MARGO_TRACE(0, "Instantiating hg_init_info structure");
-    fill_hg_init_info_from_config(config, &hg_init_info);
+    fill_hg_init_info_from_config(config, &hg.hg_init_info);
 
     // handle hg_class
     if (args.hg_class) {
         MARGO_TRACE(0, "Using user-provided hg_class");
-        hg_class = args.hg_class;
+        hg.hg_class = args.hg_class;
     } else if (args.hg_context) {
         MARGO_TRACE(0, "Using hg_class from provided hg_context");
-        hg_class = HG_Context_get_class(args.hg_context);
+        hg.hg_class = HG_Context_get_class(args.hg_context);
     } else {
         MARGO_TRACE(0,
                     "Initializing hg_class from address \"%s\" and mode \"%s\"",
                     address, mode == 0 ? "client" : "server");
-        hg_class = HG_Init_opt(address, mode, &hg_init_info);
-        if (!hg_class) {
+        hg.hg_class = HG_Init_opt(address, mode, &hg.hg_init_info);
+        if (!hg.hg_class) {
             MARGO_ERROR(0, "Could not initialize Mercury class");
             MARGO_ERROR(0,
                         "   Try running `margo-info %s` for more information "
@@ -178,48 +172,54 @@ margo_instance_id margo_init_ext(const char*                   address,
                 "   protocol or `margo-info` to list all available protocols.");
             goto error;
         }
-        hg_ownership |= MARGO_OWNS_HG_CLASS;
+        hg.hg_ownership |= MARGO_OWNS_HG_CLASS;
     }
 
     // handle hg_context
     if (args.hg_context) {
         MARGO_TRACE(0, "Using user-provided hg_context");
-        hg_context = args.hg_context;
+        hg.hg_context = args.hg_context;
     } else {
         MARGO_TRACE(0, "Initializing hg_context");
-        hg_context = HG_Context_create(hg_class);
-        if (!hg_context) {
+        hg.hg_context = HG_Context_create(hg.hg_class);
+        if (!hg.hg_context) {
             MARGO_ERROR(0, "Could not initialize hg_context");
             goto error;
         }
-        hg_ownership |= MARGO_OWNS_HG_CONTEXT;
+        hg.hg_ownership |= MARGO_OWNS_HG_CONTEXT;
     }
 
     // updating config with address and listening fields
     MARGO_TRACE(0, "Updating configuration with mercury address");
-    hret = HG_Addr_self(hg_class, &self_addr);
+    hret = HG_Addr_self(hg.hg_class, &hg.self_addr);
     if (hret != HG_SUCCESS) {
         MARGO_ERROR(0, "Could not get self address from hg_class (hret = %d)",
                     hret);
         goto error;
     }
-    char      self_addr_str[1024];
-    hg_size_t self_addr_str_size = 1024;
-    hret = HG_Addr_to_string(hg_class, self_addr_str, &self_addr_str_size,
-                             self_addr);
+    hg_size_t self_addr_str_size = 0;
+    do {
+        hret = HG_Addr_to_string(hg.hg_class, NULL, &self_addr_str_size,
+                                 hg.self_addr);
+        if (hret != HG_SUCCESS) break;
+        hg.self_addr_str = calloc(1, self_addr_str_size);
+        hret             = HG_Addr_to_string(hg.hg_class, hg.self_addr_str,
+                                 &self_addr_str_size, hg.self_addr);
+    } while (0);
     if (hret != HG_SUCCESS) {
         MARGO_ERROR(0, "Could not convert self address to string (hret = %d)",
                     hret);
         goto error;
     }
+
     struct json_object* hg_config = json_object_object_get(config, "mercury");
     json_object_object_add(hg_config, "address",
-                           json_object_new_string(self_addr_str));
+                           json_object_new_string(hg.self_addr_str));
     json_object_object_add(hg_config, "listening",
                            json_object_new_boolean(mode));
 
     /* check what eager sizes Mercury ended up with at run time */
-    ret = check_hg_eager_sizes(hg_class, hg_config);
+    ret = check_hg_eager_sizes(hg.hg_class, hg_config);
     if (ret != 0) {
         MARGO_ERROR(0, "Could not retrieve HG eager sizes");
         goto error;
@@ -256,15 +256,15 @@ margo_instance_id margo_init_ext(const char*                   address,
     MARGO_TRACE(0, "Instantiating pools from configuration");
     struct json_object* pools_config
         = json_object_object_get(argobots_config, "pools");
-    num_pools = json_object_array_length(pools_config);
-    pools     = calloc(sizeof(*pools), num_pools);
-    if (!pools) {
+    abt.num_pools = json_object_array_length(pools_config);
+    abt.pools     = calloc(sizeof(*abt.pools), abt.num_pools);
+    if (!abt.pools) {
         MARGO_ERROR(0, "Could not allocate pools array");
         goto error;
     }
-    for (unsigned i = 0; i < num_pools; i++) {
+    for (unsigned i = 0; i < abt.num_pools; i++) {
         struct json_object* p = json_object_array_get_idx(pools_config, i);
-        if (create_pool_from_config(p, i, &pools[i]) != ABT_SUCCESS) {
+        if (create_pool_from_config(p, i, &abt.pools[i]) != ABT_SUCCESS) {
             goto error;
         }
     }
@@ -272,15 +272,16 @@ margo_instance_id margo_init_ext(const char*                   address,
     // instantiate xstreams
     struct json_object* es_config
         = json_object_object_get(argobots_config, "xstreams");
-    num_xstreams = json_object_array_length(es_config);
-    xstreams     = calloc(sizeof(*xstreams), num_xstreams);
-    if (!xstreams) {
+    abt.num_xstreams = json_object_array_length(es_config);
+    abt.xstreams     = calloc(sizeof(*abt.xstreams), abt.num_xstreams);
+    if (!abt.xstreams) {
         MARGO_ERROR(0, "Could not allocate xstreams array");
         goto error;
     }
-    for (unsigned i = 0; i < num_xstreams; i++) {
+    for (unsigned i = 0; i < abt.num_xstreams; i++) {
         struct json_object* es = json_object_array_get_idx(es_config, i);
-        if (create_xstream_from_config(es, i, &xstreams[i], pools, num_pools)
+        if (create_xstream_from_config(es, i, &abt.xstreams[i], abt.pools,
+                                       abt.num_pools)
             != ABT_SUCCESS) {
             goto error;
         }
@@ -293,7 +294,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     if (progress_pool_index == -1)
         progress_pool = args.progress_pool;
     else
-        progress_pool = pools[progress_pool_index].info.pool;
+        progress_pool = abt.pools[progress_pool_index].info.pool;
 
     // find rpc pool
     MARGO_TRACE(0, "Finding RPC pool");
@@ -302,7 +303,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     if (rpc_pool_index == -1)
         rpc_pool = args.rpc_pool;
     else
-        rpc_pool = pools[rpc_pool_index].info.pool;
+        rpc_pool = abt.pools[rpc_pool_index].info.pool;
 
     // allocate margo instance
     MARGO_TRACE(0, "Allocating margo instance");
@@ -323,16 +324,11 @@ margo_instance_id margo_init_ext(const char*                   address,
 
     mid->abt_profiling_enabled = abt_profiling_enabled;
 
-    mid->hg_class      = hg_class;
-    mid->hg_context    = hg_context;
-    mid->hg_ownership  = hg_ownership;
+    mid->hg  = hg;
+    mid->abt = abt;
+
     mid->progress_pool = progress_pool;
     mid->rpc_pool      = rpc_pool;
-
-    mid->abt_pools        = pools;
-    mid->abt_xstreams     = xstreams;
-    mid->num_abt_pools    = num_pools;
-    mid->num_abt_xstreams = num_xstreams;
 
     mid->hg_progress_tid           = ABT_THREAD_NULL;
     mid->hg_progress_shutdown_flag = 0;
@@ -398,20 +394,15 @@ margo_instance_id margo_init_ext(const char*                   address,
                             ABT_THREAD_ATTR_NULL, &mid->hg_progress_tid);
     if (ret != ABT_SUCCESS) goto error;
 
-    mid->self_addr_str = strdup(self_addr_str);
-    HASH_JEN(mid->self_addr_str, strlen(mid->self_addr_str),
-             mid->self_addr_hash);
-
     // increment the number of margo instances
     g_margo_num_instances++;
 
 finish:
-    if (self_addr != HG_ADDR_NULL) HG_Addr_free(hg_class, self_addr);
     return mid;
 
 error:
     if (mid) {
-        if (mid->self_addr_str) free(mid->self_addr_str);
+        if (mid->hg.self_addr_str) free(mid->hg.self_addr_str);
         __margo_handle_cache_destroy(mid);
         __margo_timer_list_free(mid, mid->timer_list);
         ABT_mutex_free(&mid->finalize_mutex);
@@ -420,26 +411,25 @@ error:
         if (mid->current_rpc_id_key) ABT_key_free(&(mid->current_rpc_id_key));
         free(mid);
     }
-    for (unsigned i = 0; i < num_xstreams; i++) {
-        if (xstreams[i].info.xstream && xstreams[i].margo_free_flag) {
-            ABT_xstream_join(xstreams[i].info.xstream);
-            ABT_xstream_free(&(xstreams[i].info.xstream));
+    for (unsigned i = 0; i < abt.num_xstreams; i++) {
+        if (abt.xstreams[i].info.xstream && abt.xstreams[i].margo_free_flag) {
+            ABT_xstream_join(abt.xstreams[i].info.xstream);
+            ABT_xstream_free(&(abt.xstreams[i].info.xstream));
         }
     }
-    free(xstreams);
+    free(abt.xstreams);
     // The pools are supposed to be freed automatically
     /*
     for (unsigned i = 0; i < num_pools; i++) {
         if (pools[i] != ABT_POOL_NULL) ABT_pool_free(&pools[i]);
     }
     */
-    free(pools);
+    free(abt.pools);
     if (config) json_object_put(config);
-    if (self_addr != HG_ADDR_NULL) HG_Addr_free(hg_class, self_addr);
-    self_addr = HG_ADDR_NULL;
-    if (hg_context) HG_Context_destroy(hg_context);
-    if (hg_class) HG_Finalize(hg_class);
-    goto finish;
+    if (hg.self_addr != HG_ADDR_NULL) HG_Addr_free(hg.hg_class, hg.self_addr);
+    if (hg.hg_context) HG_Context_destroy(hg.hg_context);
+    if (hg.hg_class) HG_Finalize(hg.hg_class);
+    return MARGO_INSTANCE_NULL;
 }
 
 /**

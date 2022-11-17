@@ -155,25 +155,32 @@ static void margo_cleanup(margo_instance_id mid)
     ABT_cond_free(&mid->finalize_cond);
     ABT_mutex_free(&mid->pending_operations_mtx);
 
+    /* cleanup mid->abt */
+
     MARGO_TRACE(mid, "Joining and destroying xstreams");
-    for (unsigned i = 0; i < mid->num_abt_xstreams; i++) {
-        if (mid->abt_xstreams[i].margo_free_flag) {
-            ABT_xstream_join(mid->abt_xstreams[i].info.xstream);
-            ABT_xstream_free(&(mid->abt_xstreams[i].info.xstream));
+    for (unsigned i = 0; i < mid->abt.num_xstreams; i++) {
+        if (mid->abt.xstreams[i].margo_free_flag) {
+            ABT_xstream_join(mid->abt.xstreams[i].info.xstream);
+            ABT_xstream_free(&(mid->abt.xstreams[i].info.xstream));
         }
     }
 
     MARGO_TRACE(mid, "Destroying handle cache");
     __margo_handle_cache_destroy(mid);
 
-    if (mid->hg_ownership & MARGO_OWNS_HG_CONTEXT) {
+    /* cleanup mid->hg */
+
+    free(mid->hg.self_addr_str);
+    HG_Addr_free(mid->hg.hg_class, mid->hg.self_addr);
+
+    if (mid->hg.hg_ownership & MARGO_OWNS_HG_CONTEXT) {
         MARGO_TRACE(mid, "Destroying mercury context");
-        HG_Context_destroy(mid->hg_context);
+        HG_Context_destroy(mid->hg.hg_context);
     }
 
-    if (mid->hg_ownership & MARGO_OWNS_HG_CLASS) {
+    if (mid->hg.hg_ownership & MARGO_OWNS_HG_CLASS) {
         MARGO_TRACE(mid, "Destroying mercury class");
-        HG_Finalize(mid->hg_class);
+        HG_Finalize(mid->hg.hg_class);
     }
 
     ABT_key_free(&(mid->current_rpc_id_key));
@@ -210,14 +217,13 @@ static void margo_cleanup(margo_instance_id mid)
 
     MARGO_TRACE(mid, "Cleaning up margo instance");
     /* free any pools that Margo itself is reponsible for */
-    for (unsigned i = 0; i < mid->num_abt_pools; i++) {
-        if (mid->abt_pools[i].margo_free_flag
-            && mid->abt_pools[i].info.pool != ABT_POOL_NULL)
-            ABT_pool_free(&mid->abt_pools[i].info.pool);
+    for (unsigned i = 0; i < mid->abt.num_pools; i++) {
+        if (mid->abt.pools[i].margo_free_flag
+            && mid->abt.pools[i].info.pool != ABT_POOL_NULL)
+            ABT_pool_free(&mid->abt.pools[i].info.pool);
     }
-    free(mid->abt_pools);
-    free(mid->abt_xstreams);
-    free(mid->self_addr_str);
+    free(mid->abt.pools);
+    free(mid->abt.xstreams);
     free(mid);
 
     MARGO_TRACE(0, "Completed margo_cleanup");
@@ -344,7 +350,7 @@ void margo_wait_for_finalize(margo_instance_id mid)
 hg_bool_t margo_is_listening(margo_instance_id mid)
 {
     if (!mid) return HG_FALSE;
-    return HG_Class_is_listening(mid->hg_class);
+    return HG_Class_is_listening(mid->hg.hg_class);
 }
 
 void margo_push_prefinalize_callback(margo_instance_id         mid,
@@ -588,18 +594,18 @@ hg_return_t margo_deregister(margo_instance_id mid, hg_id_t rpc_id)
 
     /* get data */
     struct margo_rpc_data* data
-        = (struct margo_rpc_data*)HG_Registered_data(mid->hg_class, rpc_id);
+        = (struct margo_rpc_data*)HG_Registered_data(mid->hg.hg_class, rpc_id);
     if (data) {
         /* decrement the numner of RPC id used by the pool */
         struct margo_pool_info pool_info;
         if (margo_find_pool_by_handle(mid, data->pool, &pool_info)
             == HG_SUCCESS) {
-            mid->abt_pools[pool_info.index].num_rpc_ids -= 1;
+            mid->abt.pools[pool_info.index].num_rpc_ids -= 1;
         }
     }
 
     /* deregister */
-    hg_return_t hret = HG_Deregister(mid->hg_class, rpc_id);
+    hg_return_t hret = HG_Deregister(mid->hg.hg_class, rpc_id);
 
     /* monitoring */
     monitoring_args.ret = hret;
@@ -614,7 +620,7 @@ hg_return_t margo_registered_name(margo_instance_id mid,
                                   hg_bool_t*        flag)
 {
     *id = gen_id(func_name, 0);
-    return (HG_Registered(mid->hg_class, *id, flag));
+    return (HG_Registered(mid->hg.hg_class, *id, flag));
 }
 
 hg_return_t margo_provider_registered_name(margo_instance_id mid,
@@ -625,7 +631,7 @@ hg_return_t margo_provider_registered_name(margo_instance_id mid,
 {
     *id = gen_id(func_name, provider_id);
 
-    return HG_Registered(mid->hg_class, *id, flag);
+    return HG_Registered(mid->hg.hg_class, *id, flag);
 }
 
 hg_return_t margo_register_data(margo_instance_id mid,
@@ -634,7 +640,7 @@ hg_return_t margo_register_data(margo_instance_id mid,
                                 void (*free_callback)(void*))
 {
     struct margo_rpc_data* margo_data
-        = (struct margo_rpc_data*)HG_Registered_data(mid->hg_class, id);
+        = (struct margo_rpc_data*)HG_Registered_data(mid->hg.hg_class, id);
     if (!margo_data) return HG_OTHER_ERROR;
     if (margo_data->user_data && margo_data->user_free_callback) {
         (margo_data->user_free_callback)(margo_data->user_data);
@@ -658,7 +664,7 @@ hg_return_t margo_registered_disable_response(margo_instance_id mid,
                                               hg_id_t           id,
                                               int               disable_flag)
 {
-    return (HG_Registered_disable_response(mid->hg_class, id, disable_flag));
+    return (HG_Registered_disable_response(mid->hg.hg_class, id, disable_flag));
 }
 
 hg_return_t margo_registered_disabled_response(margo_instance_id mid,
@@ -666,7 +672,7 @@ hg_return_t margo_registered_disabled_response(margo_instance_id mid,
                                                int*              disabled_flag)
 {
     hg_bool_t   b;
-    hg_return_t ret = HG_Registered_disabled_response(mid->hg_class, id, &b);
+    hg_return_t ret = HG_Registered_disabled_response(mid->hg.hg_class, id, &b);
     if (ret != HG_SUCCESS) return ret;
     *disabled_flag = b;
     return HG_SUCCESS;
@@ -705,7 +711,7 @@ margo_addr_lookup(margo_instance_id mid, const char* name, hg_addr_t* addr)
     /* Mercury 2.x provides two versions of lookup (async and sync).  Choose the
      * former if available to avoid context switch
      */
-    hret = HG_Addr_lookup2(mid->hg_class, name, addr);
+    hret = HG_Addr_lookup2(mid->hg.hg_class, name, addr);
 
     /* monitoring */
     monitoring_args.addr = addr ? *addr : HG_ADDR_NULL;
@@ -736,7 +742,7 @@ margo_addr_lookup(margo_instance_id mid, const char* name, hg_addr_t* addr)
 
 hg_return_t margo_addr_free(margo_instance_id mid, hg_addr_t addr)
 {
-    return (HG_Addr_free(mid->hg_class, addr));
+    return (HG_Addr_free(mid->hg.hg_class, addr));
 }
 
 hg_return_t margo_addr_self(margo_instance_id mid, hg_addr_t* addr)
@@ -748,7 +754,7 @@ hg_return_t margo_addr_self(margo_instance_id mid, hg_addr_t* addr)
         = {.name = NULL, .addr = HG_ADDR_NULL, .ret = HG_SUCCESS};
     __MARGO_MONITOR(mid, FN_START, lookup, monitoring_args);
 
-    hret = HG_Addr_self(mid->hg_class, addr);
+    hret = HG_Addr_self(mid->hg.hg_class, addr);
 
     /* monitoring */
     monitoring_args.addr = addr ? *addr : HG_ADDR_NULL;
@@ -761,18 +767,18 @@ hg_return_t margo_addr_self(margo_instance_id mid, hg_addr_t* addr)
 hg_return_t
 margo_addr_dup(margo_instance_id mid, hg_addr_t addr, hg_addr_t* new_addr)
 {
-    return (HG_Addr_dup(mid->hg_class, addr, new_addr));
+    return (HG_Addr_dup(mid->hg.hg_class, addr, new_addr));
 }
 
 hg_bool_t
 margo_addr_cmp(margo_instance_id mid, hg_addr_t addr1, hg_addr_t addr2)
 {
-    return HG_Addr_cmp(mid->hg_class, addr1, addr2);
+    return HG_Addr_cmp(mid->hg.hg_class, addr1, addr2);
 }
 
 hg_return_t margo_addr_set_remove(margo_instance_id mid, hg_addr_t addr)
 {
-    return HG_Addr_set_remove(mid->hg_class, addr);
+    return HG_Addr_set_remove(mid->hg.hg_class, addr);
 }
 
 hg_return_t margo_addr_to_string(margo_instance_id mid,
@@ -780,7 +786,7 @@ hg_return_t margo_addr_to_string(margo_instance_id mid,
                                  hg_size_t*        buf_size,
                                  hg_addr_t         addr)
 {
-    return (HG_Addr_to_string(mid->hg_class, buf, buf_size, addr));
+    return (HG_Addr_to_string(mid->hg.hg_class, buf, buf_size, addr));
 }
 
 hg_return_t margo_create(margo_instance_id mid,
@@ -799,7 +805,7 @@ hg_return_t margo_create(margo_instance_id mid,
     hret = __margo_handle_cache_get(mid, addr, id, handle);
     if (hret != HG_SUCCESS) {
         /* else try creating a new handle */
-        hret = HG_Create(mid->hg_context, addr, id, handle);
+        hret = HG_Create(mid->hg.hg_context, addr, id, handle);
     }
     if (hret != HG_SUCCESS) goto finish;
 
@@ -995,7 +1001,7 @@ static hg_return_t margo_provider_iforward_internal(
     __MARGO_MONITOR(mid, FN_START, forward, monitoring_args);
 
     hg_bool_t is_registered;
-    hret = HG_Registered(mid->hg_class, server_id, &is_registered);
+    hret = HG_Registered(mid->hg.hg_class, server_id, &is_registered);
     if (hret != HG_SUCCESS) {
         // LCOV_EXCL_START
         margo_error(mid, "HG_Registered failed in %s: %s", __func__,
@@ -1013,7 +1019,7 @@ static hg_return_t margo_provider_iforward_internal(
         /* find out if disable_response was called for this RPC */
         // TODO this information could be added to margo_handle_data
         hg_bool_t response_disabled;
-        hret = HG_Registered_disabled_response(mid->hg_class, client_id,
+        hret = HG_Registered_disabled_response(mid->hg.hg_class, client_id,
                                                &response_disabled);
         if (hret != HG_SUCCESS) {
             // LCOV_EXCL_START
@@ -1503,7 +1509,7 @@ hg_return_t margo_bulk_create(margo_instance_id mid,
            .ret    = HG_SUCCESS};
     __MARGO_MONITOR(mid, FN_START, bulk_create, monitoring_args);
 
-    hret = HG_Bulk_create(mid->hg_class, count, buf_ptrs, buf_sizes, flags,
+    hret = HG_Bulk_create(mid->hg.hg_class, count, buf_ptrs, buf_sizes, flags,
                           handle);
     /* monitoring */
     monitoring_args.handle = handle ? *handle : HG_BULK_NULL;
@@ -1537,8 +1543,8 @@ hg_return_t margo_bulk_create_attr(margo_instance_id          mid,
            .ret    = HG_SUCCESS};
     __MARGO_MONITOR(mid, FN_START, bulk_create, monitoring_args);
 
-    hret = HG_Bulk_create_attr(mid->hg_class, count, buf_ptrs, buf_sizes, flags,
-                               attrs, handle);
+    hret = HG_Bulk_create_attr(mid->hg.hg_class, count, buf_ptrs, buf_sizes,
+                               flags, attrs, handle);
     /* monitoring */
     monitoring_args.handle = handle ? *handle : HG_BULK_NULL;
     monitoring_args.ret    = hret;
@@ -1578,7 +1584,7 @@ hg_return_t margo_bulk_deserialize(margo_instance_id mid,
                                    const void*       buf,
                                    hg_size_t         buf_size)
 {
-    return (HG_Bulk_deserialize(mid->hg_class, handle, buf, buf_size));
+    return (HG_Bulk_deserialize(mid->hg.hg_class, handle, buf, buf_size));
 }
 
 static hg_return_t margo_bulk_itransfer_internal(
@@ -1619,7 +1625,7 @@ static hg_return_t margo_bulk_itransfer_internal(
         hret = HG_NOMEM_ERROR;
         goto finish;
     }
-    hret = HG_Bulk_transfer(mid->hg_context, margo_cb, (void*)req, op,
+    hret = HG_Bulk_transfer(mid->hg.hg_context, margo_cb, (void*)req, op,
                             origin_addr, origin_handle, origin_offset,
                             local_handle, local_offset, size, HG_OP_ID_IGNORE);
 
@@ -1796,10 +1802,13 @@ int margo_get_progress_pool(margo_instance_id mid, ABT_pool* pool)
 
 hg_context_t* margo_get_context(margo_instance_id mid)
 {
-    return (mid->hg_context);
+    return (mid->hg.hg_context);
 }
 
-hg_class_t* margo_get_class(margo_instance_id mid) { return (mid->hg_class); }
+hg_class_t* margo_get_class(margo_instance_id mid)
+{
+    return (mid->hg.hg_class);
+}
 
 ABT_pool margo_hg_handle_get_handler_pool(hg_handle_t h)
 {
@@ -1848,7 +1857,7 @@ static inline hg_return_t margo_internal_progress(margo_instance_id mid,
         = {.timeout_ms = timeout_ms, .ret = HG_SUCCESS};
     __MARGO_MONITOR(mid, FN_START, progress, monitoring_args);
 
-    hg_return_t hret = HG_Progress(mid->hg_context, timeout_ms);
+    hg_return_t hret = HG_Progress(mid->hg.hg_context, timeout_ms);
 
     /* monitoring */
     monitoring_args.ret = hret;
@@ -1872,7 +1881,7 @@ static inline hg_return_t margo_internal_trigger(margo_instance_id mid,
 
     unsigned int count = 0;
     hg_return_t  hret
-        = HG_Trigger(mid->hg_context, timeout_ms, max_count, &count);
+        = HG_Trigger(mid->hg.hg_context, timeout_ms, max_count, &count);
     if (hret == HG_SUCCESS && actual_count) *actual_count = count;
 
     /* monitoring */
@@ -2027,7 +2036,7 @@ static hg_id_t margo_register_internal(margo_instance_id mid,
     __MARGO_MONITOR(mid, FN_START, register, monitoring_args);
 
     /* register the RPC with Mercury */
-    hret = HG_Register(mid->hg_class, id, margo_forward_proc,
+    hret = HG_Register(mid->hg.hg_class, id, margo_forward_proc,
                        margo_respond_proc, rpc_cb);
     if (hret != HG_SUCCESS) {
         id = 0;
@@ -2037,7 +2046,8 @@ static hg_id_t margo_register_internal(margo_instance_id mid,
     }
 
     /* register the margo data with the RPC */
-    margo_data = (struct margo_rpc_data*)HG_Registered_data(mid->hg_class, id);
+    margo_data
+        = (struct margo_rpc_data*)HG_Registered_data(mid->hg.hg_class, id);
     if (!margo_data) {
         margo_data
             = (struct margo_rpc_data*)malloc(sizeof(struct margo_rpc_data));
@@ -2057,7 +2067,7 @@ static hg_id_t margo_register_internal(margo_instance_id mid,
         margo_data->out_proc_cb        = out_proc_cb;
         margo_data->user_data          = NULL;
         margo_data->user_free_callback = NULL;
-        hret = HG_Register_data(mid->hg_class, id, margo_data,
+        hret = HG_Register_data(mid->hg.hg_class, id, margo_data,
                                 margo_rpc_data_free);
         if (hret != HG_SUCCESS) {
             // LCOV_EXCL_START
@@ -2073,7 +2083,7 @@ static hg_id_t margo_register_internal(margo_instance_id mid,
     /* increment the number of RPC ids using the pool */
     struct margo_pool_info pool_info;
     if (margo_find_pool_by_handle(mid, pool, &pool_info) == HG_SUCCESS) {
-        mid->abt_pools[pool_info.index].num_rpc_ids += 1;
+        mid->abt.pools[pool_info.index].num_rpc_ids += 1;
     }
 
 finish:

@@ -29,7 +29,7 @@ hg_return_t __margo_handle_cache_init(margo_instance_id mid,
         }
 
         /* create handle with NULL_ADDRs, we will reset later to valid addrs */
-        hret = HG_Create(mid->hg_context, HG_ADDR_NULL, 0, &el->handle);
+        hret = HG_Create(mid->hg.hg_context, HG_ADDR_NULL, 0, &el->handle);
         if (hret != HG_SUCCESS) {
             free(el);
             __margo_handle_cache_destroy(mid);
