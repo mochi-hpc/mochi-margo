@@ -96,6 +96,7 @@ hg_return_t margo_find_xstream_by_index(margo_instance_id          mid,
 
 /* DEPRECATED FUNCTIONS */
 
+// LCOV_EXCL_START
 int margo_get_pool_by_name(margo_instance_id mid,
                            const char*       name,
                            ABT_pool*         pool)
@@ -171,3 +172,4 @@ int margo_get_xstream_index(margo_instance_id mid, const char* name)
     if (ret != HG_SUCCESS) return -1;
     return info.index;
 }
+// LCOV_EXCL_END

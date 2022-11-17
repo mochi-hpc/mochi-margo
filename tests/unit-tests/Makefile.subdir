@@ -3,6 +3,7 @@ if BUILD_TESTS
 check_PROGRAMS += \
  tests/unit-tests/margo-addr \
  tests/unit-tests/margo-init \
+ tests/unit-tests/margo-config \
  tests/unit-tests/margo-pool \
  tests/unit-tests/margo-abt-pool \
  tests/unit-tests/margo-eventual \
@@ -19,6 +20,7 @@ check_PROGRAMS += \
 TESTS += \
  tests/unit-tests/margo-addr \
  tests/unit-tests/margo-init \
+ tests/unit-tests/margo-config \
  tests/unit-tests/margo-pool \
  tests/unit-tests/margo-abt-pool \
  tests/unit-tests/margo-eventual \
@@ -39,6 +41,11 @@ tests_unit_tests_margo_addr_SOURCES = \
 tests_unit_tests_margo_init_SOURCES = \
  tests/unit-tests/munit/munit.c \
  tests/unit-tests/margo-init.c \
+ tests/unit-tests/helper-server.c
+
+tests_unit_tests_margo_config_SOURCES = \
+ tests/unit-tests/munit/munit.c \
+ tests/unit-tests/margo-config.c \
  tests/unit-tests/helper-server.c
 
 tests_unit_tests_margo_pool_SOURCES = \

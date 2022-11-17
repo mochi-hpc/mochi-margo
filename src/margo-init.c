@@ -45,12 +45,14 @@ static void fill_hg_init_info_from_config(struct json_object*  _config,
 // corresponding ABT_pool, returning ABT_SUCCESS
 // or other ABT error codes
 static int create_pool_from_config(struct json_object*    pool_config,
+                                   uint32_t               index,
                                    struct margo_abt_pool* mpool);
 
 // Reads an xstream configuration and instantiate
 // the corresponding ABT_xstream, returning ABT_SUCCESS
 // or other ABT error codes
 static int create_xstream_from_config(struct json_object*          es_config,
+                                      uint32_t                     index,
                                       struct margo_abt_xstream*    es,
                                       const struct margo_abt_pool* mpools,
                                       size_t                       num_pools);
@@ -262,7 +264,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     }
     for (unsigned i = 0; i < num_pools; i++) {
         struct json_object* p = json_object_array_get_idx(pools_config, i);
-        if (create_pool_from_config(p, &pools[i]) != ABT_SUCCESS) {
+        if (create_pool_from_config(p, i, &pools[i]) != ABT_SUCCESS) {
             goto error;
         }
     }
@@ -278,7 +280,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     }
     for (unsigned i = 0; i < num_xstreams; i++) {
         struct json_object* es = json_object_array_get_idx(es_config, i);
-        if (create_xstream_from_config(es, &xstreams[i], pools, num_pools)
+        if (create_xstream_from_config(es, i, &xstreams[i], pools, num_pools)
             != ABT_SUCCESS) {
             goto error;
         }
@@ -1301,6 +1303,7 @@ static void fill_hg_init_info_from_config(struct json_object*  config,
 }
 
 static int create_pool_from_config(struct json_object*    pool_config,
+                                   uint32_t               index,
                                    struct margo_abt_pool* mpool)
 {
     int          ret;
@@ -1368,11 +1371,13 @@ static int create_pool_from_config(struct json_object*    pool_config,
                 ret);
         }
     }
-    mpool->info.name = jname;
+    mpool->info.name  = jname;
+    mpool->info.index = index;
     return ret;
 }
 
 static int create_xstream_from_config(struct json_object*          es_config,
+                                      uint32_t                     index,
                                       struct margo_abt_xstream*    es,
                                       const struct margo_abt_pool* mpools,
                                       size_t total_num_pools)
@@ -1451,7 +1456,8 @@ static int create_xstream_from_config(struct json_object*          es_config,
         }
         es->margo_free_flag = true;
     }
-    es->info.name = es_name;
+    es->info.name  = es_name;
+    es->info.index = index;
 
     // get/set cpubind
     if (es_cpubind == -1) {
