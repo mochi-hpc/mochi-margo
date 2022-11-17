@@ -1332,6 +1332,10 @@ static int create_pool_from_config(struct json_object*    pool_config,
         kind = ABT_POOL_FIFO;
     else if (strcmp(jkind, "fifo_wait") == 0)
         kind = ABT_POOL_FIFO_WAIT;
+    else {
+        MARGO_ERROR(0, "Invalid pool kind \"%s\"", jkind);
+        return -1;
+    }
 
     if (strcmp(jaccess, "private") == 0)
         access = ABT_POOL_ACCESS_PRIV;
@@ -1343,6 +1347,10 @@ static int create_pool_from_config(struct json_object*    pool_config,
         access = ABT_POOL_ACCESS_SPMC;
     else if (strcmp(jaccess, "mpmc") == 0)
         access = ABT_POOL_ACCESS_MPMC;
+    else {
+        MARGO_ERROR(0, "Invalid pool access \"%s\"", jaccess);
+        return -1;
+    }
 
     MARGO_TRACE(0, "Instantiating pool \"%s\"", jname);
 
@@ -1404,6 +1412,10 @@ static int create_xstream_from_config(struct json_object*          es_config,
         predef = ABT_SCHED_RANDWS;
     else if (strcmp(es_sched_type, "basic_wait") == 0)
         predef = ABT_SCHED_BASIC_WAIT;
+    else {
+        MARGO_ERROR(0, "Invalid scheduler type \"%s\"", es_sched_type);
+        return -1;
+    }
 
     ABT_pool es_pools[es_num_pools];
     for (unsigned i = 0; i < es_num_pools; i++) {
