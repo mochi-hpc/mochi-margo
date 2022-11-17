@@ -51,8 +51,7 @@ static int create_pool_from_config(struct json_object*    pool_config,
 // the corresponding ABT_xstream, returning ABT_SUCCESS
 // or other ABT error codes
 static int create_xstream_from_config(struct json_object*          es_config,
-                                      ABT_xstream*                 es,
-                                      bool*                        own_xstream,
+                                      struct margo_abt_xstream*    es,
                                       const struct margo_abt_pool* mpools,
                                       size_t                       num_pools);
 
@@ -101,19 +100,18 @@ margo_instance_id margo_init_ext(const char*                   address,
     hg_return_t         hret;
     margo_instance_id   mid = MARGO_INSTANCE_NULL;
 
-    hg_class_t*            hg_class      = NULL;
-    hg_context_t*          hg_context    = NULL;
-    uint8_t                hg_ownership  = 0;
-    struct hg_init_info    hg_init_info  = HG_INIT_INFO_INITIALIZER;
-    hg_addr_t              self_addr     = HG_ADDR_NULL;
-    struct margo_abt_pool* pools         = NULL;
-    size_t                 num_pools     = 0;
-    ABT_xstream*           xstreams      = NULL;
-    bool*                  owns_xstream  = NULL;
-    size_t                 num_xstreams  = 0;
-    ABT_pool               progress_pool = ABT_POOL_NULL;
-    ABT_pool               rpc_pool      = ABT_POOL_NULL;
-    ABT_bool               tool_enabled;
+    hg_class_t*               hg_class      = NULL;
+    hg_context_t*             hg_context    = NULL;
+    uint8_t                   hg_ownership  = 0;
+    struct hg_init_info       hg_init_info  = HG_INIT_INFO_INITIALIZER;
+    hg_addr_t                 self_addr     = HG_ADDR_NULL;
+    struct margo_abt_pool*    pools         = NULL;
+    size_t                    num_pools     = 0;
+    struct margo_abt_xstream* xstreams      = NULL;
+    size_t                    num_xstreams  = 0;
+    ABT_pool                  progress_pool = ABT_POOL_NULL;
+    ABT_pool                  rpc_pool      = ABT_POOL_NULL;
+    ABT_bool                  tool_enabled;
 
     if (getenv("MARGO_ENABLE_MONITORING") && !args.monitor) {
         args.monitor = margo_default_monitor;
@@ -273,16 +271,14 @@ margo_instance_id margo_init_ext(const char*                   address,
     struct json_object* es_config
         = json_object_object_get(argobots_config, "xstreams");
     num_xstreams = json_object_array_length(es_config);
-    xstreams     = calloc(sizeof(ABT_xstream), num_xstreams);
-    owns_xstream = calloc(sizeof(*owns_xstream), num_xstreams);
-    if (!xstreams || !owns_xstream) {
-        MARGO_ERROR(0, "Could not allocate xstreams array or ownership array");
+    xstreams     = calloc(sizeof(*xstreams), num_xstreams);
+    if (!xstreams) {
+        MARGO_ERROR(0, "Could not allocate xstreams array");
         goto error;
     }
     for (unsigned i = 0; i < num_xstreams; i++) {
         struct json_object* es = json_object_array_get_idx(es_config, i);
-        if (create_xstream_from_config(es, &xstreams[i], &owns_xstream[i],
-                                       pools, num_pools)
+        if (create_xstream_from_config(es, &xstreams[i], pools, num_pools)
             != ABT_SUCCESS) {
             goto error;
         }
@@ -295,7 +291,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     if (progress_pool_index == -1)
         progress_pool = args.progress_pool;
     else
-        progress_pool = pools[progress_pool_index].pool;
+        progress_pool = pools[progress_pool_index].info.pool;
 
     // find rpc pool
     MARGO_TRACE(0, "Finding RPC pool");
@@ -304,7 +300,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     if (rpc_pool_index == -1)
         rpc_pool = args.rpc_pool;
     else
-        rpc_pool = pools[rpc_pool_index].pool;
+        rpc_pool = pools[rpc_pool_index].info.pool;
 
     // allocate margo instance
     MARGO_TRACE(0, "Allocating margo instance");
@@ -335,7 +331,6 @@ margo_instance_id margo_init_ext(const char*                   address,
     mid->abt_xstreams     = xstreams;
     mid->num_abt_pools    = num_pools;
     mid->num_abt_xstreams = num_xstreams;
-    mid->owns_abt_xstream = owns_xstream;
 
     mid->hg_progress_tid           = ABT_THREAD_NULL;
     mid->hg_progress_shutdown_flag = 0;
@@ -424,13 +419,12 @@ error:
         free(mid);
     }
     for (unsigned i = 0; i < num_xstreams; i++) {
-        if (xstreams[i] && owns_xstream[i]) {
-            ABT_xstream_join(xstreams[i]);
-            ABT_xstream_free(&xstreams[i]);
+        if (xstreams[i].info.xstream && xstreams[i].margo_free_flag) {
+            ABT_xstream_join(xstreams[i].info.xstream);
+            ABT_xstream_free(&(xstreams[i].info.xstream));
         }
     }
     free(xstreams);
-    free(owns_xstream);
     // The pools are supposed to be freed automatically
     /*
     for (unsigned i = 0; i < num_pools; i++) {
@@ -1353,7 +1347,7 @@ static int create_pool_from_config(struct json_object*    pool_config,
     if (strcmp(jkind, "prio_wait") == 0) {
         margo_create_prio_pool_def(&prio_pool_def);
         ret = ABT_pool_create(&prio_pool_def, ABT_POOL_CONFIG_NULL,
-                              &mpool->pool);
+                              &(mpool->info.pool));
         if (ret != ABT_SUCCESS) {
             MARGO_ERROR(
                 0, "ABT_pool_create failed to create prio_wait pool (ret = %d)",
@@ -1363,22 +1357,23 @@ static int create_pool_from_config(struct json_object*    pool_config,
          * free'ing it, but only if it is _not_ the primary pool.  See
          * https://lists.argobots.org/pipermail/discuss/2021-March/000109.html
          */
-        if (strcmp(jname, "__primary__")) mpool->margo_free_flag = 1;
+        if (strcmp(jname, "__primary__")) mpool->margo_free_flag = true;
     } else {
         /* one of the standard Argobots pool types */
-        ret = ABT_pool_create_basic(kind, access, ABT_TRUE, &mpool->pool);
+        ret = ABT_pool_create_basic(kind, access, ABT_TRUE,
+                                    &(mpool->info.pool));
         if (ret != ABT_SUCCESS) {
             MARGO_ERROR(
                 0, "ABT_pool_create_basic failed to create pool (ret = %d)",
                 ret);
         }
     }
+    mpool->info.name = jname;
     return ret;
 }
 
 static int create_xstream_from_config(struct json_object*          es_config,
-                                      ABT_xstream*                 es,
-                                      bool*                        owns_xstream,
+                                      struct margo_abt_xstream*    es,
                                       const struct margo_abt_pool* mpools,
                                       size_t total_num_pools)
 {
@@ -1417,24 +1412,24 @@ static int create_xstream_from_config(struct json_object*          es_config,
     for (unsigned i = 0; i < es_num_pools; i++) {
         int pool_ref = json_object_get_int64(
             json_object_array_get_idx(es_pools_array, i));
-        es_pools[i] = mpools[pool_ref].pool;
+        es_pools[i] = mpools[pool_ref].info.pool;
     }
 
     if (strcmp(es_name, "__primary__") == 0) {
 
-        ret = ABT_xstream_self(es);
+        ret = ABT_xstream_self(&(es->info.xstream));
         if (ret != ABT_SUCCESS) {
             MARGO_ERROR(0, "ABT_xstream_self failed (ret = %d)", ret);
             return ret;
         }
         ABT_bool is_primary;
-        ABT_xstream_is_primary(*es, &is_primary);
+        ABT_xstream_is_primary(es->info.xstream, &is_primary);
         if (!is_primary) {
             MARGO_WARNING(0, "margo_init_ext called from non-primary ES");
         }
-        *owns_xstream = 0;
-        ret = ABT_xstream_set_main_sched_basic(*es, predef, es_num_pools,
-                                               es_pools);
+        es->margo_free_flag = false;
+        ret = ABT_xstream_set_main_sched_basic(es->info.xstream, predef,
+                                               es_num_pools, es_pools);
         if (ret != ABT_SUCCESS) {
             MARGO_ERROR(0,
                         "ABT_xstream_set_main_sched_basic failed to set "
@@ -1446,19 +1441,21 @@ static int create_xstream_from_config(struct json_object*          es_config,
     } else {
 
         ret = ABT_xstream_create_basic(predef, es_num_pools, es_pools,
-                                       ABT_SCHED_CONFIG_NULL, es);
+                                       ABT_SCHED_CONFIG_NULL,
+                                       &(es->info.xstream));
         if (ret != ABT_SUCCESS) {
             MARGO_ERROR(
                 0, "ABT_xstream_create_basic failed to create pool (ref = %d)",
                 ret);
             return ret;
         }
-        *owns_xstream = 1;
+        es->margo_free_flag = true;
     }
+    es->info.name = es_name;
 
     // get/set cpubind
     if (es_cpubind == -1) {
-        ret = ABT_xstream_get_cpubind(*es, &es_cpubind);
+        ret = ABT_xstream_get_cpubind(es->info.xstream, &es_cpubind);
         if (ret == ABT_ERR_FEATURE_NA) {
             /* feature not supported in this Argobots build; skip */
         } else if (ret != ABT_SUCCESS) {
@@ -1470,7 +1467,7 @@ static int create_xstream_from_config(struct json_object*          es_config,
                                    json_object_new_int64(es_cpubind));
         }
     } else {
-        ret = ABT_xstream_set_cpubind(*es, es_cpubind);
+        ret = ABT_xstream_set_cpubind(es->info.xstream, es_cpubind);
         if (ret != ABT_SUCCESS) {
             MARGO_WARNING(
                 0, "ABT_xstream_set_cpubind failed to set cpubind (ret = %d)",
@@ -1482,7 +1479,7 @@ static int create_xstream_from_config(struct json_object*          es_config,
     if (json_object_array_length(es_affinity) == 0) {
         // get affinity
         int num_cpus;
-        ret = ABT_xstream_get_affinity(*es, 0, NULL, &num_cpus);
+        ret = ABT_xstream_get_affinity(es->info.xstream, 0, NULL, &num_cpus);
         if (ret == ABT_ERR_FEATURE_NA) {
             /* feature not supported in this Argobots build; skip */
         } else if (ret != ABT_SUCCESS) {
@@ -1491,7 +1488,8 @@ static int create_xstream_from_config(struct json_object*          es_config,
                 ret);
         } else if (num_cpus) {
             int cpuids[num_cpus];
-            ABT_xstream_get_affinity(*es, num_cpus, cpuids, &num_cpus);
+            ABT_xstream_get_affinity(es->info.xstream, num_cpus, cpuids,
+                                     &num_cpus);
             for (int i = 0; i < num_cpus; i++) {
                 json_object_array_put_idx(es_affinity, i,
                                           json_object_new_int64(cpuids[i]));
@@ -1505,7 +1503,7 @@ static int create_xstream_from_config(struct json_object*          es_config,
             cpuids[i] = json_object_get_int64(
                 json_object_array_get_idx(es_affinity, i));
         }
-        ret = ABT_xstream_set_affinity(*es, num_cpus, cpuids);
+        ret = ABT_xstream_set_affinity(es->info.xstream, num_cpus, cpuids);
         if (ret != ABT_SUCCESS) {
             MARGO_WARNING(
                 0, "ABT_xtsream_set_affinity failed to set affinity (ret = %d)",
@@ -1607,127 +1605,6 @@ static void remote_shutdown_ult(hg_handle_t handle)
     if (mid->enable_remote_shutdown) { margo_finalize(mid); }
 }
 static DEFINE_MARGO_RPC_HANDLER(remote_shutdown_ult)
-
-int margo_get_pool_by_name(margo_instance_id mid,
-                           const char*       name,
-                           ABT_pool*         pool)
-{
-    int index = margo_get_pool_index(mid, name);
-    if (index >= 0) {
-        return margo_get_pool_by_index(mid, index, pool);
-    } else {
-        return -1;
-    }
-}
-
-int margo_get_pool_by_index(margo_instance_id mid,
-                            unsigned          index,
-                            ABT_pool*         pool)
-{
-    if (index >= mid->num_abt_pools) {
-        *pool = ABT_POOL_NULL;
-        return -1;
-    } else {
-        *pool = mid->abt_pools[index].pool;
-    }
-    return 0;
-}
-
-const char* margo_get_pool_name(margo_instance_id mid, unsigned index)
-{
-    if (index >= mid->num_abt_pools) {
-        return NULL;
-    } else {
-        struct json_object* argobots
-            = json_object_object_get(mid->json_cfg, "argobots");
-        struct json_object* pool_array
-            = json_object_object_get(argobots, "pools");
-        struct json_object* pool = json_object_array_get_idx(pool_array, index);
-        if (pool) {
-            return json_object_get_string(json_object_object_get(pool, "name"));
-        } else {
-            return NULL;
-        }
-    }
-}
-
-int margo_get_pool_index(margo_instance_id mid, const char* name)
-{
-    int                 index;
-    struct json_object* p = NULL;
-    struct json_object* argobots
-        = json_object_object_get(mid->json_cfg, "argobots");
-    struct json_object* pool_array = json_object_object_get(argobots, "pools");
-    CONFIG_FIND_BY_NAME(pool_array, name, index, p);
-    (void)p; // silence warning about variable not used
-    if (index >= 0) {
-        return index;
-    } else {
-        return -1;
-    }
-}
-
-size_t margo_get_num_pools(margo_instance_id mid) { return mid->num_abt_pools; }
-
-int margo_get_xstream_by_name(margo_instance_id mid,
-                              const char*       name,
-                              ABT_xstream*      es)
-{
-    int index = margo_get_xstream_index(mid, name);
-    if (index >= 0) {
-        return margo_get_xstream_by_index(mid, index, es);
-    } else {
-        return -1;
-    }
-}
-
-int margo_get_xstream_by_index(margo_instance_id mid,
-                               unsigned          index,
-                               ABT_xstream*      es)
-{
-    if (index >= mid->num_abt_xstreams) {
-        *es = ABT_XSTREAM_NULL;
-        return -1;
-    } else {
-        *es = mid->abt_xstreams[index];
-    }
-    return 0;
-}
-
-const char* margo_get_xstream_name(margo_instance_id mid, unsigned index)
-{
-    if (index >= mid->num_abt_xstreams) {
-        return NULL;
-    } else {
-        struct json_object* argobots
-            = json_object_object_get(mid->json_cfg, "argobots");
-        struct json_object* es_array
-            = json_object_object_get(argobots, "xstreams");
-        struct json_object* es = json_object_array_get_idx(es_array, index);
-        if (es) {
-            return json_object_get_string(json_object_object_get(es, "name"));
-        } else {
-            return NULL;
-        }
-    }
-}
-
-int margo_get_xstream_index(margo_instance_id mid, const char* name)
-{
-    int                 index;
-    struct json_object* e = NULL;
-    struct json_object* argobots
-        = json_object_object_get(mid->json_cfg, "argobots");
-    struct json_object* es_array = json_object_object_get(argobots, "xstreams");
-    CONFIG_FIND_BY_NAME(es_array, name, index, e);
-    (void)e; // silence warning about variable not used
-    return index;
-}
-
-size_t margo_get_num_xstreams(margo_instance_id mid)
-{
-    return mid->num_abt_xstreams;
-}
 
 static int check_hg_eager_sizes(hg_class_t*         hg_class,
                                 struct json_object* hg_cfg)

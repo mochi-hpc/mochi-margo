@@ -157,9 +157,9 @@ static void margo_cleanup(margo_instance_id mid)
 
     MARGO_TRACE(mid, "Joining and destroying xstreams");
     for (unsigned i = 0; i < mid->num_abt_xstreams; i++) {
-        if (mid->owns_abt_xstream[i]) {
-            ABT_xstream_join(mid->abt_xstreams[i]);
-            ABT_xstream_free(&mid->abt_xstreams[i]);
+        if (mid->abt_xstreams[i].margo_free_flag) {
+            ABT_xstream_join(mid->abt_xstreams[i].info.xstream);
+            ABT_xstream_free(&(mid->abt_xstreams[i].info.xstream));
         }
     }
 
@@ -212,12 +212,11 @@ static void margo_cleanup(margo_instance_id mid)
     /* free any pools that Margo itself is reponsible for */
     for (unsigned i = 0; i < mid->num_abt_pools; i++) {
         if (mid->abt_pools[i].margo_free_flag
-            && mid->abt_pools[i].pool != ABT_POOL_NULL)
-            ABT_pool_free(&mid->abt_pools[i].pool);
+            && mid->abt_pools[i].info.pool != ABT_POOL_NULL)
+            ABT_pool_free(&mid->abt_pools[i].info.pool);
     }
     free(mid->abt_pools);
     free(mid->abt_xstreams);
-    free(mid->owns_abt_xstream);
     free(mid->self_addr_str);
     free(mid);
 
@@ -586,6 +585,18 @@ hg_return_t margo_deregister(margo_instance_id mid, hg_id_t rpc_id)
     struct margo_monitor_deregister_args monitoring_args
         = {.id = rpc_id, .ret = HG_SUCCESS};
     __MARGO_MONITOR(mid, FN_START, deregister, monitoring_args);
+
+    /* get data */
+    struct margo_rpc_data* data
+        = (struct margo_rpc_data*)HG_Registered_data(mid->hg_class, rpc_id);
+    if (data) {
+        /* decrement the numner of RPC id used by the pool */
+        struct margo_pool_info pool_info;
+        if (margo_find_pool_by_handle(mid, data->pool, &pool_info)
+            == HG_SUCCESS) {
+            mid->abt_pools[pool_info.index].num_rpc_ids -= 1;
+        }
+    }
 
     /* deregister */
     hg_return_t hret = HG_Deregister(mid->hg_class, rpc_id);
@@ -2007,6 +2018,9 @@ static hg_id_t margo_register_internal(margo_instance_id mid,
     struct margo_rpc_data* margo_data;
     hg_return_t            hret;
 
+    /* check pool */
+    if (pool == ABT_POOL_NULL) { margo_get_handler_pool(mid, &pool); }
+
     /* monitoring */
     struct margo_monitor_register_args monitoring_args
         = {.name = name, .pool = pool, .id = id, .ret = HG_SUCCESS};
@@ -2054,6 +2068,12 @@ static hg_id_t margo_register_internal(margo_instance_id mid,
             goto finish;
             // LCOV_EXCL_END
         }
+    }
+
+    /* increment the number of RPC ids using the pool */
+    struct margo_pool_info pool_info;
+    if (margo_find_pool_by_handle(mid, pool, &pool_info) == HG_SUCCESS) {
+        mid->abt_pools[pool_info.index].num_rpc_ids += 1;
     }
 
 finish:
@@ -2213,6 +2233,29 @@ const char* margo_rpc_get_name(margo_instance_id mid, hg_id_t id)
         return NULL;
     else
         return data->rpc_name;
+}
+
+hg_return_t
+margo_rpc_get_pool(margo_instance_id mid, hg_id_t id, ABT_pool* pool)
+{
+    if (mid == MARGO_INSTANCE_NULL) return HG_INVALID_ARG;
+    struct margo_rpc_data* data
+        = (struct margo_rpc_data*)HG_Registered_data(margo_get_class(mid), id);
+    if (!data) return HG_NOENTRY;
+    if (pool) *pool = data->pool;
+    return HG_SUCCESS;
+}
+
+hg_return_t margo_rpc_set_pool(margo_instance_id mid, hg_id_t id, ABT_pool pool)
+{
+    if (mid == MARGO_INSTANCE_NULL) return HG_INVALID_ARG;
+    struct margo_rpc_data* data
+        = (struct margo_rpc_data*)HG_Registered_data(margo_get_class(mid), id);
+    if (!data) return HG_NOENTRY;
+    if (pool == ABT_POOL_NULL) margo_get_handler_pool(mid, &pool);
+    data->pool = pool;
+    ;
+    return HG_SUCCESS;
 }
 
 const char* margo_handle_get_name(hg_handle_t handle)

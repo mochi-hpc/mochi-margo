@@ -2304,9 +2304,10 @@ pool_time_series_to_json(const default_monitor_state_t* monitor)
             frame = frame->next;
         }
 
-        struct json_object* pool_json = json_object_new_object();
-        const char*         pool_name = margo_get_pool_name(monitor->mid, i);
-        json_object_object_add_ex(json, pool_name, pool_json,
+        struct json_object*    pool_json = json_object_new_object();
+        struct margo_pool_info pool_info;
+        margo_find_pool_by_index(monitor->mid, i, &pool_info);
+        json_object_object_add_ex(json, pool_info.name, pool_json,
                                   JSON_C_OBJECT_ADD_KEY_IS_NEW);
 
         struct json_object* timestamps = json_object_new_array_ext(array_size);
@@ -2354,11 +2355,17 @@ static void update_pool_time_series(struct default_monitor_state* monitor,
         ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->pool_time_series_mtx));
     size_t num_pools = margo_get_num_pools(monitor->mid);
     for (size_t i = 0; i < num_pools; i++) {
-        ABT_pool pool = ABT_POOL_NULL;
-        if (margo_get_pool_by_index(monitor->mid, i, &pool) != 0) { continue; }
+        struct margo_pool_info pool_info;
+        if (margo_find_pool_by_index(monitor->mid, i, &pool_info)
+            != HG_SUCCESS) {
+            continue;
+        }
         size_t pool_size, pool_total_size;
-        if (ABT_pool_get_size(pool, &pool_size) != ABT_SUCCESS) { continue; }
-        if (ABT_pool_get_total_size(pool, &pool_total_size) != ABT_SUCCESS) {
+        if (ABT_pool_get_size(pool_info.pool, &pool_size) != ABT_SUCCESS) {
+            continue;
+        }
+        if (ABT_pool_get_total_size(pool_info.pool, &pool_total_size)
+            != ABT_SUCCESS) {
             continue;
         }
         time_series_append(&(monitor->pool_size_time_series[i]), timestamp,

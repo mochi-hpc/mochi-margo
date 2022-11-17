@@ -53,8 +53,17 @@ struct margo_registered_rpc {
  * margo is responsible for explicitly free'ing the pool or not.
  */
 struct margo_abt_pool {
-    ABT_pool pool;            /* Argobots pool */
+    struct margo_pool_info info;
+    uint32_t num_rpc_ids;     /* Number of RPC ids that use this pool */
     bool     margo_free_flag; /* flag if Margo is responsible for freeing */
+};
+
+/* Struct to track ES created by margo along with a flag indicating if
+ * margo is responsible for explicitly free'ing the ES or not.
+ */
+struct margo_abt_xstream {
+    struct margo_xstream_info info;
+    bool margo_free_flag; /* flag if Margo is responsible for freeing */
 };
 
 struct margo_instance {
@@ -69,11 +78,10 @@ struct margo_instance {
     ABT_pool      rpc_pool;
 
     /* xstreams and pools built from argobots config */
-    struct margo_abt_pool* abt_pools;
-    ABT_xstream*           abt_xstreams;
-    unsigned               num_abt_pools;
-    unsigned               num_abt_xstreams;
-    bool*                  owns_abt_xstream;
+    struct margo_abt_pool*    abt_pools;
+    struct margo_abt_xstream* abt_xstreams;
+    unsigned                  num_abt_pools;
+    unsigned                  num_abt_xstreams;
 
     /* internal to margo for this particular instance */
     ABT_thread hg_progress_tid;
@@ -141,11 +149,11 @@ struct margo_request_struct {
 // Data registered to an RPC id with HG_Register_data
 struct margo_rpc_data {
     margo_instance_id mid;
-    ABT_pool          pool;
-    char*             rpc_name;
-    hg_proc_cb_t      in_proc_cb;  /* user-provided input proc */
-    hg_proc_cb_t      out_proc_cb; /* user-provided output proc */
-    void*             user_data;
+    _Atomic(ABT_pool) pool;
+    char*        rpc_name;
+    hg_proc_cb_t in_proc_cb;  /* user-provided input proc */
+    hg_proc_cb_t out_proc_cb; /* user-provided output proc */
+    void*        user_data;
     void (*user_free_callback)(void*);
 };
 

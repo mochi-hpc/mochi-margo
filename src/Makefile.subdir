@@ -14,6 +14,7 @@ noinst_HEADERS += src/margo-abt-macros.h \
 
 src_libmargo_la_SOURCES += \
  src/margo-core.c \
+ src/margo-config.c \
  src/margo-abt-profiling.c \
  src/margo-bulk-pool.c \
  src/margo-globals.c \

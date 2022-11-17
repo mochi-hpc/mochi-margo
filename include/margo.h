@@ -737,6 +737,43 @@ hg_return_t margo_register_data(margo_instance_id mid,
 void* margo_registered_data(margo_instance_id mid, hg_id_t id);
 
 /**
+ * @brief Get the name with which an RPC id was registered
+ * (NULL if the RPC id is invalid or wasn't registered with a name).
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] id RPC id.
+ *
+ * @return Registered name of the RPC.
+ */
+const char* margo_rpc_get_name(margo_instance_id mid, hg_id_t id);
+
+/**
+ * @brief Get the pool in which RPCs of the provided id will execute their ULT.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] id RPC id.
+ * @param [out] pool Pool.
+ *
+ * @return HG_SUCCESS or corresponding HG error code.
+ */
+hg_return_t
+margo_rpc_get_pool(margo_instance_id mid, hg_id_t id, ABT_pool* pool);
+
+/**
+ * @brief Set the pool in which RPCs of the provided id will execute their ULTs.
+ * If ABT_POOL_NULL is passed, this function will set the pool to the margo
+ * instance's default handler pool.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] id RPC id.
+ * @param [in] pool Pool.
+ *
+ * @return HG_SUCCESS or corresponding HG error code.
+ */
+hg_return_t
+margo_rpc_set_pool(margo_instance_id mid, hg_id_t id, ABT_pool pool);
+
+/**
  * @brief Disable response for a given RPC ID.
  *
  * @param [in] mid          Margo instance.
@@ -942,17 +979,6 @@ hg_return_t margo_get_output(hg_handle_t handle, void* out_struct);
  * @return HG_SUCCESS or corresponding HG error code.
  */
 hg_return_t margo_free_output(hg_handle_t handle, void* out_struct);
-
-/**
- * @brief Get the name with which an RPC id was registered
- * (NULL if the RPC id is invalid or wasn't registered with a name).
- *
- * @param [in] mid Margo instance
- * @param [in] rpc_id RPC id
- *
- * @return Registered name of the RPC.
- */
-const char* margo_rpc_get_name(margo_instance_id mid, hg_id_t rpc_id);
 
 /**
  * @brief Get the name of the RPC corresponding to this handle
