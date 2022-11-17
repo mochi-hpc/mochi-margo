@@ -1332,6 +1332,8 @@ static int create_pool_from_config(struct json_object*    pool_config,
         kind = ABT_POOL_FIFO;
     else if (strcmp(jkind, "fifo_wait") == 0)
         kind = ABT_POOL_FIFO_WAIT;
+    else if (strcmp(jkind, "prio_wait") == 0)
+        kind = ABT_POOL_FIFO_WAIT; /* just to silence CodeQL */
     else {
         MARGO_ERROR(0, "Invalid pool kind \"%s\"", jkind);
         return -1;
