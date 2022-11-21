@@ -1312,7 +1312,7 @@ margo_irespond(hg_handle_t handle, void* out_struct, margo_request* req)
     if (!tmp_req) { return (HG_NOMEM_ERROR); }
     hret = margo_irespond_internal(handle, out_struct, tmp_req);
     if (hret != HG_SUCCESS) {
-        free(req);
+        free(tmp_req);
         return hret;
     }
     *req = tmp_req;
@@ -1889,7 +1889,7 @@ void __margo_hg_progress_fn(void* foo)
     unsigned int           actual_count;
     struct margo_instance* mid = (struct margo_instance*)foo;
     size_t                 size;
-    unsigned int           hg_progress_timeout = mid->hg_progress_timeout_ub;
+    unsigned int           hg_progress_timeout;
     double                 next_timer_exp;
     unsigned int           pending;
 
@@ -2128,7 +2128,7 @@ void __margo_internal_pre_handler_hooks(
     hg_handle_t                            handle,
     struct margo_monitor_rpc_handler_args* monitoring_args)
 {
-    hg_id_t parent_id;
+    hg_id_t parent_id = 0;
     check_parent_id_in_input(handle, &parent_id);
     monitoring_args->parent_rpc_id = parent_id;
 
