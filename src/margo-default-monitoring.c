@@ -10,6 +10,12 @@
 #include "margo-instance.h"
 #include "margo-monitoring.h"
 #include "margo-id.h"
+#ifdef __clang_analyzer__
+    // Prevent clang-analyzer from getting confused by the actual HASH_JEN
+    // macro. This trivial HASH_FUNCTION is not actually used when the code is
+    // compiled.
+    #define HASH_FUNCTION(keyptr, keylen, hashv) hashv = 0
+#endif
 #include "uthash.h"
 
 /*
@@ -825,11 +831,18 @@ margo_default_monitor_on_create(void*                       uargs,
         return;
     }
     // MARGO_MONITOR_FN_END
+
     session_t* session = new_session(monitor);
 
     session->origin.create_ts         = timestamp;
     margo_monitor_data_t monitor_data = {.p = (void*)session};
     margo_set_monitoring_data(event_args->handle, monitor_data);
+
+#ifdef __clang_analyzer__
+    // disable static analyzer warning about leaking memory
+    // this is code is not actually executed.
+    free(session);
+#endif
 }
 
 #define RETRIEVE_SESSION(handle)                                            \
@@ -1114,10 +1127,10 @@ static void margo_default_monitor_on_wait(void*                     uargs,
     if (event_type == MARGO_MONITOR_FN_START) {
         event_args->uctx.f = timestamp;
         double t           = timestamp - ref_ts;
-        UPDATE_STATISTICS_WITH(*timestamp_stats, t);
+        if (timestamp_stats) UPDATE_STATISTICS_WITH(*timestamp_stats, t);
     } else {
         double t = timestamp - event_args->uctx.f;
-        UPDATE_STATISTICS_WITH(*duration_stats, t);
+        if (duration_stats) UPDATE_STATISTICS_WITH(*duration_stats, t);
     }
 
     if ((event_type == MARGO_MONITOR_FN_END) && bulk_session) {
@@ -1176,6 +1189,12 @@ static void margo_default_monitor_on_rpc_handler(
                 ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->target_rpc_stats_mtx));
             session->target.stats = rpc_stats;
             event_args->uctx.f    = timestamp;
+
+#ifdef __clang_analyzer__
+            // Disable static analyzer warning about leaking memory.
+            // This is code is not actually executed.
+            free(session);
+#endif
         }
 
         /* time series */
@@ -1360,6 +1379,11 @@ static void margo_default_monitor_on_bulk_transfer(
             margo_monitor_data_t monitor_data = {.p = (void*)session};
             margo_request_set_monitoring_data(event_args->request,
                                               monitor_data);
+#ifdef __clang_analyzer__
+            // Disable static analyzer warning about leaking memory.
+            // This is code is not actually executed.
+            free(session);
+#endif
         }
 
         /* time series */
