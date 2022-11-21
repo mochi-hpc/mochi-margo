@@ -1835,11 +1835,10 @@ hg_return_t _handler_for_NULL(hg_handle_t);
         margo_destroy(handle);                                                 \
         __margo_internal_decr_pending(__mid);                                  \
         __hret = HG_NOMEM_ERROR;                                               \
-        goto __finish;                                                         \
     }                                                                          \
-__finish:                                                                      \
     __monitoring_args.ret = __hret;                                            \
     __margo_internal_post_handler_hooks(__mid, &__monitoring_args);            \
+__finish:                                                                      \
     return __hret;
 
 #define __MARGO_INTERNAL_RPC_HANDLER(__name)              \
