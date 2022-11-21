@@ -412,7 +412,8 @@ error:
         free(mid);
     }
     for (unsigned i = 0; i < abt.num_xstreams; i++) {
-        if (abt.xstreams[i].info.xstream && abt.xstreams[i].margo_free_flag) {
+        if (abt.xstreams && abt.xstreams[i].info.xstream
+            && abt.xstreams[i].margo_free_flag) {
             ABT_xstream_join(abt.xstreams[i].info.xstream);
             ABT_xstream_free(&(abt.xstreams[i].info.xstream));
         }
@@ -454,6 +455,7 @@ validate_and_complete_config(struct json_object*         _margo,
     // for convenience later
     if (_hg_context && !_hg_class)
         _hg_class = HG_Context_get_class(_hg_context);
+    (void)_hg_class;
 
     /* ------- Margo configuration ------ */
     /* Fields:
