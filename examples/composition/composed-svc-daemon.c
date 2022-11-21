@@ -73,6 +73,7 @@ int main(int argc, char** argv)
     mid = margo_init(argv[1], MARGO_SERVER_MODE, 0, -1);
     if (mid == MARGO_INSTANCE_NULL) {
         fprintf(stderr, "Error: margo_init()\n");
+        free(svc_list);
         return (-1);
     }
 
@@ -81,6 +82,7 @@ int main(int argc, char** argv)
     if (hret != HG_SUCCESS) {
         fprintf(stderr, "Error: margo_addr_self()\n");
         margo_finalize(mid);
+        free(svc_list);
         return (-1);
     }
     hret = margo_addr_to_string(mid, addr_self_string, &addr_self_string_sz,
@@ -89,6 +91,7 @@ int main(int argc, char** argv)
         fprintf(stderr, "Error: margo_addr_to_string()\n");
         margo_addr_free(mid, addr_self);
         margo_finalize(mid);
+        free(svc_list);
         return (-1);
     }
     margo_addr_free(mid, addr_self);
@@ -115,6 +118,7 @@ int main(int argc, char** argv)
 
         svc = strtok(NULL, ",");
     }
+    free(svc_list);
 
     /* shut things down */
     /****************************************/
