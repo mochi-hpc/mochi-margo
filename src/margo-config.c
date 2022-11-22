@@ -37,6 +37,7 @@ hg_return_t margo_find_pool_by_name(margo_instance_id       mid,
 {
     if (mid == MARGO_INSTANCE_NULL || name == NULL) return HG_INVALID_ARG;
     for (uint32_t i = 0; i < mid->abt.num_pools; ++i) {
+        if (mid->abt.pools[i].info.name == NULL) continue;
         if (strcmp(mid->abt.pools[i].info.name, name) == 0) {
             if (info) *info = mid->abt.pools[i].info;
             return HG_SUCCESS;
@@ -76,6 +77,7 @@ hg_return_t margo_find_xstream_by_name(margo_instance_id          mid,
 {
     if (mid == MARGO_INSTANCE_NULL || name == NULL) return HG_INVALID_ARG;
     for (uint32_t i = 0; i < mid->abt.num_xstreams; ++i) {
+        if (mid->abt.xstreams[i].info.name == NULL) continue;
         if (strcmp(mid->abt.xstreams[i].info.name, name) == 0) {
             if (info) *info = mid->abt.xstreams[i].info;
             return HG_SUCCESS;

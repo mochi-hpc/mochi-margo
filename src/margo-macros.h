@@ -7,8 +7,10 @@
 #ifndef __MARGO_MACROS
 #define __MARGO_MACROS
 
-#include <json-c/json.h>
+#include <ctype.h>
+#include <stdbool.h>
 #include <json-c/json_c_version.h>
+#include <json-c/json.h>
 
 static const int json_type_int64 = json_type_int;
 
@@ -35,6 +37,39 @@ inline static struct json_object* json_object_copy(struct json_object* in)
     struct json_object* out = NULL;
     if (json_object_deep_copy(in, &out, NULL) != 0) return NULL;
     return out;
+}
+
+inline static uint64_t json_object_object_get_uint64_or(
+    const struct json_object* object, const char* key, uint64_t x)
+{
+    struct json_object* value = json_object_object_get(object, key);
+    if (value && json_object_is_type(value, json_type_int64)) {
+        return json_object_get_uint64(value);
+    } else {
+        return x;
+    }
+}
+
+inline static int64_t json_object_object_get_int64_or(
+    const struct json_object* object, const char* key, int64_t x)
+{
+    struct json_object* value = json_object_object_get(object, key);
+    if (value && json_object_is_type(value, json_type_int64)) {
+        return json_object_get_int64(value);
+    } else {
+        return x;
+    }
+}
+
+inline static bool json_object_object_get_bool_or(
+    const struct json_object* object, const char* key, bool x)
+{
+    struct json_object* value = json_object_object_get(object, key);
+    if (value && json_object_is_type(value, json_type_boolean)) {
+        return json_object_get_boolean(value);
+    } else {
+        return x;
+    }
 }
 
 #define json_array_foreach(__array, __index, __element)                \
@@ -250,7 +285,7 @@ inline static struct json_object* json_object_copy(struct json_object* in)
 
 // Checks if the provided JSON string is one of the provided string arguments.
 // Prints an error and returns -1 if it does not match any.
-#define CONFIG_IS_IN_ENUM_STRING(__config, __field_name, ...)            \
+#define CONFIG_IS_IN_ENUM_STRING_OLD(__config, __field_name, ...)        \
     do {                                                                 \
         unsigned    _i      = 0;                                         \
         const char* _vals[] = {__VA_ARGS__, NULL};                       \
@@ -264,8 +299,52 @@ inline static struct json_object* json_object_copy(struct json_object* in)
         }                                                                \
     } while (0)
 
+// Checks if the provided JSON string is one of the provided string arguments.
+// Prints an error and returns false if it does not match any.
+#define CONFIG_IS_IN_ENUM_STRING(__config, __field_name, ...)            \
+    do {                                                                 \
+        unsigned    _i      = 0;                                         \
+        const char* _vals[] = {__VA_ARGS__, NULL};                       \
+        while (_vals[_i]                                                 \
+               && strcmp(_vals[_i], json_object_get_string(__config)))   \
+            _i++;                                                        \
+        if (!_vals[_i]) {                                                \
+            margo_error(0, "Invalid enum value for \"%s\" (\"%s\")",     \
+                        __field_name, json_object_get_string(__config)); \
+            return -1;                                                   \
+        }                                                                \
+    } while (0)
+
 // Checks all the entries in the provided arrays and make sure their "name"
 // fields are unique. If not, prints an error and returns -1.
+#define CONFIG_NAMES_MUST_BE_UNIQUE_OLD(__array, __container_name)       \
+    do {                                                                 \
+        unsigned _len = json_object_array_length(__array);               \
+        for (unsigned _i = 0; _i < _len; _i++) {                         \
+            for (unsigned _j = 0; _j < _i; _j++) {                       \
+                struct json_object* _a                                   \
+                    = json_object_array_get_idx(__array, _i);            \
+                struct json_object* _b                                   \
+                    = json_object_array_get_idx(__array, _j);            \
+                struct json_object* _a_name                              \
+                    = json_object_object_get(_a, "name");                \
+                struct json_object* _b_name                              \
+                    = json_object_object_get(_b, "name");                \
+                if (_a_name && _b_name                                   \
+                    && json_object_equal(_a_name, _b_name)) {            \
+                    margo_error(0,                                       \
+                                "Found two elements with the same name " \
+                                "(\"%s\") in \"%s\"",                    \
+                                json_object_get_string(_a_name),         \
+                                __container_name);                       \
+                    return -1;                                           \
+                }                                                        \
+            }                                                            \
+        }                                                                \
+    } while (0)
+
+// Checks all the entries in the provided arrays and make sure their "name"
+// fields are unique. If not, prints an error and returns false.
 #define CONFIG_NAMES_MUST_BE_UNIQUE(__array, __container_name)           \
     do {                                                                 \
         unsigned _len = json_object_array_length(__array);               \
@@ -279,16 +358,43 @@ inline static struct json_object* json_object_copy(struct json_object* in)
                     = json_object_object_get(_a, "name");                \
                 struct json_object* _b_name                              \
                     = json_object_object_get(_b, "name");                \
-                if (json_object_equal(_a_name, _b_name)) {               \
-                    MARGO_ERROR(0,                                       \
+                if (_a_name && _b_name                                   \
+                    && json_object_equal(_a_name, _b_name)) {            \
+                    margo_error(0,                                       \
                                 "Found two elements with the same name " \
                                 "(\"%s\") in \"%s\"",                    \
                                 json_object_get_string(_a_name),         \
                                 __container_name);                       \
-                    return -1;                                           \
+                    return false;                                        \
                 }                                                        \
             }                                                            \
         }                                                                \
+    } while (0)
+
+// Checks if the name of an object is valid. A valid name is a name that can be
+// used as a C identifier.
+#define CONFIG_NAME_IS_VALID_OLD(__obj)                                      \
+    do {                                                                     \
+        struct json_object* _name_json                                       \
+            = json_object_object_get(__obj, "name");                         \
+        const char* _name = json_object_get_string(_name_json);              \
+        unsigned    _len  = strlen(_name);                                   \
+        if (_len == 0) {                                                     \
+            margo_error(0, "Empty \"name\" field");                          \
+            return -1;                                                       \
+        }                                                                    \
+        if (isdigit(_name[0])) {                                             \
+            margo_error(0, "First character of a name cannot be a digit");   \
+            return -1;                                                       \
+        }                                                                    \
+        for (unsigned _i = 0; _i < _len; _i++) {                             \
+            if (!(isalnum(_name[_i]) || _name[_i] == '_')) {                 \
+                margo_error(0,                                               \
+                            "Invalid character \"%c\" found in name \"%s\"", \
+                            _name[_i], _name);                               \
+                return -1;                                                   \
+            }                                                                \
+        }                                                                    \
     } while (0)
 
 // Checks if the name of an object is valid. A valid name is a name that can be
@@ -300,19 +406,19 @@ inline static struct json_object* json_object_copy(struct json_object* in)
         const char* _name = json_object_get_string(_name_json);              \
         unsigned    _len  = strlen(_name);                                   \
         if (_len == 0) {                                                     \
-            MARGO_ERROR(0, "Empty \"name\" field");                          \
-            return -1;                                                       \
+            margo_error(0, "Empty \"name\" field");                          \
+            return false;                                                    \
         }                                                                    \
         if (isdigit(_name[0])) {                                             \
-            MARGO_ERROR(0, "First character of a name cannot be a digit");   \
-            return -1;                                                       \
+            margo_error(0, "First character of a name cannot be a digit");   \
+            return false;                                                    \
         }                                                                    \
         for (unsigned _i = 0; _i < _len; _i++) {                             \
             if (!(isalnum(_name[_i]) || _name[_i] == '_')) {                 \
-                MARGO_ERROR(0,                                               \
+                margo_error(0,                                               \
                             "Invalid character \"%c\" found in name \"%s\"", \
                             _name[_i], _name);                               \
-                return -1;                                                   \
+                return false;                                                \
             }                                                                \
         }                                                                    \
     } while (0)

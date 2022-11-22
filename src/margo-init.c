@@ -32,15 +32,6 @@ validate_and_complete_config(struct json_object*         _config,
                              const struct hg_init_info*  _hg_init_info,
                              const struct margo_monitor* _monitor);
 
-// Checks the eager sizes reported by Mercury at runtime
-static int check_hg_eager_sizes(hg_class_t*         hg_class,
-                                struct json_object* hg_cfg);
-
-// Reads values from configuration to set the
-// various fields in the hg_init_info structure
-static void fill_hg_init_info_from_config(struct json_object*  _config,
-                                          struct hg_init_info* _hg_init_info);
-
 // Reads a pool configuration and instantiate the
 // corresponding ABT_pool, returning ABT_SUCCESS
 // or other ABT error codes
@@ -113,9 +104,6 @@ margo_instance_id margo_init_ext(const char*                   address,
         args.monitor = margo_default_monitor;
     }
 
-    if (args.hg_init_info)
-        memcpy(&hg.hg_init_info, args.hg_init_info, sizeof(hg.hg_init_info));
-
     if (args.json_config && strlen(args.json_config) > 0) {
         // read JSON config from provided string argument
         struct json_tokener*    tokener = json_tokener_new();
@@ -145,85 +133,15 @@ margo_instance_id margo_init_ext(const char*                   address,
         goto error;
     }
 
-    // handle hg_init_info
-    MARGO_TRACE(0, "Instantiating hg_init_info structure");
-    fill_hg_init_info_from_config(config, &hg.hg_init_info);
-
-    // handle hg_class
-    if (args.hg_class) {
-        MARGO_TRACE(0, "Using user-provided hg_class");
-        hg.hg_class = args.hg_class;
-    } else if (args.hg_context) {
-        MARGO_TRACE(0, "Using hg_class from provided hg_context");
-        hg.hg_class = HG_Context_get_class(args.hg_context);
-    } else {
-        MARGO_TRACE(0,
-                    "Initializing hg_class from address \"%s\" and mode \"%s\"",
-                    address, mode == 0 ? "client" : "server");
-        hg.hg_class = HG_Init_opt(address, mode, &hg.hg_init_info);
-        if (!hg.hg_class) {
-            MARGO_ERROR(0, "Could not initialize Mercury class");
-            MARGO_ERROR(0,
-                        "   Try running `margo-info %s` for more information "
-                        "about this",
-                        address);
-            MARGO_ERROR(
-                0,
-                "   protocol or `margo-info` to list all available protocols.");
-            goto error;
-        }
-        hg.hg_ownership |= MARGO_OWNS_HG_CLASS;
-    }
-
-    // handle hg_context
-    if (args.hg_context) {
-        MARGO_TRACE(0, "Using user-provided hg_context");
-        hg.hg_context = args.hg_context;
-    } else {
-        MARGO_TRACE(0, "Initializing hg_context");
-        hg.hg_context = HG_Context_create(hg.hg_class);
-        if (!hg.hg_context) {
-            MARGO_ERROR(0, "Could not initialize hg_context");
-            goto error;
-        }
-        hg.hg_ownership |= MARGO_OWNS_HG_CONTEXT;
-    }
-
-    // updating config with address and listening fields
-    MARGO_TRACE(0, "Updating configuration with mercury address");
-    hret = HG_Addr_self(hg.hg_class, &hg.self_addr);
-    if (hret != HG_SUCCESS) {
-        MARGO_ERROR(0, "Could not get self address from hg_class (hret = %d)",
-                    hret);
-        goto error;
-    }
-    hg_size_t self_addr_str_size = 0;
-    do {
-        hret = HG_Addr_to_string(hg.hg_class, NULL, &self_addr_str_size,
-                                 hg.self_addr);
-        if (hret != HG_SUCCESS) break;
-        hg.self_addr_str = calloc(1, self_addr_str_size);
-        hret             = HG_Addr_to_string(hg.hg_class, hg.self_addr_str,
-                                 &self_addr_str_size, hg.self_addr);
-    } while (0);
-    if (hret != HG_SUCCESS) {
-        MARGO_ERROR(0, "Could not convert self address to string (hret = %d)",
-                    hret);
-        goto error;
-    }
-
+    /* START NEW */
     struct json_object* hg_config = json_object_object_get(config, "mercury");
-    json_object_object_add(hg_config, "address",
-                           json_object_new_string(hg.self_addr_str));
-    json_object_object_add(hg_config, "listening",
-                           json_object_new_boolean(mode));
-
-    /* check what eager sizes Mercury ended up with at run time */
-    ret = check_hg_eager_sizes(hg.hg_class, hg_config);
-    if (ret != 0) {
-        MARGO_ERROR(0, "Could not retrieve HG eager sizes");
-        goto error;
-    }
+    struct margo_hg_user_args hg_user_args = {.hg_class     = args.hg_class,
+                                              .hg_context   = args.hg_context,
+                                              .hg_init_info = args.hg_init_info,
+                                              .listening    = mode,
+                                              .protocol     = address};
+    margo_hg_init_from_json(hg_config, &hg_user_args, &hg);
+    /* END NEW */
 
     // initialize Argobots if needed
     if (ABT_initialized() == ABT_ERR_UNINITIALIZED) {
@@ -427,9 +345,9 @@ error:
     */
     free(abt.pools);
     if (config) json_object_put(config);
-    if (hg.self_addr != HG_ADDR_NULL) HG_Addr_free(hg.hg_class, hg.self_addr);
-    if (hg.hg_context) HG_Context_destroy(hg.hg_context);
-    if (hg.hg_class) HG_Finalize(hg.hg_class);
+    /* START NEW */
+    margo_hg_destroy(&hg);
+    /* END NEW */
     return MARGO_INSTANCE_NULL;
 }
 
@@ -502,191 +420,6 @@ validate_and_complete_config(struct json_object*         _margo,
     }
     { // add or create "config" in monitoring
         CONFIG_HAS_OR_CREATE_OBJECT(_monitoring, "config", "config", ignore);
-    }
-
-    /* ------- Mercury configuration ------ */
-    /* Fields:
-       - [added] address: string
-       - [added] listening: bool (optional if hg_context provided)
-       - [optional] request_post_init: int (default 256)
-       - [optional] request_post_incr: int (default 256)
-       - [optional] auto_sm: bool (default false)
-       - [optional] no_bulk_eager: bool (default false)
-       - [optional] no_loopback: bool (default false)
-       - [optional] stats: bool (default false)
-       - [optional] na_no_block: bool (default false)
-       - [optional] na_no_retry: bool (default false)
-       - [optional] na_request_mem_device: bool (default false)
-       - [optional] max_contexts: integer (default 1)
-       - [optional] ip_subnet: string (added only if found in provided
-       hg_init_info)
-       - [optional] auth_key: auth_key (added only if found in provided
-       hg_init_info)
-       - [optional] na_max_unexpected_size: maximum unexpected message size
-       (default determined by transport)
-       - [optional] na_max_expected_size: maximum expected message size (default
-       determined by transport)
-       - [added]    input_eager_size: maximum RPC input that will be sent
-       eagerly
-       - [added]    output_eager_size: maximum RPC output that will be sent
-       eagerly
-       - [added]    version: string
-    */
-
-    /* find the "mercury" object in the configuration */
-    struct json_object* _mercury = NULL;
-    CONFIG_HAS_OR_CREATE_OBJECT(_margo, "mercury", "mercury", _mercury);
-
-    { // add or override Mercury version
-        char         hg_version_string[64];
-        unsigned int hg_major = 0, hg_minor = 0, hg_patch = 0;
-        HG_Version_get(&hg_major, &hg_minor, &hg_patch);
-        snprintf(hg_version_string, 64, "%u.%u.%u", hg_major, hg_minor,
-                 hg_patch);
-        CONFIG_OVERRIDE_STRING(_mercury, "version", hg_version_string,
-                               "mercury.version", 1);
-        MARGO_TRACE(0, "mercury.version = %s", hg_version_string);
-    }
-
-    { // add mercury.request_post_incr or set it as default
-        if (_hg_init_info) {
-            hg_uint32_t request_post_incr = _hg_init_info->request_post_incr;
-            CONFIG_OVERRIDE_INTEGER(_mercury, "request_post_incr",
-                                    request_post_incr,
-                                    "mercury.request_post_incr", 256);
-        }
-        CONFIG_HAS_OR_CREATE(_mercury, int, "request_post_incr", 256,
-                             "mercury.request_post_incr", val);
-        MARGO_TRACE(0, "mercury.request_post_incr = %d",
-                    json_object_get_int(val));
-    }
-
-    { // add mercury.request_post_init or set it as default
-        if (_hg_init_info) {
-            hg_uint32_t request_post_init = _hg_init_info->request_post_init;
-            CONFIG_OVERRIDE_INTEGER(_mercury, "request_post_init",
-                                    request_post_init,
-                                    "mercury.request_post_init", 256);
-        }
-        CONFIG_HAS_OR_CREATE(_mercury, int, "request_post_init", 256,
-                             "mercury.request_post_init", val);
-        MARGO_TRACE(0, "mercury.request_post_init = %d",
-                    json_object_get_int(val));
-    }
-
-    { // add mercury.auto_sm or set it as default
-        if (_hg_init_info)
-            CONFIG_OVERRIDE_BOOL(_mercury, "auto_sm", _hg_init_info->auto_sm,
-                                 "mercury.auto_sm", 1);
-        CONFIG_HAS_OR_CREATE(_mercury, boolean, "auto_sm", 0, "mercury.auto_sm",
-                             val);
-        MARGO_TRACE(0, "mercury.auto_sm = %s",
-                    json_object_get_boolean(val) ? "true" : "false");
-    }
-
-    { // add mercury.no_bulk_eager or set it as default
-        if (_hg_init_info)
-            CONFIG_OVERRIDE_BOOL(_mercury, "no_bulk_eager",
-                                 _hg_init_info->no_bulk_eager,
-                                 "mercury.no_bulk_eager", 1);
-        CONFIG_HAS_OR_CREATE(_mercury, boolean, "no_bulk_eager", 0,
-                             "mercury.no_bulk_eager", val);
-        MARGO_TRACE(0, "mercury.no_bulk_eager = %s",
-                    json_object_get_boolean(val) ? "true" : "false");
-    }
-
-    { // add mercury.no_loopback or set it as default
-        if (_hg_init_info)
-            CONFIG_OVERRIDE_BOOL(_mercury, "no_loopback",
-                                 _hg_init_info->no_loopback,
-                                 "mercury.no_loopback", 1);
-        CONFIG_HAS_OR_CREATE(_mercury, boolean, "no_loopback", 0,
-                             "mercury.no_loopback", val);
-        MARGO_TRACE(0, "mercury.no_loopback = %s",
-                    json_object_get_boolean(val) ? "true" : "false");
-    }
-
-    { // add mercury.stats or set it as default
-        if (_hg_init_info)
-            CONFIG_OVERRIDE_BOOL(_mercury, "stats", _hg_init_info->stats,
-                                 "mercury.stats", 1);
-        CONFIG_HAS_OR_CREATE(_mercury, boolean, "stats", 0, "mercury.stats",
-                             val);
-        MARGO_TRACE(0, "mercury.stats = %s",
-                    json_object_get_boolean(val) ? "true" : "false");
-    }
-
-    { // add mercury.na_no_block or set it as default
-        if (_hg_init_info) {
-            bool na_no_block
-                = _hg_init_info->na_init_info.progress_mode & NA_NO_BLOCK;
-            CONFIG_OVERRIDE_BOOL(_mercury, "na_no_block", na_no_block,
-                                 "mercury.na_no_block", 1);
-        }
-        CONFIG_HAS_OR_CREATE(_mercury, boolean, "na_no_block", 0,
-                             "mercury.na_no_block", val);
-        MARGO_TRACE(0, "mercury.na_no_block = %s",
-                    json_object_get_boolean(val) ? "true" : "false");
-    }
-
-    { // add mercury.na_no_retry or set it as default
-        if (_hg_init_info) {
-            bool na_no_retry
-                = _hg_init_info->na_init_info.progress_mode & NA_NO_RETRY;
-            CONFIG_OVERRIDE_BOOL(_mercury, "na_no_retry", na_no_retry,
-                                 "mercury.na_no_retry", 1);
-        }
-        CONFIG_HAS_OR_CREATE(_mercury, boolean, "na_no_retry", 0,
-                             "mercury.na_no_retry", val);
-        MARGO_TRACE(0, "mercury.na_no_retry = %s",
-                    json_object_get_boolean(val) ? "true" : "false");
-    }
-
-#if (HG_VERSION_MAJOR > 2) || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR > 1)
-    { // add mercury.na_request_mem_device or set it as default
-        if (_hg_init_info) {
-            bool na_request_mem_device
-                = _hg_init_info->na_init_info.request_mem_device;
-            CONFIG_OVERRIDE_BOOL(_mercury, "na_request_mem_device",
-                                 na_request_mem_device,
-                                 "mercury.na_request_mem_device", 1);
-        }
-        CONFIG_HAS_OR_CREATE(_mercury, boolean, "na_request_mem_device", 0,
-                             "mercury.na_request_mem_device", val);
-        MARGO_TRACE(0, "mercury.na_request_mem_device = %s",
-                    json_object_get_boolean(val) ? "true" : "false");
-    }
-#endif
-
-    { // add mercury.max_contexts or set it as default
-        if (_hg_init_info) {
-            uint8_t max_contexts = _hg_init_info->na_init_info.max_contexts;
-            CONFIG_OVERRIDE_INTEGER(_mercury, "max_contexts", max_contexts,
-                                    "mercury.max_contexts", 1);
-        }
-        CONFIG_HAS_OR_CREATE(_mercury, int64, "max_contexts", 1,
-                             "mercury.max_contexts", val);
-        MARGO_TRACE(0, "mercury.max_contexts = %d", json_object_get_int64(val));
-    }
-
-    { // add mercury.ip_subnet to configuration if present _hg_init_info
-        if (_hg_init_info && _hg_init_info->na_init_info.ip_subnet) {
-            CONFIG_OVERRIDE_STRING(_mercury, "ip_subnet",
-                                   _hg_init_info->na_init_info.ip_subnet,
-                                   "mercury.ip_subnet", 1);
-            MARGO_TRACE(0, "mercury.ip_subnet = %s",
-                        _hg_init_info->na_init_info.ip_subnet);
-        }
-    }
-
-    { // add mercury.auth_key to configuration if present in _hg_init_info
-        if (_hg_init_info && _hg_init_info->na_init_info.auth_key) {
-            CONFIG_OVERRIDE_STRING(_mercury, "auth_key",
-                                   _hg_init_info->na_init_info.auth_key,
-                                   "mercury.auth_key", 1);
-            MARGO_TRACE(0, "mercury.auth_key = %s",
-                        _hg_init_info->na_init_info.auth_key);
-        }
     }
 
     /* ------- Argobots configuration ------ */
@@ -769,26 +502,27 @@ validate_and_complete_config(struct json_object*         _margo,
             CONFIG_HAS_OR_CREATE(_pool, string, "name", default_name,
                                  "argobots.pools[?].name", val);
             // check that the name is authorized
-            CONFIG_NAME_IS_VALID(_pool);
+            CONFIG_NAME_IS_VALID_OLD(_pool);
             MARGO_TRACE(0, "argobots.pools[%d].name = \"%s\"", i,
                         json_object_get_string(val));
             // handle "kind" field
             CONFIG_HAS_OR_CREATE(_pool, string, "kind", "fifo_wait",
                                  "argobots.pools[?].kind", val);
-            CONFIG_IS_IN_ENUM_STRING(val, "argobots.pools[?].kind", "fifo",
-                                     "fifo_wait", "prio_wait");
+            CONFIG_IS_IN_ENUM_STRING_OLD(val, "argobots.pools[?].kind", "fifo",
+                                         "fifo_wait", "prio_wait");
             MARGO_TRACE(0, "argobots.pools[%d].kind = %s", i,
                         json_object_get_string(val));
             // handle "access" field
             CONFIG_HAS_OR_CREATE(_pool, string, "access", "mpmc",
                                  "argobots.pools[?].access", val);
-            CONFIG_IS_IN_ENUM_STRING(val, "argobots.pools[?].access", "private",
-                                     "spsc", "mpsc", "spmc", "mpmc");
+            CONFIG_IS_IN_ENUM_STRING_OLD(val, "argobots.pools[?].access",
+                                         "private", "spsc", "mpsc", "spmc",
+                                         "mpmc");
             MARGO_TRACE(0, "argobots.pools[%d].access = %s", i,
                         json_object_get_string(val));
         }
         // check that the names aren't repeated
-        CONFIG_NAMES_MUST_BE_UNIQUE(_pools, "argobots.pools");
+        CONFIG_NAMES_MUST_BE_UNIQUE_OLD(_pools, "argobots.pools");
     }
 
     /* ------- Argobots xstreams configuration ------- */
@@ -814,7 +548,7 @@ validate_and_complete_config(struct json_object*         _margo,
             CONFIG_HAS_OR_CREATE(_xstream, string, "name", default_name,
                                  "argobots.xstreams[?].name", val);
             // check that the name is authorized
-            CONFIG_NAME_IS_VALID(_xstream);
+            CONFIG_NAME_IS_VALID_OLD(_xstream);
             MARGO_TRACE(0, "argobots.xstreams[%d].name = \"%s\"", i,
                         json_object_get_string(val));
             // handle cpubind entry
@@ -856,7 +590,7 @@ validate_and_complete_config(struct json_object*         _margo,
             CONFIG_MUST_HAVE(_sched, string, "type",
                              "argobots.xstreams[?].scheduler.type",
                              _sched_type);
-            CONFIG_IS_IN_ENUM_STRING(
+            CONFIG_IS_IN_ENUM_STRING_OLD(
                 _sched_type, "argobots.xstreams[?].scheduler.type", "default",
                 "basic", "prio", "randws", "basic_wait");
             MARGO_TRACE(0, "argobots.xstreams[%d].scheduler.type = %s", i,
@@ -913,7 +647,7 @@ validate_and_complete_config(struct json_object*         _margo,
             }
         }
         // check that the names of xstreams are unique
-        CONFIG_NAMES_MUST_BE_UNIQUE(_xstreams, "argobots.xstreams");
+        CONFIG_NAMES_MUST_BE_UNIQUE_OLD(_xstreams, "argobots.xstreams");
         // if there is no __primary__ xstream, create one, along with its
         // scheduler and pool
         {
@@ -1231,7 +965,7 @@ validate_and_complete_config(struct json_object*         _margo,
 
     return 0;
 }
-
+#if 0
 static void fill_hg_init_info_from_config(struct json_object*  config,
                                           struct hg_init_info* info)
 {
@@ -1262,24 +996,26 @@ static void fill_hg_init_info_from_config(struct json_object*  config,
     if (json_object_get_boolean(json_object_object_get(hg, "na_no_retry")))
         info->na_init_info.progress_mode |= NA_NO_RETRY;
         /* the na_init_info.request_mem_device first appeaed in Mercury 2.2.0 */
-#if (HG_VERSION_MAJOR > 2) || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR > 1)
+    #if (HG_VERSION_MAJOR > 2) \
+        || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR > 1)
     if (json_object_get_boolean(
             json_object_object_get(hg, "na_request_mem_device")))
         info->na_init_info.request_mem_device = HG_TRUE;
-#endif
+    #endif
     info->na_init_info.max_contexts
         = json_object_get_int64(json_object_object_get(hg, "max_contexts"));
     /* The na_init_info max_unexpected_size nad max_expected_size first
      * appeared in Mercury 2.0.1.
      */
-#if (HG_VERSION_MAJOR > 2) || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR > 0) \
-    || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR == 0                        \
-        && HG_VERSION_PATCH > 0)
+    #if (HG_VERSION_MAJOR > 2)                             \
+        || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR > 0) \
+        || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR == 0 \
+            && HG_VERSION_PATCH > 0)
     info->na_init_info.max_unexpected_size = json_object_get_int(
         json_object_object_get(hg, "na_max_unexpected_size"));
     info->na_init_info.max_expected_size = json_object_get_int(
         json_object_object_get(hg, "na_max_expected_size"));
-#else
+    #else
     /* Issue a warning if the configuration specifies values for these
      * parameters and we don't have a way to honor them.
      */
@@ -1291,8 +1027,9 @@ static void fill_hg_init_info_from_config(struct json_object*  config,
         MARGO_WARNING(0,
                       "na_max_expected_size json parameter not supported on "
                       "this version of Mercury");
-#endif
+    #endif
 }
+#endif
 
 static int create_pool_from_config(struct json_object*    pool_config,
                                    uint32_t               index,
@@ -1604,6 +1341,7 @@ static void remote_shutdown_ult(hg_handle_t handle)
 }
 static DEFINE_MARGO_RPC_HANDLER(remote_shutdown_ult)
 
+#if 0
 static int check_hg_eager_sizes(hg_class_t*         hg_class,
                                 struct json_object* hg_cfg)
 {
@@ -1618,3 +1356,4 @@ static int check_hg_eager_sizes(hg_class_t*         hg_class,
 
     return (0);
 }
+#endif

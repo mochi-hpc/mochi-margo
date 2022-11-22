@@ -6,6 +6,7 @@
 #ifndef __MARGO_ABT_MACROS_H
 #define __MARGO_ABT_MACROS_H
 
+#include <string.h>
 #include <abt.h>
 
 /* In recent versions of Argobots, some new types

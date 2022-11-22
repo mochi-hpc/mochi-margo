@@ -18,6 +18,7 @@
 #include <math.h>
 
 #include "margo.h"
+#include "margo-config.h"
 #include "margo-abt-macros.h"
 #include "margo-logging.h"
 #include "margo-monitoring.h"
@@ -47,42 +48,6 @@ struct margo_registered_rpc {
     hg_id_t                      id;            /* rpc id */
     char                         func_name[64]; /* string name of rpc */
     struct margo_registered_rpc* next;          /* pointer to next in list */
-};
-
-/* Struct to track pools created by margo along with a flag indicating if
- * margo is responsible for explicitly free'ing the pool or not.
- */
-struct margo_abt_pool {
-    struct margo_pool_info info;
-    uint32_t num_rpc_ids;     /* Number of RPC ids that use this pool */
-    bool     margo_free_flag; /* flag if Margo is responsible for freeing */
-};
-
-/* Struct to track ES created by margo along with a flag indicating if
- * margo is responsible for explicitly free'ing the ES or not.
- */
-struct margo_abt_xstream {
-    struct margo_xstream_info info;
-    bool margo_free_flag; /* flag if Margo is responsible for freeing */
-};
-
-/* Argobots environment */
-struct margo_abt {
-    struct margo_abt_pool*    pools;
-    struct margo_abt_xstream* xstreams;
-    unsigned                  num_pools;
-    unsigned                  num_xstreams;
-};
-
-/* Mercury environment */
-struct margo_hg {
-    struct hg_init_info hg_init_info;
-    hg_class_t*         hg_class;
-    hg_context_t*       hg_context;
-    hg_addr_t           self_addr;
-    char*               self_addr_str;
-    /* bitwise OR of MARGO_OWNS_HG_CLASS and MARGO_OWNS_HG_CONTEXT */
-    uint8_t hg_ownership;
 };
 
 struct margo_instance {
