@@ -161,7 +161,7 @@ margo_instance_id margo_init_ext(const char*                   address,
         hg_class = args.hg_class;
     } else if (args.hg_context) {
         MARGO_TRACE(0, "Using hg_class from provided hg_context");
-        hg_class = HG_Context_get_class(hg_context);
+        hg_class = HG_Context_get_class(args.hg_context);
     } else {
         MARGO_TRACE(0,
                     "Initializing hg_class from address \"%s\" and mode \"%s\"",
