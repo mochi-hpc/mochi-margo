@@ -88,7 +88,7 @@ CFLAGS="$MERCURY_CFLAGS $CFLAGS"
 MERCURY_LIB_PATH=`pkg-config --libs-only-L mercury | sed -e 's/-L//g'`
 AC_SUBST([MERCURY_LIB_PATH], ["$MERCURY_LIB_PATH"])
 
-PKG_CHECK_MODULES([ARGOBOTS],[argobots],[],
+PKG_CHECK_MODULES([ARGOBOTS],[argobots >= 1.1],[],
    [AC_MSG_ERROR([Could not find working argobots installation!])])
 LIBS="$ARGOBOTS_LIBS $LIBS"
 # explicitly pass -R <lib path> to libtool so that it sets an rpath/runpath
