@@ -23,7 +23,7 @@
 
 // Validates the format of the configuration and
 // fill default values if they are note provided
-static int
+static bool
 validate_and_complete_config(struct json_object*         _config,
                              ABT_pool                    _progress_pool,
                              ABT_pool                    _rpc_pool,
@@ -125,10 +125,10 @@ margo_instance_id margo_init_ext(const char*                   address,
 
     // validate and complete configuration
     MARGO_TRACE(0, "Validating and completing configuration");
-    ret = validate_and_complete_config(
+    bool valide = validate_and_complete_config(
         config, args.progress_pool, args.rpc_pool, args.hg_class,
         args.hg_context, args.hg_init_info, args.monitor);
-    if (ret != 0) {
+    if (!valide) {
         MARGO_ERROR(0, "Could not validate and complete configuration");
         goto error;
     }
@@ -357,7 +357,7 @@ error:
  * initialization functions with the knowledge that it contains correct and
  * complete information.
  */
-static int
+static bool
 validate_and_complete_config(struct json_object*         _margo,
                              ABT_pool                    _custom_progress_pool,
                              ABT_pool                    _custom_rpc_pool,
@@ -496,27 +496,26 @@ validate_and_complete_config(struct json_object*         _margo,
             CONFIG_HAS_OR_CREATE(_pool, string, "name", default_name,
                                  "argobots.pools[?].name", val);
             // check that the name is authorized
-            CONFIG_NAME_IS_VALID_OLD(_pool);
+            CONFIG_NAME_IS_VALID(_pool);
             MARGO_TRACE(0, "argobots.pools[%d].name = \"%s\"", i,
                         json_object_get_string(val));
             // handle "kind" field
             CONFIG_HAS_OR_CREATE(_pool, string, "kind", "fifo_wait",
                                  "argobots.pools[?].kind", val);
-            CONFIG_IS_IN_ENUM_STRING_OLD(val, "argobots.pools[?].kind", "fifo",
-                                         "fifo_wait", "prio_wait");
+            CONFIG_IS_IN_ENUM_STRING(val, "argobots.pools[?].kind", "fifo",
+                                     "fifo_wait", "prio_wait");
             MARGO_TRACE(0, "argobots.pools[%d].kind = %s", i,
                         json_object_get_string(val));
             // handle "access" field
             CONFIG_HAS_OR_CREATE(_pool, string, "access", "mpmc",
                                  "argobots.pools[?].access", val);
-            CONFIG_IS_IN_ENUM_STRING_OLD(val, "argobots.pools[?].access",
-                                         "private", "spsc", "mpsc", "spmc",
-                                         "mpmc");
+            CONFIG_IS_IN_ENUM_STRING(val, "argobots.pools[?].access", "private",
+                                     "spsc", "mpsc", "spmc", "mpmc");
             MARGO_TRACE(0, "argobots.pools[%d].access = %s", i,
                         json_object_get_string(val));
         }
         // check that the names aren't repeated
-        CONFIG_NAMES_MUST_BE_UNIQUE_OLD(_pools, "argobots.pools");
+        CONFIG_NAMES_MUST_BE_UNIQUE(_pools, "argobots.pools");
     }
 
     /* ------- Argobots xstreams configuration ------- */
@@ -542,7 +541,7 @@ validate_and_complete_config(struct json_object*         _margo,
             CONFIG_HAS_OR_CREATE(_xstream, string, "name", default_name,
                                  "argobots.xstreams[?].name", val);
             // check that the name is authorized
-            CONFIG_NAME_IS_VALID_OLD(_xstream);
+            CONFIG_NAME_IS_VALID(_xstream);
             MARGO_TRACE(0, "argobots.xstreams[%d].name = \"%s\"", i,
                         json_object_get_string(val));
             // handle cpubind entry
@@ -564,7 +563,7 @@ validate_and_complete_config(struct json_object*         _margo,
                         MARGO_ERROR(0,
                                     "Invalid element type found in affinity "
                                     "array (should be integers)");
-                        return -1;
+                        return false;
                     }
                     MARGO_TRACE(0, "argobots.xstreams[%d].affinity[%d] = %d", i,
                                 j, json_object_get_int64(val));
@@ -584,7 +583,7 @@ validate_and_complete_config(struct json_object*         _margo,
             CONFIG_MUST_HAVE(_sched, string, "type",
                              "argobots.xstreams[?].scheduler.type",
                              _sched_type);
-            CONFIG_IS_IN_ENUM_STRING_OLD(
+            CONFIG_IS_IN_ENUM_STRING(
                 _sched_type, "argobots.xstreams[?].scheduler.type", "default",
                 "basic", "prio", "randws", "basic_wait");
             MARGO_TRACE(0, "argobots.xstreams[%d].scheduler.type = %s", i,
@@ -598,7 +597,7 @@ validate_and_complete_config(struct json_object*         _margo,
                 MARGO_ERROR(0,
                             "In scheduler definition, pools should not be an "
                             "empty array");
-                return -1;
+                return false;
             }
             // check that all the pool references refer to a known pool
             unsigned            j;
@@ -613,7 +612,7 @@ validate_and_complete_config(struct json_object*         _margo,
                         MARGO_ERROR(
                             0, "Invalid pool index %d in scheduler definition",
                             _pool_ref_index);
-                        return -1;
+                        return false;
                     }
                 } else if (json_object_is_type(_pool_ref, json_type_string)) {
                     const char* _pool_ref_name
@@ -625,7 +624,7 @@ validate_and_complete_config(struct json_object*         _margo,
                             0,
                             "Invalid pool name \"%s\" in scheduler definition",
                             _pool_ref_name);
-                        return -1;
+                        return false;
                     }
                     // replace the name with the index
                     json_object_array_put_idx(
@@ -634,14 +633,14 @@ validate_and_complete_config(struct json_object*         _margo,
                     MARGO_ERROR(
                         0,
                         "Reference to pool should be an integer or a string");
-                    return -1;
+                    return false;
                 }
                 MARGO_TRACE(0, "argobots.xstreams[%d].scheduler.pools[%d] = %d",
                             i, j, _pool_ref_index);
             }
         }
         // check that the names of xstreams are unique
-        CONFIG_NAMES_MUST_BE_UNIQUE_OLD(_xstreams, "argobots.xstreams");
+        CONFIG_NAMES_MUST_BE_UNIQUE(_xstreams, "argobots.xstreams");
         // if there is no __primary__ xstream, create one, along with its
         // scheduler and pool
         {
@@ -720,14 +719,14 @@ validate_and_complete_config(struct json_object*         _margo,
                         MARGO_ERROR(0,
                                     "\"progress_pool\" value (%d) out of range",
                                     progress_pool_index);
-                        return -1;
+                        return false;
                     }
                 } else {
                     // invalid type for progress_pool field
                     MARGO_ERROR(0,
                                 "\"progress_pool\" should be of type integer "
                                 "or string");
-                    return -1;
+                    return false;
                 }
                 // update the progress_pool to an integer index
                 json_object_object_add(
@@ -745,7 +744,7 @@ validate_and_complete_config(struct json_object*         _margo,
                                              json_type_boolean)) {
                         MARGO_ERROR(
                             0, "\"use_progress_thread\" should be a boolean");
-                        return -1;
+                        return false;
                     }
                     use_progress_thread = json_object_get_boolean(
                         json_object_object_get(_margo, "use_progress_thread"));
@@ -857,13 +856,13 @@ validate_and_complete_config(struct json_object*         _margo,
                                >= (int)json_object_array_length(_pools)) {
                         MARGO_ERROR(0, "\"rpc_pool\" value (%d) out of range",
                                     rpc_pool_index);
-                        return -1;
+                        return false;
                     }
                 } else {
                     // rpc_pool has invalid type
                     MARGO_ERROR(
                         0, "\"rpc_pool\" should be of type integer or string");
-                    return -1;
+                    return false;
                 }
                 // update the rpc_pool to an integer index
                 json_object_object_add(_margo, "rpc_pool",
@@ -878,7 +877,7 @@ validate_and_complete_config(struct json_object*         _margo,
                             json_type_int)) {
                         MARGO_ERROR(
                             0, "\"rpc_thread_count\" should be an integer");
-                        return -1;
+                        return false;
                     }
                     rpc_thread_count = json_object_get_int64(
                         json_object_object_get(_margo, "rpc_thread_count"));
@@ -957,73 +956,8 @@ validate_and_complete_config(struct json_object*         _margo,
     }
     json_object_object_del(_margo, "rpc_thread_count");
 
-    return 0;
+    return true;
 }
-#if 0
-static void fill_hg_init_info_from_config(struct json_object*  config,
-                                          struct hg_init_info* info)
-{
-    struct json_object* hg = json_object_object_get(config, "mercury");
-    info->na_class         = NULL;
-    info->request_post_init
-        = json_object_get_int(json_object_object_get(hg, "request_post_init"));
-    info->request_post_incr
-        = json_object_get_int(json_object_object_get(hg, "request_post_incr"));
-    info->auto_sm
-        = json_object_get_boolean(json_object_object_get(hg, "auto_sm"));
-    info->no_bulk_eager
-        = json_object_get_boolean(json_object_object_get(hg, "no_bulk_eager"));
-    info->no_loopback
-        = json_object_get_boolean(json_object_object_get(hg, "no_loopback"));
-    info->stats = json_object_get_boolean(json_object_object_get(hg, "stats"));
-    struct json_object* ip_subnet = json_object_object_get(hg, "ip_subnet");
-    info->na_init_info.ip_subnet
-        = ip_subnet ? json_object_get_string(ip_subnet) : NULL;
-    struct json_object* auth_key = json_object_object_get(hg, "auth_key");
-    info->na_init_info.auth_key
-        = auth_key ? json_object_get_string(auth_key) : NULL;
-    if (info->na_init_info.auth_key && (info->na_init_info.auth_key[0] == '\0'))
-        info->na_init_info.auth_key = NULL;
-    info->na_init_info.progress_mode = 0;
-    if (json_object_get_boolean(json_object_object_get(hg, "na_no_block")))
-        info->na_init_info.progress_mode |= NA_NO_BLOCK;
-    if (json_object_get_boolean(json_object_object_get(hg, "na_no_retry")))
-        info->na_init_info.progress_mode |= NA_NO_RETRY;
-        /* the na_init_info.request_mem_device first appeaed in Mercury 2.2.0 */
-    #if (HG_VERSION_MAJOR > 2) \
-        || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR > 1)
-    if (json_object_get_boolean(
-            json_object_object_get(hg, "na_request_mem_device")))
-        info->na_init_info.request_mem_device = HG_TRUE;
-    #endif
-    info->na_init_info.max_contexts
-        = json_object_get_int64(json_object_object_get(hg, "max_contexts"));
-    /* The na_init_info max_unexpected_size nad max_expected_size first
-     * appeared in Mercury 2.0.1.
-     */
-    #if (HG_VERSION_MAJOR > 2)                             \
-        || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR > 0) \
-        || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR == 0 \
-            && HG_VERSION_PATCH > 0)
-    info->na_init_info.max_unexpected_size = json_object_get_int(
-        json_object_object_get(hg, "na_max_unexpected_size"));
-    info->na_init_info.max_expected_size = json_object_get_int(
-        json_object_object_get(hg, "na_max_expected_size"));
-    #else
-    /* Issue a warning if the configuration specifies values for these
-     * parameters and we don't have a way to honor them.
-     */
-    if (json_object_object_get(hg, "na_max_unexpected_size"))
-        MARGO_WARNING(0,
-                      "na_max_unexpected_size json parameter not supported on "
-                      "this version of Mercury");
-    if (json_object_object_get(hg, "na_max_expected_size"))
-        MARGO_WARNING(0,
-                      "na_max_expected_size json parameter not supported on "
-                      "this version of Mercury");
-    #endif
-}
-#endif
 
 static int create_pool_from_config(struct json_object*    pool_config,
                                    uint32_t               index,
@@ -1334,20 +1268,3 @@ static void remote_shutdown_ult(hg_handle_t handle)
     if (mid->enable_remote_shutdown) { margo_finalize(mid); }
 }
 static DEFINE_MARGO_RPC_HANDLER(remote_shutdown_ult)
-
-#if 0
-static int check_hg_eager_sizes(hg_class_t*         hg_class,
-                                struct json_object* hg_cfg)
-{
-    hg_size_t eager_size = 0;
-
-    eager_size = HG_Class_get_input_eager_size(hg_class);
-    CONFIG_OVERRIDE_INTEGER(hg_cfg, "input_eager_size", eager_size,
-                            "mercury.input_eager_size", 1);
-    eager_size = HG_Class_get_output_eager_size(hg_class);
-    CONFIG_OVERRIDE_INTEGER(hg_cfg, "output_eager_size", eager_size,
-                            "mercury.output_eager_size", 1);
-
-    return (0);
-}
-#endif
