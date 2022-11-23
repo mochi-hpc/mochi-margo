@@ -19,6 +19,8 @@
 
 #include "margo.h"
 #include "margo-config.h"
+#include "margo-abt-config.h"
+#include "margo-hg-config.h"
 #include "margo-abt-macros.h"
 #include "margo-logging.h"
 #include "margo-monitoring.h"

@@ -83,6 +83,31 @@ inline static bool json_object_object_get_bool_or(
 #define CONFIG_HAS(__config, __key, __out) \
     ((__out = json_object_object_get(__config, __key)) != NULL)
 
+#define ASSERT_CONFIG_HAS_REQUIRED(__config__, __key__, __type__, __ctx__) \
+    do {                                                                   \
+        struct json_object* __key__                                        \
+            = json_object_object_get(__config__, #__key__);                \
+        if (!__key__) {                                                    \
+            margo_error(0, "\"" #__key__ "\" not found in " #__ctx__       \
+                           " configuration");                              \
+            return false;                                                  \
+        }                                                                  \
+        if (!json_object_is_type(__key__, json_type_##__type__)) {         \
+            margo_error(0, "Invalid type for \"" #__key__ " in " #__ctx__  \
+                           " configuration (expected " #__type__ ")");     \
+        }                                                                  \
+    } while (0)
+
+#define ASSERT_CONFIG_HAS_OPTIONAL(__config__, __key__, __type__, __ctx__)    \
+    do {                                                                      \
+        struct json_object* __key__                                           \
+            = json_object_object_get(__config__, #__key__);                   \
+        if (__key__ && !json_object_is_type(__key__, json_type_##__type__)) { \
+            margo_error(0, "Invalid type for \"" #__key__ " in " #__ctx__     \
+                           " configuration (expected " #__type__ ")");        \
+        }                                                                     \
+    } while (0)
+
 // Checks if a JSON object has a particular key and its value is of type object.
 // If the field does not exist, creates it with an empty object.
 // If the field exists but is not of type object, prints an error and return -1.
