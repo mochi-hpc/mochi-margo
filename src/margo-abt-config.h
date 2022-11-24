@@ -14,10 +14,17 @@
 
 #include <margo-config-private.h>
 #include "margo.h"
+#include "margo-globals.h"
 #include "margo-prio-pool.h"
 #include "margo-logging.h"
 #include "margo-macros.h"
 #include "margo-abt-macros.h"
+
+/* default values for key ABT parameters if not specified */
+#define MARGO_DEFAULT_ABT_MEM_MAX_NUM_STACKS 8
+#define MARGO_DEFAULT_ABT_THREAD_STACKSIZE   2097152
+
+typedef struct json_object json_object_t;
 
 typedef char
     optional_char; /* optional string (may be null after initialization) */
@@ -49,14 +56,16 @@ typedef struct margo_abt_pool {
     bool     margo_free_flag; /* flag if Margo is responsible for freeing */
 } margo_abt_pool_t;
 
-static inline bool
-margo_abt_pool_validate_json(const struct json_object* pool_json);
-static inline bool margo_abt_pool_init_from_json(const struct json_object*,
+static inline bool margo_abt_pool_validate_json(const json_object_t*, uint32_t);
+static inline bool margo_abt_pool_init_from_json(const json_object_t*,
                                                  uint32_t,
                                                  margo_abt_pool_t*);
-static inline struct json_object*
-                   margo_abt_pool_to_json(const margo_abt_pool_t*);
-static inline void margo_abt_pool_destroy(margo_abt_pool_t*);
+static inline json_object_t* margo_abt_pool_to_json(const margo_abt_pool_t*);
+static inline void           margo_abt_pool_destroy(margo_abt_pool_t*);
+static inline bool           margo_abt_pool_init_external(uint32_t,
+                                                          const char*,
+                                                          ABT_pool,
+                                                          margo_abt_pool_t*);
 
 /* Struct to track scheduler information in a margo_abt_xstream. */
 typedef struct margo_abt_sched {
@@ -66,15 +75,15 @@ typedef struct margo_abt_sched {
     size_t    num_pools;
 } margo_abt_sched_t;
 
-static inline bool margo_abt_sched_validate_json(const struct json_object*,
-                                                 const struct json_object*);
-static inline bool margo_abt_sched_init_from_json(const struct json_object*,
+static inline bool margo_abt_sched_validate_json(const json_object_t*,
+                                                 uint32_t,
+                                                 const json_object_t*);
+static inline bool margo_abt_sched_init_from_json(const json_object_t*,
                                                   margo_abt_sched_t*,
                                                   const margo_abt_pool_t*,
                                                   unsigned);
-static inline struct json_object*
-                   margo_abt_sched_to_json(const margo_abt_sched_t*);
-static inline void margo_abt_sched_destroy(margo_abt_sched_t*);
+static inline json_object_t* margo_abt_sched_to_json(const margo_abt_sched_t*);
+static inline void           margo_abt_sched_destroy(margo_abt_sched_t*);
 
 /* Struct to track ES created by margo along with a flag indicating if
  * margo is responsible for explicitly free'ing the ES or not.
@@ -85,14 +94,15 @@ typedef struct margo_abt_xstream {
     bool margo_free_flag; /* flag if Margo is responsible for freeing */
 } margo_abt_xstream_t;
 
-static inline bool margo_abt_xstream_validate_json(const struct json_object*,
-                                                   const struct json_object*);
-static inline bool margo_abt_xstream_init_from_json(const struct json_object*,
+static inline bool margo_abt_xstream_validate_json(const json_object_t*,
+                                                   uint32_t,
+                                                   const json_object_t*);
+static inline bool margo_abt_xstream_init_from_json(const json_object_t*,
                                                     uint32_t,
                                                     margo_abt_xstream_t*,
                                                     const margo_abt_pool_t*,
                                                     unsigned);
-static inline struct json_object*
+static inline json_object_t*
                    margo_abt_xstream_to_json(const margo_abt_xstream_t*);
 static inline void margo_abt_xstream_destroy(margo_abt_xstream_t*);
 
@@ -104,11 +114,23 @@ typedef struct margo_abt {
     unsigned                  num_xstreams;
 } margo_abt_t;
 
-static inline bool margo_abt_validate_json(const struct json_object*);
-static inline bool margo_abt_init_from_json(const struct json_object*,
-                                            margo_abt_t*);
-static inline struct json_object* margo_abt_to_json(const margo_abt_t*);
-static inline void                margo_abt_destroy(margo_abt_t*);
+/* User-provided initialization information */
+typedef struct margo_abt_user_args {
+    ABT_pool       progress_pool;        /* user-provided ABT_pool */
+    ABT_pool       rpc_pool;             /* user-provided ABT_pool */
+    json_object_t* jprogress_pool;       /* "progres_pool" field */
+    json_object_t* jrpc_pool;            /* "handler_pool" field */
+    json_object_t* juse_progress_thread; /* "use_progress_thread" field */
+    json_object_t* jrpc_thread_count;    /* "rpc_thread_count" field */
+} margo_abt_user_args_t;
+
+static inline bool              margo_abt_validate_json(const json_object_t*,
+                                                        const margo_abt_user_args_t*);
+static inline bool              margo_abt_init_from_json(const json_object_t*,
+                                                         const margo_abt_user_args_t*,
+                                                         margo_abt_t*);
+static inline json_object_t*    margo_abt_to_json(const margo_abt_t*);
+static inline void              margo_abt_destroy(margo_abt_t*);
 static inline margo_abt_pool_t* margo_abt_find_pool_by_name(const margo_abt_t*,
                                                             const char*);
 static inline margo_abt_pool_t*
@@ -122,25 +144,53 @@ margo_abt_find_xstream_by_handle(const margo_abt_t*, ABT_xstream);
 
 /* ------ margo_abt_pool_* --------- */
 
-static inline bool margo_abt_pool_validate_json(const struct json_object* json)
+static inline bool margo_abt_pool_validate_json(const json_object_t* jpool,
+                                                uint32_t             index)
 {
-    if (!json || !json_object_is_type(json, json_type_object)) return false;
+    if (!jpool || !json_object_is_type(jpool, json_type_object)) return false;
 
-    ASSERT_CONFIG_HAS_OPTIONAL(json, access, string,
-                               pool); /* default: "mpmcs" for predef pools */
-    ASSERT_CONFIG_HAS_OPTIONAL(json, kind, string,
-                               pool); /* default: "fifo_wait" */
-    ASSERT_CONFIG_HAS_OPTIONAL(json, name, string,
-                               pool); /* default: generated */
+#define HANDLE_CONFIG_ERROR return false
 
-    if (json_object_object_get(json, "name")) CONFIG_NAME_IS_VALID(json);
+    /* default: "mpmcs" for predef pools */
+    ASSERT_CONFIG_HAS_OPTIONAL(jpool, access, string, pool);
+    json_object_t* jaccess = json_object_object_get(jpool, "access");
+    if (jaccess) {
+        char fmt[128];
+        sprintf(fmt, "argobots.pools[%d].access", index);
+        CONFIG_IS_IN_ENUM_STRING(jaccess, fmt, "private", "spsc", "mpsc",
+                                 "spmc", "mpmc");
+    }
+
+    /* default: "fifo_wait" */
+    ASSERT_CONFIG_HAS_OPTIONAL(jpool, kind, string, pool);
+    json_object_t* jkind = json_object_object_get(jpool, "kind");
+    if (jkind) {
+        char fmt[128];
+        sprintf(fmt, "argobots.pools[%d].kind", index);
+        CONFIG_IS_IN_ENUM_STRING(jkind, fmt, "fifo", "fifo_wait", "prio_wait",
+                                 "external");
+        if (strcmp(json_object_get_string(jkind), "external") == 0) {
+            margo_error(0,
+                        "Cannot instantiate configuration with pools marked "
+                        "\"external\"");
+            return false;
+        }
+    }
+    // TODO: support dlopen-ed pool definitions
+
+    /* default: generated */
+    ASSERT_CONFIG_HAS_OPTIONAL(jpool, name, string, pool);
+    json_object_t* jname = json_object_object_get(jpool, "name");
+    if (jname) CONFIG_NAME_IS_VALID(jpool);
+
+#undef HANDLE_CONFIG_ERROR
 
     return true;
 }
 
-static inline bool margo_abt_pool_init_from_json(const struct json_object* json,
-                                                 uint32_t          index,
-                                                 margo_abt_pool_t* p)
+static inline bool margo_abt_pool_init_from_json(const json_object_t* jpool,
+                                                 uint32_t             index,
+                                                 margo_abt_pool_t*    p)
 {
     ABT_pool_access access = ABT_POOL_ACCESS_MPMC;
     ABT_pool_kind   kind   = (ABT_pool_kind)(-1);
@@ -148,7 +198,7 @@ static inline bool margo_abt_pool_init_from_json(const struct json_object* json,
     p->margo_free_flag = ABT_TRUE;
     p->info.index      = index;
 
-    struct json_object* jname = json_object_object_get(json, "name");
+    json_object_t* jname = json_object_object_get(jpool, "name");
     if (jname)
         p->info.name = strdup(json_object_get_string(jname));
     else {
@@ -157,12 +207,8 @@ static inline bool margo_abt_pool_init_from_json(const struct json_object* json,
         snprintf((char*)p->info.name, name_size + 1, "__pool_%d__", index);
     }
 
-    struct json_object* jkind = json_object_object_get(json, "kind");
-    if (jkind)
-        p->kind = strdup(json_object_get_string(jkind));
-    else
-        p->kind = strdup("fifo_wait");
-
+    p->kind
+        = strdup(json_object_object_get_string_or(jpool, "kind", "fifo_wait"));
     if (strcmp(p->kind, "fifo_wait") == 0)
         kind = ABT_POOL_FIFO_WAIT;
     else if (strcmp(p->kind, "fifo") == 0)
@@ -172,13 +218,9 @@ static inline bool margo_abt_pool_init_from_json(const struct json_object* json,
         kind = ABT_POOL_RANDWS;
 #endif
 
-    struct json_object* jaccess = json_object_object_get(json, "access");
-    if (jaccess)
+    json_object_t* jaccess = json_object_object_get(jpool, "access");
+    if (jaccess) {
         p->access = strdup(json_object_get_string(jaccess));
-    else if (kind != (ABT_pool_kind)(-1))
-        p->access = strdup("mpmc");
-
-    if (p->access) {
         if (strcmp(p->access, "private") == 0)
             access = ABT_POOL_ACCESS_PRIV;
         else if (strcmp(p->access, "mpmc") == 0)
@@ -201,7 +243,10 @@ static inline bool margo_abt_pool_init_from_json(const struct json_object* json,
                               &p->info.pool);
     } else {
         // custom pool definition, not supported for now
-        margo_error(NULL, "Invalid pool kind \"%s\"", p->kind);
+        margo_error(NULL,
+                    "Invalid pool kind \"%s\" "
+                    "(custom pool definitions not yet supported)",
+                    p->kind);
         ret = ABT_ERR_INV_POOL_KIND;
     }
 
@@ -212,19 +257,31 @@ static inline bool margo_abt_pool_init_from_json(const struct json_object* json,
     return true;
 }
 
-static inline struct json_object*
-margo_abt_pool_to_json(const margo_abt_pool_t* p)
+static inline bool margo_abt_pool_init_external(uint32_t          index,
+                                                const char*       name,
+                                                ABT_pool          handle,
+                                                margo_abt_pool_t* p)
 {
-    struct json_object* json = json_object_new_object();
+    memset(p, 0, sizeof(*p));
+    p->info.index = index;
+    p->info.name  = name;
+    p->info.pool  = handle;
+    p->kind       = strdup("external");
+    return true;
+}
+
+static inline json_object_t* margo_abt_pool_to_json(const margo_abt_pool_t* p)
+{
+    json_object_t* jpool = json_object_new_object();
     int flags = JSON_C_OBJECT_ADD_KEY_IS_NEW | JSON_C_OBJECT_ADD_CONSTANT_KEY;
-    json_object_object_add_ex(json, "kind", json_object_new_string(p->kind),
+    json_object_object_add_ex(jpool, "kind", json_object_new_string(p->kind),
                               flags);
-    json_object_object_add_ex(json, "name",
+    json_object_object_add_ex(jpool, "name",
                               json_object_new_string(p->info.name), flags);
     if (p->access)
-        json_object_object_add_ex(json, "access",
+        json_object_object_add_ex(jpool, "access",
                                   json_object_new_string(p->access), flags);
-    return json;
+    return jpool;
 }
 
 static inline void margo_abt_pool_destroy(margo_abt_pool_t* p)
@@ -241,38 +298,49 @@ static inline void margo_abt_pool_destroy(margo_abt_pool_t* p)
 /* ------ margo_abt_sched_* --------- */
 
 static inline bool
-margo_abt_sched_validate_json(const struct json_object* s,
-                              const struct json_object* available_pool_array)
+margo_abt_sched_validate_json(const json_object_t* jsched,
+                              uint32_t             es_index,
+                              const json_object_t* javailable_pool_array)
 {
-    if (!s || !json_object_is_type(s, json_type_object)) return false;
+    if (!jsched || !json_object_is_type(jsched, json_type_object)) return false;
 
-    ASSERT_CONFIG_HAS_OPTIONAL(s, type, string, scheduler);
-    ASSERT_CONFIG_HAS_OPTIONAL(s, pools, array, scheduler);
+#define HANDLE_CONFIG_ERROR return false
 
-    struct json_object* sched_pool_array = json_object_object_get(s, "pools");
-    size_t sched_pool_array_len = json_object_array_length(sched_pool_array);
-    size_t num_available_pools = json_object_array_length(available_pool_array);
+    ASSERT_CONFIG_HAS_OPTIONAL(jsched, type, string, scheduler);
+    json_object_t* jtype = json_object_object_get(jsched, "type");
+    if (jtype) {
+        char field[128];
+        sprintf(field, "argobots.xstreams[%d].scheduler.type", es_index);
+        CONFIG_IS_IN_ENUM_STRING(jtype, field, "default", "basic", "prio",
+                                 "randws", "basic_wait");
+    }
+
+    ASSERT_CONFIG_HAS_OPTIONAL(jsched, pools, array, scheduler);
+
+    json_object_t* jsched_pools = json_object_object_get(jsched, "pools");
+    size_t sched_pool_array_len = json_object_array_length(jsched_pools);
+    size_t num_available_pools
+        = json_object_array_length(javailable_pool_array);
 
     for (unsigned i = 0; i < sched_pool_array_len; i++) {
-        struct json_object* pool_ref
-            = json_object_array_get_idx(sched_pool_array, i);
-        /* pool_ref is an integer */
-        if (json_object_is_type(pool_ref, json_type_int64)) {
-            int index = json_object_get_int(pool_ref);
+        json_object_t* jpool_ref = json_object_array_get_idx(jsched_pools, i);
+        /* jpool_ref is an integer */
+        if (json_object_is_type(jpool_ref, json_type_int64)) {
+            int index = json_object_get_int(jpool_ref);
             if (index < 0 || index >= num_available_pools) {
                 margo_error(
                     0, "Invalid pool index (%d) in scheduler configuration",
                     index);
                 return false;
             }
-            /* pool_ref is a string */
-        } else if (json_object_is_type(pool_ref, json_type_string)) {
-            const char* pool_name = json_object_get_string(pool_ref);
+            /* jpool_ref is a string */
+        } else if (json_object_is_type(jpool_ref, json_type_string)) {
+            const char* pool_name = json_object_get_string(jpool_ref);
             unsigned    j         = 0;
             for (; j < num_available_pools; j++) {
-                struct json_object* p
-                    = json_object_array_get_idx(available_pool_array, j);
-                struct json_object* p_name = json_object_object_get(p, "name");
+                json_object_t* p
+                    = json_object_array_get_idx(javailable_pool_array, j);
+                json_object_t* p_name = json_object_object_get(p, "name");
                 if (p_name
                     && strcmp(pool_name, json_object_get_string(p_name)) == 0)
                     break;
@@ -293,19 +361,16 @@ margo_abt_sched_validate_json(const struct json_object* s,
         }
     }
     return true;
+#undef HANDLE_CONFIG_ERROR
 }
 
-static inline bool
-margo_abt_sched_init_from_json(const struct json_object* json,
-                               margo_abt_sched_t*        s,
-                               const margo_abt_pool_t*   pools,
-                               unsigned                  total_num_pools)
+static inline bool margo_abt_sched_init_from_json(const json_object_t* jsched,
+                                                  margo_abt_sched_t*   s,
+                                                  const margo_abt_pool_t* pools,
+                                                  unsigned total_num_pools)
 {
-    struct json_object* jtype = json_object_object_get(json, "type");
-    if (jtype)
-        s->type = strdup(json_object_get_string(jtype));
-    else
-        s->type = strdup("default");
+    s->type
+        = strdup(json_object_object_get_string_or(jsched, "type", "default"));
 
     ABT_sched_predef sched_predef = ABT_SCHED_DEFAULT;
     if (s->type) {
@@ -322,19 +387,19 @@ margo_abt_sched_init_from_json(const struct json_object* json,
     }
     // TODO add support for dynamically loaded sched definitions
 
-    struct json_object* jpool_array = json_object_object_get(json, "pools");
-    if (jpool_array)
-        json_object_get(jpool_array);
+    json_object_t* jpools = json_object_object_get(jsched, "pools");
+    if (jpools)
+        json_object_get(jpools);
     else
-        jpool_array = json_object_new_array_ext(0);
+        jpools = json_object_new_array_ext(0);
 
-    size_t num_pools    = json_object_array_length(jpool_array);
-    s->pools            = malloc(num_pools * sizeof(*(s->pools)));
-    s->num_pools        = num_pools;
-    ABT_pool* abt_pools = malloc(num_pools * sizeof(*abt_pools));
-    for (unsigned i = 0; i < num_pools; i++) {
-        struct json_object* jpool = json_object_array_get_idx(jpool_array, i);
-        uint32_t            pool_idx = 0;
+    size_t jpools_len   = json_object_array_length(jpools);
+    s->pools            = malloc(jpools_len * sizeof(*(s->pools)));
+    s->num_pools        = jpools_len;
+    ABT_pool* abt_pools = malloc(jpools_len * sizeof(*abt_pools));
+    for (unsigned i = 0; i < jpools_len; i++) {
+        json_object_t* jpool    = json_object_array_get_idx(jpools, i);
+        uint32_t       pool_idx = 0;
         if (json_object_is_type(jpool, json_type_int64)) {
             pool_idx = (uint32_t)json_object_get_int(jpool);
         } else {
@@ -347,9 +412,9 @@ margo_abt_sched_init_from_json(const struct json_object* json,
         s->pools[i]  = pool_idx;
         abt_pools[i] = pools[pool_idx].info.pool;
     }
-    json_object_put(jpool_array);
+    json_object_put(jpools);
 
-    int ret = ABT_sched_create_basic(sched_predef, num_pools, abt_pools,
+    int ret = ABT_sched_create_basic(sched_predef, jpools_len, abt_pools,
                                      ABT_SCHED_CONFIG_NULL, &s->sched);
 
     if (ret != ABT_SUCCESS) {
@@ -360,14 +425,13 @@ margo_abt_sched_init_from_json(const struct json_object* json,
     return true;
 }
 
-static inline struct json_object*
-margo_abt_sched_to_json(const margo_abt_sched_t* s)
+static inline json_object_t* margo_abt_sched_to_json(const margo_abt_sched_t* s)
 {
-    struct json_object* json = json_object_new_object();
+    json_object_t* json = json_object_new_object();
     int flags = JSON_C_OBJECT_ADD_KEY_IS_NEW | JSON_C_OBJECT_ADD_CONSTANT_KEY;
     json_object_object_add_ex(json, "type", json_object_new_string(s->type),
                               flags);
-    struct json_object* jpools = json_object_new_array_ext(s->num_pools);
+    json_object_t* jpools = json_object_new_array_ext(s->num_pools);
     for (uint32_t i = 0; i < s->num_pools; i++) {
         json_object_array_add(jpools, json_object_new_uint64(s->pools[i]));
     }
@@ -385,23 +449,27 @@ static inline void margo_abt_sched_destroy(margo_abt_sched_t* s)
 /* ------ margo_abt_xstream_* --------- */
 
 static inline bool
-margo_abt_xstream_validate_json(const struct json_object* x,
-                                const struct json_object* pool_array)
+margo_abt_xstream_validate_json(const json_object_t* jxstream,
+                                uint32_t             index,
+                                const json_object_t* javailable_pools)
 {
-    if (!x || !json_object_is_type(x, json_type_object)) return false;
-
-    ASSERT_CONFIG_HAS_OPTIONAL(x, scheduler, object, xstream);
-    ASSERT_CONFIG_HAS_OPTIONAL(x, name, string, xstream);
-    ASSERT_CONFIG_HAS_OPTIONAL(x, cpubind, int, xstream);
-    ASSERT_CONFIG_HAS_OPTIONAL(x, affiniry, array, xstream);
-
-    struct json_object* jsched = json_object_object_get(x, "scheduler");
-    if (jsched && !margo_abt_sched_validate_json(jsched, pool_array))
+#define HANDLE_CONFIG_ERROR return false
+    if (!jxstream || !json_object_is_type(jxstream, json_type_object))
         return false;
 
-    struct json_object* jaffinity = json_object_object_get(x, "affinity");
+    ASSERT_CONFIG_HAS_OPTIONAL(jxstream, scheduler, object, xstreams);
+    ASSERT_CONFIG_HAS_OPTIONAL(jxstream, name, string, xstreams);
+    ASSERT_CONFIG_HAS_OPTIONAL(jxstream, cpubind, int, xstreams);
+    ASSERT_CONFIG_HAS_OPTIONAL(jxstream, affinity, array, xstreams);
+
+    json_object_t* jsched = json_object_object_get(jxstream, "scheduler");
+    if (jsched
+        && !margo_abt_sched_validate_json(jsched, index, javailable_pools))
+        return false;
+
+    json_object_t* jaffinity = json_object_object_get(jxstream, "affinity");
     for (unsigned i = 0; i < json_object_array_length(jaffinity); i++) {
-        struct json_object* value = json_object_array_get_idx(jaffinity, i);
+        json_object_t* value = json_object_array_get_idx(jaffinity, i);
         if (!json_object_is_type(value, json_type_int)) {
             margo_error(
                 0, "Invalid type found in affinity array (expected integer)");
@@ -409,14 +477,14 @@ margo_abt_xstream_validate_json(const struct json_object* x,
         }
     }
 
-    struct json_object* jname = json_object_object_get(x, "name");
+    json_object_t* jname = json_object_object_get(jxstream, "name");
     if (jname) {
-        CONFIG_NAME_IS_VALID(x);
+        CONFIG_NAME_IS_VALID(jxstream);
         const char* name = json_object_get_string(jname);
         if (strcmp(name, "__primary__") == 0
             && ABT_initialized() == ABT_SUCCESS) {
-            struct json_object* disable_safety_warning
-                = json_object_object_get(x, "disable_safety_warning");
+            json_object_t* disable_safety_warning
+                = json_object_object_get(jxstream, "disable_safety_warning");
             if (!(disable_safety_warning
                   && json_object_is_type(disable_safety_warning,
                                          json_type_boolean)
@@ -437,8 +505,7 @@ margo_abt_xstream_validate_json(const struct json_object* x,
                 return false;
             }
 
-            struct json_object* jpools
-                = json_object_object_get(jsched, "pools");
+            json_object_t* jpools = json_object_object_get(jsched, "pools");
             if (!jpools || json_object_array_length(jpools) == 0) {
                 margo_error(0,
                             "__primary__ xstream requires scheduler to have at "
@@ -447,19 +514,19 @@ margo_abt_xstream_validate_json(const struct json_object* x,
             }
         }
     }
-
     return true;
+#undef HANDLE_CONFIG_ERROR
 }
 
 static inline bool
-margo_abt_xstream_init_from_json(const struct json_object* json,
-                                 uint32_t                  index,
-                                 margo_abt_xstream_t*      x,
-                                 const margo_abt_pool_t*   pools,
-                                 unsigned                  num_pools)
+margo_abt_xstream_init_from_json(const json_object_t*    jxstream,
+                                 uint32_t                index,
+                                 margo_abt_xstream_t*    x,
+                                 const margo_abt_pool_t* pools,
+                                 unsigned                num_pools)
 {
-    bool                result = false;
-    struct json_object* jname  = json_object_object_get(json, "name");
+    bool           result = false;
+    json_object_t* jname  = json_object_object_get(jxstream, "name");
     if (jname)
         x->info.name = strdup(json_object_get_string(jname));
     else {
@@ -468,13 +535,13 @@ margo_abt_xstream_init_from_json(const struct json_object* json,
         snprintf((char*)x->info.name, name_len + 1, "__xstream_%d__", index);
     }
 
-    int                 cpubind  = -1;
-    struct json_object* jcpubind = json_object_object_get(json, "cpubind");
+    int            cpubind  = -1;
+    json_object_t* jcpubind = json_object_object_get(jxstream, "cpubind");
     if (jcpubind) cpubind = json_object_get_int(jcpubind);
 
-    int*                affinity     = NULL;
-    int                 affinity_len = 0;
-    struct json_object* jaffinity    = json_object_object_get(json, "affinity");
+    int*           affinity     = NULL;
+    int            affinity_len = 0;
+    json_object_t* jaffinity    = json_object_object_get(jxstream, "affinity");
     if (jaffinity) {
         affinity_len = json_object_array_length(jaffinity);
         affinity     = malloc(sizeof(*affinity) * affinity_len);
@@ -484,7 +551,7 @@ margo_abt_xstream_init_from_json(const struct json_object* json,
         }
     }
 
-    struct json_object* jsched = json_object_object_get(json, "scheduler");
+    json_object_t* jsched = json_object_object_get(jxstream, "scheduler");
     if (jsched)
         json_object_get(jsched);
     else
@@ -508,19 +575,19 @@ finish:
     return result;
 }
 
-static inline struct json_object*
+static inline json_object_t*
 margo_abt_xstream_to_json(const margo_abt_xstream_t* x)
 {
-    struct json_object* json   = json_object_new_object();
-    struct json_object* jsched = margo_abt_sched_to_json(&(x->sched));
+    json_object_t* jxstream = json_object_new_object();
+    json_object_t* jsched   = margo_abt_sched_to_json(&(x->sched));
     int flags = JSON_C_OBJECT_ADD_KEY_IS_NEW | JSON_C_OBJECT_ADD_CONSTANT_KEY;
-    json_object_object_add_ex(json, "scheduler", jsched, flags);
+    json_object_object_add_ex(jxstream, "scheduler", jsched, flags);
 
     int cpuid;
     int ret = ABT_xstream_get_cpubind(x->info.xstream, &cpuid);
     if (ret == ABT_SUCCESS) {
-        json_object_object_add_ex(json, "cpubind", json_object_new_int(cpuid),
-                                  flags);
+        json_object_object_add_ex(jxstream, "cpubind",
+                                  json_object_new_int(cpuid), flags);
     }
 
     int num_cpus;
@@ -530,16 +597,16 @@ margo_abt_xstream_to_json(const margo_abt_xstream_t* x)
         ret = ABT_xstream_get_affinity(x->info.xstream, num_cpus, cpuids,
                                        &num_cpus);
         if (ret == ABT_SUCCESS) {
-            struct json_object* jcpuids = json_object_new_array_ext(num_cpus);
+            json_object_t* jcpuids = json_object_new_array_ext(num_cpus);
             for (int i = 0; i < num_cpus; i++) {
                 json_object_array_add(jcpuids,
                                       json_object_new_int64(cpuids[i]));
             }
-            json_object_object_add_ex(json, "affinity", jcpuids, flags);
+            json_object_object_add_ex(jxstream, "affinity", jcpuids, flags);
         }
         free(cpuids);
     }
-    return json;
+    return jxstream;
 }
 
 static inline void margo_abt_xstream_destroy(margo_abt_xstream_t* x)
@@ -555,25 +622,148 @@ static inline void margo_abt_xstream_destroy(margo_abt_xstream_t* x)
 
 /* ------ margo_abt_* --------- */
 
-static inline bool margo_abt_validate_json(const struct json_object* a)
+static inline bool
+margo_abt_validate_json(const json_object_t*         a,
+                        const margo_abt_user_args_t* user_args)
 {
+#define HANDLE_CONFIG_ERROR \
+    result = false;         \
+    goto finish
+
     if (!a || !json_object_is_type(a, json_type_object)) return false;
 
-    bool result = true;
+    json_object_t* ignore = NULL;
+    bool           result = true;
     ASSERT_CONFIG_HAS_OPTIONAL(a, pools, array, argobots);
     ASSERT_CONFIG_HAS_OPTIONAL(a, xstreams, array, argobots);
     ASSERT_CONFIG_HAS_OPTIONAL(a, abt_mem_max_num_stacks, int, argobots);
     ASSERT_CONFIG_HAS_OPTIONAL(a, abt_thread_stacksize, int, argobots);
 
-    struct json_object* jpools = json_object_object_get(a, "pools");
+    /* validate abt_mem_max_num_stacks and abt_thread_stacksize */
+
+    json_object_t* jabt_mem_max_num_stacks
+        = json_object_object_get(a, "abt_mem_max_num_stacks");
+    if (jabt_mem_max_num_stacks) {
+        if (getenv("ABT_MEM_MAX_NUM_STACKS")) {
+            long val = atol(getenv("ABT_MEM_MAX_NUM_STACKS"));
+            if (val != json_object_get_int64(jabt_mem_max_num_stacks)) {
+                margo_warning(
+                    0,
+                    "\"abt_mem_max_num_stacks\" will be ignored"
+                    " because the ABT_MEM_MAX_NUM_STACKS environment variable"
+                    " is defined");
+            }
+        } else if (ABT_initialized() == ABT_SUCCESS) {
+            margo_warning(0,
+                          "\"abt_mem_max_num_stacks\" will be ignored"
+                          " because Argobots is already initialized");
+        }
+    }
+
+    json_object_t* jabt_thread_stacksize
+        = json_object_object_get(a, "abt_thread_stacksize");
+    if (jabt_thread_stacksize) {
+        if (getenv("ABT_THREAD_STACKSIZE")) {
+            long val = atol(getenv("ABT_THREAD_STACKSIZE"));
+            if (val != json_object_get_int64(jabt_thread_stacksize)) {
+                margo_warning(
+                    0,
+                    "\"abt_thread_stacksize\" will be ignored"
+                    " because the ABT_THREAD_STACKSIZE environment variable"
+                    " is defined");
+            }
+        } else if (ABT_initialized() == ABT_SUCCESS) {
+            margo_warning(0,
+                          "\"abt_thread_stacksize\" will be ignored"
+                          " because Argobots is already initialized");
+        }
+    }
+
+    /* validate the user-provided fields */
+
+    bool has_external_progress_pool
+        = (user_args->progress_pool != ABT_POOL_NULL)
+       && (user_args->progress_pool != NULL);
+    bool has_external_rpc_pool = (user_args->rpc_pool != ABT_POOL_NULL)
+                              && (user_args->rpc_pool != NULL);
+
+    if (user_args->jprogress_pool
+        && !(json_object_is_type(user_args->jprogress_pool, json_type_int64)
+             || json_object_is_type(user_args->jprogress_pool,
+                                    json_type_string))) {
+        margo_error(0,
+                    "\"progress_pool\" field must be an integer or a string");
+        HANDLE_CONFIG_ERROR;
+    }
+
+    if (user_args->jrpc_pool
+        && !(json_object_is_type(user_args->jrpc_pool, json_type_int64)
+             || json_object_is_type(user_args->jrpc_pool, json_type_string))) {
+        margo_error(0, "\"rpc_pool\" field must be an integer or a string");
+        HANDLE_CONFIG_ERROR;
+    }
+
+    if (user_args->juse_progress_thread
+        && !json_object_is_type(user_args->juse_progress_thread,
+                                json_type_boolean)) {
+        margo_error(0, "\"use_progress_thread\" field must be a boolean");
+        HANDLE_CONFIG_ERROR;
+    }
+
+    if (user_args->jrpc_thread_count
+        && !json_object_is_type(user_args->jrpc_thread_count,
+                                json_type_int64)) {
+        margo_error(0, "\"rpc_thread_count\" field must be an integer");
+        HANDLE_CONFIG_ERROR;
+    }
+
+    if (user_args->juse_progress_thread) {
+        if (has_external_progress_pool) {
+            margo_warning(0,
+                          "\"use_progress_thread\" will be ignored"
+                          " because external progress pool was provided");
+        } else if (user_args->jprogress_pool) {
+            margo_warning(0,
+                          "\"use_progress_thread\" will be ignored"
+                          " because \"progress_pool\" field was specified");
+        }
+    }
+
+    if (has_external_progress_pool && user_args->jprogress_pool) {
+        margo_warning(0,
+                      "\"progress_pool\" will be ignored because"
+                      " external progress pool was provided");
+    }
+
+    if (user_args->jrpc_thread_count) {
+        if (has_external_rpc_pool) {
+            margo_warning(0,
+                          "\"rpc_thread_count\" will be ignored"
+                          " because external rpc pool was provided");
+        } else if (user_args->jrpc_pool) {
+            margo_warning(0,
+                          "\"rpc_thread_count\" will be ignored"
+                          " because \"rpc_pool\" field was specified");
+        }
+    }
+
+    if (has_external_rpc_pool && user_args->jrpc_pool) {
+        margo_warning(0,
+                      "\"rpc_pool\" will be ignored because"
+                      " external rpc pool was provided");
+    }
+
+    /* validate the "pools" list */
+
+    json_object_t* jpools    = json_object_object_get(a, "pools");
+    size_t         num_pools = 0;
     if (jpools) {
         json_object_get(jpools);
-        size_t num_pools = json_object_array_length(jpools);
+        num_pools = json_object_array_length(jpools);
         for (unsigned i = 0; i < num_pools; ++i) {
-            struct json_object* jpool = json_object_array_get_idx(jpools, i);
-            if (!margo_abt_pool_validate_json(jpool)) {
-                result = false;
-                goto finish;
+            json_object_t* jpool = json_object_array_get_idx(jpools, i);
+            if (!margo_abt_pool_validate_json(jpool, i)) {
+                HANDLE_CONFIG_ERROR;
             }
         }
         CONFIG_NAMES_MUST_BE_UNIQUE(jpools, "argobots.pools");
@@ -581,16 +771,56 @@ static inline bool margo_abt_validate_json(const struct json_object* a)
         jpools = json_object_new_array_ext(0);
     }
 
-    struct json_object* jxstreams = json_object_object_get(a, "xstreams");
+    /* check that progres_pool is present, if provided */
+
+    if (user_args->jprogress_pool) {
+        if (json_object_is_type(user_args->jprogress_pool, json_type_int64)) {
+            /* jprogress_pool is an integer */
+            int progress_pool_idx
+                = json_object_get_int(user_args->jprogress_pool);
+            if (progress_pool_idx < 0 || progress_pool_idx >= num_pools) {
+                margo_error(0, "Invalid \"progress_pool\" index (%d)",
+                            progress_pool_idx);
+                HANDLE_CONFIG_ERROR;
+            }
+        } else {
+            /* jprogress_pool is a string */
+            const char* progress_pool_name
+                = json_object_get_string(user_args->jprogress_pool);
+            CONFIG_ARRAY_MUST_HAVE_ITEM_NAMED(jpools, progress_pool_name,
+                                              "argobots.pools", ignore);
+        }
+    }
+
+    /* check that rpc_pool is present, if provided */
+    if (user_args->jrpc_pool) {
+        if (json_object_is_type(user_args->jrpc_pool, json_type_int64)) {
+            /* jrpc_pool is an integer */
+            int rpc_pool_idx = json_object_get_int(user_args->jrpc_pool);
+            if (rpc_pool_idx < 0 || rpc_pool_idx >= num_pools) {
+                margo_error(0, "Invalid \"rpc_pool\" index (%d)", rpc_pool_idx);
+                HANDLE_CONFIG_ERROR;
+            }
+        } else {
+            /* jrpc_pool is a string */
+            const char* rpc_pool_name
+                = json_object_get_string(user_args->jrpc_pool);
+            CONFIG_ARRAY_MUST_HAVE_ITEM_NAMED(jpools, rpc_pool_name,
+                                              "argobots.pools", ignore);
+        }
+    }
+
+    /* validate the list of xstreams */
+
+    json_object_t* jxstreams = json_object_object_get(a, "xstreams");
     if (jxstreams) {
         size_t num_es = json_object_array_length(jxstreams);
         for (unsigned i = 0; i < num_es; ++i) {
             if (!margo_abt_xstream_validate_json(
-                    json_object_array_get_idx(jxstreams, i), jpools)) {
-                result = false;
-                goto finish;
+                    json_object_array_get_idx(jxstreams, i), i, jpools)) {
+                HANDLE_CONFIG_ERROR;
             }
-            struct json_object* jxstream_name
+            json_object_t* jxstream_name
                 = json_object_object_get(jxstreams, "name");
         }
         CONFIG_NAMES_MUST_BE_UNIQUE(jxstreams, "argobots.xstreams");
@@ -599,21 +829,56 @@ static inline bool margo_abt_validate_json(const struct json_object* a)
 finish:
     json_object_put(jpools);
     return result;
+
+#undef HANDLE_CONFIG_ERROR
 }
 
-static inline bool margo_abt_init_from_json(const struct json_object* json,
-                                            margo_abt_t*              a)
+static inline bool
+margo_abt_init_from_json(const json_object_t*         jabt,
+                         const margo_abt_user_args_t* user_args,
+                         margo_abt_t*                 a)
 {
-    bool                result    = true;
-    struct json_object* jpools    = json_object_object_get(json, "pools");
-    struct json_object* jxstreams = json_object_object_get(json, "xstreams");
+    int            ret;
+    bool           result    = true;
+    json_object_t* jpools    = json_object_object_get(jabt, "pools");
+    json_object_t* jxstreams = json_object_object_get(jabt, "xstreams");
+
+    /* handle ABT initialization */
+    if (ABT_initialized() == ABT_ERR_UNINITIALIZED) {
+        if (!getenv("ABT_THREAD_STACKSIZE")) {
+            int abt_thread_stacksize = json_object_object_get_uint64_or(
+                jabt, "abt_thread_stacksize",
+                MARGO_DEFAULT_ABT_THREAD_STACKSIZE);
+            char abt_thread_stacksize_str[128];
+            sprintf(abt_thread_stacksize_str, "%d", abt_thread_stacksize);
+            setenv("ABT_THREAD_STACKSIZE", abt_thread_stacksize_str, 1);
+        }
+        if (!getenv("ABT_MEM_MAX_NUM_STACKS")) {
+            int abt_mem_max_num_stacks = json_object_object_get_uint64_or(
+                jabt, "abt_mem_max_num_stacks",
+                MARGO_DEFAULT_ABT_MEM_MAX_NUM_STACKS);
+            char abt_mem_max_num_stacks_str[128];
+            sprintf(abt_mem_max_num_stacks_str, "%d", abt_mem_max_num_stacks);
+            setenv("ABT_MEM_MAX_NUM_STACKS", abt_mem_max_num_stacks_str, 1);
+        }
+        ret = ABT_init(0, NULL);
+        if (ret != ABT_SUCCESS) {
+            margo_error(
+                0, "Could not initialize Argobots (ABT_init returned %d)", ret);
+            result = false;
+            goto error;
+        }
+        g_margo_abt_init = 1;
+    }
+
+    /* build pools that are specified in the JSON */
 
     if (!jpools) goto init_xstreams;
 
     a->num_pools = json_object_array_length(jpools);
     a->pools     = calloc(a->num_pools, sizeof(*(a->pools)));
     for (unsigned i = 0; i < a->num_pools; ++i) {
-        struct json_object* jpool = json_object_array_get_idx(jpools, i);
+        json_object_t* jpool = json_object_array_get_idx(jpools, i);
         if (!margo_abt_pool_init_from_json(jpool, i, a->pools + i)) {
             result = false;
             goto error;
@@ -626,7 +891,7 @@ init_xstreams:
     a->num_xstreams = json_object_array_length(jxstreams);
     a->xstreams     = calloc(a->num_xstreams, sizeof(*(a->xstreams)));
     for (unsigned i = 0; i < a->num_xstreams; ++i) {
-        struct json_object* jxstream = json_object_array_get_idx(jxstreams, i);
+        json_object_t* jxstream = json_object_array_get_idx(jxstreams, i);
         if (!margo_abt_xstream_init_from_json(jxstream, i, a->xstreams + i,
                                               a->pools, a->num_pools)) {
             result = false;
@@ -641,21 +906,20 @@ error:
     goto finish;
 }
 
-static inline struct json_object* margo_abt_to_json(const margo_abt_t* a)
+static inline json_object_t* margo_abt_to_json(const margo_abt_t* a)
 {
-    struct json_object* json      = json_object_new_object();
-    struct json_object* jpools    = json_object_new_array_ext(a->num_pools);
-    struct json_object* jxstreams = json_object_new_array_ext(a->num_xstreams);
+    json_object_t* json      = json_object_new_object();
+    json_object_t* jpools    = json_object_new_array_ext(a->num_pools);
+    json_object_t* jxstreams = json_object_new_array_ext(a->num_xstreams);
     int flags = JSON_C_OBJECT_ADD_KEY_IS_NEW | JSON_C_OBJECT_ADD_CONSTANT_KEY;
     json_object_object_add_ex(json, "pools", jpools, flags);
     json_object_object_add_ex(json, "xstreams", jxstreams, flags);
     for (unsigned i = 0; i < a->num_xstreams; ++i) {
-        struct json_object* jxstream
-            = margo_abt_xstream_to_json(a->xstreams + i);
+        json_object_t* jxstream = margo_abt_xstream_to_json(a->xstreams + i);
         json_object_array_add(jxstreams, jxstream);
     }
     for (unsigned i = 0; i < a->num_pools; ++i) {
-        struct json_object* jpool = margo_abt_pool_to_json(a->pools + i);
+        json_object_t* jpool = margo_abt_pool_to_json(a->pools + i);
         json_object_array_add(jpools, jpool);
     }
     char* abt_mem_max_num_stacks = getenv("ABT_MEM_MAX_NUM_STACKS");
@@ -705,8 +969,6 @@ margo_abt_find_pool_by_handle(const margo_abt_t* abt, ABT_pool pool)
     return NULL;
 }
 
-static inline bool margo_abt_add_external_pool(const margo_abt_t*, ABT_pool) {}
-
 static inline margo_abt_xstream_t*
 margo_abt_find_xstream_by_name(const margo_abt_t* abt, const char* name)
 {
@@ -729,7 +991,4 @@ margo_abt_find_xstream_by_handle(const margo_abt_t* abt, ABT_xstream xstream)
     }
     return NULL;
 }
-
-static inline bool margo_abt_add_external_xstream(const margo_abt_t*, ABT_pool)
-{}
 #endif

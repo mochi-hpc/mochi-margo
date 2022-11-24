@@ -58,6 +58,8 @@ static inline void                margo_hg_destroy(margo_hg_t*);
 static inline bool margo_hg_validate_json(const struct json_object*   json,
                                           const margo_hg_user_args_t* user_args)
 {
+#define HANDLE_CONFIG_ERROR return false
+
     if (!json || !json_object_is_type(json, json_type_object)) return false;
 
     // if hg_class or hg_init_info provided,
@@ -138,6 +140,7 @@ static inline bool margo_hg_validate_json(const struct json_object*   json,
                              "ipv4", "ipv6", "native");
 #endif
     return true;
+#undef HANDLE_CONFIG_ERROR
 }
 
 static inline bool margo_hg_init_from_json(const struct json_object*   json,

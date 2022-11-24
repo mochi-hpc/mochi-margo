@@ -17,10 +17,6 @@
 #include "margo-prio-pool.h"
 #include "abtx_prof.h"
 
-/* default values for key ABT parameters if not specified */
-#define MARGO_DEFAULT_ABT_MEM_MAX_NUM_STACKS 8
-#define MARGO_DEFAULT_ABT_THREAD_STACKSIZE   2097152
-
 // Validates the format of the configuration and
 // fill default values if they are note provided
 static bool
@@ -369,6 +365,8 @@ validate_and_complete_config(struct json_object*         _margo,
     struct json_object* ignore; // to pass as output to macros when we don't
                                 // care ouput the output
     struct json_object* val;
+
+#define HANDLE_CONFIG_ERROR return false
 
     /* ------- Margo configuration ------ */
     /* Fields:

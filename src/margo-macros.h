@@ -72,6 +72,17 @@ inline static bool json_object_object_get_bool_or(
     }
 }
 
+inline static const char* json_object_object_get_string_or(
+    const struct json_object* object, const char* key, const char* fallback)
+{
+    struct json_object* value = json_object_object_get(object, key);
+    if (value && json_object_is_type(value, json_type_string)) {
+        return json_object_get_string(value);
+    } else {
+        return fallback;
+    }
+}
+
 #define json_array_foreach(__array, __index, __element)                \
     for (__index = 0;                                                  \
          __index < json_object_array_length(__array)                   \
@@ -93,7 +104,7 @@ inline static bool json_object_object_get_bool_or(
         if (__out && !json_object_is_type(__out, json_type_object)) {         \
             margo_error(0, "\"%s\" is in configuration but is not an object", \
                         __fullname);                                          \
-            return false;                                                     \
+            HANDLE_CONFIG_ERROR;                                              \
         }                                                                     \
         if (!__out) {                                                         \
             __out = json_object_new_object();                                 \
@@ -111,7 +122,7 @@ inline static bool json_object_object_get_bool_or(
         if (__out && !json_object_is_type(__out, json_type_array)) {         \
             margo_error(0, "\"%s\" is in configuration but is not an array", \
                         __fullname);                                         \
-            return false;                                                    \
+            HANDLE_CONFIG_ERROR;                                             \
         }                                                                    \
         if (!__out) {                                                        \
             __out = json_object_new_array();                                 \
@@ -133,7 +144,7 @@ inline static bool json_object_object_get_bool_or(
                         "\"%s\" in configuration but has an incorrect type " \
                         "(expected %s)",                                     \
                         __fullname, #__type);                                \
-            return false;                                                    \
+            HANDLE_CONFIG_ERROR;                                             \
         }                                                                    \
         if (!__out) {                                                        \
             __out = json_object_new_##__type(__value);                       \
@@ -149,13 +160,13 @@ inline static bool json_object_object_get_bool_or(
         __out = json_object_object_get(__config, __key);                       \
         if (!__out) {                                                          \
             margo_error(0, "\"%s\" not found in configuration", __fullname);   \
-            return false;                                                      \
+            HANDLE_CONFIG_ERROR;                                               \
         }                                                                      \
         if (!json_object_is_type(__out, json_type_##__type)) {                 \
             margo_error(                                                       \
                 0, "\"%s\" in configuration has incorrect type (expected %s)", \
                 __fullname, #__type);                                          \
-            return false;                                                      \
+            HANDLE_CONFIG_ERROR;                                               \
         }                                                                      \
     } while (0)
 
@@ -226,7 +237,7 @@ inline static bool json_object_object_get_bool_or(
             = json_object_get_int64(json_object_object_get(__config, __key)); \
         if (_tmp < 0) {                                                       \
             margo_error(0, "\"%s\" must not be negative", __fullname);        \
-            return false;                                                     \
+            HANDLE_CONFIG_ERROR;                                              \
         }                                                                     \
     } while (0)
 
@@ -279,7 +290,7 @@ inline static bool json_object_object_get_bool_or(
             margo_error(0,                                                     \
                         "Could not find element named \"%s\" in \"%s\" array", \
                         __name, __array_name);                                 \
-            return false;                                                      \
+            HANDLE_CONFIG_ERROR;                                               \
         }                                                                      \
     } while (0)
 
@@ -295,7 +306,7 @@ inline static bool json_object_object_get_bool_or(
         if (!_vals[_i]) {                                                \
             margo_error(0, "Invalid enum value for \"%s\" (\"%s\")",     \
                         __field_name, json_object_get_string(__config)); \
-            return false;                                                \
+            HANDLE_CONFIG_ERROR;                                         \
         }                                                                \
     } while (0)
 
@@ -321,7 +332,7 @@ inline static bool json_object_object_get_bool_or(
                                 "(\"%s\") in \"%s\"",                    \
                                 json_object_get_string(_a_name),         \
                                 __container_name);                       \
-                    return false;                                        \
+                    HANDLE_CONFIG_ERROR;                                 \
                 }                                                        \
             }                                                            \
         }                                                                \
@@ -337,18 +348,18 @@ inline static bool json_object_object_get_bool_or(
         unsigned    _len  = strlen(_name);                                   \
         if (_len == 0) {                                                     \
             margo_error(0, "Empty \"name\" field");                          \
-            return -1;                                                       \
+            HANDLE_CONFIG_ERROR;                                             \
         }                                                                    \
         if (isdigit(_name[0])) {                                             \
             margo_error(0, "First character of a name cannot be a digit");   \
-            return -1;                                                       \
+            HANDLE_CONFIG_ERROR;                                             \
         }                                                                    \
         for (unsigned _i = 0; _i < _len; _i++) {                             \
             if (!(isalnum(_name[_i]) || _name[_i] == '_')) {                 \
                 margo_error(0,                                               \
                             "Invalid character \"%c\" found in name \"%s\"", \
                             _name[_i], _name);                               \
-                return -1;                                                   \
+                HANDLE_CONFIG_ERROR;                                         \
             }                                                                \
         }                                                                    \
     } while (0)
@@ -395,7 +406,7 @@ inline static bool json_object_object_get_bool_or(
         if (!__key__) {                                                    \
             margo_error(0, "\"" #__key__ "\" not found in " #__ctx__       \
                            " configuration");                              \
-            return false;                                                  \
+            HANDLE_CONFIG_ERROR;                                           \
         }                                                                  \
         if (!json_object_is_type(__key__, json_type_##__type__)) {         \
             margo_error(0, "Invalid type for \"" #__key__ " in " #__ctx__  \
@@ -410,6 +421,7 @@ inline static bool json_object_object_get_bool_or(
         if (__key__ && !json_object_is_type(__key__, json_type_##__type__)) { \
             margo_error(0, "Invalid type for \"" #__key__ " in " #__ctx__     \
                            " configuration (expected " #__type__ ")");        \
+            HANDLE_CONFIG_ERROR;                                              \
         }                                                                     \
     } while (0)
 
