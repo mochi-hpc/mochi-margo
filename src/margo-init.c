@@ -232,8 +232,6 @@ margo_instance_id margo_init_ext(const char*                   address,
         ret = ABT_init(0, NULL);
         if (ret != 0) goto error;
         g_margo_abt_init = 1;
-        ret              = ABT_mutex_create(&g_margo_num_instances_mtx);
-        if (ret != 0) goto error;
     }
 
     /* Check if Argobots is now initialized with the desired parameters
@@ -408,11 +406,7 @@ margo_instance_id margo_init_ext(const char*                   address,
              mid->self_addr_hash);
 
     // increment the number of margo instances
-    if (g_margo_num_instances_mtx == ABT_MUTEX_NULL)
-        ABT_mutex_create(&g_margo_num_instances_mtx);
-    ABT_mutex_lock(g_margo_num_instances_mtx);
-    g_margo_num_instances += 1;
-    ABT_mutex_unlock(g_margo_num_instances_mtx);
+    g_margo_num_instances++;
 
 finish:
     if (self_addr != HG_ADDR_NULL) HG_Addr_free(hg_class, self_addr);

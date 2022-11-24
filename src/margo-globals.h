@@ -10,6 +10,7 @@
 // compilation units. These globals must start with the g_margo_ prefix.
 
 #include <stdbool.h>
+#include <stdatomic.h>
 #include <margo.h>
 #include "abtx_prof.h"
 
@@ -19,9 +20,8 @@
 // in later calls and in margo_cleanup we can check for
 // g_margo_num_instances_mtx != ABT_MUTEX_NULL
 // to know if we should do something to cleanup ABT as well.
-extern int       g_margo_num_instances;
-extern ABT_mutex g_margo_num_instances_mtx;
-extern bool      g_margo_abt_init;
+extern _Atomic int  g_margo_num_instances;
+extern _Atomic bool g_margo_abt_init;
 
 // Track if an instance has enabled abt profiling.  We can only do this
 // once, no matter how many margo instances are running.

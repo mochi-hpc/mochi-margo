@@ -179,32 +179,22 @@ static void margo_cleanup(margo_instance_id mid)
     ABT_key_free(&(mid->current_rpc_id_key));
 
     MARGO_TRACE(mid, "Checking if Argobots should be finalized");
-    if (g_margo_num_instances_mtx != ABT_MUTEX_NULL) {
-        ABT_mutex_lock(g_margo_num_instances_mtx);
-        g_margo_num_instances -= 1;
-        if (g_margo_num_instances > 0) {
-            ABT_mutex_unlock(g_margo_num_instances_mtx);
-        } else {
-            /* this is the last margo instance */
-            ABT_mutex_unlock(g_margo_num_instances_mtx);
-            ABT_mutex_free(&g_margo_num_instances_mtx);
-            g_margo_num_instances_mtx = ABT_MUTEX_NULL;
-
-            /* shut down global abt profiling if needed */
-            if (g_margo_abt_prof_init) {
-                if (g_margo_abt_prof_started) {
-                    ABTX_prof_stop(g_margo_abt_prof_context);
-                    g_margo_abt_prof_started = 0;
-                }
-                ABTX_prof_finalize(g_margo_abt_prof_context);
-                g_margo_abt_prof_init = 0;
+    if (--g_margo_num_instances == 0) {
+        /* this is the last margo instance */
+        /* shut down global abt profiling if needed */
+        if (g_margo_abt_prof_init) {
+            if (g_margo_abt_prof_started) {
+                ABTX_prof_stop(g_margo_abt_prof_context);
+                g_margo_abt_prof_started = 0;
             }
+            ABTX_prof_finalize(g_margo_abt_prof_context);
+            g_margo_abt_prof_init = 0;
+        }
 
-            /* shut down argobots itself if needed */
-            if (g_margo_abt_init) {
-                MARGO_TRACE(mid, "Finalizing argobots");
-                ABT_finalize();
-            }
+        /* shut down argobots itself if needed */
+        if (g_margo_abt_init) {
+            MARGO_TRACE(mid, "Finalizing argobots");
+            ABT_finalize();
         }
     }
 
