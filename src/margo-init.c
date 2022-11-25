@@ -19,14 +19,10 @@
 
 // Validates the format of the configuration and
 // fill default values if they are note provided
-static bool
-validate_and_complete_config(struct json_object*         _config,
-                             ABT_pool                    _progress_pool,
-                             ABT_pool                    _rpc_pool,
-                             hg_class_t*                 _hg_class,
-                             hg_context_t*               _hg_context,
-                             const struct hg_init_info*  _hg_init_info,
-                             const struct margo_monitor* _monitor);
+static bool validate_and_complete_config(struct json_object* _config,
+                                         ABT_pool            _progress_pool,
+                                         ABT_pool            _rpc_pool,
+                                         const struct margo_monitor* _monitor);
 
 // Reads a pool configuration and instantiate the
 // corresponding ABT_pool, returning ABT_SUCCESS
@@ -89,7 +85,8 @@ margo_instance_id margo_init_ext(const char*                   address,
     hg_return_t         hret;
     margo_instance_id   mid = MARGO_INSTANCE_NULL;
 
-    struct margo_hg  hg  = {HG_INIT_INFO_INITIALIZER, NULL, NULL, 0};
+    struct margo_hg hg
+        = {HG_INIT_INFO_INITIALIZER, NULL, NULL, HG_ADDR_NULL, NULL, 0};
     struct margo_abt abt = {0};
 
     ABT_pool progress_pool = ABT_POOL_NULL;
@@ -121,9 +118,8 @@ margo_instance_id margo_init_ext(const char*                   address,
 
     // validate and complete configuration
     MARGO_TRACE(0, "Validating and completing configuration");
-    bool valide = validate_and_complete_config(
-        config, args.progress_pool, args.rpc_pool, args.hg_class,
-        args.hg_context, args.hg_init_info, args.monitor);
+    bool valide = validate_and_complete_config(config, args.progress_pool,
+                                               args.rpc_pool, args.monitor);
     if (!valide) {
         MARGO_ERROR(0, "Could not validate and complete configuration");
         goto error;
@@ -311,7 +307,6 @@ margo_instance_id margo_init_ext(const char*                   address,
     // increment the number of margo instances
     g_margo_num_instances++;
 
-finish:
     return mid;
 
 error:
@@ -353,14 +348,10 @@ error:
  * initialization functions with the knowledge that it contains correct and
  * complete information.
  */
-static bool
-validate_and_complete_config(struct json_object*         _margo,
-                             ABT_pool                    _custom_progress_pool,
-                             ABT_pool                    _custom_rpc_pool,
-                             hg_class_t*                 _hg_class,
-                             hg_context_t*               _hg_context,
-                             const struct hg_init_info*  _hg_init_info,
-                             const struct margo_monitor* _monitor)
+static bool validate_and_complete_config(struct json_object* _margo,
+                                         ABT_pool _custom_progress_pool,
+                                         ABT_pool _custom_rpc_pool,
+                                         const struct margo_monitor* _monitor)
 {
     struct json_object* ignore; // to pass as output to macros when we don't
                                 // care ouput the output
