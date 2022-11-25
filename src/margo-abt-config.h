@@ -730,6 +730,7 @@ margo_abt_validate_json(const json_object_t*         a,
 
     if (!a || !json_object_is_type(a, json_type_object)) return false;
 
+    json_object_t* jpools = NULL;
     json_object_t* ignore = NULL;
     bool           result = true;
     ASSERT_CONFIG_HAS_OPTIONAL(a, pools, array, argobots);
@@ -853,8 +854,8 @@ margo_abt_validate_json(const json_object_t*         a,
 
     /* validate the "pools" list */
 
-    json_object_t* jpools    = json_object_object_get(a, "pools");
-    int            num_pools = 0;
+    jpools        = json_object_object_get(a, "pools");
+    int num_pools = 0;
     if (jpools) {
         json_object_get(jpools);
         num_pools = json_object_array_length(jpools);
@@ -922,7 +923,7 @@ margo_abt_validate_json(const json_object_t*         a,
     }
 
 finish:
-    json_object_put(jpools);
+    if (jpools) json_object_put(jpools);
     return result;
 
 #undef HANDLE_CONFIG_ERROR
@@ -989,6 +990,18 @@ margo_abt_init_from_json(const json_object_t*         jabt,
         g_margo_abt_init = 1;
         g_margo_num_instances++;
         first_abt_init = true;
+    }
+
+    /* Turn on profiling capability if a) it has not been done already (this
+     * is global to Argobots) and b) the argobots tool interface is enabled.
+     */
+    if (!g_margo_abt_prof_init) {
+        ABT_bool tool_enabled;
+        ABT_info_query_config(ABT_INFO_QUERY_KIND_ENABLED_TOOL, &tool_enabled);
+        if (tool_enabled == ABT_TRUE) {
+            ABTX_prof_init(&g_margo_abt_prof_context);
+            g_margo_abt_prof_init = 1;
+        }
     }
 
     /* build pools that are specified in the JSON */
@@ -1058,6 +1071,8 @@ margo_abt_init_from_json(const json_object_t*         jabt,
                 goto error;
             }
             primary_pool = a->pools[primary_pool_idx].pool;
+            a->pools[primary_pool_idx].margo_free_flag
+                = false; /* can't free the pool associated with primary ES */
             a->num_pools += 1;
             /* add a __primary__ ES */
             json_object_t* jprimary_xstream = json_object_new_object();
@@ -1304,6 +1319,15 @@ static inline void margo_abt_destroy(margo_abt_t* a)
     }
     memset(a, 0, sizeof(*a));
     if (--g_margo_num_instances == 0 && g_margo_abt_init) {
+        /* shut down global abt profiling if needed */
+        if (g_margo_abt_prof_init) {
+            if (g_margo_abt_prof_started) {
+                ABTX_prof_stop(g_margo_abt_prof_context);
+                g_margo_abt_prof_started = 0;
+            }
+            ABTX_prof_finalize(g_margo_abt_prof_context);
+            g_margo_abt_prof_init = 0;
+        }
         ABT_finalize();
         g_margo_abt_init = false;
     }

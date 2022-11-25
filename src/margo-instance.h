@@ -53,8 +53,6 @@ struct margo_registered_rpc {
 };
 
 struct margo_instance {
-    /* json config */
-    struct json_object* json_cfg;
 
     /* Argobots environment */
     struct margo_abt abt;

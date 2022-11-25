@@ -154,56 +154,10 @@ static void margo_cleanup(margo_instance_id mid)
     ABT_mutex_free(&mid->finalize_mutex);
     ABT_cond_free(&mid->finalize_cond);
     ABT_mutex_free(&mid->pending_operations_mtx);
-
-    /* cleanup mid->abt */
-
-    MARGO_TRACE(mid, "Joining and destroying xstreams");
-    for (unsigned i = 0; i < mid->abt.num_xstreams; i++) {
-        if (mid->abt.xstreams[i].margo_free_flag) {
-            ABT_xstream_join(mid->abt.xstreams[i].xstream);
-            ABT_xstream_free(&(mid->abt.xstreams[i].xstream));
-        }
-    }
+    ABT_key_free(&(mid->current_rpc_id_key));
 
     MARGO_TRACE(mid, "Destroying handle cache");
     __margo_handle_cache_destroy(mid);
-
-    /* cleanup mid->hg */
-
-    free(mid->hg.self_addr_str);
-    HG_Addr_free(mid->hg.hg_class, mid->hg.self_addr);
-
-    if (mid->hg.hg_ownership & MARGO_OWNS_HG_CONTEXT) {
-        MARGO_TRACE(mid, "Destroying mercury context");
-        HG_Context_destroy(mid->hg.hg_context);
-    }
-
-    if (mid->hg.hg_ownership & MARGO_OWNS_HG_CLASS) {
-        MARGO_TRACE(mid, "Destroying mercury class");
-        HG_Finalize(mid->hg.hg_class);
-    }
-
-    ABT_key_free(&(mid->current_rpc_id_key));
-
-    MARGO_TRACE(mid, "Checking if Argobots should be finalized");
-    if (--g_margo_num_instances == 0) {
-        /* this is the last margo instance */
-        /* shut down global abt profiling if needed */
-        if (g_margo_abt_prof_init) {
-            if (g_margo_abt_prof_started) {
-                ABTX_prof_stop(g_margo_abt_prof_context);
-                g_margo_abt_prof_started = 0;
-            }
-            ABTX_prof_finalize(g_margo_abt_prof_context);
-            g_margo_abt_prof_init = 0;
-        }
-
-        /* shut down argobots itself if needed */
-        if (g_margo_abt_init) {
-            MARGO_TRACE(mid, "Finalizing argobots");
-            ABT_finalize();
-        }
-    }
 
     MARGO_TRACE(mid, "Cleaning up RPC data");
     while (mid->registered_rpcs) {
@@ -212,18 +166,9 @@ static void margo_cleanup(margo_instance_id mid)
         mid->registered_rpcs = next_rpc;
     }
 
-    MARGO_TRACE(mid, "Destroying JSON configuration");
-    json_object_put(mid->json_cfg);
+    margo_hg_destroy(&(mid->hg));
+    margo_abt_destroy(&(mid->abt));
 
-    MARGO_TRACE(mid, "Cleaning up margo instance");
-    /* free any pools that Margo itself is reponsible for */
-    for (unsigned i = 0; i < mid->abt.num_pools; i++) {
-        if (mid->abt.pools[i].margo_free_flag
-            && mid->abt.pools[i].pool != ABT_POOL_NULL)
-            ABT_pool_free(&mid->abt.pools[i].pool);
-    }
-    free(mid->abt.pools);
-    free(mid->abt.xstreams);
     free(mid);
 
     MARGO_TRACE(0, "Completed margo_cleanup");
@@ -2006,10 +1951,7 @@ int margo_set_param(margo_instance_id mid, const char* key, const char* value)
         MARGO_TRACE(0, "Setting progress_timeout_ub_msecs to %s", value);
         int progress_timeout_ub_msecs = atoi(value);
         mid->hg_progress_timeout_ub   = progress_timeout_ub_msecs;
-        json_object_object_add(
-            mid->json_cfg, "progress_timeout_ub_msecs",
-            json_object_new_int64(progress_timeout_ub_msecs));
-        return (0);
+        return 0;
     }
 
     /* unknown key, or at least one that cannot be modified at runtime */
@@ -2229,10 +2171,13 @@ hg_return_t __margo_internal_set_handle_data(hg_handle_t handle)
 
 char* margo_get_config(margo_instance_id mid)
 {
+#if 0
     const char* content = json_object_to_json_string_ext(
         mid->json_cfg,
         JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_NOSLASHESCAPE);
     return strdup(content);
+#endif
+    return strdup("{}"); // TODO
 }
 
 const char* margo_rpc_get_name(margo_instance_id mid, hg_id_t id)

@@ -58,6 +58,7 @@ static FILE* margo_output_file_open(margo_instance_id mid,
     /* if directory is not specified then use output directory from margo
      * configuration
      */
+#if 0
     if (revised_file_name[0] == '/') {
         absolute_file_name = revised_file_name;
     } else {
@@ -75,6 +76,9 @@ static FILE* margo_output_file_open(margo_instance_id mid,
                     json_object_object_get(mid->json_cfg, "output_dir")),
                 revised_file_name);
     }
+#endif
+    absolute_file_name
+        = revised_file_name; // TODO add an output_dir in the margo_instance_id
 
     /* actually open file */
     outfile = fopen(absolute_file_name, "a");
