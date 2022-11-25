@@ -23,8 +23,12 @@ hg_return_t margo_find_pool_by_handle(margo_instance_id       mid,
     if (mid == MARGO_INSTANCE_NULL || handle == ABT_POOL_NULL)
         return HG_INVALID_ARG;
     for (uint32_t i = 0; i < mid->abt.num_pools; ++i) {
-        if (mid->abt.pools[i].info.pool == handle) {
-            if (info) *info = mid->abt.pools[i].info;
+        if (mid->abt.pools[i].pool == handle) {
+            if (info) {
+                info->index = i;
+                info->name  = mid->abt.pools[i].name;
+                info->pool  = mid->abt.pools[i].pool;
+            }
             return HG_SUCCESS;
         }
     }
@@ -37,9 +41,13 @@ hg_return_t margo_find_pool_by_name(margo_instance_id       mid,
 {
     if (mid == MARGO_INSTANCE_NULL || name == NULL) return HG_INVALID_ARG;
     for (uint32_t i = 0; i < mid->abt.num_pools; ++i) {
-        if (mid->abt.pools[i].info.name == NULL) continue;
-        if (strcmp(mid->abt.pools[i].info.name, name) == 0) {
-            if (info) *info = mid->abt.pools[i].info;
+        if (mid->abt.pools[i].name == NULL) continue;
+        if (strcmp(mid->abt.pools[i].name, name) == 0) {
+            if (info) {
+                info->index = i;
+                info->name  = mid->abt.pools[i].name;
+                info->pool  = mid->abt.pools[i].pool;
+            }
             return HG_SUCCESS;
         }
     }
@@ -52,7 +60,11 @@ hg_return_t margo_find_pool_by_index(margo_instance_id       mid,
 {
     if (mid == MARGO_INSTANCE_NULL || index >= mid->abt.num_pools)
         return HG_INVALID_ARG;
-    if (info) *info = mid->abt.pools[index].info;
+    if (info) {
+        info->index = index;
+        info->name  = mid->abt.pools[index].name;
+        info->pool  = mid->abt.pools[index].pool;
+    }
     return HG_SUCCESS;
 }
 
@@ -63,8 +75,12 @@ hg_return_t margo_find_xstream_by_handle(margo_instance_id          mid,
     if (mid == MARGO_INSTANCE_NULL || handle == ABT_XSTREAM_NULL)
         return HG_INVALID_ARG;
     for (uint32_t i = 0; i < mid->abt.num_xstreams; ++i) {
-        if (mid->abt.xstreams[i].info.xstream == handle) {
-            if (info) *info = mid->abt.xstreams[i].info;
+        if (mid->abt.xstreams[i].xstream == handle) {
+            if (info) {
+                info->name    = mid->abt.xstreams[i].name;
+                info->xstream = mid->abt.xstreams[i].xstream;
+                info->index   = i;
+            }
             return HG_SUCCESS;
         }
     }
@@ -77,9 +93,13 @@ hg_return_t margo_find_xstream_by_name(margo_instance_id          mid,
 {
     if (mid == MARGO_INSTANCE_NULL || name == NULL) return HG_INVALID_ARG;
     for (uint32_t i = 0; i < mid->abt.num_xstreams; ++i) {
-        if (mid->abt.xstreams[i].info.name == NULL) continue;
-        if (strcmp(mid->abt.xstreams[i].info.name, name) == 0) {
-            if (info) *info = mid->abt.xstreams[i].info;
+        if (mid->abt.xstreams[i].name == NULL) continue;
+        if (strcmp(mid->abt.xstreams[i].name, name) == 0) {
+            if (info) {
+                info->name    = mid->abt.xstreams[i].name;
+                info->xstream = mid->abt.xstreams[i].xstream;
+                info->index   = i;
+            }
             return HG_SUCCESS;
         }
     }
@@ -92,7 +112,11 @@ hg_return_t margo_find_xstream_by_index(margo_instance_id          mid,
 {
     if (mid == MARGO_INSTANCE_NULL || index >= mid->abt.num_xstreams)
         return HG_INVALID_ARG;
-    if (info) *info = mid->abt.xstreams[index].info;
+    if (info) {
+        info->name    = mid->abt.xstreams[index].name;
+        info->xstream = mid->abt.xstreams[index].xstream;
+        info->index   = index;
+    }
     return HG_SUCCESS;
 }
 

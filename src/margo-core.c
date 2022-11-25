@@ -160,8 +160,8 @@ static void margo_cleanup(margo_instance_id mid)
     MARGO_TRACE(mid, "Joining and destroying xstreams");
     for (unsigned i = 0; i < mid->abt.num_xstreams; i++) {
         if (mid->abt.xstreams[i].margo_free_flag) {
-            ABT_xstream_join(mid->abt.xstreams[i].info.xstream);
-            ABT_xstream_free(&(mid->abt.xstreams[i].info.xstream));
+            ABT_xstream_join(mid->abt.xstreams[i].xstream);
+            ABT_xstream_free(&(mid->abt.xstreams[i].xstream));
         }
     }
 
@@ -219,8 +219,8 @@ static void margo_cleanup(margo_instance_id mid)
     /* free any pools that Margo itself is reponsible for */
     for (unsigned i = 0; i < mid->abt.num_pools; i++) {
         if (mid->abt.pools[i].margo_free_flag
-            && mid->abt.pools[i].info.pool != ABT_POOL_NULL)
-            ABT_pool_free(&mid->abt.pools[i].info.pool);
+            && mid->abt.pools[i].pool != ABT_POOL_NULL)
+            ABT_pool_free(&mid->abt.pools[i].pool);
     }
     free(mid->abt.pools);
     free(mid->abt.xstreams);

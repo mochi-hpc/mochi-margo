@@ -39,7 +39,9 @@ DEFINE_MARGO_RPC_HANDLER(rpc_ult)
 
 static MunitResult test_abt_config(const MunitParameter params[], void* data)
 {
+    (void)params;
     struct test_context* ctx = (struct test_context*)data;
+    (void)ctx;
     struct margo_init_info init_info = {0};
     init_info.json_config =
         "{"
@@ -127,6 +129,7 @@ static MunitResult test_abt_config(const MunitParameter params[], void* data)
     munit_assert_int(HG_NOENTRY, ==, margo_find_xstream_by_name(mid, "my_es_42", NULL));
 
     margo_finalize(mid);
+    return MUNIT_OK;
 }
 
 static MunitTest tests[] = {

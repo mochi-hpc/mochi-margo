@@ -28,14 +28,12 @@ static bool validate_and_complete_config(struct json_object* _config,
 // corresponding ABT_pool, returning ABT_SUCCESS
 // or other ABT error codes
 static int create_pool_from_config(struct json_object*    pool_config,
-                                   uint32_t               index,
                                    struct margo_abt_pool* mpool);
 
 // Reads an xstream configuration and instantiate
 // the corresponding ABT_xstream, returning ABT_SUCCESS
 // or other ABT error codes
 static int create_xstream_from_config(struct json_object*          es_config,
-                                      uint32_t                     index,
                                       struct margo_abt_xstream*    es,
                                       const struct margo_abt_pool* mpools,
                                       size_t                       num_pools);
@@ -174,7 +172,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     }
     for (unsigned i = 0; i < abt.num_pools; i++) {
         struct json_object* p = json_object_array_get_idx(pools_config, i);
-        if (create_pool_from_config(p, i, &abt.pools[i]) != ABT_SUCCESS) {
+        if (create_pool_from_config(p, &abt.pools[i]) != ABT_SUCCESS) {
             goto error;
         }
     }
@@ -190,7 +188,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     }
     for (unsigned i = 0; i < abt.num_xstreams; i++) {
         struct json_object* es = json_object_array_get_idx(es_config, i);
-        if (create_xstream_from_config(es, i, &abt.xstreams[i], abt.pools,
+        if (create_xstream_from_config(es, &abt.xstreams[i], abt.pools,
                                        abt.num_pools)
             != ABT_SUCCESS) {
             goto error;
@@ -204,7 +202,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     if (progress_pool_index == -1)
         progress_pool = args.progress_pool;
     else
-        progress_pool = abt.pools[progress_pool_index].info.pool;
+        progress_pool = abt.pools[progress_pool_index].pool;
 
     // find rpc pool
     MARGO_TRACE(0, "Finding RPC pool");
@@ -213,7 +211,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     if (rpc_pool_index == -1)
         rpc_pool = args.rpc_pool;
     else
-        rpc_pool = abt.pools[rpc_pool_index].info.pool;
+        rpc_pool = abt.pools[rpc_pool_index].pool;
 
     // allocate margo instance
     MARGO_TRACE(0, "Allocating margo instance");
@@ -321,10 +319,10 @@ error:
         free(mid);
     }
     for (unsigned i = 0; i < abt.num_xstreams; i++) {
-        if (abt.xstreams && abt.xstreams[i].info.xstream
+        if (abt.xstreams && abt.xstreams[i].xstream
             && abt.xstreams[i].margo_free_flag) {
-            ABT_xstream_join(abt.xstreams[i].info.xstream);
-            ABT_xstream_free(&(abt.xstreams[i].info.xstream));
+            ABT_xstream_join(abt.xstreams[i].xstream);
+            ABT_xstream_free(&(abt.xstreams[i].xstream));
         }
     }
     free(abt.xstreams);
@@ -949,7 +947,6 @@ static bool validate_and_complete_config(struct json_object* _margo,
 }
 
 static int create_pool_from_config(struct json_object*    pool_config,
-                                   uint32_t               index,
                                    struct margo_abt_pool* mpool)
 {
     int          ret;
@@ -996,7 +993,7 @@ static int create_pool_from_config(struct json_object*    pool_config,
     if (strcmp(jkind, "prio_wait") == 0) {
         margo_create_prio_pool_def(&prio_pool_def);
         ret = ABT_pool_create(&prio_pool_def, ABT_POOL_CONFIG_NULL,
-                              &(mpool->info.pool));
+                              &(mpool->pool));
         if (ret != ABT_SUCCESS) {
             MARGO_ERROR(
                 0, "ABT_pool_create failed to create prio_wait pool (ret = %d)",
@@ -1009,21 +1006,18 @@ static int create_pool_from_config(struct json_object*    pool_config,
         if (strcmp(jname, "__primary__")) mpool->margo_free_flag = true;
     } else {
         /* one of the standard Argobots pool types */
-        ret = ABT_pool_create_basic(kind, access, ABT_TRUE,
-                                    &(mpool->info.pool));
+        ret = ABT_pool_create_basic(kind, access, ABT_TRUE, &(mpool->pool));
         if (ret != ABT_SUCCESS) {
             MARGO_ERROR(
                 0, "ABT_pool_create_basic failed to create pool (ret = %d)",
                 ret);
         }
     }
-    mpool->info.name  = jname;
-    mpool->info.index = index;
+    mpool->name = (char*)jname;
     return ret;
 }
 
 static int create_xstream_from_config(struct json_object*          es_config,
-                                      uint32_t                     index,
                                       struct margo_abt_xstream*    es,
                                       const struct margo_abt_pool* mpools,
                                       size_t total_num_pools)
@@ -1063,23 +1057,23 @@ static int create_xstream_from_config(struct json_object*          es_config,
     for (unsigned i = 0; i < es_num_pools; i++) {
         int pool_ref = json_object_get_int64(
             json_object_array_get_idx(es_pools_array, i));
-        es_pools[i] = mpools[pool_ref].info.pool;
+        es_pools[i] = mpools[pool_ref].pool;
     }
 
     if (strcmp(es_name, "__primary__") == 0) {
 
-        ret = ABT_xstream_self(&(es->info.xstream));
+        ret = ABT_xstream_self(&(es->xstream));
         if (ret != ABT_SUCCESS) {
             MARGO_ERROR(0, "ABT_xstream_self failed (ret = %d)", ret);
             return ret;
         }
         ABT_bool is_primary;
-        ABT_xstream_is_primary(es->info.xstream, &is_primary);
+        ABT_xstream_is_primary(es->xstream, &is_primary);
         if (!is_primary) {
             MARGO_WARNING(0, "margo_init_ext called from non-primary ES");
         }
         es->margo_free_flag = false;
-        ret = ABT_xstream_set_main_sched_basic(es->info.xstream, predef,
+        ret = ABT_xstream_set_main_sched_basic(es->xstream, predef,
                                                es_num_pools, es_pools);
         if (ret != ABT_SUCCESS) {
             MARGO_ERROR(0,
@@ -1092,8 +1086,7 @@ static int create_xstream_from_config(struct json_object*          es_config,
     } else {
 
         ret = ABT_xstream_create_basic(predef, es_num_pools, es_pools,
-                                       ABT_SCHED_CONFIG_NULL,
-                                       &(es->info.xstream));
+                                       ABT_SCHED_CONFIG_NULL, &(es->xstream));
         if (ret != ABT_SUCCESS) {
             MARGO_ERROR(
                 0, "ABT_xstream_create_basic failed to create pool (ref = %d)",
@@ -1102,12 +1095,11 @@ static int create_xstream_from_config(struct json_object*          es_config,
         }
         es->margo_free_flag = true;
     }
-    es->info.name  = es_name;
-    es->info.index = index;
+    es->name = (char*)es_name;
 
     // get/set cpubind
     if (es_cpubind == -1) {
-        ret = ABT_xstream_get_cpubind(es->info.xstream, &es_cpubind);
+        ret = ABT_xstream_get_cpubind(es->xstream, &es_cpubind);
         if (ret == ABT_ERR_FEATURE_NA) {
             /* feature not supported in this Argobots build; skip */
         } else if (ret != ABT_SUCCESS) {
@@ -1119,7 +1111,7 @@ static int create_xstream_from_config(struct json_object*          es_config,
                                    json_object_new_int64(es_cpubind));
         }
     } else {
-        ret = ABT_xstream_set_cpubind(es->info.xstream, es_cpubind);
+        ret = ABT_xstream_set_cpubind(es->xstream, es_cpubind);
         if (ret != ABT_SUCCESS) {
             MARGO_WARNING(
                 0, "ABT_xstream_set_cpubind failed to set cpubind (ret = %d)",
@@ -1131,7 +1123,7 @@ static int create_xstream_from_config(struct json_object*          es_config,
     if (json_object_array_length(es_affinity) == 0) {
         // get affinity
         int num_cpus;
-        ret = ABT_xstream_get_affinity(es->info.xstream, 0, NULL, &num_cpus);
+        ret = ABT_xstream_get_affinity(es->xstream, 0, NULL, &num_cpus);
         if (ret == ABT_ERR_FEATURE_NA) {
             /* feature not supported in this Argobots build; skip */
         } else if (ret != ABT_SUCCESS) {
@@ -1140,8 +1132,7 @@ static int create_xstream_from_config(struct json_object*          es_config,
                 ret);
         } else if (num_cpus) {
             int cpuids[num_cpus];
-            ABT_xstream_get_affinity(es->info.xstream, num_cpus, cpuids,
-                                     &num_cpus);
+            ABT_xstream_get_affinity(es->xstream, num_cpus, cpuids, &num_cpus);
             for (int i = 0; i < num_cpus; i++) {
                 json_object_array_put_idx(es_affinity, i,
                                           json_object_new_int64(cpuids[i]));
@@ -1155,7 +1146,7 @@ static int create_xstream_from_config(struct json_object*          es_config,
             cpuids[i] = json_object_get_int64(
                 json_object_array_get_idx(es_affinity, i));
         }
-        ret = ABT_xstream_set_affinity(es->info.xstream, num_cpus, cpuids);
+        ret = ABT_xstream_set_affinity(es->xstream, num_cpus, cpuids);
         if (ret != ABT_SUCCESS) {
             MARGO_WARNING(
                 0, "ABT_xtsream_set_affinity failed to set affinity (ret = %d)",
