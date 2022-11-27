@@ -76,12 +76,6 @@ fi
 PKG_CHECK_MODULES([MERCURY],[mercury],[],
    [AC_MSG_ERROR([Could not find working mercury installation!])])
 LIBS="$MERCURY_LIBS $LIBS"
-# explicitly pass -R <lib path> to libtool so that it sets an rpath/runpath
-# to refer to this dependent library.  This is a workaround to set explicit
-# paths for dependent libraries installed via spack packages, which do not
-# use system library paths, do not install .la files, and do not set
-# LD_LIBRARY_PATH by default.
-LDFLAGS="$LDFLAGS -R "`pkg-config --libs-only-L mercury| sed -e 's/^-L//g'`
 CPPFLAGS="$MERCURY_CFLAGS $CPPFLAGS"
 CFLAGS="$MERCURY_CFLAGS $CFLAGS"
 # find the path containing the Mercury libraries
@@ -91,24 +85,12 @@ AC_SUBST([MERCURY_LIB_PATH], ["$MERCURY_LIB_PATH"])
 PKG_CHECK_MODULES([ARGOBOTS],[argobots >= 1.1],[],
    [AC_MSG_ERROR([Could not find working argobots installation!])])
 LIBS="$ARGOBOTS_LIBS $LIBS"
-# explicitly pass -R <lib path> to libtool so that it sets an rpath/runpath
-# to refer to this dependent library.  This is a workaround to set explicit
-# paths for dependent libraries installed via spack packages, which do not
-# use system library paths, do not install .la files, and do not set
-# LD_LIBRARY_PATH by default.
-LDFLAGS="$LDFLAGS -R "`pkg-config --libs-only-L argobots| sed -e 's/^-L//g'`
 CPPFLAGS="$ARGOBOTS_CFLAGS $CPPFLAGS"
 CFLAGS="$ARGOBOTS_CFLAGS $CFLAGS"
 
 PKG_CHECK_MODULES([JSONC],[json-c],[],
    [AC_MSG_ERROR([Could not find working json-c installation!])])
 LIBS="$JSONC_LIBS $LIBS"
-# explicitly pass -R <lib path> to libtool so that it sets an rpath/runpath
-# to refer to this dependent library.  This is a workaround to set explicit
-# paths for dependent libraries installed via spack packages, which do not
-# use system library paths, do not install .la files, and do not set
-# LD_LIBRARY_PATH by default.
-LDFLAGS="$LDFLAGS -R "`pkg-config --libs-only-L json-c| sed -e 's/^-L//g'`
 dnl
 dnl Note that pkg-config may report an include path that contains a
 dnl "/json-c" component.  If so, strip it out.  We prefer to use an explicit
