@@ -7,7 +7,28 @@
 #ifndef __MARGO_MACROS
 #define __MARGO_MACROS
 
+#include <json-c/json.h>
+#include <json-c/json_c_version.h>
+
 static const int json_type_int64 = json_type_int;
+
+// json-c version is (major << 16) | (minor << 8) | (patch)
+// 3584 corresponds to version 0.14.0
+#if JSON_C_VERSION_NUM < 3584
+static inline struct json_object* json_object_new_uint64(uint64_t x)
+{
+    return json_object_new_int64((int64_t)x);
+}
+#endif
+
+// 3840 corresponds to version 0.14.0
+#if JSON_C_VERSION_NUM < 3840
+static inline struct json_object* json_object_new_array_ext(int initial_size)
+{
+    (void)initial_size;
+    return json_object_new_array();
+}
+#endif
 
 inline static struct json_object* json_object_copy(struct json_object* in)
 {

@@ -510,13 +510,13 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
         {
             // check RPC info
             ASSERT_JSON_HAS(echo, rpc_id, int);
-            munit_assert_long(2924675071, ==, json_object_get_uint64(rpc_id));
+            munit_assert_long(2924675071, ==, json_object_get_int64(rpc_id));
             ASSERT_JSON_HAS(echo, parent_rpc_id, int);
-            munit_assert_long(65535, ==, json_object_get_uint64(parent_rpc_id));
+            munit_assert_long(65535, ==, json_object_get_int64(parent_rpc_id));
             ASSERT_JSON_HAS(echo, provider_id, int);
-            munit_assert_long(provider_id_param, ==, json_object_get_uint64(provider_id));
+            munit_assert_long(provider_id_param, ==, json_object_get_int64(provider_id));
             ASSERT_JSON_HAS(echo, parent_provider_id, int);
-            munit_assert_long(65535, ==, json_object_get_uint64(parent_provider_id));
+            munit_assert_long(65535, ==, json_object_get_int64(parent_provider_id));
             ASSERT_JSON_HAS(echo, name, string);
             munit_assert_string_equal(json_object_get_string(name), "echo");
             // RPC must have an "origin" section
@@ -568,13 +568,13 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
         {
             // check RPC info
             ASSERT_JSON_HAS(root, rpc_id, int);
-            munit_assert_long(65535, ==, json_object_get_uint64(rpc_id));
+            munit_assert_long(65535, ==, json_object_get_int64(rpc_id));
             ASSERT_JSON_HAS(root, parent_rpc_id, int);
-            munit_assert_long(65535, ==, json_object_get_uint64(parent_rpc_id));
+            munit_assert_long(65535, ==, json_object_get_int64(parent_rpc_id));
             ASSERT_JSON_HAS(root, provider_id, int);
-            munit_assert_long(65535, ==, json_object_get_uint64(provider_id));
+            munit_assert_long(65535, ==, json_object_get_int64(provider_id));
             ASSERT_JSON_HAS(root, parent_provider_id, int);
-            munit_assert_long(65535, ==, json_object_get_uint64(parent_provider_id));
+            munit_assert_long(65535, ==, json_object_get_int64(parent_provider_id));
             ASSERT_JSON_HAS(root, name, string);
             munit_assert_string_equal(json_object_get_string(name), "");
             // RPC must have a "target" section
@@ -595,13 +595,13 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
             {
                 // check RPC info
                 ASSERT_JSON_HAS(echo, rpc_id, int);
-                munit_assert_long(2924675071, ==, json_object_get_uint64(rpc_id));
+                munit_assert_long(2924675071, ==, json_object_get_int64(rpc_id));
                 ASSERT_JSON_HAS(echo, parent_rpc_id, int);
-                munit_assert_long(2924675071, ==, json_object_get_uint64(parent_rpc_id));
+                munit_assert_long(2924675071, ==, json_object_get_int64(parent_rpc_id));
                 ASSERT_JSON_HAS(echo, provider_id, int);
-                munit_assert_long(provider_id_param, ==, json_object_get_uint64(provider_id));
+                munit_assert_long(provider_id_param, ==, json_object_get_int64(provider_id));
                 ASSERT_JSON_HAS(echo, parent_provider_id, int);
-                munit_assert_long(provider_id_param, ==, json_object_get_uint64(parent_provider_id));
+                munit_assert_long(provider_id_param, ==, json_object_get_int64(parent_provider_id));
                 ASSERT_JSON_HAS(echo, name, string);
                 munit_assert_string_equal(json_object_get_string(name), "echo");
                 // RPC must have an "origin" section

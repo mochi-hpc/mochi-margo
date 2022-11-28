@@ -7,6 +7,8 @@
 #include <unistd.h>
 #include <errno.h>
 #include <abt.h>
+#include <json-c/json.h>
+#include "margo-macros.h"
 #include "margo-instance.h"
 #include "margo-monitoring.h"
 #include "margo-id.h"
