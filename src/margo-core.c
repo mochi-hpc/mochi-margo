@@ -2169,17 +2169,6 @@ hg_return_t __margo_internal_set_handle_data(hg_handle_t handle)
         return HG_SUCCESS;
 }
 
-char* margo_get_config(margo_instance_id mid)
-{
-#if 0
-    const char* content = json_object_to_json_string_ext(
-        mid->json_cfg,
-        JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_NOSLASHESCAPE);
-    return strdup(content);
-#endif
-    return strdup("{}"); // TODO
-}
-
 const char* margo_rpc_get_name(margo_instance_id mid, hg_id_t id)
 {
     struct margo_rpc_data* data

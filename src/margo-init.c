@@ -171,9 +171,10 @@ margo_instance_id margo_init_ext(const char*                   address,
 
     mid->timer_list = __margo_timer_list_create();
 
-    mid->free_handle_list = NULL;
-    mid->used_handle_hash = NULL;
-    hret                  = __margo_handle_cache_init(mid, handle_cache_size);
+    mid->handle_cache_size = handle_cache_size;
+    mid->free_handle_list  = NULL;
+    mid->used_handle_hash  = NULL;
+    hret                   = __margo_handle_cache_init(mid, handle_cache_size);
     if (hret != HG_SUCCESS) goto error;
 
     // create current_rpc_id_key ABT_key
@@ -185,8 +186,13 @@ margo_instance_id margo_init_ext(const char*                   address,
     if (args.monitor) {
         struct json_object* monitoring
             = json_object_object_get(config, "monitoring");
-        struct json_object* monitoring_config
-            = json_object_object_get(monitoring, "config");
+        struct json_object* monitoring_config = NULL;
+        if (monitoring) {
+            monitoring_config = json_object_object_get(monitoring, "config");
+            json_object_get(monitoring_config);
+        } else {
+            monitoring_config = json_object_new_object();
+        }
 
         mid->monitor = (struct margo_monitor*)malloc(sizeof(*(mid->monitor)));
         memcpy(mid->monitor, args.monitor, sizeof(*(mid->monitor)));
@@ -194,14 +200,7 @@ margo_instance_id margo_init_ext(const char*                   address,
             mid->monitor->uargs = mid->monitor->initialize(
                 mid, mid->monitor->uargs, monitoring_config);
 
-        // replace the "config" section with one provided by the monitoring
-        // backend
-        if (mid->monitor->config) {
-            monitoring_config = mid->monitor->config(mid->monitor->uargs);
-            if (monitoring_config) {
-                json_object_object_add(monitoring, "config", monitoring_config);
-            }
-        }
+        json_object_put(monitoring_config);
     }
 
     mid->shutdown_rpc_id = MARGO_REGISTER(

@@ -21,14 +21,27 @@ extern "C" {
  */
 typedef struct margo_instance* margo_instance_id;
 
+#define MARGO_CONFIG_PRETTY_JSON   0x1
+#define MARGO_CONFIG_HIDE_EXTERNAL 0x2
+
 /**
- * @brief Retrieves complete configuration of margo instance, incoded as json.
+ * @brief Retrieves complete configuration of margo instance, encoded as json.
  *
  * @param [in] mid Margo instance.
  *
  * @return Null-terminated string that must be free'd by caller.
  */
 char* margo_get_config(margo_instance_id mid);
+
+/**
+ * @brief Retrieves complete configuration of margo instance, encoded as json.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] options Bitwise OR of MARGO_CONFIG_* options.
+ *
+ * @return Null-terminated string that must be free'd by caller.
+ */
+char* margo_get_config_opt(margo_instance_id mid, int options);
 
 /**
  * @brief Get the number of xstreams defined in the margo instance.

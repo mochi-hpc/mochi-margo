@@ -9,6 +9,57 @@
 #include <margo-logging.h>
 #include "margo-instance.h"
 
+char* margo_get_config(margo_instance_id mid)
+{
+    return margo_get_config_opt(mid, 0);
+}
+
+char* margo_get_config_opt(margo_instance_id mid, int options)
+{
+    int flags = JSON_C_OBJECT_ADD_KEY_IS_NEW | JSON_C_OBJECT_ADD_CONSTANT_KEY;
+    int json_to_string_flags = JSON_C_TO_STRING_NOSLASHESCAPE;
+    if (options & MARGO_CONFIG_PRETTY_JSON) {
+        json_to_string_flags |= JSON_C_TO_STRING_PRETTY;
+    }
+    struct json_object* root = json_object_new_object();
+    // argobots section
+    struct json_object* abt_json = margo_abt_to_json(&(mid->abt));
+    json_object_object_add_ex(root, "argobots", abt_json, flags);
+    // mercury section
+    struct json_object* hg_json = margo_hg_to_json(&(mid->hg));
+    json_object_object_add_ex(root, "mercury", hg_json, flags);
+    // monitoring section
+    if (mid->monitor) {
+        struct json_object* monitoring = json_object_new_object();
+        if (mid->monitor->name) {
+            json_object_object_add_ex(
+                monitoring, "name",
+                json_object_new_string(mid->monitor->name()), flags);
+        }
+        if (mid->monitor->config) {
+            json_object_object_add_ex(monitoring, "config",
+                                      mid->monitor->config(mid->monitor->uargs),
+                                      flags);
+        }
+        json_object_object_add_ex(root, "monitoring", monitoring, flags);
+    }
+    // progress_timeout_ub_msec
+    json_object_object_add_ex(
+        root, "progress_timeout_ub_msec",
+        json_object_new_uint64(mid->hg_progress_timeout_ub), flags);
+    // handle_cache_size
+    json_object_object_add_ex(root, "handle_cache_size",
+                              json_object_new_uint64(mid->handle_cache_size),
+                              flags);
+    // TODO progress_pool
+    // TODO rpc_pool
+    const char* content = json_object_to_json_string_ext(
+        root, JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_NOSLASHESCAPE);
+    content = strdup(content);
+    json_object_put(root);
+    return (char*)content;
+}
+
 size_t margo_get_num_pools(margo_instance_id mid) { return mid->abt.num_pools; }
 
 size_t margo_get_num_xstreams(margo_instance_id mid)

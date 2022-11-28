@@ -513,12 +513,15 @@ margo_abt_xstream_validate_json(const json_object_t* jxstream,
         return false;
 
     json_object_t* jaffinity = json_object_object_get(jxstream, "affinity");
-    for (unsigned i = 0; i < json_object_array_length(jaffinity); i++) {
-        json_object_t* value = json_object_array_get_idx(jaffinity, i);
-        if (!json_object_is_type(value, json_type_int)) {
-            margo_error(
-                0, "Invalid type found in affinity array (expected integer)");
-            return false;
+    if (jaffinity) {
+        for (unsigned i = 0; i < json_object_array_length(jaffinity); i++) {
+            json_object_t* value = json_object_array_get_idx(jaffinity, i);
+            if (!json_object_is_type(value, json_type_int)) {
+                margo_error(
+                    0,
+                    "Invalid type found in affinity array (expected integer)");
+                return false;
+            }
         }
     }
 

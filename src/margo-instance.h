@@ -97,6 +97,7 @@ struct margo_instance {
     struct margo_timer_list* timer_list;
 
     /* linked list of free hg handles and a hash of in-use handles */
+    size_t                        handle_cache_size;
     struct margo_handle_cache_el* free_handle_list;
     struct margo_handle_cache_el* used_handle_hash;
     ABT_mutex handle_cache_mtx; /* mutex protecting access to above caches */
