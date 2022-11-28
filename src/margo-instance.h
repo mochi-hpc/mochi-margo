@@ -60,9 +60,9 @@ struct margo_instance {
     /* Mercury environment */
     struct margo_hg hg;
 
-    /* Progress pool and default handler pool */
-    ABT_pool progress_pool;
-    ABT_pool rpc_pool;
+    /* Progress pool and default handler pool (index from abt.pools) */
+    //_Atomic unsigned progress_pool_idx;
+    //_Atomic unsigned rpc_pool_idx;
 
     /* internal to margo for this particular instance */
     ABT_thread hg_progress_tid;
@@ -115,6 +115,11 @@ struct margo_instance {
     /* optional diagnostics data tracking */
     int abt_profiling_enabled;
 };
+
+#define MARGO_PROGRESS_POOL(mid) \
+    (mid)->abt.pools[mid->abt.progress_pool_idx].pool
+
+#define MARGO_RPC_POOL(mid) (mid)->abt.pools[mid->abt.rpc_pool_idx].pool
 
 struct margo_request_struct {
     margo_eventual_t     eventual;

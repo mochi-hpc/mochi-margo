@@ -145,9 +145,6 @@ margo_instance_id margo_init_ext(const char*                   address,
     mid->hg  = hg;
     mid->abt = abt;
 
-    mid->progress_pool = mid->abt.pools[mid->abt.progress_pool_idx].pool;
-    mid->rpc_pool      = mid->abt.pools[mid->abt.rpc_pool_idx].pool;
-
     mid->hg_progress_tid           = ABT_THREAD_NULL;
     mid->hg_progress_shutdown_flag = 0;
     mid->hg_progress_timeout_ub    = progress_timeout_ub;
@@ -207,8 +204,8 @@ margo_instance_id margo_init_ext(const char*                   address,
         mid, "__shutdown__", void, margo_shutdown_out_t, remote_shutdown_ult);
 
     MARGO_TRACE(0, "Starting progress loop");
-    ret = ABT_thread_create(mid->progress_pool, __margo_hg_progress_fn, mid,
-                            ABT_THREAD_ATTR_NULL, &mid->hg_progress_tid);
+    ret = ABT_thread_create(MARGO_PROGRESS_POOL(mid), __margo_hg_progress_fn,
+                            mid, ABT_THREAD_ATTR_NULL, &mid->hg_progress_tid);
     if (ret != ABT_SUCCESS) goto error;
 
     // increment the number of margo instances

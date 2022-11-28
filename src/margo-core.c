@@ -1728,7 +1728,7 @@ void margo_thread_sleep(margo_instance_id mid, double timeout_ms)
 int margo_get_handler_pool(margo_instance_id mid, ABT_pool* pool)
 {
     if (mid) {
-        *pool = mid->rpc_pool;
+        *pool = MARGO_RPC_POOL(mid);
         return 0;
     } else {
         return -1;
@@ -1738,7 +1738,7 @@ int margo_get_handler_pool(margo_instance_id mid, ABT_pool* pool)
 int margo_get_progress_pool(margo_instance_id mid, ABT_pool* pool)
 {
     if (mid) {
-        *pool = mid->progress_pool;
+        *pool = MARGO_PROGRESS_POOL(mid);
         return 0;
     } else {
         return -1;
@@ -1867,7 +1867,8 @@ void __margo_hg_progress_fn(void* foo)
          * because it is not technically in the pool as a runnable thread at
          * the moment.
          */
-        ABT_pool_get_size(mid->progress_pool, &size);
+        ABT_pool progress_pool = MARGO_PROGRESS_POOL(mid);
+        ABT_pool_get_size(progress_pool, &size);
         if (size) ABT_thread_yield();
 
         /* Are there any other threads in this pool that *might* need to
@@ -1881,7 +1882,7 @@ void __margo_hg_progress_fn(void* foo)
          * count.  Note that this function *does* count the caller, so it
          * will always be at least one, unlike ABT_pool_get_size().
          */
-        ABT_pool_get_total_size(mid->progress_pool, &size);
+        ABT_pool_get_total_size(progress_pool, &size);
 
         /* Are there any RPCs in flight, regardless of what pool they were
          * issued to?  If so, then we also cannot block in Mercury, because
