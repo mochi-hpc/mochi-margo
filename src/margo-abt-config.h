@@ -487,6 +487,9 @@ margo_abt_sched_to_json(const margo_abt_sched_t* s,
                               flags);
     json_object_t* jpools = json_object_new_array_ext(s->num_pools);
     for (uint32_t i = 0; i < s->num_pools; i++) {
+        if ((options & MARGO_CONFIG_HIDE_EXTERNAL)
+            && (strcmp(known_pools[s->pools[i]].kind, "external") == 0))
+            continue; // skip external pools if requested
         if (options & MARGO_CONFIG_USE_NAMES) {
             json_object_array_add(
                 jpools, json_object_new_string(known_pools[s->pools[i]].name));
@@ -1294,11 +1297,17 @@ static inline json_object_t* margo_abt_to_json(const margo_abt_t* a,
     json_object_object_add_ex(json, "pools", jpools, flags);
     json_object_object_add_ex(json, "xstreams", jxstreams, flags);
     for (unsigned i = 0; i < a->num_xstreams; ++i) {
+        if ((options & MARGO_CONFIG_HIDE_EXTERNAL)
+            && (strcmp(a->xstreams[i].sched.type, "external") == 0))
+            continue; // skip external xstreams if requested
         json_object_t* jxstream = margo_abt_xstream_to_json(
             a->xstreams + i, options, a->pools, a->num_pools);
         json_object_array_add(jxstreams, jxstream);
     }
     for (unsigned i = 0; i < a->num_pools; ++i) {
+        if ((options & MARGO_CONFIG_HIDE_EXTERNAL)
+            && (strcmp(a->pools[i].kind, "external") == 0))
+            continue; // skip external pools if requested
         json_object_t* jpool = margo_abt_pool_to_json(a->pools + i);
         json_object_array_add(jpools, jpool);
     }
