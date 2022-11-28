@@ -21,8 +21,12 @@ extern "C" {
  */
 typedef struct margo_instance* margo_instance_id;
 
-#define MARGO_CONFIG_PRETTY_JSON   0x1
+/* human-readable JSON output */
+#define MARGO_CONFIG_PRETTY_JSON 0x1
+/* don't show external pools/xstreams */
 #define MARGO_CONFIG_HIDE_EXTERNAL 0x2
+/* use names instead of indices */
+#define MARGO_CONFIG_USE_NAMES 0x4
 
 /**
  * @brief Retrieves complete configuration of margo instance, encoded as json.

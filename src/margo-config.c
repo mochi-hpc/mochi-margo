@@ -23,7 +23,7 @@ char* margo_get_config_opt(margo_instance_id mid, int options)
     }
     struct json_object* root = json_object_new_object();
     // argobots section
-    struct json_object* abt_json = margo_abt_to_json(&(mid->abt));
+    struct json_object* abt_json = margo_abt_to_json(&(mid->abt), options);
     json_object_object_add_ex(root, "argobots", abt_json, flags);
     // mercury section
     struct json_object* hg_json = margo_hg_to_json(&(mid->hg));
@@ -51,8 +51,26 @@ char* margo_get_config_opt(margo_instance_id mid, int options)
     json_object_object_add_ex(root, "handle_cache_size",
                               json_object_new_uint64(mid->handle_cache_size),
                               flags);
-    // TODO progress_pool
-    // TODO rpc_pool
+    // progress_pool and rpc_pool
+    if (options & MARGO_CONFIG_USE_NAMES) {
+        json_object_object_add_ex(
+            root, "progress_pool",
+            json_object_new_string(
+                mid->abt.pools[mid->abt.progress_pool_idx].name),
+            flags);
+        json_object_object_add_ex(
+            root, "rpc_pool",
+            json_object_new_string(mid->abt.pools[mid->abt.rpc_pool_idx].name),
+            flags);
+    } else {
+        json_object_object_add_ex(
+            root, "progress_pool",
+            json_object_new_uint64(mid->abt.progress_pool_idx), flags);
+        json_object_object_add_ex(root, "rpc_pool",
+                                  json_object_new_uint64(mid->abt.rpc_pool_idx),
+                                  flags);
+    }
+    // serialize
     const char* content = json_object_to_json_string_ext(
         root, JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_NOSLASHESCAPE);
     content = strdup(content);

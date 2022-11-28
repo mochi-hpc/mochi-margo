@@ -85,7 +85,10 @@ static inline bool margo_abt_sched_init_external(ABT_sched,
                                                  margo_abt_sched_t*,
                                                  const margo_abt_pool_t*,
                                                  unsigned);
-static inline json_object_t* margo_abt_sched_to_json(const margo_abt_sched_t*);
+static inline json_object_t* margo_abt_sched_to_json(const margo_abt_sched_t*,
+                                                     int,
+                                                     const margo_abt_pool_t*,
+                                                     unsigned);
 static inline void           margo_abt_sched_destroy(margo_abt_sched_t*);
 
 /* Struct to track ES created by margo along with a flag indicating if
@@ -111,8 +114,8 @@ static inline bool margo_abt_xstream_init_external(const char*,
                                                    const margo_abt_pool_t*,
                                                    unsigned,
                                                    margo_abt_xstream_t*);
-static inline json_object_t*
-                   margo_abt_xstream_to_json(const margo_abt_xstream_t*);
+static inline json_object_t* margo_abt_xstream_to_json(
+    const margo_abt_xstream_t*, int, const margo_abt_pool_t*, unsigned);
 static inline void margo_abt_xstream_destroy(margo_abt_xstream_t*);
 
 /* Argobots environment */
@@ -140,7 +143,7 @@ static inline bool           margo_abt_validate_json(const json_object_t*,
 static inline bool           margo_abt_init_from_json(const json_object_t*,
                                                       const margo_abt_user_args_t*,
                                                       margo_abt_t*);
-static inline json_object_t* margo_abt_to_json(const margo_abt_t*);
+static inline json_object_t* margo_abt_to_json(const margo_abt_t*, int);
 static inline void           margo_abt_destroy(margo_abt_t*);
 static inline int margo_abt_find_pool_by_name(const margo_abt_t*, const char*);
 static inline int margo_abt_find_pool_by_handle(const margo_abt_t*, ABT_pool);
@@ -471,15 +474,25 @@ error:
     return false;
 }
 
-static inline json_object_t* margo_abt_sched_to_json(const margo_abt_sched_t* s)
+static inline json_object_t*
+margo_abt_sched_to_json(const margo_abt_sched_t* s,
+                        int                      options,
+                        const margo_abt_pool_t*  known_pools,
+                        unsigned                 num_known_pools)
 {
+    (void)num_known_pools;
     json_object_t* json = json_object_new_object();
     int flags = JSON_C_OBJECT_ADD_KEY_IS_NEW | JSON_C_OBJECT_ADD_CONSTANT_KEY;
     json_object_object_add_ex(json, "type", json_object_new_string(s->type),
                               flags);
     json_object_t* jpools = json_object_new_array_ext(s->num_pools);
     for (uint32_t i = 0; i < s->num_pools; i++) {
-        json_object_array_add(jpools, json_object_new_uint64(s->pools[i]));
+        if (options & MARGO_CONFIG_USE_NAMES) {
+            json_object_array_add(
+                jpools, json_object_new_string(known_pools[s->pools[i]].name));
+        } else {
+            json_object_array_add(jpools, json_object_new_uint64(s->pools[i]));
+        }
     }
     json_object_object_add_ex(json, "pools", jpools, flags);
     return json;
@@ -678,10 +691,14 @@ error:
 }
 
 static inline json_object_t*
-margo_abt_xstream_to_json(const margo_abt_xstream_t* x)
+margo_abt_xstream_to_json(const margo_abt_xstream_t* x,
+                          int                        options,
+                          const margo_abt_pool_t*    known_pools,
+                          unsigned                   num_known_pools)
 {
     json_object_t* jxstream = json_object_new_object();
-    json_object_t* jsched   = margo_abt_sched_to_json(&(x->sched));
+    json_object_t* jsched   = margo_abt_sched_to_json(
+        &(x->sched), options, known_pools, num_known_pools);
     int flags = JSON_C_OBJECT_ADD_KEY_IS_NEW | JSON_C_OBJECT_ADD_CONSTANT_KEY;
     json_object_object_add_ex(jxstream, "scheduler", jsched, flags);
 
@@ -1267,7 +1284,8 @@ error:
     goto finish;
 }
 
-static inline json_object_t* margo_abt_to_json(const margo_abt_t* a)
+static inline json_object_t* margo_abt_to_json(const margo_abt_t* a,
+                                               int                options)
 {
     json_object_t* json      = json_object_new_object();
     json_object_t* jpools    = json_object_new_array_ext(a->num_pools);
@@ -1276,7 +1294,8 @@ static inline json_object_t* margo_abt_to_json(const margo_abt_t* a)
     json_object_object_add_ex(json, "pools", jpools, flags);
     json_object_object_add_ex(json, "xstreams", jxstreams, flags);
     for (unsigned i = 0; i < a->num_xstreams; ++i) {
-        json_object_t* jxstream = margo_abt_xstream_to_json(a->xstreams + i);
+        json_object_t* jxstream = margo_abt_xstream_to_json(
+            a->xstreams + i, options, a->pools, a->num_pools);
         json_object_array_add(jxstreams, jxstream);
     }
     for (unsigned i = 0; i < a->num_pools; ++i) {
