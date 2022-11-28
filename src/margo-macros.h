@@ -364,41 +364,6 @@ inline static const char* json_object_object_get_string_or(
         }                                                                    \
     } while (0)
 
-// Adds a new pool in the provided array.
-#define CONFIG_ADD_NEW_POOL(__pools, __name, __kind, __access)              \
-    do {                                                                    \
-        struct json_object* _p = json_object_new_object();                  \
-        json_object_object_add(_p, "name", json_object_new_string(__name)); \
-        json_object_object_add(_p, "kind", json_object_new_string(__kind)); \
-        json_object_object_add(_p, "access",                                \
-                               json_object_new_string(__access));           \
-        json_object_array_add(__pools, _p);                                 \
-    } while (0)
-
-// Adds a new xstream in the provided array. The variadic argument corresponds
-// to pool indices to add to the xstream's scheduler.
-#define CONFIG_ADD_NEW_XSTREAM(__xstreams, __name, __sched_predef, ...)     \
-    do {                                                                    \
-        struct json_object* _x = json_object_new_object();                  \
-        json_object_object_add(_x, "name", json_object_new_string(__name)); \
-        json_object_object_add(_x, "cpubind", json_object_new_int64(-1));   \
-        json_object_object_add(_x, "affinity", json_object_new_array());    \
-        int                 _pool_index[] = {__VA_ARGS__, -1};              \
-        struct json_object* _s            = json_object_new_object();       \
-        json_object_object_add(_s, "type",                                  \
-                               json_object_new_string(__sched_predef));     \
-        struct json_object* _s_pools = json_object_new_array();             \
-        unsigned            _i       = 0;                                   \
-        while (_pool_index[_i] != -1) {                                     \
-            json_object_array_add(_s_pools,                                 \
-                                  json_object_new_int64(_pool_index[_i]));  \
-            _i++;                                                           \
-        }                                                                   \
-        json_object_object_add(_s, "pools", _s_pools);                      \
-        json_object_object_add(_x, "scheduler", _s);                        \
-        json_object_array_add(__xstreams, _x);                              \
-    } while (0)
-
 #define ASSERT_CONFIG_HAS_REQUIRED(__config__, __key__, __type__, __ctx__) \
     do {                                                                   \
         struct json_object* __key__                                        \
