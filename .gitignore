@@ -9,9 +9,14 @@ config.log
 config.status
 Makefile
 Makefile.in
-margo-config.h.in
-margo-config.h.in~
+margo-config-private.h.in
+margo-config-private.h.in~
 configure
+configure~
+compile_commands.json
+/build/
+spack.lock
+/.spack-env/
 cscope.files
 aclocal.m4
 Makefile.in
