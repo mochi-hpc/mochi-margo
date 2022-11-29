@@ -71,8 +71,8 @@ char* margo_get_config_opt(margo_instance_id mid, int options)
                                   flags);
     }
     // serialize
-    const char* content = json_object_to_json_string_ext(
-        root, JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_NOSLASHESCAPE);
+    const char* content
+        = json_object_to_json_string_ext(root, json_to_string_flags);
     content = strdup(content);
     json_object_put(root);
     return (char*)content;

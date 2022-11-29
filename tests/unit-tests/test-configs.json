@@ -1,0 +1,8 @@
+{
+    "empty-config": {
+        "pass": true,
+        "input": {},
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__primary__"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]}}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":0,"rpc_pool":0}
+    }
+
+}
