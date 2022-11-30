@@ -165,7 +165,7 @@ static inline bool margo_abt_pool_validate_json(const json_object_t* jpool,
 
 #define HANDLE_CONFIG_ERROR return false
 
-    /* default: "mpmcs" for predef pools */
+    /* default: "mpmc" for predef pools */
     ASSERT_CONFIG_HAS_OPTIONAL(jpool, access, string, pool);
     json_object_t* jaccess = json_object_object_get(jpool, "access");
     if (jaccess) {
@@ -215,6 +215,7 @@ static inline bool margo_abt_pool_init_from_json(const json_object_t* jpool,
     if (jname)
         p->name = strdup(json_object_get_string(jname));
     else {
+        // TODO check that the generated name is not used
         int name_size = snprintf(NULL, 0, "__pool_%d__", index);
         p->name       = calloc(1, name_size + 1);
         snprintf((char*)p->name, name_size + 1, "__pool_%d__", index);

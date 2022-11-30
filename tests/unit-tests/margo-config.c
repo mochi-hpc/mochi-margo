@@ -1,4 +1,5 @@
 
+#include <unistd.h>
 #include <margo.h>
 #include <json-c/json.h>
 
@@ -194,7 +195,6 @@ static MunitResult test_json_config(const MunitParameter params[], void* data)
             = json_object_object_get(config, "output");
         munit_assert_not_null(expected_config);
         char* output_config_str = margo_get_config(mid);
-
         struct json_object* output_config
             = json_tokener_parse(output_config_str);
         munit_assert_not_null(output_config);
@@ -214,40 +214,37 @@ static MunitResult test_json_config(const MunitParameter params[], void* data)
     return MUNIT_OK;
 }
 
-static char* congig_name_params[] = {
-    "empty",
-    "use_progress_thread=true",
-    "use_progress_thread=false",
-    "use_progress_thead=string",
-    "rpc_thread_count=-1",
-    "rpc_thread_count=0",
-    "rpc_thread_count=1",
-    "rpc_thread_count=2",
-    "rpc_thread_count=string",
-    "rpc_thread_count=-1/use_progress_thread=true",
-    "rpc_thread_count=0/use_progress_thread=true",
-    "rpc_thread_count=1/use_progress_thread=true",
-    "rpc_thread_count=2/use_progress_thread=true",
-    "valid_pool_kinds_and_access",
-    NULL
-};
-
-static MunitParameterEnum test_params[] = {
-    { "test-config", congig_name_params },
-    { NULL, NULL }
-};
-
-static MunitTest tests[]
-    = {{"/abt-config", test_abt_config, test_context_setup,
-        test_context_tear_down, MUNIT_TEST_OPTION_NONE, NULL},
-       {"/json-config", test_json_config, test_context_setup,
-        test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
-       {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
-
-static const MunitSuite test_suite
-    = {"/margo", tests, NULL, 1, MUNIT_SUITE_OPTION_NONE};
-
 int main(int argc, char** argv)
 {
-    return munit_suite_main(&test_suite, NULL, argc, argv);
+    struct json_object* configs
+          = json_object_from_file("tests/unit-tests/test-configs.json");
+    if(!configs) {
+        fprintf(stderr, "Could not open or parse JSON file \"tests/unit-tests/test-configs.json\"\n");
+        return MUNIT_FAIL;
+    }
+    int num_tests = json_object_object_length(configs);
+    char** config_name_params = NULL;
+    config_name_params = calloc(num_tests+1, sizeof(char*));
+    unsigned i = 0;
+    json_object_object_foreach(configs, key, val) {
+        config_name_params[i] = key;
+        i += 1;
+    }
+    MunitParameterEnum test_params[] = {
+      { "test-config", config_name_params },
+      { NULL, NULL }
+    };
+    MunitTest tests[] = {
+        {"/abt-config", test_abt_config, test_context_setup,
+         test_context_tear_down, MUNIT_TEST_OPTION_NONE, NULL},
+        {"/json-config", test_json_config, test_context_setup,
+         test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
+        {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}
+    };
+    MunitSuite test_suite
+        = {"/margo", tests, NULL, 1, MUNIT_SUITE_OPTION_NONE};
+    int result =  munit_suite_main(&test_suite, NULL, argc, argv);
+    json_object_put(configs);
+    free(config_name_params);
+    return result;
 }

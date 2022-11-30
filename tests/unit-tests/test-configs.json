@@ -19,7 +19,7 @@
 
     "use_progress_thead=string": {
         "pass": false,
-        "input": {"use_progress_thread": "something"}
+        "input": {"use_progress_thread": "XXX"}
     },
 
     "rpc_thread_count=-1": {
@@ -48,7 +48,7 @@
 
     "rpc_thread_count=string": {
         "pass": false,
-        "input": {"rpc_thread_count": "something"}
+        "input": {"rpc_thread_count": "XXX"}
     },
 
     "rpc_thread_count=-1/use_progress_thread=true": {
@@ -79,5 +79,115 @@
         "pass": true,
         "input": {"argobots":{"pools":[{"name":"fifo_pool","kind":"fifo","access":"private"},{"name":"fifo_wait_pool","kind":"fifo_wait","access":"mpmc"},{"name":"prio_wait_pool","kind":"prio_wait","access":"spsc"},{"name":"fifo_pool_2","kind":"fifo","access":"mpsc"},{"name":"fifo_pool_3","kind":"fifo","access":"spmc"}]}},
         "output": {"argobots":{"pools":[{"kind":"fifo","name":"fifo_pool","access":"private"},{"kind":"fifo_wait","name":"fifo_wait_pool","access":"mpmc"},{"kind":"prio_wait","name":"prio_wait_pool","access":"spsc"},{"kind":"fifo","name":"fifo_pool_2","access":"mpsc"},{"kind":"fifo","name":"fifo_pool_3","access":"spmc"},{"kind":"fifo_wait","name":"__primary__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[5]},"name":"__primary__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":5,"rpc_pool":5}
+    },
+
+    "pools_should_be_an_array": {
+        "pass": false,
+        "input": {"argobots":{"pools":true}}
+    },
+
+    "pool_name_must_be_a_string": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{"name":true}]}}
+    },
+
+    "pool_name_must_be_unique": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{"name":"my_pool"},{"name":"my_pool"}]}}
+    },
+
+    "pool_name_must_be_valid": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{"name":"$%^"}]}}
+    },
+
+    "pool_kind_must_be_a_string": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{"kind":true}]}}
+    },
+
+    "pool_kind_must_be_valid": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{"kind":"XXX"}]}}
+    },
+
+    "pool_kind_must_not_be_external": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{"kind":"external"}]}}
+    },
+
+    "pool_access_must_be_a_string": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{"access":true}]}}
+    },
+
+    "pool_access_must_be_valid": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{"access":"XXX"}]}}
+    },
+
+    "xstreams_should_be_an_array": {
+        "pass": false,
+        "input": {"argobots":{"xstreams":true}}
+    },
+
+    "xstreams_name_should_be_a_string": {
+        "pass": false,
+        "input": {"argobots":{"xstreams":[{"name":true}]}}
+    },
+
+    "xstreams_name_should_be_valid": {
+        "pass": false,
+        "input": {"argobots":{"xstreams":[{"name":"%&*("}]}}
+    },
+
+    "xstreams_name_should_be_unique": {
+        "pass": false,
+        "input": {"argobots":{"xstreams":[{"name":"my_es"},{"name":"my_es"}]}}
+    },
+
+    "xstreams_cpubind_should_be_an_integer": {
+        "pass": false,
+        "input": {"argobots":{"xstreams":[{"cpubind":true}]}}
+    },
+
+    "xstreams_affinity_should_be_an_array": {
+        "pass": false,
+        "input": {"argobots":{"xstreams":[{"affinity":true}]}}
+    },
+
+    "xstreams_affinity_should_contain_integers": {
+        "pass": false,
+        "input": {"argobots":{"xstreams":[{"affinity":[true]}]}}
+    },
+
+    "sched_type_must_be_a_string": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{}],"xstreams":[{"scheduler":{"type":true,"pools":[0]}}]}}
+    },
+
+    "sched_type_must_be_valid": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{}],"xstreams":[{"scheduler":{"type":"XXX","pools":[0]}}]}}
+    },
+
+    "sched_pools_must_be_an_array": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{}],"xstreams":[{"scheduler":{"pools":true}}]}}
+    },
+
+    "sched_pools_ref_must_be_string_or_integer": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{}], "xstreams":[{"scheduler":{"pools":[true]}}]}}
+    },
+
+    "sched_pools_integer_ref_must_be_valid": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{}], "xstreams":[{"scheduler":{"pools":[42]}}]}}
+    },
+
+    "sched_pools_string_ref_must_be_valid": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{}], "xstreams":[{"scheduler":{"pools":["XXX"]}}]}}
     }
 }
