@@ -1,8 +1,83 @@
 {
-    "empty-config": {
+    "empty": {
         "pass": true,
         "input": {},
-        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__primary__"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]}}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":0,"rpc_pool":0}
-    }
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__primary__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__primary__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":0,"rpc_pool":0}
+    },
 
+    "use_progress_thread=true": {
+        "pass": true,
+        "input": {"use_progress_thread": true},
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__primary__","access":"mpmc"},{"kind":"fifo_wait","name":"__progress__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__primary__"},{"scheduler":{"type":"default","pools":[1]},"name":"__progress__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":1,"rpc_pool":0}
+    },
+
+    "use_progress_thread=false": {
+        "pass": true,
+        "input": {"use_progress_thread": false},
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__primary__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__primary__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":0,"rpc_pool":0}
+    },
+
+    "use_progress_thead=string": {
+        "pass": false,
+        "input": {"use_progress_thread": "something"}
+    },
+
+    "rpc_thread_count=-1": {
+        "pass": true,
+        "input": {"rpc_thread_count": -1},
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__primary__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__primary__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":0,"rpc_pool":0}
+    },
+
+    "rpc_thread_count=0": {
+        "pass": true,
+        "input": {"rpc_thread_count": 0},
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__primary__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__primary__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":0,"rpc_pool":0}
+    },
+
+    "rpc_thread_count=1": {
+        "pass": true,
+        "input": {"rpc_thread_count": 1},
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__primary__","access":"mpmc"},{"kind":"fifo_wait","name":"__rpc__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__primary__"},{"scheduler":{"type":"default","pools":[1]},"name":"__rpc_0__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":0,"rpc_pool":1}
+    },
+
+    "rpc_thread_count=2": {
+        "pass": true,
+        "input": {"rpc_thread_count": 2},
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__primary__","access":"mpmc"},{"kind":"fifo_wait","name":"__rpc__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__primary__"},{"scheduler":{"type":"default","pools":[1]},"name":"__rpc_0__"},{"scheduler":{"type":"default","pools":[1]},"name":"__rpc_1__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":0,"rpc_pool":1}
+    },
+
+    "rpc_thread_count=string": {
+        "pass": false,
+        "input": {"rpc_thread_count": "something"}
+    },
+
+    "rpc_thread_count=-1/use_progress_thread=true": {
+        "pass": true,
+        "input": {"rpc_thread_count": -1, "use_progress_thread": true},
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__primary__","access":"mpmc"},{"kind":"fifo_wait","name":"__progress__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__primary__"},{"scheduler":{"type":"default","pools":[1]},"name":"__progress__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":1,"rpc_pool":1}
+    },
+
+    "rpc_thread_count=0/use_progress_thread=true": {
+        "pass": true,
+        "input": {"rpc_thread_count": 0, "use_progress_thread": true},
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__primary__","access":"mpmc"},{"kind":"fifo_wait","name":"__progress__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__primary__"},{"scheduler":{"type":"default","pools":[1]},"name":"__progress__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":1,"rpc_pool":0}
+    },
+
+    "rpc_thread_count=1/use_progress_thread=true": {
+        "pass": true,
+        "input": {"rpc_thread_count": 1, "use_progress_thread": true},
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__primary__","access":"mpmc"},{"kind":"fifo_wait","name":"__progress__","access":"mpmc"},{"kind":"fifo_wait","name":"__rpc__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__primary__"},{"scheduler":{"type":"default","pools":[1]},"name":"__progress__"},{"scheduler":{"type":"default","pools":[2]},"name":"__rpc_0__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":1,"rpc_pool":2}
+    },
+
+    "rpc_thread_count=2/use_progress_thread=true": {
+        "pass": true,
+        "input": {"rpc_thread_count": 2, "use_progress_thread": true},
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__primary__","access":"mpmc"},{"kind":"fifo_wait","name":"__progress__","access":"mpmc"},{"kind":"fifo_wait","name":"__rpc__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__primary__"},{"scheduler":{"type":"default","pools":[1]},"name":"__progress__"},{"scheduler":{"type":"default","pools":[2]},"name":"__rpc_0__"},{"scheduler":{"type":"default","pools":[2]},"name":"__rpc_1__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":1,"rpc_pool":2}
+    },
+
+    "valid_pool_kinds_and_access": {
+        "pass": true,
+        "input": {"argobots":{"pools":[{"name":"fifo_pool","kind":"fifo","access":"private"},{"name":"fifo_wait_pool","kind":"fifo_wait","access":"mpmc"},{"name":"prio_wait_pool","kind":"prio_wait","access":"spsc"},{"name":"fifo_pool_2","kind":"fifo","access":"mpsc"},{"name":"fifo_pool_3","kind":"fifo","access":"spmc"}]}},
+        "output": {"argobots":{"pools":[{"kind":"fifo","name":"fifo_pool","access":"private"},{"kind":"fifo_wait","name":"fifo_wait_pool","access":"mpmc"},{"kind":"prio_wait","name":"prio_wait_pool","access":"spsc"},{"kind":"fifo","name":"fifo_pool_2","access":"mpsc"},{"kind":"fifo","name":"fifo_pool_3","access":"spmc"},{"kind":"fifo_wait","name":"__primary__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[5]},"name":"__primary__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":5,"rpc_pool":5}
+    }
 }

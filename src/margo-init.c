@@ -115,11 +115,11 @@ margo_instance_id margo_init_ext(const char*                   address,
 
     struct json_object*   _jabt = json_object_object_get(config, "argobots");
     margo_abt_user_args_t abt_uargs = {
-        .jprogress_pool    = json_object_object_get(_jabt, "progress_pool"),
-        .jrpc_pool         = json_object_object_get(_jabt, "rpc_pool"),
-        .jrpc_thread_count = json_object_object_get(_jabt, "rpc_thread_count"),
+        .jprogress_pool    = json_object_object_get(config, "progress_pool"),
+        .jrpc_pool         = json_object_object_get(config, "rpc_pool"),
+        .jrpc_thread_count = json_object_object_get(config, "rpc_thread_count"),
         .juse_progress_thread
-        = json_object_object_get(_jabt, "use_progress_thread"),
+        = json_object_object_get(config, "use_progress_thread"),
         .progress_pool = args.progress_pool,
         .rpc_pool      = args.rpc_pool};
     if (!margo_abt_init_from_json(_jabt, &abt_uargs, &abt)) { goto error; }

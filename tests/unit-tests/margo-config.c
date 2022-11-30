@@ -157,7 +157,7 @@ static MunitResult test_abt_config(const MunitParameter params[], void* data)
 
 static MunitResult test_json_config(const MunitParameter params[], void* data)
 {
-    (void)params;
+    const char* config_name = munit_parameters_get(params, "test-config");
     struct test_context* ctx = (struct test_context*)data;
     (void)ctx;
     struct margo_init_info init_info = {0};
@@ -168,58 +168,80 @@ static MunitResult test_json_config(const MunitParameter params[], void* data)
     munit_assert_not_null(configs);
     munit_assert(json_object_is_type(configs, json_type_object));
 
-    json_object_object_foreach(configs, test_name, config)
-    {
+    struct json_object* config = json_object_object_get(configs, config_name);
+    munit_assert_not_null(config);
 
-        munit_assert(json_object_is_type(config, json_type_object));
-        struct json_object* config_in = json_object_object_get(config, "input");
-        munit_assert_not_null(config_in);
-        munit_assert(json_object_is_type(config_in, json_type_object));
-        struct json_object* pass = json_object_object_get(config, "pass");
-        munit_assert_not_null(pass);
-        munit_assert(json_object_is_type(pass, json_type_boolean));
+    munit_assert(json_object_is_type(config, json_type_object));
+    struct json_object* config_in = json_object_object_get(config, "input");
+    munit_assert_not_null(config_in);
+    munit_assert(json_object_is_type(config_in, json_type_object));
+    struct json_object* pass = json_object_object_get(config, "pass");
+    munit_assert_not_null(pass);
+    munit_assert(json_object_is_type(pass, json_type_boolean));
 
-        munit_logf(MUNIT_LOG_INFO, "initializing margo with config \"%s\"",
-                   test_name);
-        init_info.json_config = json_object_to_json_string_ext(
+    munit_logf(MUNIT_LOG_INFO, "initializing margo with config \"%s\"",
+            config_name);
+    init_info.json_config = json_object_to_json_string_ext(
             config_in, JSON_C_TO_STRING_NOSLASHESCAPE);
 
-        margo_instance_id mid
-            = margo_init_ext("na+sm", MARGO_SERVER_MODE, &init_info);
-        if (!json_object_get_boolean(pass)) {
-            munit_assert_null(mid);
-        } else {
-            munit_assert_not_null(mid);
-            struct json_object* expected_config
-                = json_object_object_get(config, "output");
-            munit_assert_not_null(expected_config);
-            char* output_config_str = margo_get_config(mid);
+    margo_instance_id mid
+        = margo_init_ext("na+sm", MARGO_SERVER_MODE, &init_info);
+    if (!json_object_get_boolean(pass)) {
+        munit_assert_null(mid);
+    } else {
+        munit_assert_not_null(mid);
+        struct json_object* expected_config
+            = json_object_object_get(config, "output");
+        munit_assert_not_null(expected_config);
+        char* output_config_str = margo_get_config(mid);
 
-            munit_logf(MUNIT_LOG_INFO, "output config is\n%s\n",
-                       output_config_str);
+        struct json_object* output_config
+            = json_tokener_parse(output_config_str);
+        munit_assert_not_null(output_config);
+        json_object_object_del(output_config, "mercury");
 
-            struct json_object* output_config
-                = json_tokener_parse(output_config_str);
-            munit_assert_not_null(output_config);
-            json_object_object_del(output_config, "mercury");
+        munit_logf(MUNIT_LOG_INFO, "output config is\n%s\n",
+                json_object_to_json_string_ext(output_config, JSON_C_TO_STRING_NOSLASHESCAPE));
 
-            munit_assert(json_object_equal(output_config, expected_config));
+        munit_assert(json_object_equal(output_config, expected_config));
 
-            json_object_put(output_config);
-            free(output_config_str);
-            margo_finalize(mid);
-        }
+        json_object_put(output_config);
+        free(output_config_str);
+        margo_finalize(mid);
     }
     json_object_put(configs);
 
     return MUNIT_OK;
 }
 
+static char* congig_name_params[] = {
+    "empty",
+    "use_progress_thread=true",
+    "use_progress_thread=false",
+    "use_progress_thead=string",
+    "rpc_thread_count=-1",
+    "rpc_thread_count=0",
+    "rpc_thread_count=1",
+    "rpc_thread_count=2",
+    "rpc_thread_count=string",
+    "rpc_thread_count=-1/use_progress_thread=true",
+    "rpc_thread_count=0/use_progress_thread=true",
+    "rpc_thread_count=1/use_progress_thread=true",
+    "rpc_thread_count=2/use_progress_thread=true",
+    "valid_pool_kinds_and_access",
+    NULL
+};
+
+static MunitParameterEnum test_params[] = {
+    { "test-config", congig_name_params },
+    { NULL, NULL }
+};
+
 static MunitTest tests[]
     = {{"/abt-config", test_abt_config, test_context_setup,
         test_context_tear_down, MUNIT_TEST_OPTION_NONE, NULL},
        {"/json-config", test_json_config, test_context_setup,
-        test_context_tear_down, MUNIT_TEST_OPTION_NONE, NULL},
+        test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
        {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
 
 static const MunitSuite test_suite
