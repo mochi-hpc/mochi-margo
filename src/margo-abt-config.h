@@ -61,12 +61,18 @@ typedef struct margo_abt_pool {
 
 static inline bool margo_abt_pool_validate_json(const json_object_t*, uint32_t);
 static inline bool margo_abt_pool_init_from_json(const json_object_t*,
-                                                 uint32_t,
-                                                 margo_abt_pool_t*);
+                                                 margo_abt_pool_t*,
+                                                 const margo_abt_pool_t*,
+                                                 unsigned);
 static inline json_object_t* margo_abt_pool_to_json(const margo_abt_pool_t*);
 static inline void           margo_abt_pool_destroy(margo_abt_pool_t*);
-static inline bool
-margo_abt_pool_init_external(const char*, ABT_pool, margo_abt_pool_t*);
+static inline bool           margo_abt_pool_init_external(const char*,
+                                                          ABT_pool,
+                                                          margo_abt_pool_t*,
+                                                          const margo_abt_pool_t*,
+                                                          unsigned);
+static inline char*          generate_unused_pool_name(const margo_abt_pool_t*,
+                                                       unsigned);
 
 /* Struct to track scheduler information in a margo_abt_xstream. */
 typedef struct margo_abt_sched {
@@ -107,18 +113,24 @@ static inline bool margo_abt_xstream_validate_json(const json_object_t*,
                                                    uint32_t,
                                                    const json_object_t*);
 static inline bool margo_abt_xstream_init_from_json(const json_object_t*,
-                                                    uint32_t,
                                                     margo_abt_xstream_t*,
-                                                    margo_abt_pool_t*,
+                                                    const margo_abt_xstream_t*,
+                                                    unsigned,
+                                                    const margo_abt_pool_t*,
                                                     unsigned);
 static inline bool margo_abt_xstream_init_external(const char*,
                                                    ABT_xstream,
-                                                   margo_abt_pool_t*,
+                                                   margo_abt_xstream_t*,
+                                                   const margo_abt_xstream_t*,
                                                    unsigned,
-                                                   margo_abt_xstream_t*);
+                                                   const margo_abt_pool_t*,
+                                                   unsigned);
 static inline json_object_t* margo_abt_xstream_to_json(
     const margo_abt_xstream_t*, int, const margo_abt_pool_t*, unsigned);
 static inline void margo_abt_xstream_destroy(margo_abt_xstream_t*);
+static inline char*
+generate_unused_xstream_name(const margo_abt_xstream_t* known_xstreams,
+                             unsigned                   num_xstreams);
 
 /* Argobots environment */
 typedef struct margo_abt {
@@ -202,9 +214,11 @@ static inline bool margo_abt_pool_validate_json(const json_object_t* jpool,
     return true;
 }
 
-static inline bool margo_abt_pool_init_from_json(const json_object_t* jpool,
-                                                 uint32_t             index,
-                                                 margo_abt_pool_t*    p)
+static inline bool
+margo_abt_pool_init_from_json(const json_object_t*    jpool,
+                              margo_abt_pool_t*       p,
+                              const margo_abt_pool_t* known_pools,
+                              unsigned                num_known_pools)
 {
     ABT_pool_access access = ABT_POOL_ACCESS_MPMC;
     ABT_pool_kind   kind   = (ABT_pool_kind)(-1);
@@ -214,12 +228,8 @@ static inline bool margo_abt_pool_init_from_json(const json_object_t* jpool,
     json_object_t* jname = json_object_object_get(jpool, "name");
     if (jname)
         p->name = strdup(json_object_get_string(jname));
-    else {
-        // TODO check that the generated name is not used
-        int name_size = snprintf(NULL, 0, "__pool_%d__", index);
-        p->name       = calloc(1, name_size + 1);
-        snprintf((char*)p->name, name_size + 1, "__pool_%d__", index);
-    }
+    else
+        p->name = generate_unused_pool_name(known_pools, num_known_pools);
 
     p->kind
         = strdup(json_object_object_get_string_or(jpool, "kind", "fifo_wait"));
@@ -273,12 +283,16 @@ static inline bool margo_abt_pool_init_from_json(const json_object_t* jpool,
     return true;
 }
 
-static inline bool margo_abt_pool_init_external(const char*       name,
-                                                ABT_pool          handle,
-                                                margo_abt_pool_t* p)
+static inline bool
+margo_abt_pool_init_external(const char*             name,
+                             ABT_pool                handle,
+                             margo_abt_pool_t*       p,
+                             const margo_abt_pool_t* known_pools,
+                             unsigned                num_known_pools)
 {
     memset(p, 0, sizeof(*p));
-    p->name = strdup(name);
+    p->name = name ? strdup(name)
+                   : generate_unused_pool_name(known_pools, num_known_pools);
     p->pool = handle;
     p->kind = strdup("external");
     return true;
@@ -308,6 +322,26 @@ static inline void margo_abt_pool_destroy(margo_abt_pool_t* p)
         ABT_pool_free(&(p->pool));
     }
     memset(p, 0, sizeof(*p));
+}
+
+static inline char*
+generate_unused_pool_name(const margo_abt_pool_t* known_pools,
+                          unsigned                num_pools)
+{
+    unsigned i = num_pools;
+    unsigned j = 0;
+    char     name[128];
+    while (true) {
+        snprintf(name, 128, "__pool_%d__", i);
+        for (j = 0; j < num_pools; j++) {
+            if (strcmp(name, known_pools[j].name) == 0) break;
+        }
+        if (j == num_pools)
+            return strdup(name);
+        else
+            i += 1;
+    }
+    return strdup("");
 }
 
 /* ------ margo_abt_sched_* --------- */
@@ -590,20 +624,20 @@ margo_abt_xstream_validate_json(const json_object_t* jxstream,
 }
 
 static inline bool
-margo_abt_xstream_init_from_json(const json_object_t* jxstream,
-                                 uint32_t             index,
-                                 margo_abt_xstream_t* x,
-                                 margo_abt_pool_t*    pools,
-                                 unsigned             num_pools)
+margo_abt_xstream_init_from_json(const json_object_t*       jxstream,
+                                 margo_abt_xstream_t*       x,
+                                 const margo_abt_xstream_t* known_xstreams,
+                                 unsigned                   num_known_xstreams,
+                                 const margo_abt_pool_t*    known_pools,
+                                 unsigned                   num_known_pools)
 {
     bool           result = true;
     json_object_t* jname  = json_object_object_get(jxstream, "name");
     if (jname)
         x->name = strdup(json_object_get_string(jname));
     else {
-        int name_len = snprintf(NULL, 0, "__xstream_%d__", index);
-        x->name      = calloc(1, name_len + 1);
-        snprintf((char*)x->name, name_len + 1, "__xstream_%d__", index);
+        x->name
+            = generate_unused_xstream_name(known_xstreams, num_known_xstreams);
     }
 
     int            cpubind  = -1;
@@ -628,7 +662,8 @@ margo_abt_xstream_init_from_json(const json_object_t* jxstream,
     else
         jsched = json_object_new_object();
 
-    if (!margo_abt_sched_init_from_json(jsched, &(x->sched), pools, num_pools))
+    if (!margo_abt_sched_init_from_json(jsched, &(x->sched), known_pools,
+                                        num_known_pools))
         goto error;
 
     int ret;
@@ -637,7 +672,8 @@ margo_abt_xstream_init_from_json(const json_object_t* jxstream,
         ret                = ABT_xstream_create(x->sched.sched, &(x->xstream));
         x->margo_free_flag = true;
         for (unsigned i = 0; i < x->sched.num_pools; i++)
-            pools[x->sched.pools[i]].used_by_primary = true;
+            ((margo_abt_pool_t*)known_pools)[x->sched.pools[i]].used_by_primary
+                = true;
     } else {
         /* primary ES, change its scheduler */
         ret = ABT_xstream_self(&x->xstream);
@@ -689,13 +725,17 @@ error:
 }
 
 static inline bool
-margo_abt_xstream_init_external(const char*          name,
-                                ABT_xstream          handle,
-                                margo_abt_pool_t*    known_pools,
-                                unsigned             num_known_pools,
-                                margo_abt_xstream_t* x)
+margo_abt_xstream_init_external(const char*                name,
+                                ABT_xstream                handle,
+                                margo_abt_xstream_t*       x,
+                                const margo_abt_xstream_t* known_xstreams,
+                                unsigned                   num_known_xstreams,
+                                const margo_abt_pool_t*    known_pools,
+                                unsigned                   num_known_pools)
 {
-    x->name    = strdup(name);
+    x->name    = name ? strdup(name)
+                      : generate_unused_xstream_name(known_xstreams,
+                                                  num_known_xstreams);
     x->xstream = handle;
 
     ABT_sched sched;
@@ -715,7 +755,8 @@ margo_abt_xstream_init_external(const char*          name,
 
     if (strcmp(name, "__primary__") == 0) {
         for (unsigned i = 0; i < x->sched.num_pools; i++) {
-            known_pools[x->sched.pools[i]].used_by_primary = true;
+            ((margo_abt_pool_t*)known_pools)[x->sched.pools[i]].used_by_primary
+                = true;
         }
     }
 
@@ -776,6 +817,26 @@ static inline void margo_abt_xstream_destroy(margo_abt_xstream_t* x)
     margo_abt_sched_destroy(&(x->sched));
     free((char*)x->name);
     memset(x, 0, sizeof(*x));
+}
+
+static inline char*
+generate_unused_xstream_name(const margo_abt_xstream_t* known_xstreams,
+                             unsigned                   num_xstreams)
+{
+    unsigned i = num_xstreams;
+    unsigned j = 0;
+    char     name[128];
+    while (true) {
+        snprintf(name, 128, "__xstream_%d__", i);
+        for (j = 0; j < num_xstreams; j++) {
+            if (strcmp(name, known_xstreams[j].name) == 0) break;
+        }
+        if (j == num_xstreams)
+            return strdup(name);
+        else
+            i += 1;
+    }
+    return strdup("");
 }
 
 /* ------ margo_abt_* --------- */
@@ -1070,14 +1131,17 @@ margo_abt_init_from_json(const json_object_t*         jabt,
      * may have to add a __primary__ pool, and/or a __progress__
      * pool, and/or an __rpc__ pool.
      */
-    a->num_pools = json_object_array_length(jpools);
-    a->pools     = calloc(a->num_pools + 3, sizeof(*(a->pools)));
-    for (unsigned i = 0; i < a->num_pools; ++i) {
+    unsigned num_pools = json_object_array_length(jpools);
+    a->num_pools       = 0;
+    a->pools           = calloc(num_pools + 3, sizeof(*(a->pools)));
+    for (unsigned i = 0; i < num_pools; ++i) {
         json_object_t* jpool = json_object_array_get_idx(jpools, i);
-        if (!margo_abt_pool_init_from_json(jpool, i, a->pools + i)) {
+        if (!margo_abt_pool_init_from_json(jpool, a->pools + i, a->pools,
+                                           a->num_pools)) {
             result = false;
             goto error;
         }
+        a->num_pools += 1;
     }
 
     /* compute how many extra ES we will add:
@@ -1101,12 +1165,13 @@ margo_abt_init_from_json(const json_object_t*         jabt,
     }
 
     /* build xstreams that are specified in the JSON */
-    a->num_xstreams = json_object_array_length(jxstreams);
-    a->xstreams
-        = calloc(a->num_xstreams + num_extra_es, sizeof(*(a->xstreams)));
-    for (unsigned i = 0; i < a->num_xstreams; ++i) {
+    unsigned num_xstreams = json_object_array_length(jxstreams);
+    a->num_xstreams       = 0;
+    a->xstreams = calloc(num_xstreams + num_extra_es, sizeof(*(a->xstreams)));
+    for (unsigned i = 0; i < num_xstreams; ++i) {
         json_object_t* jxstream = json_object_array_get_idx(jxstreams, i);
-        if (!margo_abt_xstream_init_from_json(jxstream, i, a->xstreams + i,
+        if (!margo_abt_xstream_init_from_json(jxstream, a->xstreams + i,
+                                              a->xstreams, a->num_xstreams,
                                               a->pools, a->num_pools)) {
             result = false;
             goto error;
@@ -1115,6 +1180,7 @@ margo_abt_init_from_json(const json_object_t*         jabt,
             primary_pool_idx = a->xstreams[i].sched.pools[0];
             primary_pool     = a->pools[primary_pool_idx].pool;
         }
+        a->num_xstreams += 1;
     }
 
     /* initialize __primary__ ES if it's not defined in the JSON */
@@ -1127,8 +1193,9 @@ margo_abt_init_from_json(const json_object_t*         jabt,
             json_object_object_add(jprimary_pool, "access",
                                    json_object_new_string("mpmc"));
             primary_pool_idx = a->num_pools;
-            result           = margo_abt_pool_init_from_json(
-                jprimary_pool, primary_pool_idx, a->pools + primary_pool_idx);
+            result           = margo_abt_pool_init_from_json(jprimary_pool,
+                                                   a->pools + primary_pool_idx,
+                                                   a->pools, a->num_pools);
             json_object_put(jprimary_pool);
             if (!result) goto error;
             primary_pool = a->pools[primary_pool_idx].pool;
@@ -1149,8 +1216,8 @@ margo_abt_init_from_json(const json_object_t*         jabt,
             json_object_array_add(jprimary_xstream_pools,
                                   json_object_new_int(primary_pool_idx));
             result = margo_abt_xstream_init_from_json(
-                jprimary_xstream, a->num_xstreams,
-                a->xstreams + a->num_xstreams, a->pools, a->num_pools);
+                jprimary_xstream, a->xstreams + a->num_xstreams, a->xstreams,
+                a->num_xstreams, a->pools, a->num_pools);
             json_object_put(jprimary_xstream);
             if (!result) goto error;
             a->num_xstreams += 1;
@@ -1161,13 +1228,14 @@ margo_abt_init_from_json(const json_object_t*         jabt,
             primary_pool_idx = a->num_pools;
             /* add the ES' pool as external */
             result = margo_abt_pool_init_external("__primary__", primary_pool,
-                                                  a->pools + a->num_pools);
+                                                  a->pools + a->num_pools,
+                                                  a->pools, a->num_pools);
             if (!result) goto error;
             a->num_pools += 1;
             /* add an external __primary__ ES */
             result = margo_abt_xstream_init_external(
-                "__primary__", self_es, a->pools, a->num_pools,
-                a->xstreams + a->num_xstreams);
+                "__primary__", self_es, a->xstreams + a->num_xstreams,
+                a->xstreams, a->num_xstreams, a->pools, a->num_pools);
             if (!result) goto error;
             a->num_xstreams += 1;
         }
@@ -1184,10 +1252,10 @@ margo_abt_init_from_json(const json_object_t*         jabt,
     } else if (user_args->progress_pool != ABT_POOL_NULL
                && user_args->progress_pool != NULL) {
         /* external progress pool specified, and it's not the primary, so add it
-         * as external */
-        // TODO check if a __progress__ pool is already defined
-        result = margo_abt_pool_init_external(
-            "__progress__", user_args->progress_pool, a->pools + a->num_pools);
+         */
+        result = margo_abt_pool_init_external(NULL, user_args->progress_pool,
+                                              a->pools + a->num_pools, a->pools,
+                                              a->num_pools);
         if (!result) goto error;
         progress_pool_idx = (int)a->num_pools;
         a->num_pools += 1;
@@ -1203,25 +1271,21 @@ margo_abt_init_from_json(const json_object_t*         jabt,
 
     } else if (user_args->juse_progress_thread
                && json_object_get_boolean(user_args->juse_progress_thread)) {
-        /* use_progress_thread specified and true, add a __progress__ ES with a
-         * __progress__ pool */
-        // TODO check if a __progress__ pool is already defined
+        /* use_progress_thread specified and true, add a progress ES
+         * with its own progress pool */
         json_object_t* jprogress_pool = json_object_new_object();
-        json_object_object_add(jprogress_pool, "name",
-                               json_object_new_string("__progress__"));
         json_object_object_add(jprogress_pool, "access",
                                json_object_new_string("mpmc"));
         progress_pool_idx = a->num_pools;
-        result            = margo_abt_pool_init_from_json(
-            jprogress_pool, progress_pool_idx, a->pools + progress_pool_idx);
+        result            = margo_abt_pool_init_from_json(jprogress_pool,
+                                               a->pools + progress_pool_idx,
+                                               a->pools, a->num_pools);
         json_object_put(jprogress_pool);
         if (!result) goto error;
         a->num_pools += 1;
-        /* add a __proress__ ES */
+        /* add a proress ES */
         json_object_t* jprogress_xstream = json_object_new_object();
-        json_object_object_add(jprogress_xstream, "name",
-                               json_object_new_string("__progress__"));
-        json_object_t* jprogress_sched = json_object_new_object();
+        json_object_t* jprogress_sched   = json_object_new_object();
         json_object_object_add(jprogress_xstream, "scheduler", jprogress_sched);
         json_object_t* jprogress_xstream_pools = json_object_new_array_ext(1);
         json_object_object_add(jprogress_sched, "pools",
@@ -1229,8 +1293,8 @@ margo_abt_init_from_json(const json_object_t*         jabt,
         json_object_array_add(jprogress_xstream_pools,
                               json_object_new_int(progress_pool_idx));
         result = margo_abt_xstream_init_from_json(
-            jprogress_xstream, a->num_xstreams, a->xstreams + a->num_xstreams,
-            a->pools, a->num_pools);
+            jprogress_xstream, a->xstreams + a->num_xstreams, a->xstreams,
+            a->num_xstreams, a->pools, a->num_pools);
         json_object_put(jprogress_xstream);
         if (!result) goto error;
         a->num_xstreams += 1;
@@ -1255,9 +1319,9 @@ margo_abt_init_from_json(const json_object_t*         jabt,
     } else if (user_args->rpc_pool != ABT_POOL_NULL
                && user_args->rpc_pool != NULL) {
         /* external RPC pool specified, add it as external */
-        // TODO check if the __rpc__ pool is already defined
-        result = margo_abt_pool_init_external("__rpc__", user_args->rpc_pool,
-                                              a->pools + a->num_pools);
+        result = margo_abt_pool_init_external(NULL, user_args->rpc_pool,
+                                              a->pools + a->num_pools, a->pools,
+                                              a->num_pools);
         if (!result) goto error;
         rpc_pool_idx = (int)a->num_pools;
         a->num_pools += 1;
@@ -1278,38 +1342,30 @@ margo_abt_init_from_json(const json_object_t*         jabt,
 
     } else if (user_args->jrpc_thread_count
                && json_object_get_int(user_args->jrpc_thread_count) > 0) {
-        /* rpc_thread_count specified and > 0, and RPC pool and some RPC ES
-         * should be created */
-        // TODO check is an RPC pool is already defined
+        /* rpc_thread_count specified and > 0, an RPC pool and some RPC ES
+         * should be created. */
         json_object_t* jrpc_pool = json_object_new_object();
-        json_object_object_add(jrpc_pool, "name",
-                               json_object_new_string("__rpc__"));
         json_object_object_add(jrpc_pool, "access",
                                json_object_new_string("mpmc"));
         rpc_pool_idx = a->num_pools;
-        result       = margo_abt_pool_init_from_json(jrpc_pool, rpc_pool_idx,
-                                               a->pools + rpc_pool_idx);
+        result       = margo_abt_pool_init_from_json(
+            jrpc_pool, a->pools + rpc_pool_idx, a->pools, a->num_pools);
         json_object_put(jrpc_pool);
         if (!result) goto error;
         a->num_pools += 1;
         /* add a __rpc_X__ ESs */
         int num_rpc_es = json_object_get_int(user_args->jrpc_thread_count);
         for (int i = 0; i < num_rpc_es; i++) {
-            // TODO check if __rpc_X_ name is already in used
             json_object_t* jrpc_xstream = json_object_new_object();
-            char           es_name[64];
-            sprintf(es_name, "__rpc_%d__", i);
-            json_object_object_add(jrpc_xstream, "name",
-                                   json_object_new_string(es_name));
-            json_object_t* jrpc_sched = json_object_new_object();
+            json_object_t* jrpc_sched   = json_object_new_object();
             json_object_object_add(jrpc_xstream, "scheduler", jrpc_sched);
             json_object_t* jrpc_xstream_pools = json_object_new_array_ext(1);
             json_object_object_add(jrpc_sched, "pools", jrpc_xstream_pools);
             json_object_array_add(jrpc_xstream_pools,
                                   json_object_new_int(rpc_pool_idx));
             result = margo_abt_xstream_init_from_json(
-                jrpc_xstream, a->num_xstreams, a->xstreams + a->num_xstreams,
-                a->pools, a->num_pools);
+                jrpc_xstream, a->xstreams + a->num_xstreams, a->xstreams,
+                a->num_xstreams, a->pools, a->num_pools);
             json_object_put(jrpc_xstream);
             if (!result) goto error;
             a->num_xstreams += 1;

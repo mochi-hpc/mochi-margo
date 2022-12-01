@@ -208,9 +208,6 @@ margo_instance_id margo_init_ext(const char*                   address,
                             mid, ABT_THREAD_ATTR_NULL, &mid->hg_progress_tid);
     if (ret != ABT_SUCCESS) goto error;
 
-    // increment the number of margo instances
-    g_margo_num_instances++;
-
     json_object_put(config);
     return mid;
 

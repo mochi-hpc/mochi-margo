@@ -171,8 +171,13 @@ static MunitResult test_json_config(const MunitParameter params[], void* data)
 
     struct json_object* config = json_object_object_get(configs, config_name);
     munit_assert_not_null(config);
-
     munit_assert(json_object_is_type(config, json_type_object));
+
+    struct json_object* abt_init = json_object_object_get(config, "abt_init");
+    if(abt_init && json_object_get_boolean(abt_init)) {
+        ABT_init(0, NULL);
+    }
+
     struct json_object* config_in = json_object_object_get(config, "input");
     munit_assert_not_null(config_in);
     munit_assert(json_object_is_type(config_in, json_type_object));
@@ -209,6 +214,11 @@ static MunitResult test_json_config(const MunitParameter params[], void* data)
         free(output_config_str);
         margo_finalize(mid);
     }
+
+    if(abt_init && json_object_get_boolean(abt_init)) {
+        ABT_finalize();
+    }
+
     json_object_put(configs);
 
     return MUNIT_OK;
