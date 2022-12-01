@@ -46,7 +46,10 @@ jobs:
         eval `spack env activate --sh .` &&
         ./prepare.sh &&
         ./configure --enable-coverage --prefix=`pwd` &&
-        make check
-    - name: Upload code coverage files
-      run: |
-        bash <(curl -s https://codecov.io/bash)
+        make check &&
+        ls
+
+    - uses: codecov/codecov-action@v3
+      with:
+        fail_ci_if_error: true # optional (default = false)
+        verbose: true # optional (default = false)
