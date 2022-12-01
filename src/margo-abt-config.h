@@ -248,9 +248,11 @@ static inline bool margo_abt_pool_init_from_json(const json_object_t* jpool,
     }
 
     int ret;
-    if (kind != (ABT_pool_kind)(-1))
+    if (kind != (ABT_pool_kind)(-1)) {
+        if (!p->access) p->access = strdup("mpmc");
         ret = ABT_pool_create_basic(kind, access, ABT_TRUE, &p->pool);
-    else if (strcmp(p->kind, "prio_wait") == 0) {
+    } else if (strcmp(p->kind, "prio_wait") == 0) {
+        if (!p->access) p->access = strdup("mpmc");
         ABT_pool_def prio_pool_def;
         margo_create_prio_pool_def(&prio_pool_def);
         ret = ABT_pool_create(&prio_pool_def, ABT_POOL_CONFIG_NULL, &p->pool);
@@ -333,6 +335,14 @@ margo_abt_sched_validate_json(const json_object_t* jsched,
     json_object_t* jsched_pools = json_object_object_get(jsched, "pools");
     size_t sched_pool_array_len = json_object_array_length(jsched_pools);
     int num_available_pools = json_object_array_length(javailable_pool_array);
+
+#if ABT_NUMVERSION < 20000000
+    if (sched_pool_array_len == 0) {
+        margo_error(
+            0, "Argobots < 2.0 requires schedulers to have at least one pool.");
+        return false;
+    }
+#endif
 
     for (unsigned i = 0; i < sched_pool_array_len; i++) {
         json_object_t* jpool_ref = json_object_array_get_idx(jsched_pools, i);
@@ -417,7 +427,6 @@ static inline bool margo_abt_sched_init_from_json(const json_object_t* jsched,
         } else {
             const char* pool_name = json_object_get_string(jpool);
             for (; pool_idx < total_num_pools; ++pool_idx) {
-                if (!pools[pool_idx].name) continue;
                 if (strcmp(pools[pool_idx].name, pool_name) == 0) break;
             }
         }
@@ -533,6 +542,16 @@ margo_abt_xstream_validate_json(const json_object_t* jxstream,
     if (jsched
         && !margo_abt_sched_validate_json(jsched, index, javailable_pools))
         return false;
+
+#if ABT_NUMVERSION < 20000000
+    if (!jsched) {
+        margo_error(
+            0,
+            "Argobots < 2.0 requires schedulers to have at least one pool, "
+            "hence it requires a scheduler to be defined for all xstreams.");
+        return false;
+    }
+#endif
 
     json_object_t* jaffinity = json_object_object_get(jxstream, "affinity");
     if (jaffinity) {

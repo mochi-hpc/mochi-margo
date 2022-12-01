@@ -81,6 +81,21 @@
         "output": {"argobots":{"pools":[{"kind":"fifo","name":"fifo_pool","access":"private"},{"kind":"fifo_wait","name":"fifo_wait_pool","access":"mpmc"},{"kind":"prio_wait","name":"prio_wait_pool","access":"spsc"},{"kind":"fifo","name":"fifo_pool_2","access":"mpsc"},{"kind":"fifo","name":"fifo_pool_3","access":"spmc"},{"kind":"fifo_wait","name":"__primary__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[5]},"name":"__primary__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":5,"rpc_pool":5}
     },
 
+    "argobots_should_be_an_object": {
+        "pass": false,
+        "input": {"argobots":true}
+    },
+
+    "abt_thread_stacksize_should_be_an_integer": {
+        "pass": false,
+        "input": {"argobots":{"abt_thread_stacksize":true}}
+    },
+
+    "abt_mem_max_num_stacks_should_be_an_integer": {
+        "pass": false,
+        "input": {"argobots":{"abt_mem_max_num_stacks":true}}
+    },
+
     "pools_should_be_an_array": {
         "pass": false,
         "input": {"argobots":{"pools":true}}
@@ -96,9 +111,19 @@
         "input": {"argobots":{"pools":[{"name":"my_pool"},{"name":"my_pool"}]}}
     },
 
-    "pool_name_must_be_valid": {
+    "pool_name_must_be_valid1": {
         "pass": false,
         "input": {"argobots":{"pools":[{"name":"$%^"}]}}
+    },
+
+    "pool_name_must_be_valid2": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{"name":"2mypool"}]}}
+    },
+
+    "pool_name_must_be_valid3": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{"name":""}]}}
     },
 
     "pool_kind_must_be_a_string": {
@@ -133,32 +158,52 @@
 
     "xstreams_name_should_be_a_string": {
         "pass": false,
-        "input": {"argobots":{"xstreams":[{"name":true}]}}
+        "input": {"argobots":{"pools":[{}],"xstreams":[{"name":true,"scheduler":{"pools":[0]}}]}}
     },
 
-    "xstreams_name_should_be_valid": {
+    "xstreams_name_should_be_valid1": {
         "pass": false,
-        "input": {"argobots":{"xstreams":[{"name":"%&*("}]}}
+        "input": {"argobots":{"pools":[{}],"xstreams":[{"name":"%&*(","scheduler":{"pools":[0]}}]}}
+    },
+
+    "xstreams_name_should_be_valid2": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{}],"xstreams":[{"name":"2myes","scheduler":{"pools":[0]}}]}}
+    },
+
+    "xstreams_name_should_be_valid3": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{}],"xstreams":[{"name":"","scheduler":{"pools":[0]}}]}}
     },
 
     "xstreams_name_should_be_unique": {
         "pass": false,
-        "input": {"argobots":{"xstreams":[{"name":"my_es"},{"name":"my_es"}]}}
+        "input": {"argobots":{"pools":[{}],"xstreams":[{"name":"my_es","scheduler":{"pools":[0]}},{"name":"my_es","scheduler":{"pools":[0]}}]}}
     },
 
     "xstreams_cpubind_should_be_an_integer": {
         "pass": false,
-        "input": {"argobots":{"xstreams":[{"cpubind":true}]}}
+        "input": {"argobots":{"pools":[{}],"xstreams":[{"cpubind":true,"scheduler":{"pools":[0]}}]}}
     },
 
     "xstreams_affinity_should_be_an_array": {
         "pass": false,
-        "input": {"argobots":{"xstreams":[{"affinity":true}]}}
+        "input": {"argobots":{"pools":[{}],"xstreams":[{"affinity":true,"scheduler":{"pools":[0]}}]}}
     },
 
     "xstreams_affinity_should_contain_integers": {
         "pass": false,
-        "input": {"argobots":{"xstreams":[{"affinity":[true]}]}}
+        "input": {"argobots":{"pools":[{}],"xstreams":[{"affinity":[true],"scheduler":{"pools":[0]}}]}}
+    },
+
+    "xstreams_should_have_scheduler": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{}],"xstreams":[{}]}}
+    },
+
+    "xstreams_scheduler_should_be_an_object": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{}],"xstreams":[{"scheduler":true}]}}
     },
 
     "sched_type_must_be_a_string": {
@@ -176,6 +221,11 @@
         "input": {"argobots":{"pools":[{}],"xstreams":[{"scheduler":{"pools":true}}]}}
     },
 
+    "sched_pools_must_not_be_empty": {
+        "pass": false,
+        "input": {"argobots":{"xstreams":[{"scheduler":{"pools":[]}}]}}
+    },
+
     "sched_pools_ref_must_be_string_or_integer": {
         "pass": false,
         "input": {"argobots":{"pools":[{}], "xstreams":[{"scheduler":{"pools":[true]}}]}}
@@ -189,5 +239,71 @@
     "sched_pools_string_ref_must_be_valid": {
         "pass": false,
         "input": {"argobots":{"pools":[{}], "xstreams":[{"scheduler":{"pools":["XXX"]}}]}}
+    },
+
+    "progress_pool_string": {
+        "pass": true,
+        "input": {"argobots":{"pools":[{"name":"my_pool"}],"xstreams":[{"scheduler":{"pools":["my_pool"]}}]},"progress_pool":"my_pool"},
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"my_pool","access":"mpmc"},{"kind":"fifo_wait","name":"__primary__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__xstream_0__"},{"scheduler":{"type":"default","pools":[1]},"name":"__primary__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":0,"rpc_pool":1}
+    },
+
+    "progress_pool_integer": {
+        "pass": true,
+        "input": {"argobots":{"pools":[{}],"xstreams":[{"scheduler":{"pools":[0]}}]},"progress_pool":0},
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__pool_0__","access":"mpmc"},{"kind":"fifo_wait","name":"__primary__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__xstream_0__"},{"scheduler":{"type":"default","pools":[1]},"name":"__primary__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":0,"rpc_pool":1}
+    },
+
+    "use_progress_thread_is_ignored": {
+        "pass": true,
+        "input": {"argobots":{"pools":[{}],"xstreams":[{"scheduler":{"pools":[0]}}]},"progress_pool":0, "use_progress_thread":false},
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__pool_0__","access":"mpmc"},{"kind":"fifo_wait","name":"__primary__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__xstream_0__"},{"scheduler":{"type":"default","pools":[1]},"name":"__primary__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":0,"rpc_pool":1}
+    },
+
+    "progress_pool_should_be_string_or_integer": {
+        "pass": false,
+        "input": {"progress_pool":true}
+    },
+
+    "progress_pool_string_should_be_valid": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{"name":"my_pool"}],"xstreams":[{"scheduler":{"pools":["my_pool"]}}]},"progress_pool":"XXX"}
+    },
+
+    "progress_pool_integer_should_be_valid": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{}],"xstreams":[{"scheduler":{"pools":[0]}}]},"progress_pool":42}
+    },
+
+    "rpc_pool_string": {
+        "pass": true,
+        "input": {"argobots":{"pools":[{"name":"my_pool"}],"xstreams":[{"scheduler":{"pools":["my_pool"]}}]},"rpc_pool":"my_pool"},
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"my_pool","access":"mpmc"},{"kind":"fifo_wait","name":"__primary__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__xstream_0__"},{"scheduler":{"type":"default","pools":[1]},"name":"__primary__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":1,"rpc_pool":0}
+    },
+
+    "rpc_pool_integer": {
+        "pass": true,
+        "input": {"argobots":{"pools":[{}],"xstreams":[{"scheduler":{"pools":[0]}}]},"rpc_pool":0},
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__pool_0__","access":"mpmc"},{"kind":"fifo_wait","name":"__primary__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__xstream_0__"},{"scheduler":{"type":"default","pools":[1]},"name":"__primary__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":1,"rpc_pool":0}
+    },
+
+    "rpc_thread_count_is_ignored": {
+        "pass": true,
+        "input": {"argobots":{"pools":[{}],"xstreams":[{"scheduler":{"pools":[0]}}]},"rpc_pool":0,"rpc_thread_count":4},
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__pool_0__","access":"mpmc"},{"kind":"fifo_wait","name":"__primary__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__xstream_0__"},{"scheduler":{"type":"default","pools":[1]},"name":"__primary__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":1,"rpc_pool":0}
+    },
+
+    "rpc_pool_should_be_string_or_integer": {
+        "pass": false,
+        "input": {"rpc_pool":true}
+    },
+
+    "rpc_pool_string_should_be_valid": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{"name":"my_pool"}],"xstreams":[{"scheduler":{"pools":["my_pool"]}}]},"rpc_pool":"XXX"}
+    },
+
+    "rpc_pool_integer_should_be_valid": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{}],"xstreams":[{"scheduler":{"pools":[0]}}]},"rpc_pool":42}
     }
 }
