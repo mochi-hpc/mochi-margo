@@ -47,7 +47,7 @@ jobs:
         ./prepare.sh &&
         ./configure --enable-coverage --prefix=`pwd` &&
         make check &&
-        ls
+        tree .
 
     - uses: codecov/codecov-action@v3
       with:
