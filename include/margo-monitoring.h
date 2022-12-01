@@ -8,6 +8,7 @@
 #ifndef __MARGO_MONITORING_H
 #define __MARGO_MONITORING_H
 
+#include <stdbool.h>
 #include <abt.h>
 #include <mercury.h>
 #include <mercury_types.h>

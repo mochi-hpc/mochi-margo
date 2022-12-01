@@ -12,6 +12,7 @@
 extern "C" {
 #endif
 
+#include <stdbool.h>
 #include <mercury.h>
 #include <mercury_types.h>
 #include <mercury_bulk.h>
