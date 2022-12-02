@@ -238,8 +238,6 @@ static bool validate_and_complete_config(struct json_object* _margo,
                                          ABT_pool _custom_rpc_pool,
                                          const struct margo_monitor* _monitor)
 {
-    struct json_object* ignore; // to pass as output to macros when we don't
-                                // care ouput the output
     struct json_object* val;
 
 #define HANDLE_CONFIG_ERROR return false
@@ -254,9 +252,6 @@ static bool validate_and_complete_config(struct json_object* _margo,
        - [optional] rpc_thread_count: integer (default 0)
        - [optional] monitoring: object
     */
-
-    /* report version number for this component */
-    CONFIG_OVERRIDE_STRING(_margo, "version", PACKAGE_VERSION, "version", 1);
 
     { // add or override progress_timeout_ub_msec
         CONFIG_HAS_OR_CREATE(_margo, int64, "progress_timeout_ub_msec", 100,
@@ -280,17 +275,6 @@ static bool validate_and_complete_config(struct json_object* _margo,
     CONFIG_HAS_OR_CREATE_OBJECT(_margo, "monitoring", "monitoring",
                                 _monitoring);
 
-    { // override monitor name
-        const char* monitor_name
-            = (_monitor && _monitor->name) ? _monitor->name() : "<unknown>";
-        CONFIG_OVERRIDE_STRING(_monitoring, "name", monitor_name,
-                               "monitoring.name", 1);
-        MARGO_TRACE(0, "monitoring.name = %s", monitor_name);
-    }
-    { // add or create "config" in monitoring
-        CONFIG_HAS_OR_CREATE_OBJECT(_monitoring, "config", "config", ignore);
-    }
-
     // validate Argobots configuration
     margo_abt_user_args_t abt_uargs = {
         .jprogress_pool    = json_object_object_get(_margo, "progress_pool"),
@@ -303,14 +287,6 @@ static bool validate_and_complete_config(struct json_object* _margo,
     struct json_object* _argobots = NULL;
     CONFIG_HAS_OR_CREATE_OBJECT(_margo, "argobots", "argobots", _argobots);
     if (!margo_abt_validate_json(_argobots, &abt_uargs)) { return false; }
-
-    CONFIG_HAS_OR_CREATE(_argobots, int, "abt_thread_stacksize",
-                         MARGO_DEFAULT_ABT_THREAD_STACKSIZE,
-                         "argobots.abt_thread_stacksize", ignore);
-
-    CONFIG_HAS_OR_CREATE(_argobots, int, "abt_mem_max_num_stacks",
-                         MARGO_DEFAULT_ABT_MEM_MAX_NUM_STACKS,
-                         "argobots.abt_mem_max_num_stacks", ignore);
 
     return true;
 }

@@ -22,6 +22,9 @@ char* margo_get_config_opt(margo_instance_id mid, int options)
         json_to_string_flags |= JSON_C_TO_STRING_PRETTY;
     }
     struct json_object* root = json_object_new_object();
+    // margo version
+    json_object_object_add_ex(root, "version",
+                              json_object_new_string(PACKAGE_VERSION), flags);
     // argobots section
     struct json_object* abt_json = margo_abt_to_json(&(mid->abt), options);
     json_object_object_add_ex(root, "argobots", abt_json, flags);

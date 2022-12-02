@@ -204,6 +204,7 @@ static MunitResult test_json_config(const MunitParameter params[], void* data)
             = json_tokener_parse(output_config_str);
         munit_assert_not_null(output_config);
         json_object_object_del(output_config, "mercury");
+        json_object_object_del(output_config, "version");
 
         munit_logf(MUNIT_LOG_INFO, "output config is\n%s\n",
                 json_object_to_json_string_ext(output_config, JSON_C_TO_STRING_NOSLASHESCAPE));

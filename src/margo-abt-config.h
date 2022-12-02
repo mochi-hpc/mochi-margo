@@ -882,21 +882,22 @@ margo_abt_validate_json(const json_object_t*         a,
 
     json_object_t* jabt_thread_stacksize
         = json_object_object_get(a, "abt_thread_stacksize");
-    if (jabt_thread_stacksize) {
-        if (getenv("ABT_THREAD_STACKSIZE")) {
-            long val = atol(getenv("ABT_THREAD_STACKSIZE"));
-            if (val != json_object_get_int64(jabt_thread_stacksize)) {
-                margo_warning(
-                    0,
-                    "\"abt_thread_stacksize\" will be ignored"
-                    " because the ABT_THREAD_STACKSIZE environment variable"
-                    " is defined");
-            }
-        } else if (ABT_initialized() == ABT_SUCCESS) {
-            margo_warning(0,
-                          "\"abt_thread_stacksize\" will be ignored"
-                          " because Argobots is already initialized");
+    long abt_thread_stacksize = jabt_thread_stacksize
+                                  ? json_object_get_int64(jabt_thread_stacksize)
+                                  : MARGO_DEFAULT_ABT_THREAD_STACKSIZE;
+    if (getenv("ABT_THREAD_STACKSIZE")) {
+        long val = atol(getenv("ABT_THREAD_STACKSIZE"));
+        if (val != abt_thread_stacksize) {
+            margo_warning(
+                0,
+                "\"abt_thread_stacksize\" will be ignored"
+                " because the ABT_THREAD_STACKSIZE environment variable"
+                " is defined");
         }
+    } else if (ABT_initialized() == ABT_SUCCESS) {
+        margo_warning(0,
+                      "\"abt_thread_stacksize\" will be ignored"
+                      " because Argobots is already initialized");
     }
 
     /* validate the user-provided fields */
