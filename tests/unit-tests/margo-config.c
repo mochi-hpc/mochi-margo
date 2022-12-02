@@ -205,6 +205,8 @@ static MunitResult test_json_abt_config(const MunitParameter params[], void* dat
         munit_assert_not_null(output_config);
         json_object_object_del(output_config, "mercury");
         json_object_object_del(output_config, "version");
+        struct json_object* argobots = json_object_object_get(output_config, "argobots");
+        json_object_object_del(argobots, "lazy_stack_alloc");
 
         munit_logf(MUNIT_LOG_INFO, "output config is\n%s\n",
                 json_object_to_json_string_ext(output_config, JSON_C_TO_STRING_NOSLASHESCAPE));
