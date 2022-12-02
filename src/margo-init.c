@@ -19,10 +19,10 @@
 
 // Validates the format of the configuration and
 // fill default values if they are note provided
-static bool validate_and_complete_config(struct json_object* _config,
-                                         ABT_pool            _progress_pool,
-                                         ABT_pool            _rpc_pool,
-                                         const struct margo_monitor* _monitor);
+static bool __margo_validate_json(struct json_object*           _config,
+                                  const char*                   address,
+                                  int                           mode,
+                                  const struct margo_init_info* uargs);
 
 // Sets environment variables for Argobots
 static void set_argobots_environment_variables(struct json_object* config);
@@ -97,25 +97,20 @@ margo_instance_id margo_init_ext(const char*                   address,
     }
 
     // validate and complete configuration
-    MARGO_TRACE(0, "Validating and completing configuration");
-    bool valide = validate_and_complete_config(config, args.progress_pool,
-                                               args.rpc_pool, args.monitor);
-    if (!valide) {
-        MARGO_ERROR(0, "Could not validate configuration");
-        goto error;
-    }
+    margo_trace(0, "Validating JSON configuration");
+    if (!__margo_validate_json(config, address, mode, &args)) goto error;
 
+    margo_trace(0, "Initializing Mercury");
     struct json_object* hg_config = json_object_object_get(config, "mercury");
     struct margo_hg_user_args hg_user_args = {.hg_class     = args.hg_class,
                                               .hg_context   = args.hg_context,
                                               .hg_init_info = args.hg_init_info,
                                               .listening    = mode,
                                               .protocol     = address};
-    if (!__margo_hg_init_from_json(hg_config, &hg_user_args, &hg)) {
-        goto error;
-    }
+    if (!__margo_hg_init_from_json(hg_config, &hg_user_args, &hg)) goto error;
 
-    struct json_object*   _jabt = json_object_object_get(config, "argobots");
+    margo_trace(0, "Initializing Argobots");
+    struct json_object* abt_config = json_object_object_get(config, "argobots");
     margo_abt_user_args_t abt_uargs = {
         .jprogress_pool    = json_object_object_get(config, "progress_pool"),
         .jrpc_pool         = json_object_object_get(config, "rpc_pool"),
@@ -124,7 +119,10 @@ margo_instance_id margo_init_ext(const char*                   address,
         = json_object_object_get(config, "use_progress_thread"),
         .progress_pool = args.progress_pool,
         .rpc_pool      = args.rpc_pool};
-    if (!__margo_abt_init_from_json(_jabt, &abt_uargs, &abt)) { goto error; }
+    if (!__margo_abt_init_from_json(abt_config, &abt_uargs, &abt)) {
+        goto error;
+    }
+
     confirm_argobots_configuration(config);
 
     // allocate margo instance
@@ -135,12 +133,12 @@ margo_instance_id margo_init_ext(const char*                   address,
         goto error;
     }
 
-    int progress_timeout_ub = json_object_get_int64(
-        json_object_object_get(config, "progress_timeout_ub_msec"));
-    int handle_cache_size = json_object_get_int64(
-        json_object_object_get(config, "handle_cache_size"));
-    int abt_profiling_enabled = json_object_get_boolean(
-        json_object_object_get(config, "enable_abt_profiling"));
+    int progress_timeout_ub = json_object_object_get_int_or(
+        config, "progress_timeout_ub_msec", 100);
+    int handle_cache_size
+        = json_object_object_get_int_or(config, "handle_cache_size", 32);
+    int abt_profiling_enabled
+        = json_object_object_get_bool_or(config, "enable_abt_profiling", true);
 
     mid->abt_profiling_enabled = abt_profiling_enabled;
 
@@ -235,12 +233,12 @@ error:
  * initialization functions with the knowledge that it contains correct and
  * complete information.
  */
-static bool validate_and_complete_config(struct json_object* _margo,
-                                         ABT_pool _custom_progress_pool,
-                                         ABT_pool _custom_rpc_pool,
-                                         const struct margo_monitor* _monitor)
+static bool __margo_validate_json(struct json_object*           _margo,
+                                  const char*                   address,
+                                  int                           mode,
+                                  const struct margo_init_info* uargs)
 {
-    struct json_object* val;
+    struct json_object* ignore;
 
 #define HANDLE_CONFIG_ERROR return false
 
@@ -252,54 +250,83 @@ static bool validate_and_complete_config(struct json_object* _margo,
        - [optional] handle_cache_size: integer >= 0 (default 32)
        - [optional] use_progress_thread: bool (default false)
        - [optional] rpc_thread_count: integer (default 0)
+       - [optional] progress_pool: integer or string
+       - [optional] rpc_pool: integer or string
        - [optional] monitoring: object
     */
 
-    { // add or override progress_timeout_ub_msec
-        CONFIG_HAS_OR_CREATE(_margo, int64, "progress_timeout_ub_msec", 100,
-                             "progress_timeout_ub_msec", val);
-        CONFIG_INTEGER_MUST_BE_POSITIVE(_margo, "progress_timeout_ub_msec",
-                                        "progress_timeout_ub_msec");
-        MARGO_TRACE(0, "progress_timeout_ub_msec = %ld",
-                    json_object_get_int64(val));
+    // check progress_pool
+    struct json_object* _progress_pool
+        = json_object_object_get(_margo, "progress_pool");
+    if (_progress_pool
+        && !(json_object_is_type(_progress_pool, json_type_int)
+             || json_object_is_type(_progress_pool, json_type_string))) {
+        margo_error(0,
+                    "\"progress_pool\" field in configuration "
+                    "should be an integer or a string");
+        HANDLE_CONFIG_ERROR;
     }
 
-    { // add or override handle_cache_size
-        CONFIG_HAS_OR_CREATE(_margo, int64, "handle_cache_size", 32,
-                             "handle_cache_size", val);
-        CONFIG_INTEGER_MUST_BE_POSITIVE(_margo, "handle_cache_size",
-                                        "handle_cache_size");
-        MARGO_TRACE(0, "handle_cache_size = %ld", json_object_get_int64(val));
+    // check rpc_pool
+    struct json_object* _rpc_pool = json_object_object_get(_margo, "rpc_pool");
+    if (_rpc_pool
+        && !(json_object_is_type(_rpc_pool, json_type_int)
+             || json_object_is_type(_rpc_pool, json_type_string))) {
+        margo_error(0,
+                    "\"rpc_pool\" field in configuration "
+                    "should be an integer or a string");
+        HANDLE_CONFIG_ERROR;
     }
 
-    /* find the "monitoring" object in the configuration */
-    struct json_object* _monitoring = NULL;
-    CONFIG_HAS_OR_CREATE_OBJECT(_margo, "monitoring", "monitoring",
-                                _monitoring);
+    // check use_progress_thread
+    ASSERT_CONFIG_HAS_OPTIONAL(_margo, use_progress_thread, boolean, "margo");
 
-    // validate Argobots configuration
+    // check rpc_thread_count
+    ASSERT_CONFIG_HAS_OPTIONAL(_margo, rpc_thread_count, int, "margo");
+
+    // check mercury configuration
+    struct json_object*  _mercury = json_object_object_get(_margo, "mercury");
+    margo_hg_user_args_t hg_uargs = {.protocol     = address,
+                                     .listening    = mode == MARGO_SERVER_MODE,
+                                     .hg_init_info = uargs->hg_init_info,
+                                     .hg_class     = uargs->hg_class,
+                                     .hg_context   = uargs->hg_context};
+    if (!__margo_hg_validate_json(_mercury, &hg_uargs)) { return false; }
+
+    // check argobots configuration
+    struct json_object* _argobots = json_object_object_get(_margo, "argobots");
     margo_abt_user_args_t abt_uargs = {
         .jprogress_pool    = json_object_object_get(_margo, "progress_pool"),
         .jrpc_pool         = json_object_object_get(_margo, "rpc_pool"),
         .jrpc_thread_count = json_object_object_get(_margo, "rpc_thread_count"),
         .juse_progress_thread
         = json_object_object_get(_margo, "use_progress_thread"),
-        .progress_pool = _custom_progress_pool,
-        .rpc_pool      = _custom_rpc_pool};
-    struct json_object* _argobots = NULL;
-    CONFIG_HAS_OR_CREATE_OBJECT(_margo, "argobots", "argobots", _argobots);
+        .progress_pool = uargs->progress_pool,
+        .rpc_pool      = uargs->rpc_pool};
     if (!__margo_abt_validate_json(_argobots, &abt_uargs)) { return false; }
 
+    // check progress_timeout_ub_msec
+    ASSERT_CONFIG_HAS_OPTIONAL(_margo, progress_timeout_ub_msec, int, "margo");
+    if (CONFIG_HAS(_margo, "progress_timeout_ub_msec", ignore)) {
+        CONFIG_INTEGER_MUST_BE_POSITIVE(_margo, "progress_timeout_ub_msec",
+                                        "progress_timeout_ub_msec");
+    }
+
+    // check handle_cache_size
+    ASSERT_CONFIG_HAS_OPTIONAL(_margo, handle_cache_size, int, "margo");
+    if (CONFIG_HAS(_margo, "handle_cache_size", ignore)) {
+        CONFIG_INTEGER_MUST_BE_POSITIVE(_margo, "handle_cache_size",
+                                        "handle_cache_size");
+    }
+
     return true;
+#undef HANDLE_CONFIG_ERROR
 }
 
 static void confirm_argobots_configuration(struct json_object* config)
 {
     /* this function assumes that the json is already fully populated */
     size_t runtime_abt_thread_stacksize = 0;
-#ifdef HAVE_ABT_INFO_QUERY_KIND_ENABLED_LAZY_STACK_ALLOC
-    ABT_bool config_bool;
-#endif
 
     /* retrieve expected values according to Margo configuration */
     struct json_object* argobots = json_object_object_get(config, "argobots");
@@ -336,17 +363,6 @@ static void confirm_argobots_configuration(struct json_object* config)
             "transport libraries.",
             abt_thread_stacksize, runtime_abt_thread_stacksize);
     }
-
-    /* also simply report a few relevant compile-time parameters */
-
-#ifdef HAVE_ABT_INFO_QUERY_KIND_ENABLED_LAZY_STACK_ALLOC
-    ABT_info_query_config(ABT_INFO_QUERY_KIND_ENABLED_LAZY_STACK_ALLOC,
-                          &config_bool);
-    CONFIG_OVERRIDE_BOOL(argobots, "lazy_stack_alloc", config_bool,
-                         "argobots.lazy_stack_alloc", 0);
-#endif
-
-    return;
 }
 
 static void set_argobots_environment_variables(struct json_object* config)

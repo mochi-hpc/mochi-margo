@@ -61,6 +61,17 @@ inline static int64_t json_object_object_get_int64_or(
     }
 }
 
+inline static int64_t json_object_object_get_int_or(
+    const struct json_object* object, const char* key, int x)
+{
+    struct json_object* value = json_object_object_get(object, key);
+    if (value && json_object_is_type(value, json_type_int)) {
+        return json_object_get_int(value);
+    } else {
+        return x;
+    }
+}
+
 inline static bool json_object_object_get_bool_or(
     const struct json_object* object, const char* key, bool x)
 {
@@ -94,64 +105,6 @@ inline static const char* json_object_object_get_string_or(
 #define CONFIG_HAS(__config, __key, __out) \
     ((__out = json_object_object_get(__config, __key)) != NULL)
 
-// Checks if a JSON object has a particular key and its value is of type object.
-// If the field does not exist, creates it with an empty object.
-// If the field exists but is not of type object, prints an error and return -1.
-// After a call to this macro, __out is set to the ceated/found field.
-#define CONFIG_HAS_OR_CREATE_OBJECT(__config, __key, __fullname, __out)       \
-    do {                                                                      \
-        __out = json_object_object_get(__config, __key);                      \
-        if (__out && !json_object_is_type(__out, json_type_object)) {         \
-            margo_error(0, "\"%s\" is in configuration but is not an object", \
-                        __fullname);                                          \
-            HANDLE_CONFIG_ERROR;                                              \
-        }                                                                     \
-        if (!__out) {                                                         \
-            __out = json_object_new_object();                                 \
-            json_object_object_add(__config, __key, __out);                   \
-        }                                                                     \
-    } while (0)
-
-// Checks if a JSON object has a particular key and its value is of type array.
-// If the field does not exist, creates it with an empty array.
-// If the field exists but is not of type object, prints an error and return -1.
-// After a call to this macro, __out is set to the ceated/found field.
-#define CONFIG_HAS_OR_CREATE_ARRAY(__config, __key, __fullname, __out)       \
-    do {                                                                     \
-        __out = json_object_object_get(__config, __key);                     \
-        if (__out && !json_object_is_type(__out, json_type_array)) {         \
-            margo_error(0, "\"%s\" is in configuration but is not an array", \
-                        __fullname);                                         \
-            HANDLE_CONFIG_ERROR;                                             \
-        }                                                                    \
-        if (!__out) {                                                        \
-            __out = json_object_new_array();                                 \
-            json_object_object_add(__config, __key, __out);                  \
-        }                                                                    \
-    } while (0)
-
-// Checks if a JSON object has a particular key and its value is of the
-// specified type (not array or object or null). If the field does not exist,
-// creates it with the provided value.. If the field exists but is not of type
-// object, prints an error and return -1. After a call to this macro, __out is
-// set to the ceated/found field.
-#define CONFIG_HAS_OR_CREATE(__config, __type, __key, __value, __fullname,   \
-                             __out)                                          \
-    do {                                                                     \
-        __out = json_object_object_get(__config, __key);                     \
-        if (__out && !json_object_is_type(__out, json_type_##__type)) {      \
-            margo_error(0,                                                   \
-                        "\"%s\" in configuration but has an incorrect type " \
-                        "(expected %s)",                                     \
-                        __fullname, #__type);                                \
-            HANDLE_CONFIG_ERROR;                                             \
-        }                                                                    \
-        if (!__out) {                                                        \
-            __out = json_object_new_##__type(__value);                       \
-            json_object_object_add(__config, __key, __out);                  \
-        }                                                                    \
-    } while (0)
-
 // Checks if a JSON object contains a field of a specified type. If the field is
 // not found or if the type is incorrect, prints an error and returns -1.
 // After a call to this macro, __out is set to the created/found field.
@@ -168,65 +121,6 @@ inline static const char* json_object_object_get_string_or(
                 __fullname, #__type);                                          \
             HANDLE_CONFIG_ERROR;                                               \
         }                                                                      \
-    } while (0)
-
-// Overrides a field with a string. If the field already existed and was
-// different from the new value, and __warning is true, prints a warning.
-#define CONFIG_OVERRIDE_STRING(__config, __key, __value, __fullname,          \
-                               __warning)                                     \
-    do {                                                                      \
-        struct json_object* _tmp = json_object_object_get(__config, __key);   \
-        if (_tmp && __warning) {                                              \
-            if (!json_object_is_type(_tmp, json_type_string))                 \
-                margo_warning(0, "Overriding field \"%s\" with value \"%s\"", \
-                              __fullname, __value);                           \
-            else if (strcmp(json_object_get_string(_tmp), __value) != 0)      \
-                margo_warning(                                                \
-                    0, "Overriding field \"%s\" (\"%s\") with value \"%s\"",  \
-                    __fullname, json_object_get_string(_tmp), __value);       \
-        }                                                                     \
-        _tmp = json_object_new_string(__value);                               \
-        json_object_object_add(__config, __key, _tmp);                        \
-    } while (0)
-
-// Overrides a field with a boolean. If the field already existed and was
-// different from the new value, and __warning is true, prints a warning.
-#define CONFIG_OVERRIDE_BOOL(__config, __key, __value, __field_name,          \
-                             __warning)                                       \
-    do {                                                                      \
-        struct json_object* _tmp = json_object_object_get(__config, __key);   \
-        if (_tmp && __warning) {                                              \
-            if (!json_object_is_type(_tmp, json_type_boolean))                \
-                margo_warning(0, "Overriding field \"%s\" with value \"%s\"", \
-                              __field_name, __value ? "true" : "false");      \
-            else if (json_object_get_boolean(_tmp) != !!__value)              \
-                margo_warning(                                                \
-                    0, "Overriding field \"%s\" (\"%s\") with value \"%s\"",  \
-                    __field_name,                                             \
-                    json_object_get_boolean(_tmp) ? "true" : "false",         \
-                    __value ? "true" : "false");                              \
-        }                                                                     \
-        json_object_object_add(__config, __key,                               \
-                               json_object_new_boolean(__value));             \
-    } while (0)
-
-// Overrides a field with an integer. If the field already existed and was
-// different from the new value, and __warning is true, prints a warning.
-#define CONFIG_OVERRIDE_INTEGER(__config, __key, __value, __field_name,        \
-                                __warning)                                     \
-    do {                                                                       \
-        struct json_object* _tmp = json_object_object_get(__config, __key);    \
-        if (_tmp && __warning) {                                               \
-            if (!json_object_is_type(_tmp, json_type_int))                     \
-                margo_warning(0, "Overriding field \"%s\" with value %d",      \
-                              __field_name, (int)__value);                     \
-            else if (json_object_get_int64(_tmp) != (int64_t)(__value))        \
-                margo_warning(0, "Overriding field \"%s\" (%d) with value %d", \
-                              __field_name, json_object_get_int64(_tmp),       \
-                              __value);                                        \
-        }                                                                      \
-        json_object_object_add(__config, __key,                                \
-                               json_object_new_int64(__value));                \
     } while (0)
 
 // If the specified field is not positive or null, prints an error and returns

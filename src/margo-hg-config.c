@@ -10,7 +10,11 @@ bool __margo_hg_validate_json(const struct json_object*   json,
 {
 #define HANDLE_CONFIG_ERROR return false
 
-    if (!json || !json_object_is_type(json, json_type_object)) return false;
+    if (!json) return true;
+    if (!json_object_is_type(json, json_type_object)) {
+        margo_error(0, "\"mercury\" field in configuration must be an object");
+        return false;
+    }
 
     // if hg_class or hg_init_info provided,
     // configuration will be ignored

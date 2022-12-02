@@ -156,7 +156,7 @@ static MunitResult test_abt_config(const MunitParameter params[], void* data)
     return MUNIT_OK;
 }
 
-static MunitResult test_json_config(const MunitParameter params[], void* data)
+static MunitResult test_json_abt_config(const MunitParameter params[], void* data)
 {
     const char* config_name = munit_parameters_get(params, "test-config");
     struct test_context* ctx = (struct test_context*)data;
@@ -248,7 +248,7 @@ int main(int argc, char** argv)
     MunitTest tests[] = {
         {"/abt-config", test_abt_config, test_context_setup,
          test_context_tear_down, MUNIT_TEST_OPTION_NONE, NULL},
-        {"/json-config", test_json_config, test_context_setup,
+        {"/json-abt-config", test_json_abt_config, test_context_setup,
          test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
         {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}
     };

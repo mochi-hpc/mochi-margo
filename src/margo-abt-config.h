@@ -80,7 +80,6 @@ typedef struct margo_abt_sched {
 } margo_abt_sched_t;
 
 bool           __margo_abt_sched_validate_json(const json_object_t*,
-                                               uint32_t,
                                                const json_object_t*);
 bool           __margo_abt_sched_init_from_json(const json_object_t*,
                                                 margo_abt_sched_t*,
@@ -107,7 +106,6 @@ typedef struct margo_abt_xstream {
 } margo_abt_xstream_t;
 
 bool           __margo_abt_xstream_validate_json(const json_object_t*,
-                                                 uint32_t,
                                                  const json_object_t*);
 bool           __margo_abt_xstream_init_from_json(const json_object_t*,
                                                   margo_abt_xstream_t*,
