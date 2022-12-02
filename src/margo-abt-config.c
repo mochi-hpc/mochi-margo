@@ -21,7 +21,7 @@ bool __margo_abt_pool_validate_json(const json_object_t* jpool, uint32_t index)
     if (!json_object_is_type(jpool, json_type_object)) {
         margo_error(0,
                     "\"argobots.pools[%d]\" field in "
-                    "configuration must be of type object.",
+                    "configuration must be of type object",
                     index);
         return false;
     }
@@ -109,7 +109,7 @@ bool __margo_abt_pool_init_from_json(const json_object_t*    jpool,
         if (!p->access) p->access = strdup("mpmc");
         ret = ABT_pool_create_basic(kind, access, ABT_TRUE, &p->pool);
         if (ret != ABT_SUCCESS) {
-            margo_error(0, "ABT_pool_create_basic failed with error code %d.",
+            margo_error(0, "ABT_pool_create_basic failed with error code %d",
                         ret);
         }
     } else if (strcmp(p->kind, "prio_wait") == 0) {
@@ -118,7 +118,7 @@ bool __margo_abt_pool_init_from_json(const json_object_t*    jpool,
         margo_create_prio_pool_def(&prio_pool_def);
         ret = ABT_pool_create(&prio_pool_def, ABT_POOL_CONFIG_NULL, &p->pool);
         if (ret != ABT_SUCCESS) {
-            margo_error(0, "ABT_pool_create failed with error code %d.", ret);
+            margo_error(0, "ABT_pool_create failed with error code %d", ret);
         }
     } else {
         // custom pool definition, not supported for now
@@ -206,7 +206,7 @@ bool __margo_abt_sched_validate_json(const json_object_t* jsched,
     if (!jsched) return true;
     if (!json_object_is_type(jsched, json_type_object)) {
         margo_error(0,
-                    "\"scheduler\" field in configuration must be an object.");
+                    "\"scheduler\" field in configuration must be an object");
         return false;
     }
 
@@ -232,7 +232,7 @@ bool __margo_abt_sched_validate_json(const json_object_t* jsched,
 #if ABT_NUMVERSION < 20000000
     if (sched_pool_array_len == 0) {
         margo_error(
-            0, "Argobots < 2.0 requires schedulers to have at least one pool.");
+            0, "Argobots < 2.0 requires schedulers to have at least one pool");
         return false;
     }
 #endif
@@ -327,8 +327,7 @@ bool __margo_abt_sched_init_from_json(const json_object_t*    jsched,
     free(abt_pools);
 
     if (ret != ABT_SUCCESS) {
-        margo_error(0, "ABT_sched_create_basic failed with error code %d.",
-                    ret);
+        margo_error(0, "ABT_sched_create_basic failed with error code %d", ret);
         __margo_abt_sched_destroy(s);
         return false;
     }
@@ -347,7 +346,7 @@ bool __margo_abt_sched_init_external(ABT_sched               sched,
     int num_pools;
     int ret = ABT_sched_get_num_pools(sched, &num_pools);
     if (ret != ABT_SUCCESS) {
-        margo_error(0, "ABT_sched_get_num_pools failed with error code %d.",
+        margo_error(0, "ABT_sched_get_num_pools failed with error code %d",
                     ret);
         return false;
     }
@@ -357,7 +356,7 @@ bool __margo_abt_sched_init_external(ABT_sched               sched,
     ABT_pool* pools = alloca(num_pools * sizeof(ABT_pool));
     ret             = ABT_sched_get_pools(sched, num_pools, 0, pools);
     if (ret != ABT_SUCCESS) {
-        margo_error(0, "ABT_sched_get_pools failed with error code %d.", ret);
+        margo_error(0, "ABT_sched_get_pools failed with error code %d", ret);
         goto error;
     }
 
@@ -371,8 +370,7 @@ bool __margo_abt_sched_init_external(ABT_sched               sched,
         }
         if (j == num_known_pools) {
             margo_error(
-                0,
-                "A pool associated with this external ES is not registered.");
+                0, "A pool associated with this external ES is not registered");
             goto error;
         }
     }
@@ -427,7 +425,7 @@ bool __margo_abt_xstream_validate_json(const json_object_t* jxstream,
 #else
     if (!json_object_is_type(jxstream, json_type_object)) {
         margo_error(
-            0, "xstream definition in configuration must be of type object.");
+            0, "xstream definition in configuration must be of type object");
         return false;
     }
 #endif
@@ -441,7 +439,6 @@ bool __margo_abt_xstream_validate_json(const json_object_t* jxstream,
 
     json_object_t* jsched = json_object_object_get(jxstream, "scheduler");
     if (!__margo_abt_sched_validate_json(jsched, javailable_pools)) {
-        margo_error(0, "^ in \"argobots.xstreams[%d]\".", index);
         return false;
     }
 
@@ -450,7 +447,7 @@ bool __margo_abt_xstream_validate_json(const json_object_t* jxstream,
         margo_error(
             0,
             "Argobots < 2.0 requires schedulers to have at least one pool, "
-            "hence it requires a scheduler to be defined for all xstreams.");
+            "hence it requires a scheduler to be defined for all xstreams");
         return false;
     }
 #endif
@@ -605,7 +602,7 @@ bool __margo_abt_xstream_init_external(
     if (ret != ABT_SUCCESS) {
         margo_error(0,
                     "Could not retrieve main scheduler from ES "
-                    "(ABT_xstream_get_main_sched returned %d",
+                    "(ABT_xstream_get_main_sched returned %d)",
                     ret);
         goto error;
     }
@@ -855,6 +852,7 @@ bool __margo_abt_validate_json(const json_object_t*         a,
         for (int i = 0; i < num_pools; ++i) {
             json_object_t* jpool = json_object_array_get_idx(jpools, i);
             if (!__margo_abt_pool_validate_json(jpool, i)) {
+                margo_error(0, "^ in \"argobots.pools[%d]\"", i);
                 HANDLE_CONFIG_ERROR;
             }
         }
@@ -909,6 +907,7 @@ bool __margo_abt_validate_json(const json_object_t*         a,
         for (unsigned i = 0; i < num_es; ++i) {
             json_object_t* jxstream = json_object_array_get_idx(jxstreams, i);
             if (!__margo_abt_xstream_validate_json(jxstream, jpools)) {
+                margo_error(0, "^ in \"argobots.xstreams[%d]\"", i);
                 HANDLE_CONFIG_ERROR;
             }
         }
