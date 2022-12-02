@@ -26,10 +26,10 @@ char* margo_get_config_opt(margo_instance_id mid, int options)
     json_object_object_add_ex(root, "version",
                               json_object_new_string(PACKAGE_VERSION), flags);
     // argobots section
-    struct json_object* abt_json = margo_abt_to_json(&(mid->abt), options);
+    struct json_object* abt_json = __margo_abt_to_json(&(mid->abt), options);
     json_object_object_add_ex(root, "argobots", abt_json, flags);
     // mercury section
-    struct json_object* hg_json = margo_hg_to_json(&(mid->hg));
+    struct json_object* hg_json = __margo_hg_to_json(&(mid->hg));
     json_object_object_add_ex(root, "mercury", hg_json, flags);
     // monitoring section
     if (mid->monitor) {

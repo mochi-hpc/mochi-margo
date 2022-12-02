@@ -111,7 +111,9 @@ margo_instance_id margo_init_ext(const char*                   address,
                                               .hg_init_info = args.hg_init_info,
                                               .listening    = mode,
                                               .protocol     = address};
-    if (!margo_hg_init_from_json(hg_config, &hg_user_args, &hg)) { goto error; }
+    if (!__margo_hg_init_from_json(hg_config, &hg_user_args, &hg)) {
+        goto error;
+    }
 
     struct json_object*   _jabt = json_object_object_get(config, "argobots");
     margo_abt_user_args_t abt_uargs = {
@@ -122,7 +124,7 @@ margo_instance_id margo_init_ext(const char*                   address,
         = json_object_object_get(config, "use_progress_thread"),
         .progress_pool = args.progress_pool,
         .rpc_pool      = args.rpc_pool};
-    if (!margo_abt_init_from_json(_jabt, &abt_uargs, &abt)) { goto error; }
+    if (!__margo_abt_init_from_json(_jabt, &abt_uargs, &abt)) { goto error; }
     confirm_argobots_configuration(config);
 
     // allocate margo instance
@@ -222,8 +224,8 @@ error:
         free(mid);
     }
     if (config) json_object_put(config);
-    margo_hg_destroy(&hg);
-    margo_abt_destroy(&abt);
+    __margo_hg_destroy(&hg);
+    __margo_abt_destroy(&abt);
     return MARGO_INSTANCE_NULL;
 }
 
@@ -286,7 +288,7 @@ static bool validate_and_complete_config(struct json_object* _margo,
         .rpc_pool      = _custom_rpc_pool};
     struct json_object* _argobots = NULL;
     CONFIG_HAS_OR_CREATE_OBJECT(_margo, "argobots", "argobots", _argobots);
-    if (!margo_abt_validate_json(_argobots, &abt_uargs)) { return false; }
+    if (!__margo_abt_validate_json(_argobots, &abt_uargs)) { return false; }
 
     return true;
 }

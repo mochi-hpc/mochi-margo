@@ -166,8 +166,8 @@ static void margo_cleanup(margo_instance_id mid)
         mid->registered_rpcs = next_rpc;
     }
 
-    margo_hg_destroy(&(mid->hg));
-    margo_abt_destroy(&(mid->abt));
+    __margo_hg_destroy(&(mid->hg));
+    __margo_abt_destroy(&(mid->abt));
 
     free(mid);
 
