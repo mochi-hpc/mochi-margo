@@ -518,7 +518,7 @@ static void* margo_default_monitor_initialize(margo_instance_id   mid,
     monitor->mid = mid;
 
     /* default configuration */
-    const char* prefix         = getenv("MARGO_MONITORING_FILENAME_PREFOX");
+    const char* prefix         = getenv("MARGO_MONITORING_FILENAME_PREFIX");
     monitor->filename_prefix   = strdup(prefix ? prefix : "margo");
     monitor->precision         = 9;
     monitor->stats_pretty_json = 0;
