@@ -10,6 +10,7 @@
 #include <ctype.h>
 #include <stdbool.h>
 #include <json-c/json_c_version.h>
+#include <json-c/json_util.h>
 #include <json-c/json.h>
 
 static const int json_type_int64 = json_type_int;
@@ -260,26 +261,31 @@ inline static const char* json_object_object_get_string_or(
 
 #define ASSERT_CONFIG_HAS_REQUIRED(__config__, __key__, __type__, __ctx__) \
     do {                                                                   \
-        struct json_object* __key__                                        \
-            = json_object_object_get(__config__, #__key__);                \
-        if (!__key__) {                                                    \
-            margo_error(0, "\"" #__key__ "\" not found in " #__ctx__       \
+        struct json_object* __tmp__                                        \
+            = json_object_object_get(__config__, __key__);                 \
+        if (!__tmp__) {                                                    \
+            margo_error(0, "\"" __key__ "\" not found in " __ctx__         \
                            " configuration");                              \
             HANDLE_CONFIG_ERROR;                                           \
         }                                                                  \
-        if (!json_object_is_type(__key__, json_type_##__type__)) {         \
-            margo_error(0, "Invalid type for \"" #__key__ " in " #__ctx__  \
-                           " configuration (expected " #__type__ ")");     \
+        if (!json_object_is_type(__tmp__, json_type_##__type__)) {         \
+            margo_error(0,                                                 \
+                        "Invalid type for \"" __key__ " in " __ctx__       \
+                        " configuration (expected " #__type__ ", got %s)", \
+                        json_type_to_name(json_object_get_type(__tmp__))); \
+            HANDLE_CONFIG_ERROR;                                           \
         }                                                                  \
     } while (0)
 
 #define ASSERT_CONFIG_HAS_OPTIONAL(__config__, __key__, __type__, __ctx__)    \
     do {                                                                      \
-        struct json_object* __key__                                           \
-            = json_object_object_get(__config__, #__key__);                   \
-        if (__key__ && !json_object_is_type(__key__, json_type_##__type__)) { \
-            margo_error(0, "Invalid type for \"" #__key__ " in " #__ctx__     \
-                           " configuration (expected " #__type__ ")");        \
+        struct json_object* __tmp__                                           \
+            = json_object_object_get(__config__, __key__);                    \
+        if (__tmp__ && !json_object_is_type(__tmp__, json_type_##__type__)) { \
+            margo_error(0,                                                    \
+                        "Invalid type for \"" __key__ " in " __ctx__          \
+                        " configuration (expected " #__type__ ", got %s)",    \
+                        json_type_to_name(json_object_get_type(__tmp__)));    \
             HANDLE_CONFIG_ERROR;                                              \
         }                                                                     \
     } while (0)

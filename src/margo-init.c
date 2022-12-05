@@ -279,10 +279,10 @@ static bool __margo_validate_json(struct json_object*           _margo,
     }
 
     // check use_progress_thread
-    ASSERT_CONFIG_HAS_OPTIONAL(_margo, use_progress_thread, boolean, "margo");
+    ASSERT_CONFIG_HAS_OPTIONAL(_margo, "use_progress_thread", boolean, "margo");
 
     // check rpc_thread_count
-    ASSERT_CONFIG_HAS_OPTIONAL(_margo, rpc_thread_count, int, "margo");
+    ASSERT_CONFIG_HAS_OPTIONAL(_margo, "rpc_thread_count", int, "margo");
 
     // check mercury configuration
     struct json_object*  _mercury = json_object_object_get(_margo, "mercury");
@@ -306,14 +306,15 @@ static bool __margo_validate_json(struct json_object*           _margo,
     if (!__margo_abt_validate_json(_argobots, &abt_uargs)) { return false; }
 
     // check progress_timeout_ub_msec
-    ASSERT_CONFIG_HAS_OPTIONAL(_margo, progress_timeout_ub_msec, int, "margo");
+    ASSERT_CONFIG_HAS_OPTIONAL(_margo, "progress_timeout_ub_msec", int,
+                               "margo");
     if (CONFIG_HAS(_margo, "progress_timeout_ub_msec", ignore)) {
         CONFIG_INTEGER_MUST_BE_POSITIVE(_margo, "progress_timeout_ub_msec",
                                         "progress_timeout_ub_msec");
     }
 
     // check handle_cache_size
-    ASSERT_CONFIG_HAS_OPTIONAL(_margo, handle_cache_size, int, "margo");
+    ASSERT_CONFIG_HAS_OPTIONAL(_margo, "handle_cache_size", int, "margo");
     if (CONFIG_HAS(_margo, "handle_cache_size", ignore)) {
         CONFIG_INTEGER_MUST_BE_POSITIVE(_margo, "handle_cache_size",
                                         "handle_cache_size");

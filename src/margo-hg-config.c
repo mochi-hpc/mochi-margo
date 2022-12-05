@@ -48,46 +48,47 @@ bool __margo_hg_validate_json(const struct json_object*   json,
         WARNING_CONFIG_HAS(json, na_addr_format);
     }
 
-    ASSERT_CONFIG_HAS_OPTIONAL(json, address, string, mercury);
-    ASSERT_CONFIG_HAS_OPTIONAL(json, version, string, mercury);
-    ASSERT_CONFIG_HAS_OPTIONAL(json, listening, boolean, mercury);
-    ASSERT_CONFIG_HAS_OPTIONAL(json, request_post_incr, int, mercury);
-    ASSERT_CONFIG_HAS_OPTIONAL(json, request_post_init, int, mercury);
-    ASSERT_CONFIG_HAS_OPTIONAL(json, auto_sm, boolean, mercury);
-    ASSERT_CONFIG_HAS_OPTIONAL(json, no_bulk_eager, boolean, mercury);
-    ASSERT_CONFIG_HAS_OPTIONAL(json, no_loopback, boolean, mercury);
-    ASSERT_CONFIG_HAS_OPTIONAL(json, stats, boolean, mercury);
-    ASSERT_CONFIG_HAS_OPTIONAL(json, na_no_block, boolean, mercury);
-    ASSERT_CONFIG_HAS_OPTIONAL(json, na_no_retry, boolean, mercury);
-    ASSERT_CONFIG_HAS_OPTIONAL(json, max_contexts, int, mercury);
-    ASSERT_CONFIG_HAS_OPTIONAL(json, ip_subnet, string, mercury);
-    ASSERT_CONFIG_HAS_OPTIONAL(json, auth_key, string, mercury);
-    ASSERT_CONFIG_HAS_OPTIONAL(json, input_eager_size, int, mercury);
-    ASSERT_CONFIG_HAS_OPTIONAL(json, output_eager_size, int, mercury);
+    ASSERT_CONFIG_HAS_OPTIONAL(json, "address", string, "mercury");
+    ASSERT_CONFIG_HAS_OPTIONAL(json, "version", string, "mercury");
+    ASSERT_CONFIG_HAS_OPTIONAL(json, "listening", boolean, "mercury");
+    ASSERT_CONFIG_HAS_OPTIONAL(json, "request_post_incr", int, "mercury");
+    ASSERT_CONFIG_HAS_OPTIONAL(json, "request_post_init", int, "mercury");
+    ASSERT_CONFIG_HAS_OPTIONAL(json, "auto_sm", boolean, "mercury");
+    ASSERT_CONFIG_HAS_OPTIONAL(json, "no_bulk_eager", boolean, "mercury");
+    ASSERT_CONFIG_HAS_OPTIONAL(json, "no_loopback", boolean, "mercury");
+    ASSERT_CONFIG_HAS_OPTIONAL(json, "stats", boolean, "mercury");
+    ASSERT_CONFIG_HAS_OPTIONAL(json, "na_no_block", boolean, "mercury");
+    ASSERT_CONFIG_HAS_OPTIONAL(json, "na_no_retry", boolean, "mercury");
+    ASSERT_CONFIG_HAS_OPTIONAL(json, "max_contexts", int, "mercury");
+    ASSERT_CONFIG_HAS_OPTIONAL(json, "ip_subnet", string, "mercury");
+    ASSERT_CONFIG_HAS_OPTIONAL(json, "auth_key", string, "mercury");
+    ASSERT_CONFIG_HAS_OPTIONAL(json, "input_eager_size", int, "mercury");
+    ASSERT_CONFIG_HAS_OPTIONAL(json, "output_eager_size", int, "mercury");
 #if (HG_VERSION_MAJOR > 2)       \
     || (HG_VERSION_MAJOR == 2    \
         && (HG_VERSION_MINOR > 1 \
             || (HG_VERSION_MINOR == 0 && HG_VERSION_PATH > 0)))
     // na_max_unexpected_size and na_max_expected_size available from
     // version 2.0.1
-    ASSERT_CONFIG_HAS_OPTIONAL(json, na_max_unexpected_size, int, mercury);
-    ASSERT_CONFIG_HAS_OPTIONAL(json, na_max_expected_size, int, mercury);
+    ASSERT_CONFIG_HAS_OPTIONAL(json, "na_max_unexpected_size", int, "mercury");
+    ASSERT_CONFIG_HAS_OPTIONAL(json, "na_max_expected_size", int, "mercury");
 #endif
 #if (HG_VERSION_MAJOR > 2) || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR > 0)
     // sm_info_string available from version 2.1.0
-    ASSERT_CONFIG_HAS_OPTIONAL(json, sm_info_string, string, mercury);
+    ASSERT_CONFIG_HAS_OPTIONAL(json, "sm_info_string", string, "mercury");
 #endif
 #if (HG_VERSION_MAJOR > 2) || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR > 1)
     // na_request_mem_device available from version 2.2.0
-    ASSERT_CONFIG_HAS_OPTIONAL(json, na_request_mem_device, boolean, mercury);
+    ASSERT_CONFIG_HAS_OPTIONAL(json, "na_request_mem_device", boolean,
+                               "mercury");
     // checksum_level available from version 2.2.0
-    ASSERT_CONFIG_HAS_OPTIONAL(json, checksum_level, string, mercury);
+    ASSERT_CONFIG_HAS_OPTIONAL(json, "checksum_level", string, "mercury");
     struct json_object* checksum_level
         = json_object_object_get(json, "checksum_level");
     CONFIG_IS_IN_ENUM_STRING(checksum_level, "checksum_level", "none",
                              "rpc_headers", "rpc_payload");
     // na_addr_format available from version 2.2.0
-    ASSERT_CONFIG_HAS_OPTIONAL(json, na_addr_format, string, mercury);
+    ASSERT_CONFIG_HAS_OPTIONAL(json, "na_addr_format", string, "mercury");
     struct json_object* na_addr_format
         = json_object_object_get(json, "na_addr_format");
     CONFIG_IS_IN_ENUM_STRING(na_addr_format, "na_addr_format", "unspec", "ipv4",

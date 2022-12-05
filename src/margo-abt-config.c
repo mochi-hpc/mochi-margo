@@ -29,7 +29,7 @@ bool __margo_abt_pool_validate_json(const json_object_t* jpool, uint32_t index)
 #define HANDLE_CONFIG_ERROR return false
 
     /* default: "mpmc" for predef pools */
-    ASSERT_CONFIG_HAS_OPTIONAL(jpool, access, string, pool);
+    ASSERT_CONFIG_HAS_OPTIONAL(jpool, "access", string, "pool");
     json_object_t* jaccess = json_object_object_get(jpool, "access");
     if (jaccess) {
         char fmt[128];
@@ -39,7 +39,7 @@ bool __margo_abt_pool_validate_json(const json_object_t* jpool, uint32_t index)
     }
 
     /* default: "fifo_wait" */
-    ASSERT_CONFIG_HAS_OPTIONAL(jpool, kind, string, pool);
+    ASSERT_CONFIG_HAS_OPTIONAL(jpool, "kind", string, "pool");
     json_object_t* jkind = json_object_object_get(jpool, "kind");
     if (jkind) {
         char fmt[128];
@@ -57,7 +57,7 @@ bool __margo_abt_pool_validate_json(const json_object_t* jpool, uint32_t index)
     // TODO: support dlopen-ed pool definitions
 
     /* default: generated */
-    ASSERT_CONFIG_HAS_OPTIONAL(jpool, name, string, pool);
+    ASSERT_CONFIG_HAS_OPTIONAL(jpool, "name", string, "pool");
     json_object_t* jname = json_object_object_get(jpool, "name");
     if (jname) CONFIG_NAME_IS_VALID(jpool);
 
@@ -212,14 +212,14 @@ bool __margo_abt_sched_validate_json(const json_object_t* jsched,
 
 #define HANDLE_CONFIG_ERROR return false
 
-    ASSERT_CONFIG_HAS_OPTIONAL(jsched, type, string, scheduler);
+    ASSERT_CONFIG_HAS_OPTIONAL(jsched, "type", string, "scheduler");
     json_object_t* jtype = json_object_object_get(jsched, "type");
     if (jtype) {
         CONFIG_IS_IN_ENUM_STRING(jtype, "scheduler.type", "default", "basic",
                                  "prio", "randws", "basic_wait");
     }
 
-    ASSERT_CONFIG_HAS_OPTIONAL(jsched, pools, array, scheduler);
+    ASSERT_CONFIG_HAS_OPTIONAL(jsched, "pools", array, "scheduler");
 
     json_object_t* jsched_pools = json_object_object_get(jsched, "pools");
     size_t         sched_pool_array_len
@@ -432,10 +432,10 @@ bool __margo_abt_xstream_validate_json(const json_object_t* jxstream,
 
 #define HANDLE_CONFIG_ERROR return false
 
-    ASSERT_CONFIG_HAS_OPTIONAL(jxstream, scheduler, object, xstreams);
-    ASSERT_CONFIG_HAS_OPTIONAL(jxstream, name, string, xstreams);
-    ASSERT_CONFIG_HAS_OPTIONAL(jxstream, cpubind, int, xstreams);
-    ASSERT_CONFIG_HAS_OPTIONAL(jxstream, affinity, array, xstreams);
+    ASSERT_CONFIG_HAS_OPTIONAL(jxstream, "scheduler", object, "xstream");
+    ASSERT_CONFIG_HAS_OPTIONAL(jxstream, "name", string, "xstream");
+    ASSERT_CONFIG_HAS_OPTIONAL(jxstream, "cpubind", int, "xstream");
+    ASSERT_CONFIG_HAS_OPTIONAL(jxstream, "affinity", array, "xstream");
 
     json_object_t* jsched = json_object_object_get(jxstream, "scheduler");
     if (!__margo_abt_sched_validate_json(jsched, javailable_pools)) {
@@ -763,10 +763,10 @@ bool __margo_abt_validate_json(const json_object_t*         a,
     json_object_t* jpools = NULL;
     json_object_t* ignore = NULL;
     bool           result = true;
-    ASSERT_CONFIG_HAS_OPTIONAL(a, pools, array, argobots);
-    ASSERT_CONFIG_HAS_OPTIONAL(a, xstreams, array, argobots);
-    ASSERT_CONFIG_HAS_OPTIONAL(a, abt_mem_max_num_stacks, int, argobots);
-    ASSERT_CONFIG_HAS_OPTIONAL(a, abt_thread_stacksize, int, argobots);
+    ASSERT_CONFIG_HAS_OPTIONAL(a, "pools", array, "argobots");
+    ASSERT_CONFIG_HAS_OPTIONAL(a, "xstreams", array, "argobots");
+    ASSERT_CONFIG_HAS_OPTIONAL(a, "abt_mem_max_num_stacks", int, "argobots");
+    ASSERT_CONFIG_HAS_OPTIONAL(a, "abt_thread_stacksize", int, "argobots");
 
     /* validate the user-provided fields */
 
