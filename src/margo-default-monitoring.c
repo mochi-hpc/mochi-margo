@@ -518,9 +518,10 @@ static void* margo_default_monitor_initialize(margo_instance_id   mid,
     monitor->mid = mid;
 
     /* default configuration */
-    monitor->filename_prefix         = strdup("margo");
-    monitor->precision               = 9;
-    monitor->stats_pretty_json       = 0;
+    const char* prefix         = getenv("MARGO_MONITORING_FILENAME_PREFOX");
+    monitor->filename_prefix   = strdup(prefix ? prefix : "margo");
+    monitor->precision         = 9;
+    monitor->stats_pretty_json = 0;
     monitor->time_series_pretty_json = 0;
     monitor->sample_progress_every   = 1;
     monitor->time_series_interval    = 1.0;
