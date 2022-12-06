@@ -238,7 +238,7 @@ static bool __margo_validate_json(struct json_object*           _margo,
                                   int                           mode,
                                   const struct margo_init_info* uargs)
 {
-    struct json_object* ignore;
+    struct json_object* ignore = NULL;
 
 #define HANDLE_CONFIG_ERROR return false
 
@@ -255,7 +255,35 @@ static bool __margo_validate_json(struct json_object*           _margo,
        - [optional] monitoring: object
     */
 
-    // check progress_pool
+    // check "mercury" configuration field
+    struct json_object*  _mercury = json_object_object_get(_margo, "mercury");
+    margo_hg_user_args_t hg_uargs = {.protocol     = address,
+                                     .listening    = mode == MARGO_SERVER_MODE,
+                                     .hg_init_info = uargs->hg_init_info,
+                                     .hg_class     = uargs->hg_class,
+                                     .hg_context   = uargs->hg_context};
+    if (!__margo_hg_validate_json(_mercury, &hg_uargs)) { return false; }
+
+    // check "argobots" configuration field
+    struct json_object* _argobots = json_object_object_get(_margo, "argobots");
+    if (!__margo_abt_validate_json(_argobots)) { return false; }
+
+    // check "progress_timeout_ub_msec" field
+    ASSERT_CONFIG_HAS_OPTIONAL(_margo, "progress_timeout_ub_msec", int,
+                               "margo");
+    if (CONFIG_HAS(_margo, "progress_timeout_ub_msec", ignore)) {
+        CONFIG_INTEGER_MUST_BE_POSITIVE(_margo, "progress_timeout_ub_msec",
+                                        "progress_timeout_ub_msec");
+    }
+
+    // check "handle_cache_size" field
+    ASSERT_CONFIG_HAS_OPTIONAL(_margo, "handle_cache_size", int, "margo");
+    if (CONFIG_HAS(_margo, "handle_cache_size", ignore)) {
+        CONFIG_INTEGER_MUST_BE_POSITIVE(_margo, "handle_cache_size",
+                                        "handle_cache_size");
+    }
+
+    // check "progress_pool"
     struct json_object* _progress_pool
         = json_object_object_get(_margo, "progress_pool");
     if (_progress_pool
@@ -265,6 +293,54 @@ static bool __margo_validate_json(struct json_object*           _margo,
                     "\"progress_pool\" field in configuration "
                     "should be an integer or a string");
         HANDLE_CONFIG_ERROR;
+    }
+
+    // check that progress_pool is present, if provided */
+    if (_progress_pool) {
+        struct json_object* _pools = json_object_object_get(_argobots, "pools");
+        if (json_object_is_type(_progress_pool, json_type_int64)) {
+            /* progress_pool is an integer */
+            int progress_pool_idx = json_object_get_int(_progress_pool);
+            int num_pools = _pools ? json_object_array_length(_pools) : 0;
+            if (progress_pool_idx < 0 || progress_pool_idx >= num_pools) {
+                margo_error(0, "Invalid \"progress_pool\" index (%d)",
+                            progress_pool_idx);
+                HANDLE_CONFIG_ERROR;
+            }
+        } else {
+            /* progress_pool is a string */
+            const char* progress_pool_name
+                = json_object_get_string(_progress_pool);
+            if (strcmp(progress_pool_name, "__primary__") != 0)
+                CONFIG_ARRAY_MUST_HAVE_ITEM_NAMED(_pools, progress_pool_name,
+                                                  "argobots.pools", ignore);
+        }
+    }
+
+    // check "use_progress_thread" field
+    ASSERT_CONFIG_HAS_OPTIONAL(_margo, "use_progress_thread", boolean, "margo");
+    struct json_object* _use_progress_thread
+        = json_object_object_get(_margo, "use_progress_thread");
+    bool has_external_progress_pool = (uargs->progress_pool != ABT_POOL_NULL)
+                                   && (uargs->progress_pool != NULL);
+
+    // throw some warnings if more than one of use_progres_thread,
+    // progress_pool, or external progress pool are used.
+    if (_use_progress_thread) {
+        if (has_external_progress_pool) {
+            margo_warning(0,
+                          "\"use_progress_thread\" will be ignored"
+                          " because external progress pool was provided");
+        } else if (_progress_pool) {
+            margo_warning(0,
+                          "\"use_progress_thread\" will be ignored"
+                          " because \"progress_pool\" field was specified");
+        }
+    }
+    if (has_external_progress_pool && _progress_pool) {
+        margo_warning(0,
+                      "\"progress_pool\" will be ignored because"
+                      " external progress pool was provided");
     }
 
     // check rpc_pool
@@ -278,46 +354,50 @@ static bool __margo_validate_json(struct json_object*           _margo,
         HANDLE_CONFIG_ERROR;
     }
 
-    // check use_progress_thread
-    ASSERT_CONFIG_HAS_OPTIONAL(_margo, "use_progress_thread", boolean, "margo");
+    // check that rpc_pool is present, if provided */
+    if (_rpc_pool) {
+        struct json_object* _pools = json_object_object_get(_argobots, "pools");
+        if (json_object_is_type(_rpc_pool, json_type_int64)) {
+            /* rpc_pool is an integer */
+            int rpc_pool_idx = json_object_get_int(_rpc_pool);
+            int num_pools    = _pools ? json_object_array_length(_pools) : 0;
+            if (rpc_pool_idx < 0 || rpc_pool_idx >= num_pools) {
+                margo_error(0, "Invalid \"rpc_pool\" index (%d)", rpc_pool_idx);
+                HANDLE_CONFIG_ERROR;
+            }
+        } else {
+            /* rpc_pool is a string */
+            const char* rpc_pool_name = json_object_get_string(_rpc_pool);
+            if (strcmp(rpc_pool_name, "__primary__") != 0)
+                CONFIG_ARRAY_MUST_HAVE_ITEM_NAMED(_pools, rpc_pool_name,
+                                                  "argobots.pools", ignore);
+        }
+    }
 
     // check rpc_thread_count
     ASSERT_CONFIG_HAS_OPTIONAL(_margo, "rpc_thread_count", int, "margo");
+    struct json_object* _rpc_thread_count
+        = json_object_object_get(_margo, "rpc_thread_count");
+    bool has_external_rpc_pool
+        = (uargs->rpc_pool != ABT_POOL_NULL) && (uargs->rpc_pool != NULL);
 
-    // check mercury configuration
-    struct json_object*  _mercury = json_object_object_get(_margo, "mercury");
-    margo_hg_user_args_t hg_uargs = {.protocol     = address,
-                                     .listening    = mode == MARGO_SERVER_MODE,
-                                     .hg_init_info = uargs->hg_init_info,
-                                     .hg_class     = uargs->hg_class,
-                                     .hg_context   = uargs->hg_context};
-    if (!__margo_hg_validate_json(_mercury, &hg_uargs)) { return false; }
-
-    // check argobots configuration
-    struct json_object* _argobots = json_object_object_get(_margo, "argobots");
-    margo_abt_user_args_t abt_uargs = {
-        .jprogress_pool    = json_object_object_get(_margo, "progress_pool"),
-        .jrpc_pool         = json_object_object_get(_margo, "rpc_pool"),
-        .jrpc_thread_count = json_object_object_get(_margo, "rpc_thread_count"),
-        .juse_progress_thread
-        = json_object_object_get(_margo, "use_progress_thread"),
-        .progress_pool = uargs->progress_pool,
-        .rpc_pool      = uargs->rpc_pool};
-    if (!__margo_abt_validate_json(_argobots, &abt_uargs)) { return false; }
-
-    // check progress_timeout_ub_msec
-    ASSERT_CONFIG_HAS_OPTIONAL(_margo, "progress_timeout_ub_msec", int,
-                               "margo");
-    if (CONFIG_HAS(_margo, "progress_timeout_ub_msec", ignore)) {
-        CONFIG_INTEGER_MUST_BE_POSITIVE(_margo, "progress_timeout_ub_msec",
-                                        "progress_timeout_ub_msec");
+    // throw some warnings if more than of rpc_thread_count,
+    // rpc_pool, or external rpc pool are used.
+    if (_rpc_thread_count) {
+        if (has_external_rpc_pool) {
+            margo_warning(0,
+                          "\"rpc_thread_count\" will be ignored"
+                          " because external rpc pool was provided");
+        } else if (_rpc_pool) {
+            margo_warning(0,
+                          "\"rpc_thread_count\" will be ignored"
+                          " because \"rpc_pool\" field was specified");
+        }
     }
-
-    // check handle_cache_size
-    ASSERT_CONFIG_HAS_OPTIONAL(_margo, "handle_cache_size", int, "margo");
-    if (CONFIG_HAS(_margo, "handle_cache_size", ignore)) {
-        CONFIG_INTEGER_MUST_BE_POSITIVE(_margo, "handle_cache_size",
-                                        "handle_cache_size");
+    if (has_external_rpc_pool && _rpc_pool) {
+        margo_warning(0,
+                      "\"rpc_pool\" will be ignored because"
+                      " external rpc pool was provided");
     }
 
     return true;

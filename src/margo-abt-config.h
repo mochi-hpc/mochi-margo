@@ -128,12 +128,19 @@ void           __margo_abt_xstream_destroy(margo_abt_xstream_t*);
 
 /* Argobots environment */
 typedef struct margo_abt {
-    struct margo_abt_pool*    pools;
+    /* array of pools */
+    struct margo_abt_pool* pools;
+    unsigned               pools_len;
+    unsigned               pools_cap;
+    ABT_mutex_memory       pools_mtx;
+    /* array of xstreams */
     struct margo_abt_xstream* xstreams;
-    unsigned                  num_pools;
-    unsigned                  num_xstreams;
-    unsigned                  progress_pool_idx;
-    unsigned                  rpc_pool_idx;
+    unsigned                  xstreams_len;
+    unsigned                  xstreams_cap;
+    ABT_mutex_memory          xstreams_mtx;
+
+    unsigned progress_pool_idx;
+    unsigned rpc_pool_idx;
 } margo_abt_t;
 
 /* User-provided initialization information */
@@ -146,8 +153,7 @@ typedef struct margo_abt_user_args {
     json_object_t* jrpc_thread_count;    /* "rpc_thread_count" field */
 } margo_abt_user_args_t;
 
-bool           __margo_abt_validate_json(const json_object_t*,
-                                         const margo_abt_user_args_t*);
+bool           __margo_abt_validate_json(const json_object_t*);
 bool           __margo_abt_init_from_json(const json_object_t*,
                                           const margo_abt_user_args_t*,
                                           margo_abt_t*);

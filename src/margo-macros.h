@@ -95,11 +95,12 @@ inline static const char* json_object_object_get_string_or(
     }
 }
 
-#define json_array_foreach(__array, __index, __element)                \
-    for (__index = 0;                                                  \
-         __index < json_object_array_length(__array)                   \
-         && (__element = json_object_array_get_idx(__array, __index)); \
-         __index++)
+#define json_array_foreach(__array, __index, __element)                    \
+    if (__array)                                                           \
+        for (__index = 0;                                                  \
+             __index < json_object_array_length(__array)                   \
+             && (__element = json_object_array_get_idx(__array, __index)); \
+             __index++)
 
 // Can be used in configurations to check if a JSON object has a particular
 // field. If it does, the __out parameter is set to that field.

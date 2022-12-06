@@ -258,7 +258,7 @@ int margo_state_dump(margo_instance_id mid,
     fprintf(outfile, "# ================================================\n");
 
     /* for each pool that margo is aware of */
-    for (i = 0; i < (int)mid->abt.num_pools; i++) {
+    for (i = 0; i < (int)mid->abt.pools_len; i++) {
         /* Display stack trace of ULTs within that pool.  This will not
          * include any ULTs that are presently executing (including the
          * caller).

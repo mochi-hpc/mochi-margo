@@ -81,11 +81,11 @@ char* margo_get_config_opt(margo_instance_id mid, int options)
     return (char*)content;
 }
 
-size_t margo_get_num_pools(margo_instance_id mid) { return mid->abt.num_pools; }
+size_t margo_get_num_pools(margo_instance_id mid) { return mid->abt.pools_len; }
 
 size_t margo_get_num_xstreams(margo_instance_id mid)
 {
-    return mid->abt.num_xstreams;
+    return mid->abt.xstreams_len;
 }
 
 hg_return_t margo_find_pool_by_handle(margo_instance_id       mid,
@@ -94,7 +94,7 @@ hg_return_t margo_find_pool_by_handle(margo_instance_id       mid,
 {
     if (mid == MARGO_INSTANCE_NULL || handle == ABT_POOL_NULL)
         return HG_INVALID_ARG;
-    for (uint32_t i = 0; i < mid->abt.num_pools; ++i) {
+    for (uint32_t i = 0; i < mid->abt.pools_len; ++i) {
         if (mid->abt.pools[i].pool == handle) {
             if (info) {
                 info->index = i;
@@ -112,7 +112,7 @@ hg_return_t margo_find_pool_by_name(margo_instance_id       mid,
                                     struct margo_pool_info* info)
 {
     if (mid == MARGO_INSTANCE_NULL || name == NULL) return HG_INVALID_ARG;
-    for (uint32_t i = 0; i < mid->abt.num_pools; ++i) {
+    for (uint32_t i = 0; i < mid->abt.pools_len; ++i) {
         if (mid->abt.pools[i].name == NULL) continue;
         if (strcmp(mid->abt.pools[i].name, name) == 0) {
             if (info) {
@@ -130,7 +130,7 @@ hg_return_t margo_find_pool_by_index(margo_instance_id       mid,
                                      uint32_t                index,
                                      struct margo_pool_info* info)
 {
-    if (mid == MARGO_INSTANCE_NULL || index >= mid->abt.num_pools)
+    if (mid == MARGO_INSTANCE_NULL || index >= mid->abt.pools_len)
         return HG_INVALID_ARG;
     if (info) {
         info->index = index;
@@ -146,7 +146,7 @@ hg_return_t margo_find_xstream_by_handle(margo_instance_id          mid,
 {
     if (mid == MARGO_INSTANCE_NULL || handle == ABT_XSTREAM_NULL)
         return HG_INVALID_ARG;
-    for (uint32_t i = 0; i < mid->abt.num_xstreams; ++i) {
+    for (uint32_t i = 0; i < mid->abt.xstreams_len; ++i) {
         if (mid->abt.xstreams[i].xstream == handle) {
             if (info) {
                 info->name    = mid->abt.xstreams[i].name;
@@ -164,7 +164,7 @@ hg_return_t margo_find_xstream_by_name(margo_instance_id          mid,
                                        struct margo_xstream_info* info)
 {
     if (mid == MARGO_INSTANCE_NULL || name == NULL) return HG_INVALID_ARG;
-    for (uint32_t i = 0; i < mid->abt.num_xstreams; ++i) {
+    for (uint32_t i = 0; i < mid->abt.xstreams_len; ++i) {
         if (mid->abt.xstreams[i].name == NULL) continue;
         if (strcmp(mid->abt.xstreams[i].name, name) == 0) {
             if (info) {
@@ -182,7 +182,7 @@ hg_return_t margo_find_xstream_by_index(margo_instance_id          mid,
                                         uint32_t                   index,
                                         struct margo_xstream_info* info)
 {
-    if (mid == MARGO_INSTANCE_NULL || index >= mid->abt.num_xstreams)
+    if (mid == MARGO_INSTANCE_NULL || index >= mid->abt.xstreams_len)
         return HG_INVALID_ARG;
     if (info) {
         info->name    = mid->abt.xstreams[index].name;
