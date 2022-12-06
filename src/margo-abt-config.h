@@ -31,6 +31,8 @@ typedef char
 /* after initialization from JSON, char* are assumed to point to a valid string
  */
 
+typedef struct margo_abt margo_abt_t;
+
 /* For all the structures bellow, the following functions are provided:
  * (1) _validate_json: validate that the provided JSON object can be used
  *   to initialize the given object type;
@@ -59,18 +61,21 @@ typedef struct margo_abt_pool {
                                    primary ES */
 } margo_abt_pool_t;
 
-bool           __margo_abt_pool_validate_json(const json_object_t*, uint32_t);
-bool           __margo_abt_pool_init_from_json(const json_object_t*,
-                                               margo_abt_pool_t*,
-                                               const margo_abt_pool_t*,
-                                               unsigned);
-json_object_t* __margo_abt_pool_to_json(const margo_abt_pool_t*);
-void           __margo_abt_pool_destroy(margo_abt_pool_t*);
-bool           __margo_abt_pool_init_external(const char*,
-                                              ABT_pool,
-                                              margo_abt_pool_t*,
-                                              const margo_abt_pool_t*,
-                                              unsigned);
+bool __margo_abt_pool_validate_json(const json_object_t* config);
+
+bool __margo_abt_pool_init_from_json(const json_object_t* config,
+                                     const margo_abt_t*   abt,
+                                     margo_abt_pool_t*    pool);
+
+json_object_t* __margo_abt_pool_to_json(const margo_abt_pool_t* pool);
+
+void __margo_abt_pool_destroy(margo_abt_pool_t* pool);
+
+bool __margo_abt_pool_init_external(const char*        name,
+                                    ABT_pool           handle,
+                                    const margo_abt_t* abt,
+                                    margo_abt_pool_t*  pool);
+
 /* Struct to track scheduler information in a margo_abt_xstream. */
 typedef struct margo_abt_sched {
     ABT_sched sched;
@@ -79,21 +84,23 @@ typedef struct margo_abt_sched {
     size_t    num_pools;
 } margo_abt_sched_t;
 
-bool           __margo_abt_sched_validate_json(const json_object_t*,
-                                               const json_object_t*);
-bool           __margo_abt_sched_init_from_json(const json_object_t*,
-                                                margo_abt_sched_t*,
-                                                const margo_abt_pool_t*,
-                                                unsigned);
-bool           __margo_abt_sched_init_external(ABT_sched,
-                                               margo_abt_sched_t*,
-                                               const margo_abt_pool_t*,
-                                               unsigned);
-json_object_t* __margo_abt_sched_to_json(const margo_abt_sched_t*,
-                                         int,
-                                         const margo_abt_pool_t*,
-                                         unsigned);
-void           __margo_abt_sched_destroy(margo_abt_sched_t*);
+bool __margo_abt_sched_validate_json(const json_object_t* sched,
+                                     const margo_abt_t*   abt,
+                                     const json_object_t* pools_array);
+
+bool __margo_abt_sched_init_from_json(const json_object_t* config,
+                                      const margo_abt_t*   abt,
+                                      margo_abt_sched_t*   sched);
+
+bool __margo_abt_sched_init_external(ABT_sched          handle,
+                                     const margo_abt_t* abt,
+                                     margo_abt_sched_t* sched);
+
+json_object_t* __margo_abt_sched_to_json(const margo_abt_sched_t* sched,
+                                         const margo_abt_t*       abt,
+                                         int                      options);
+
+void __margo_abt_sched_destroy(margo_abt_sched_t* sched);
 
 /* Struct to track ES created by margo along with a flag indicating if
  * margo is responsible for explicitly free'ing the ES or not.
@@ -105,26 +112,24 @@ typedef struct margo_abt_xstream {
     bool margo_free_flag; /* flag if Margo is responsible for freeing */
 } margo_abt_xstream_t;
 
-bool           __margo_abt_xstream_validate_json(const json_object_t*,
-                                                 const json_object_t*);
-bool           __margo_abt_xstream_init_from_json(const json_object_t*,
-                                                  margo_abt_xstream_t*,
-                                                  const margo_abt_xstream_t*,
-                                                  unsigned,
-                                                  const margo_abt_pool_t*,
-                                                  unsigned);
-bool           __margo_abt_xstream_init_external(const char*,
-                                                 ABT_xstream,
-                                                 margo_abt_xstream_t*,
-                                                 const margo_abt_xstream_t*,
-                                                 unsigned,
-                                                 const margo_abt_pool_t*,
-                                                 unsigned);
-json_object_t* __margo_abt_xstream_to_json(const margo_abt_xstream_t*,
-                                           int,
-                                           const margo_abt_pool_t*,
-                                           unsigned);
-void           __margo_abt_xstream_destroy(margo_abt_xstream_t*);
+bool __margo_abt_xstream_validate_json(const json_object_t* config,
+                                       const margo_abt_t*   abt,
+                                       const json_object_t* pools_array);
+
+bool __margo_abt_xstream_init_from_json(const json_object_t* config,
+                                        const margo_abt_t*   abt,
+                                        margo_abt_xstream_t*);
+
+bool __margo_abt_xstream_init_external(const char*          name,
+                                       ABT_xstream          handle,
+                                       const margo_abt_t*   abt,
+                                       margo_abt_xstream_t* xstream);
+
+json_object_t* __margo_abt_xstream_to_json(const margo_abt_xstream_t* xstream,
+                                           const margo_abt_t*         abt,
+                                           int                        options);
+
+void __margo_abt_xstream_destroy(margo_abt_xstream_t* xstream);
 
 /* Argobots environment */
 typedef struct margo_abt {
@@ -132,12 +137,14 @@ typedef struct margo_abt {
     struct margo_abt_pool* pools;
     unsigned               pools_len;
     unsigned               pools_cap;
-    ABT_mutex_memory       pools_mtx;
     /* array of xstreams */
     struct margo_abt_xstream* xstreams;
     unsigned                  xstreams_len;
     unsigned                  xstreams_cap;
-    ABT_mutex_memory          xstreams_mtx;
+    /* mutex protecting access to the above */
+    ABT_mutex_memory mtx;
+    /* margo instance owning this margo_abt */
+    margo_instance_id mid;
 
     unsigned progress_pool_idx;
     unsigned rpc_pool_idx;
@@ -153,15 +160,29 @@ typedef struct margo_abt_user_args {
     json_object_t* jrpc_thread_count;    /* "rpc_thread_count" field */
 } margo_abt_user_args_t;
 
-bool           __margo_abt_validate_json(const json_object_t*);
-bool           __margo_abt_init_from_json(const json_object_t*,
-                                          const margo_abt_user_args_t*,
-                                          margo_abt_t*);
-json_object_t* __margo_abt_to_json(const margo_abt_t*, int);
-void           __margo_abt_destroy(margo_abt_t*);
-int            __margo_abt_find_pool_by_name(const margo_abt_t*, const char*);
-int            __margo_abt_find_pool_by_handle(const margo_abt_t*, ABT_pool);
-int __margo_abt_find_xstream_by_name(const margo_abt_t*, const char*);
-int __margo_abt_find_xstream_by_handle(const margo_abt_t*, ABT_xstream);
+bool __margo_abt_validate_json(const json_object_t* config);
 
+bool __margo_abt_init_from_json(const json_object_t*         config,
+                                const margo_abt_user_args_t* uargs,
+                                margo_abt_t*);
+
+json_object_t* __margo_abt_to_json(const margo_abt_t* abt, int options);
+
+void __margo_abt_destroy(margo_abt_t* abt);
+
+int  __margo_abt_find_pool_by_name(const margo_abt_t* abt, const char* name);
+int  __margo_abt_find_pool_by_handle(const margo_abt_t* abt, ABT_pool pool);
+int  __margo_abt_find_xstream_by_name(const margo_abt_t* abt, const char* name);
+int  __margo_abt_find_xstream_by_handle(const margo_abt_t* abt,
+                                        ABT_xstream        xstream);
+bool __margo_abt_add_pool_from_json(margo_abt_t*         abt,
+                                    const json_object_t* config);
+bool __margo_abt_add_xstream_from_json(margo_abt_t*         abt,
+                                       const json_object_t* config);
+bool __margo_abt_add_external_pool(margo_abt_t* abt,
+                                   const char*  name,
+                                   ABT_pool     pool);
+bool __margo_abt_add_external_xstream(margo_abt_t* abt,
+                                      const char*  name,
+                                      ABT_xstream  xstream);
 #endif

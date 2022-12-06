@@ -192,18 +192,18 @@ inline static const char* json_object_object_get_string_or(
 
 // Checks if the provided JSON string is one of the provided string arguments.
 // Prints an error and returns -1 if it does not match any.
-#define CONFIG_IS_IN_ENUM_STRING(__config, __field_name, ...)            \
-    do {                                                                 \
-        unsigned    _i      = 0;                                         \
-        const char* _vals[] = {__VA_ARGS__, NULL};                       \
-        while (_vals[_i]                                                 \
-               && strcmp(_vals[_i], json_object_get_string(__config)))   \
-            _i++;                                                        \
-        if (!_vals[_i]) {                                                \
-            margo_error(0, "Invalid enum value for \"%s\" (\"%s\")",     \
-                        __field_name, json_object_get_string(__config)); \
-            HANDLE_CONFIG_ERROR;                                         \
-        }                                                                \
+#define CONFIG_IS_IN_ENUM_STRING(__config, __field_name, ...)                  \
+    do {                                                                       \
+        unsigned    _i      = 0;                                               \
+        const char* _vals[] = {__VA_ARGS__, NULL};                             \
+        while (_vals[_i]                                                       \
+               && strcmp(_vals[_i], json_object_get_string(__config)))         \
+            _i++;                                                              \
+        if (!_vals[_i]) {                                                      \
+            margo_error(0, "Invalid enum value for %s (\"%s\")", __field_name, \
+                        json_object_get_string(__config));                     \
+            HANDLE_CONFIG_ERROR;                                               \
+        }                                                                      \
     } while (0)
 
 // Checks all the entries in the provided arrays and make sure their "name"
