@@ -38,7 +38,7 @@ bool __margo_abt_pool_validate_json(const json_object_t* jpool)
                                  "prio_wait", "external");
         if (strcmp(json_object_get_string(jkind), "external") == 0) {
             margo_error(0,
-                        "\"argobots.pools[%d] is marked as external and "
+                        "Pool is marked as external and "
                         "cannot be instantiated",
                         index);
             return false;
@@ -857,7 +857,7 @@ bool __margo_abt_init_from_json(const json_object_t*         jabt,
     /* build xstreams that are specified in the JSON */
     unsigned num_xstreams = jxstreams ? json_object_array_length(jxstreams) : 0;
     a->xstreams_len       = 0;
-    a->xstreams_cap       = num_xstreams + 1; // num_extra_es;
+    a->xstreams_cap       = num_xstreams + 1;
     a->xstreams           = calloc(a->xstreams_cap, sizeof(*(a->xstreams)));
     for (unsigned i = 0; i < num_xstreams; ++i) {
         json_object_t* jxstream = json_object_array_get_idx(jxstreams, i);
@@ -1288,7 +1288,8 @@ bool __margo_abt_add_external_pool(margo_abt_t* abt,
     index = __margo_abt_find_pool_by_handle(abt, pool);
     if (index >= 0) {
         margo_error(abt->mid,
-                    "Could not add external pool: pool already registered",
+                    "Could not add external pool \"%s\":"
+                    " pool already registered",
                     name);
         return false;
     }
@@ -1328,9 +1329,10 @@ bool __margo_abt_add_external_xstream(margo_abt_t* abt,
     // check that the xstream isn't already registered
     index = __margo_abt_find_xstream_by_handle(abt, xstream);
     if (index >= 0) {
-        margo_error(
-            abt->mid,
-            "Could not add external xstream: xstream already registered", name);
+        margo_error(abt->mid,
+                    "Could not add external xstream \"%s\":"
+                    " xstream already registered",
+                    name);
         return false;
     }
 
