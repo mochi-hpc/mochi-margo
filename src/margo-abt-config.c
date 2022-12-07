@@ -730,6 +730,7 @@ bool __margo_abt_validate_json(const json_object_t* a)
     ASSERT_CONFIG_HAS_OPTIONAL(a, "xstreams", array, "argobots");
     ASSERT_CONFIG_HAS_OPTIONAL(a, "abt_mem_max_num_stacks", int, "argobots");
     ASSERT_CONFIG_HAS_OPTIONAL(a, "abt_thread_stacksize", int, "argobots");
+    ASSERT_CONFIG_HAS_OPTIONAL(a, "profiling_dir", string, "argobots");
 
     /* validate the "pools" list */
 
@@ -821,6 +822,11 @@ bool __margo_abt_init_from_json(const json_object_t* jabt, margo_abt_t* a)
             g_margo_abt_prof_init = 1;
         }
     }
+
+    json_object_t* jprofiling_dir
+        = json_object_object_get(jabt, "profiling_dir");
+    a->profiling_dir
+        = strdup(jprofiling_dir ? json_object_get_string(jprofiling_dir) : ".");
 
     /* build pools that are specified in the JSON */
 
@@ -976,6 +982,8 @@ json_object_t* __margo_abt_to_json(const margo_abt_t* a, int options)
             json, "abt_thread_stacksize",
             json_object_new_int64(atol(abt_thread_stacksize)), flags);
     }
+    json_object_object_add_ex(json, "profiling_dir",
+                              json_object_new_string(a->profiling_dir), flags);
 #ifdef HAVE_ABT_INFO_QUERY_KIND_ENABLED_LAZY_STACK_ALLOC
     ABT_bool lazy_stack_alloc;
     ABT_info_query_config(ABT_INFO_QUERY_KIND_ENABLED_LAZY_STACK_ALLOC,
@@ -996,6 +1004,7 @@ void __margo_abt_destroy(margo_abt_t* a)
         __margo_abt_pool_destroy(a->pools + i);
     }
     free(a->pools);
+    free(a->profiling_dir);
     memset(a, 0, sizeof(*a));
     if (--g_margo_num_instances == 0 && g_margo_abt_init) {
         /* shut down global abt profiling if needed */

@@ -58,27 +58,20 @@ static FILE* margo_output_file_open(margo_instance_id mid,
     /* if directory is not specified then use output directory from margo
      * configuration
      */
-#if 0
     if (revised_file_name[0] == '/') {
-        absolute_file_name = revised_file_name;
+        absolute_file_name = strdup(revised_file_name);
     } else {
-        absolute_file_name
-            = malloc(strlen(json_object_get_string(
-                         json_object_object_get(mid->json_cfg, "output_dir")))
-                     + strlen(revised_file_name) + 2);
+        absolute_file_name = malloc(strlen(mid->abt.profiling_dir)
+                                    + strlen(revised_file_name) + 2);
         if (!absolute_file_name) {
             MARGO_ERROR(mid, "malloc() failure: %d\n", errno);
             free(revised_file_name);
             return NULL;
         }
-        sprintf(absolute_file_name, "%s/%s",
-                json_object_get_string(
-                    json_object_object_get(mid->json_cfg, "output_dir")),
+        sprintf(absolute_file_name, "%s/%s", mid->abt.profiling_dir,
                 revised_file_name);
     }
-#endif
-    absolute_file_name
-        = revised_file_name; // TODO add an output_dir in the margo_instance_id
+    free(revised_file_name);
 
     /* actually open file */
     outfile = fopen(absolute_file_name, "a");
@@ -86,15 +79,9 @@ static FILE* margo_output_file_open(margo_instance_id mid,
         MARGO_ERROR(mid, "fopen(%s) failure: %d\n", absolute_file_name, errno);
 
     if (resolved_file_name) {
-        if (absolute_file_name != revised_file_name) {
-            *resolved_file_name = absolute_file_name;
-            free(revised_file_name);
-        } else {
-            *resolved_file_name = revised_file_name;
-        }
+        *resolved_file_name = absolute_file_name;
     } else {
-        if (absolute_file_name != revised_file_name) free(absolute_file_name);
-        free(revised_file_name);
+        free(absolute_file_name);
     }
 
     return (outfile);
@@ -218,19 +205,10 @@ int margo_state_dump(margo_instance_id mid,
 
     fprintf(outfile,
             "\n# Margo Argobots profiling summary\n"
-            "\n# NOTE: this is only available if mid->diag_enabled == 1 above "
-            "*and* Argobots\n"
-            "# has been compiled with tool interface support.  You can turn on "
-            "Margo\n"
-            "# diagnostics at runtime by calling margo_diag_start() "
-            "programatically, by\n"
-            "# setting the MARGO_ENABLE_DIAGNOSTICS=1 environment variable, or "
-            "by setting\n"
-            "# the \"enable_diagnostics\" JSON configuration parameter. You "
-            "can enable the\n"
-            "# Argobots tool interface by compiling Argobots with the "
-            "--enable-tool or the\n"
-            "# +tool spack variant.\n"
+            "\n# NOTE: this is only available if Argobots\n"
+            "# has been compiled with tool interface support\n"
+            "# by compiling Argobots with --enable-tool or\n"
+            "# the +tool spack variant.\n"
             "# ==========================\n");
     margo_abt_profiling_dump_fp(mid, outfile);
 

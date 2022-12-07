@@ -145,6 +145,8 @@ typedef struct margo_abt {
     ABT_mutex_memory mtx;
     /* margo instance owning this margo_abt */
     margo_instance_id mid;
+    /* default directory for ABT profiling */
+    char* profiling_dir;
 } margo_abt_t;
 
 bool __margo_abt_validate_json(const json_object_t* config);
