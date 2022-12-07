@@ -18,6 +18,13 @@
         "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__primary__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__primary__"}],"abt_mem_max_num_stacks":12,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":0,"rpc_pool":0}
     },
 
+    "abt_mem_max_num_stacks/abt_thread_stacksize/abt_init": {
+        "pass": true,
+        "abt_init": true,
+        "input": {"argobots":{"abt_mem_max_num_stacks": 12, "abt_thread_stacksize": 2000000}},
+        "output": {"argobots":{"pools":[{"kind":"external","name":"__primary__"}],"xstreams":[{"scheduler":{"type":"external","pools":[0]},"name":"__primary__"}]},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":0,"rpc_pool":0}
+    },
+
     "abt_mem_max_num_stacks/env": {
         "pass": true,
         "env": {
