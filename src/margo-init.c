@@ -162,7 +162,7 @@ margo_instance_id margo_init_ext(const char*                   address,
             json_object_object_add(jprogress_pool, "access",
                                    json_object_new_string("mpmc"));
             progress_pool_idx = abt.pools_len;
-            bool ret = __margo_abt_add_pool_from_json(&abt, jprogress_pool);
+            ret = __margo_abt_add_pool_from_json(&abt, jprogress_pool);
             json_object_put(jprogress_pool);
             if (!ret) goto error;
             /* add a proress ES */
@@ -210,7 +210,7 @@ margo_instance_id margo_init_ext(const char*                   address,
         } else if (args.rpc_pool != ABT_POOL_NULL && args.rpc_pool != NULL) {
             /* external RPC pool specified, add it as external */
             rpc_pool_idx = (int)abt.pools_len;
-            bool ret = __margo_abt_add_external_pool(&abt, NULL, args.rpc_pool);
+            ret = __margo_abt_add_external_pool(&abt, NULL, args.rpc_pool);
             if (!ret) goto error;
 
         } else if (jrpc_pool) {
@@ -235,7 +235,7 @@ margo_instance_id margo_init_ext(const char*                   address,
             json_object_object_add(jrpc_pool, "access",
                                    json_object_new_string("mpmc"));
             rpc_pool_idx = abt.pools_len;
-            bool ret     = __margo_abt_add_pool_from_json(&abt, jrpc_pool);
+            ret          = __margo_abt_add_pool_from_json(&abt, jrpc_pool);
             json_object_put(jrpc_pool);
             if (!ret) goto error;
             /* add a __rpc_X__ ESs */
