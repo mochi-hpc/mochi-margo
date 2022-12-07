@@ -58,20 +58,18 @@ char* margo_get_config_opt(margo_instance_id mid, int options)
     if (options & MARGO_CONFIG_USE_NAMES) {
         json_object_object_add_ex(
             root, "progress_pool",
-            json_object_new_string(
-                mid->abt.pools[mid->abt.progress_pool_idx].name),
+            json_object_new_string(mid->abt.pools[mid->progress_pool_idx].name),
             flags);
         json_object_object_add_ex(
             root, "rpc_pool",
-            json_object_new_string(mid->abt.pools[mid->abt.rpc_pool_idx].name),
+            json_object_new_string(mid->abt.pools[mid->rpc_pool_idx].name),
             flags);
     } else {
         json_object_object_add_ex(
             root, "progress_pool",
-            json_object_new_uint64(mid->abt.progress_pool_idx), flags);
-        json_object_object_add_ex(root, "rpc_pool",
-                                  json_object_new_uint64(mid->abt.rpc_pool_idx),
-                                  flags);
+            json_object_new_uint64(mid->progress_pool_idx), flags);
+        json_object_object_add_ex(
+            root, "rpc_pool", json_object_new_uint64(mid->rpc_pool_idx), flags);
     }
     // serialize
     const char* content

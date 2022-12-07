@@ -145,26 +145,11 @@ typedef struct margo_abt {
     ABT_mutex_memory mtx;
     /* margo instance owning this margo_abt */
     margo_instance_id mid;
-
-    unsigned progress_pool_idx;
-    unsigned rpc_pool_idx;
 } margo_abt_t;
-
-/* User-provided initialization information */
-typedef struct margo_abt_user_args {
-    ABT_pool       progress_pool;        /* user-provided ABT_pool */
-    ABT_pool       rpc_pool;             /* user-provided ABT_pool */
-    json_object_t* jprogress_pool;       /* "progres_pool" field */
-    json_object_t* jrpc_pool;            /* "handler_pool" field */
-    json_object_t* juse_progress_thread; /* "use_progress_thread" field */
-    json_object_t* jrpc_thread_count;    /* "rpc_thread_count" field */
-} margo_abt_user_args_t;
 
 bool __margo_abt_validate_json(const json_object_t* config);
 
-bool __margo_abt_init_from_json(const json_object_t*         config,
-                                const margo_abt_user_args_t* uargs,
-                                margo_abt_t*);
+bool __margo_abt_init_from_json(const json_object_t* config, margo_abt_t*);
 
 json_object_t* __margo_abt_to_json(const margo_abt_t* abt, int options);
 

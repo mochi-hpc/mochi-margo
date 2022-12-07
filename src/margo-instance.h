@@ -61,8 +61,8 @@ struct margo_instance {
     struct margo_hg hg;
 
     /* Progress pool and default handler pool (index from abt.pools) */
-    //_Atomic unsigned progress_pool_idx;
-    //_Atomic unsigned rpc_pool_idx;
+    _Atomic unsigned progress_pool_idx;
+    _Atomic unsigned rpc_pool_idx;
 
     /* internal to margo for this particular instance */
     ABT_thread hg_progress_tid;
@@ -116,10 +116,9 @@ struct margo_instance {
     int abt_profiling_enabled;
 };
 
-#define MARGO_PROGRESS_POOL(mid) \
-    (mid)->abt.pools[mid->abt.progress_pool_idx].pool
+#define MARGO_PROGRESS_POOL(mid) (mid)->abt.pools[mid->progress_pool_idx].pool
 
-#define MARGO_RPC_POOL(mid) (mid)->abt.pools[mid->abt.rpc_pool_idx].pool
+#define MARGO_RPC_POOL(mid) (mid)->abt.pools[mid->rpc_pool_idx].pool
 
 struct margo_request_struct {
     margo_eventual_t     eventual;
