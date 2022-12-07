@@ -122,6 +122,11 @@
         "input": {"argobots":{"pools":true}}
     },
 
+    "pool_should_be_an_object": {
+        "pass": false,
+        "input": {"argobots":{"pools":[true]}}
+    },
+
     "pool_name_must_be_a_string": {
         "pass": false,
         "input": {"argobots":{"pools":[{"name":true}]}}
@@ -175,6 +180,11 @@
     "xstreams_should_be_an_array": {
         "pass": false,
         "input": {"argobots":{"xstreams":true}}
+    },
+
+    "xstreams_should_contain_objects": {
+        "pass": false,
+        "input": {"argobots":{"xstreams":[true]}}
     },
 
     "xstreams_name_should_be_a_string": {
@@ -338,5 +348,39 @@
     "rpc_pool_integer_should_be_valid": {
         "pass": false,
         "input": {"argobots":{"pools":[{}],"xstreams":[{"scheduler":{"pools":[0]}}]},"rpc_pool":42}
-    }
+    },
+
+    "primary_pool": {
+        "pass": true,
+        "input": {"argobots":{"pools":[{"name":"__primary__","kind":"fifo"}]}},
+        "output": {"argobots":{"pools":[{"kind":"fifo","name":"__primary__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__primary__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":0,"rpc_pool":0}
+    },
+
+    "primary_xstream": {
+        "pass": true,
+        "input": {"argobots":{"pools":[{"name":"__primary__","kind":"fifo"}],"xstreams":[{"name":"__primary__","scheduler":{"pools":[0]}}]}},
+        "output": {"argobots":{"pools":[{"kind":"fifo","name":"__primary__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__primary__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":0,"rpc_pool":0}
+    },
+
+    "primary_xstream_without_scheduler": {
+        "pass": false,
+        "input": {"argobots":{"xstreams":[{"name":"__primary__"}]}}
+    },
+
+    "primary_xstream_without_pool": {
+        "pass": false,
+        "input": {"argobots":{"xstreams":[{"name":"__primary__","scheduler":{"pools":[]}}]}}
+    },
+
+    "define_primary_pool/with_abt_init": {
+        "pass": false,
+        "abt_init": true,
+        "input": {"argobots":{"pools":[{"name":"__primary__","kind":"fifo"}]}}
+    },
+
+    "define_primary_xstream/with_abt_init": {
+        "pass": false,
+        "abt_init": true,
+        "input": {"argobots":{"pools":[{"name":"__primary__","kind":"fifo"}],"xstreams":[{"name":"__primary__","scheduler":{"pools":[0]}}]}}
+    },
 }

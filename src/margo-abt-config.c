@@ -48,7 +48,18 @@ bool __margo_abt_pool_validate_json(const json_object_t* jpool)
     /* default: generated */
     ASSERT_CONFIG_HAS_OPTIONAL(jpool, "name", string, "pool");
     json_object_t* jname = json_object_object_get(jpool, "name");
-    if (jname) CONFIG_NAME_IS_VALID(jpool);
+    if (jname) {
+        CONFIG_NAME_IS_VALID(jpool);
+        if (strcmp(json_object_get_string(jname), "__primary__") == 0) {
+            if (ABT_initialized() == ABT_SUCCESS) {
+                margo_error(
+                    0,
+                    "Defining a pool named \"__primary__\" is not"
+                    " allowed when Argobots is initialized before Margo");
+                return false;
+            }
+        }
+    }
 
 #undef HANDLE_CONFIG_ERROR
 
@@ -95,7 +106,7 @@ bool __margo_abt_pool_init_from_json(const json_object_t* jpool,
     int ret;
     if (kind != (ABT_pool_kind)(-1)) {
         if (!pool->access) pool->access = strdup("mpmc");
-        ret = ABT_pool_create_basic(kind, access, ABT_TRUE, &pool->pool);
+        ret = ABT_pool_create_basic(kind, access, ABT_FALSE, &pool->pool);
         if (ret != ABT_SUCCESS) {
             margo_error(0, "ABT_pool_create_basic failed with error code %d",
                         ret);
@@ -351,14 +362,7 @@ bool __margo_abt_sched_init_external(ABT_sched          sched,
     }
 
     for (int i = 0; i < num_pools; i++) {
-        unsigned j;
-        for (j = 0; j < abt->pools_len; j++) {
-            if (pools[i] == abt->pools[j].pool) {
-                s->pools[i] = j;
-                break;
-            }
-        }
-        if (j == abt->pools_len) {
+        if (__margo_abt_find_pool_by_handle(abt, pools[i]) < 0) {
             margo_error(
                 0, "A pool associated with this external ES is not registered");
             goto error;
@@ -421,7 +425,6 @@ bool __margo_abt_xstream_validate_json(const json_object_t* jxstream,
 
 #define HANDLE_CONFIG_ERROR return false
 
-    ASSERT_CONFIG_HAS_OPTIONAL(jxstream, "scheduler", object, "xstream");
     ASSERT_CONFIG_HAS_OPTIONAL(jxstream, "name", string, "xstream");
     ASSERT_CONFIG_HAS_OPTIONAL(jxstream, "cpubind", int, "xstream");
     ASSERT_CONFIG_HAS_OPTIONAL(jxstream, "affinity", array, "xstream");
@@ -461,9 +464,10 @@ bool __margo_abt_xstream_validate_json(const json_object_t* jxstream,
         const char* name = json_object_get_string(jname);
         if (strcmp(name, "__primary__") == 0) {
             if (ABT_initialized() == ABT_SUCCESS) {
-                margo_error(0,
-                            "Defining an xstream named \"__primary__\" is not"
-                            " allowed when Argobots is initialized manually");
+                margo_error(
+                    0,
+                    "Defining an xstream named \"__primary__\" is not"
+                    " allowed when Argobots is initialized before Margo");
                 return false;
             }
             if (!jsched) {
@@ -518,9 +522,6 @@ bool __margo_abt_xstream_init_from_json(const json_object_t* jxstream,
         /* not the primary ES, create a new ES */
         ret                = ABT_xstream_create(x->sched.sched, &(x->xstream));
         x->margo_free_flag = true;
-        for (unsigned i = 0; i < x->sched.num_pools; i++)
-            ((margo_abt_pool_t*)abt->pools)[x->sched.pools[i]].used_by_primary
-                = true;
     } else {
         /* primary ES, change its scheduler */
         ret = ABT_xstream_self(&x->xstream);
@@ -531,27 +532,15 @@ bool __margo_abt_xstream_init_from_json(const json_object_t* jxstream,
                         ret);
             goto error;
         }
-        ABT_bool is_primary;
-        ret = ABT_xstream_is_primary(x->xstream, &is_primary);
-        if (ret != ABT_SUCCESS) {
-            margo_error(0,
-                        "Could not check if current ES is primary "
-                        "(ABT_xstream_is_primary returned %d)",
-                        ret);
-            goto error;
-        }
-        if (!is_primary) {
-            margo_error(
-                0,
-                "\"__primary__\" ES can only be defined from the primary ES");
-            goto error;
-        }
         ret = ABT_xstream_set_main_sched(x->xstream, x->sched.sched);
         if (ret != ABT_SUCCESS) {
             margo_error(0,
                         "Could not set the main scheduler of the primary ES");
             goto error;
         }
+        for (unsigned i = 0; i < x->sched.num_pools; i++)
+            ((margo_abt_pool_t*)abt->pools)[x->sched.pools[i]].used_by_primary
+                = true;
     }
 
     if (ret == ABT_SUCCESS) {
@@ -577,6 +566,7 @@ bool __margo_abt_xstream_init_external(const char*          name,
 {
     x->name    = name ? strdup(name) : generate_unused_xstream_name(abt);
     x->xstream = handle;
+    x->margo_free_flag = false;
 
     ABT_sched sched;
     int       ret = ABT_xstream_get_main_sched(handle, &sched);
@@ -926,13 +916,6 @@ bool __margo_abt_init_from_json(const json_object_t* jabt, margo_abt_t* a)
             if (!result) goto error;
             a->xstreams_len += 1;
         } else { /* ABT was initialized before margo */
-            if (primary_pool_idx > 0) {
-                margo_error(a->mid,
-                            "Defining a pool named \"__primary__\" is not"
-                            " allowed when Argobots is initialized manually");
-                result = false;
-                goto error;
-            }
             ABT_xstream self_es;
             ABT_xstream_self(&self_es);
             ABT_xstream_get_main_pools(self_es, 1, &primary_pool);
