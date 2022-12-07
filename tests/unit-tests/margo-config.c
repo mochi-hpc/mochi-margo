@@ -185,6 +185,25 @@ static MunitResult test_json_abt_config(const MunitParameter params[], void* dat
     munit_assert_not_null(pass);
     munit_assert(json_object_is_type(pass, json_type_boolean));
 
+    int options = 0;
+    struct json_object* hide_external = json_object_object_get(config, "hide_external");
+    if(hide_external) munit_assert(json_object_is_type(hide_external, json_type_boolean));
+    struct json_object* use_names = json_object_object_get(config, "use_names");
+    if(use_names) munit_assert(json_object_is_type(use_names, json_type_boolean));
+    if(hide_external && json_object_get_boolean(hide_external))
+        options |= MARGO_CONFIG_HIDE_EXTERNAL;
+    if(use_names && json_object_get_boolean(use_names))
+        options |= MARGO_CONFIG_USE_NAMES;
+
+    struct json_object* env = json_object_object_get(config, "env");
+    if(env) {
+        munit_assert(json_object_is_type(env, json_type_object));
+        json_object_object_foreach(env, key, val) {
+            munit_assert(json_object_is_type(val, json_type_string));
+            setenv(key, json_object_get_string(val), 1);
+        }
+    }
+
     munit_logf(MUNIT_LOG_INFO, "initializing margo with config \"%s\"",
             config_name);
     init_info.json_config = json_object_to_json_string_ext(
@@ -199,7 +218,7 @@ static MunitResult test_json_abt_config(const MunitParameter params[], void* dat
         struct json_object* expected_config
             = json_object_object_get(config, "output");
         munit_assert_not_null(expected_config);
-        char* output_config_str = margo_get_config(mid);
+        char* output_config_str = margo_get_config_opt(mid, options);
         struct json_object* output_config
             = json_tokener_parse(output_config_str);
         munit_assert_not_null(output_config);

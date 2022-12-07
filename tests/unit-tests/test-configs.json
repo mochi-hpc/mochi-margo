@@ -5,10 +5,64 @@
         "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__primary__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__primary__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":0,"rpc_pool":0}
     },
 
+    "empty/hide_external": {
+        "pass": true,
+        "hide_external": true,
+        "input": {},
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__primary__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__primary__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":0,"rpc_pool":0}
+    },
+
+    "abt_mem_max_num_stacks": {
+        "pass": true,
+        "input": {"argobots":{"abt_mem_max_num_stacks": 12}},
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__primary__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__primary__"}],"abt_mem_max_num_stacks":12,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":0,"rpc_pool":0}
+    },
+
+    "abt_mem_max_num_stacks/env": {
+        "pass": true,
+        "env": {
+            "ABT_MEM_MAX_NUM_STACKS": "16"
+        },
+        "input": {"argobots":{"abt_mem_max_num_stacks": 12}},
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__primary__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__primary__"}],"abt_mem_max_num_stacks":16,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":0,"rpc_pool":0}
+    },
+
+    "abt_mem_max_num_stacks_must_be_an_integer": {
+        "pass": false,
+        "input": {"argobots":{"abt_mem_max_num_stacks": true}}
+    },
+
+    "abt_thread_stacksize": {
+        "pass": true,
+        "input": {"argobots":{"abt_thread_stacksize": 2000000}},
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__primary__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__primary__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2000000},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":0,"rpc_pool":0}
+    },
+
+    "abt_thread_stacksize/env": {
+        "pass": true,
+        "env": {
+            "ABT_THREAD_STACKSIZE": "2000002"
+        },
+        "input": {"argobots":{"abt_thread_stacksize": 2000000}},
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__primary__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__primary__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2000002},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":0,"rpc_pool":0}
+    },
+
+    "abt_thread_stacksize_must_be_an_integer": {
+        "pass": false,
+        "input": {"argobots":{"abt_thread_stacksize": true}}
+    },
+
     "use_progress_thread=true": {
         "pass": true,
         "input": {"use_progress_thread": true},
         "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__primary__","access":"mpmc"},{"kind":"fifo_wait","name":"__pool_1__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__primary__"},{"scheduler":{"type":"default","pools":[1]},"name":"__xstream_1__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":1,"rpc_pool":0}
+    },
+
+    "use_progress_thread=true/use_names": {
+        "pass": true,
+        "use_names": true,
+        "input": {"use_progress_thread": true},
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__primary__","access":"mpmc"},{"kind":"fifo_wait","name":"__pool_1__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":["__primary__"]},"name":"__primary__"},{"scheduler":{"type":"default","pools":["__pool_1__"]},"name":"__xstream_1__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":"__pool_1__","rpc_pool":"__primary__"}
     },
 
     "use_progress_thread=false": {
@@ -22,6 +76,14 @@
         "abt_init": true,
         "input": {},
         "output": {"argobots":{"pools":[{"kind":"external","name":"__primary__"}],"xstreams":[{"scheduler":{"type":"external","pools":[0]},"name":"__primary__"}]},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":0,"rpc_pool":0}
+    },
+
+    "empty/with_abt_init/hide_external": {
+        "pass": true,
+        "abt_init": true,
+        "hide_external": true,
+        "input": {},
+        "output": {"argobots":{"pools":[],"xstreams":[]},"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":0,"rpc_pool":0}
     },
 
     "use_progress_thread=true/with_abt_init": {
@@ -165,6 +227,11 @@
     "pool_kind_must_not_be_external": {
         "pass": false,
         "input": {"argobots":{"pools":[{"kind":"external"}]}}
+    },
+
+    "pool_kind_custom_not_supported": {
+        "pass": false,
+        "input": {"argobots":{"pools":[{"kind":"my_custom_pool_kind"}]}}
     },
 
     "pool_access_must_be_a_string": {
