@@ -9,11 +9,16 @@ noinst_HEADERS += src/margo-abt-macros.h \
                   src/margo-prio-pool.h\
                   src/margo-timer-private.h \
                   src/margo-monitoring-internal.h \
+                  src/margo-abt-config.h \
+                  src/margo-hg-config.h \
                   src/uthash.h\
                   src/utlist.h
 
 src_libmargo_la_SOURCES += \
  src/margo-core.c \
+ src/margo-config.c \
+ src/margo-abt-config.c \
+ src/margo-hg-config.c \
  src/margo-abt-profiling.c \
  src/margo-bulk-pool.c \
  src/margo-globals.c \

@@ -59,22 +59,19 @@ static FILE* margo_output_file_open(margo_instance_id mid,
      * configuration
      */
     if (revised_file_name[0] == '/') {
-        absolute_file_name = revised_file_name;
+        absolute_file_name = strdup(revised_file_name);
     } else {
-        absolute_file_name
-            = malloc(strlen(json_object_get_string(
-                         json_object_object_get(mid->json_cfg, "output_dir")))
-                     + strlen(revised_file_name) + 2);
+        absolute_file_name = malloc(strlen(mid->abt.profiling_dir)
+                                    + strlen(revised_file_name) + 2);
         if (!absolute_file_name) {
             MARGO_ERROR(mid, "malloc() failure: %d\n", errno);
             free(revised_file_name);
             return NULL;
         }
-        sprintf(absolute_file_name, "%s/%s",
-                json_object_get_string(
-                    json_object_object_get(mid->json_cfg, "output_dir")),
+        sprintf(absolute_file_name, "%s/%s", mid->abt.profiling_dir,
                 revised_file_name);
     }
+    free(revised_file_name);
 
     /* actually open file */
     outfile = fopen(absolute_file_name, "a");
@@ -82,15 +79,9 @@ static FILE* margo_output_file_open(margo_instance_id mid,
         MARGO_ERROR(mid, "fopen(%s) failure: %d\n", absolute_file_name, errno);
 
     if (resolved_file_name) {
-        if (absolute_file_name != revised_file_name) {
-            *resolved_file_name = absolute_file_name;
-            free(revised_file_name);
-        } else {
-            *resolved_file_name = revised_file_name;
-        }
+        *resolved_file_name = absolute_file_name;
     } else {
-        if (absolute_file_name != revised_file_name) free(absolute_file_name);
-        free(revised_file_name);
+        free(absolute_file_name);
     }
 
     return (outfile);
@@ -102,8 +93,8 @@ static void margo_abt_profiling_dump_fp(margo_instance_id mid, FILE* outfile)
     time(&ltime);
 
     fprintf(outfile, "# Margo diagnostics (Argobots profile)\n");
-    fprintf(outfile, "# Addr Hash and Address Name: %lu,%s\n",
-            mid->self_addr_hash, mid->self_addr_str);
+    fprintf(outfile, "# Addr Hash and Address Name: %s\n",
+            mid->hg.self_addr_str);
     fprintf(outfile, "# %s\n", ctime(&ltime));
 
     if (g_margo_abt_prof_started) {
@@ -184,7 +175,7 @@ int margo_state_dump(margo_instance_id mid,
     time(&ltime);
 
     fprintf(outfile, "# Margo state dump\n");
-    fprintf(outfile, "# Mercury address: %s\n", mid->self_addr_str);
+    fprintf(outfile, "# Mercury address: %s\n", mid->hg.self_addr_str);
     fprintf(outfile, "# %s\n", ctime(&ltime));
 
     fprintf(outfile,
@@ -214,19 +205,10 @@ int margo_state_dump(margo_instance_id mid,
 
     fprintf(outfile,
             "\n# Margo Argobots profiling summary\n"
-            "\n# NOTE: this is only available if mid->diag_enabled == 1 above "
-            "*and* Argobots\n"
-            "# has been compiled with tool interface support.  You can turn on "
-            "Margo\n"
-            "# diagnostics at runtime by calling margo_diag_start() "
-            "programatically, by\n"
-            "# setting the MARGO_ENABLE_DIAGNOSTICS=1 environment variable, or "
-            "by setting\n"
-            "# the \"enable_diagnostics\" JSON configuration parameter. You "
-            "can enable the\n"
-            "# Argobots tool interface by compiling Argobots with the "
-            "--enable-tool or the\n"
-            "# +tool spack variant.\n"
+            "\n# NOTE: this is only available if Argobots\n"
+            "# has been compiled with tool interface support\n"
+            "# by compiling Argobots with --enable-tool or\n"
+            "# the +tool spack variant.\n"
             "# ==========================\n");
     margo_abt_profiling_dump_fp(mid, outfile);
 
@@ -254,13 +236,13 @@ int margo_state_dump(margo_instance_id mid,
     fprintf(outfile, "# ================================================\n");
 
     /* for each pool that margo is aware of */
-    for (i = 0; i < (int)mid->num_abt_pools; i++) {
+    for (i = 0; i < (int)mid->abt.pools_len; i++) {
         /* Display stack trace of ULTs within that pool.  This will not
          * include any ULTs that are presently executing (including the
          * caller).
          */
-        fprintf(outfile, "# Pool: %s\n", margo_get_pool_name(mid, i));
-        ABT_info_print_thread_stacks_in_pool(outfile, mid->abt_pools[i].pool);
+        fprintf(outfile, "# Pool: %s\n", mid->abt.pools[i].name);
+        ABT_info_print_thread_stacks_in_pool(outfile, mid->abt.pools[i].pool);
     }
 
     if (outfile != stdout) fclose(outfile);

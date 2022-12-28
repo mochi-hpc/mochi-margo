@@ -175,5 +175,7 @@ if test "$enable_coverage" = "yes" ; then
     LDFLAGS="--coverage -lgcov"
 fi
 
+AC_CONFIG_LINKS([tests/unit-tests/test-configs.json:tests/unit-tests/test-configs.json])
+
 AC_CONFIG_FILES([Makefile maint/margo.pc])
 AC_OUTPUT

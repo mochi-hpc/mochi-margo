@@ -66,8 +66,9 @@ static MunitResult rpc_pool_kind(const MunitParameter params[], void* data)
     /* check resulting configuration */
     runtime_config = margo_get_config(ctx->mid);
 
+    fprintf(stderr, "%s\n", runtime_config);
     /* just one pool with the __rpc__ name */
-    count = count_occurrence(runtime_config, "__rpc__");
+    count = count_occurrence(runtime_config, "my_pool");
     munit_assert_int_goto(count, ==, 1, error);
 
     /* just one pool with the prio_wait kind */
@@ -85,7 +86,7 @@ error:
 }
 
 static char * json_params[] = {
-    "{ \"rpc_thread_count\":2, \"argobots\":{ \"pools\":[ { \"name\":\"__rpc__\", \"kind\":\"prio_wait\" } ] } }", NULL
+    "{ \"rpc_thread_count\":0, \"argobots\":{ \"pools\":[ { \"name\":\"my_pool\", \"kind\":\"prio_wait\" } ] } }", NULL
 };
 
 static MunitParameterEnum rpc_pool_kind_params[] = {

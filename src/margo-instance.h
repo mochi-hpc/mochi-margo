@@ -18,6 +18,9 @@
 #include <math.h>
 
 #include "margo.h"
+#include "margo-config.h"
+#include "margo-abt-config.h"
+#include "margo-hg-config.h"
 #include "margo-abt-macros.h"
 #include "margo-logging.h"
 #include "margo-monitoring.h"
@@ -49,31 +52,17 @@ struct margo_registered_rpc {
     struct margo_registered_rpc* next;          /* pointer to next in list */
 };
 
-/* Struct to track pools created by margo along with a flag indicating if
- * margo is responsible for explicitly free'ing the pool or not.
- */
-struct margo_abt_pool {
-    ABT_pool pool;            /* Argobots pool */
-    bool     margo_free_flag; /* flag if Margo is responsible for freeing */
-};
-
 struct margo_instance {
-    /* json config */
-    struct json_object* json_cfg;
 
-    /* mercury/argobots state */
-    hg_class_t*   hg_class;
-    hg_context_t* hg_context;
-    uint8_t       hg_ownership;
-    ABT_pool      progress_pool;
-    ABT_pool      rpc_pool;
+    /* Argobots environment */
+    struct margo_abt abt;
 
-    /* xstreams and pools built from argobots config */
-    struct margo_abt_pool* abt_pools;
-    ABT_xstream*           abt_xstreams;
-    unsigned               num_abt_pools;
-    unsigned               num_abt_xstreams;
-    bool*                  owns_abt_xstream;
+    /* Mercury environment */
+    struct margo_hg hg;
+
+    /* Progress pool and default handler pool (index from abt.pools) */
+    _Atomic unsigned progress_pool_idx;
+    _Atomic unsigned rpc_pool_idx;
 
     /* internal to margo for this particular instance */
     ABT_thread hg_progress_tid;
@@ -108,6 +97,7 @@ struct margo_instance {
     struct margo_timer_list* timer_list;
 
     /* linked list of free hg handles and a hash of in-use handles */
+    size_t                        handle_cache_size;
     struct margo_handle_cache_el* free_handle_list;
     struct margo_handle_cache_el* used_handle_hash;
     ABT_mutex handle_cache_mtx; /* mutex protecting access to above caches */
@@ -123,10 +113,12 @@ struct margo_instance {
     ABT_key current_rpc_id_key;
 
     /* optional diagnostics data tracking */
-    int      abt_profiling_enabled;
-    char*    self_addr_str;
-    uint64_t self_addr_hash;
+    int abt_profiling_enabled;
 };
+
+#define MARGO_PROGRESS_POOL(mid) (mid)->abt.pools[mid->progress_pool_idx].pool
+
+#define MARGO_RPC_POOL(mid) (mid)->abt.pools[mid->rpc_pool_idx].pool
 
 struct margo_request_struct {
     margo_eventual_t     eventual;
@@ -141,11 +133,11 @@ struct margo_request_struct {
 // Data registered to an RPC id with HG_Register_data
 struct margo_rpc_data {
     margo_instance_id mid;
-    ABT_pool          pool;
-    char*             rpc_name;
-    hg_proc_cb_t      in_proc_cb;  /* user-provided input proc */
-    hg_proc_cb_t      out_proc_cb; /* user-provided output proc */
-    void*             user_data;
+    _Atomic(ABT_pool) pool;
+    char*        rpc_name;
+    hg_proc_cb_t in_proc_cb;  /* user-provided input proc */
+    hg_proc_cb_t out_proc_cb; /* user-provided output proc */
+    void*        user_data;
     void (*user_free_callback)(void*);
 };
 

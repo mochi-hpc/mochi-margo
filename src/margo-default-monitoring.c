@@ -508,9 +508,9 @@ static inline void clear_bulk_session_pool(default_monitor_state_t* monitor)
  * Functions related to implementing the monitor's callbacks
  * ======================================================================== */
 
-static void* margo_default_monitor_initialize(margo_instance_id   mid,
-                                              void*               uargs,
-                                              struct json_object* config)
+static void* __margo_default_monitor_initialize(margo_instance_id   mid,
+                                                void*               uargs,
+                                                struct json_object* config)
 {
     (void)uargs;
     default_monitor_state_t* monitor = calloc(1, sizeof(*monitor));
@@ -625,7 +625,7 @@ static void* margo_default_monitor_initialize(margo_instance_id   mid,
     return (void*)monitor;
 }
 
-static void margo_default_monitor_finalize(void* uargs)
+static void __margo_default_monitor_finalize(void* uargs)
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     if (!monitor) return;
@@ -694,9 +694,9 @@ static void margo_default_monitor_finalize(void* uargs)
     free(monitor);
 }
 
-static const char* margo_default_monitor_name() { return "default"; }
+static const char* __margo_default_monitor_name() { return "default"; }
 
-static struct json_object* margo_default_monitor_config(void* uargs)
+static struct json_object* __margo_default_monitor_config(void* uargs)
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     if (!monitor) return NULL;
@@ -738,10 +738,10 @@ static struct json_object* margo_default_monitor_config(void* uargs)
 }
 
 static void
-margo_default_monitor_on_register(void*                         uargs,
-                                  double                        timestamp,
-                                  margo_monitor_event_t         event_type,
-                                  margo_monitor_register_args_t event_args)
+__margo_default_monitor_on_register(void*                         uargs,
+                                    double                        timestamp,
+                                    margo_monitor_event_t         event_type,
+                                    margo_monitor_register_args_t event_args)
 {
     (void)timestamp;
     if (event_type == MARGO_MONITOR_FN_START) return;
@@ -756,10 +756,10 @@ margo_default_monitor_on_register(void*                         uargs,
 }
 
 static void
-margo_default_monitor_on_progress(void*                         uargs,
-                                  double                        timestamp,
-                                  margo_monitor_event_t         event_type,
-                                  margo_monitor_progress_args_t event_args)
+__margo_default_monitor_on_progress(void*                         uargs,
+                                    double                        timestamp,
+                                    margo_monitor_event_t         event_type,
+                                    margo_monitor_progress_args_t event_args)
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
 
@@ -802,10 +802,10 @@ margo_default_monitor_on_progress(void*                         uargs,
 }
 
 static void
-margo_default_monitor_on_trigger(void*                        uargs,
-                                 double                       timestamp,
-                                 margo_monitor_event_t        event_type,
-                                 margo_monitor_trigger_args_t event_args)
+__margo_default_monitor_on_trigger(void*                        uargs,
+                                   double                       timestamp,
+                                   margo_monitor_event_t        event_type,
+                                   margo_monitor_trigger_args_t event_args)
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     if (!monitor->enable_statistics) return;
@@ -821,10 +821,10 @@ margo_default_monitor_on_trigger(void*                        uargs,
 }
 
 static void
-margo_default_monitor_on_create(void*                       uargs,
-                                double                      timestamp,
-                                margo_monitor_event_t       event_type,
-                                margo_monitor_create_args_t event_args)
+__margo_default_monitor_on_create(void*                       uargs,
+                                  double                      timestamp,
+                                  margo_monitor_event_t       event_type,
+                                  margo_monitor_create_args_t event_args)
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     if (!monitor->enable_statistics) return;
@@ -868,10 +868,10 @@ margo_default_monitor_on_create(void*                       uargs,
     } while (0)
 
 static void
-margo_default_monitor_on_forward(void*                        uargs,
-                                 double                       timestamp,
-                                 margo_monitor_event_t        event_type,
-                                 margo_monitor_forward_args_t event_args)
+__margo_default_monitor_on_forward(void*                        uargs,
+                                   double                       timestamp,
+                                   margo_monitor_event_t        event_type,
+                                   margo_monitor_forward_args_t event_args)
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     if (!monitor->enable_statistics) return;
@@ -930,10 +930,10 @@ margo_default_monitor_on_forward(void*                        uargs,
 }
 
 static void
-margo_default_monitor_on_set_input(void*                          uargs,
-                                   double                         timestamp,
-                                   margo_monitor_event_t          event_type,
-                                   margo_monitor_set_input_args_t event_args)
+__margo_default_monitor_on_set_input(void*                          uargs,
+                                     double                         timestamp,
+                                     margo_monitor_event_t          event_type,
+                                     margo_monitor_set_input_args_t event_args)
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     if (!monitor->enable_statistics) return;
@@ -952,11 +952,11 @@ margo_default_monitor_on_set_input(void*                          uargs,
     }
 }
 
-static void
-margo_default_monitor_on_set_output(void*                           uargs,
-                                    double                          timestamp,
-                                    margo_monitor_event_t           event_type,
-                                    margo_monitor_set_output_args_t event_args)
+static void __margo_default_monitor_on_set_output(
+    void*                           uargs,
+    double                          timestamp,
+    margo_monitor_event_t           event_type,
+    margo_monitor_set_output_args_t event_args)
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     if (!monitor->enable_statistics) return;
@@ -975,11 +975,11 @@ margo_default_monitor_on_set_output(void*                           uargs,
     }
 }
 
-static void
-margo_default_monitor_on_get_output(void*                           uargs,
-                                    double                          timestamp,
-                                    margo_monitor_event_t           event_type,
-                                    margo_monitor_get_output_args_t event_args)
+static void __margo_default_monitor_on_get_output(
+    void*                           uargs,
+    double                          timestamp,
+    margo_monitor_event_t           event_type,
+    margo_monitor_get_output_args_t event_args)
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     if (!monitor->enable_statistics) return;
@@ -998,10 +998,10 @@ margo_default_monitor_on_get_output(void*                           uargs,
 }
 
 static void
-margo_default_monitor_on_get_input(void*                          uargs,
-                                   double                         timestamp,
-                                   margo_monitor_event_t          event_type,
-                                   margo_monitor_get_input_args_t event_args)
+__margo_default_monitor_on_get_input(void*                          uargs,
+                                     double                         timestamp,
+                                     margo_monitor_event_t          event_type,
+                                     margo_monitor_get_input_args_t event_args)
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     if (!monitor->enable_statistics) return;
@@ -1019,11 +1019,11 @@ margo_default_monitor_on_get_input(void*                          uargs,
     }
 }
 
-static void
-margo_default_monitor_on_forward_cb(void*                           uargs,
-                                    double                          timestamp,
-                                    margo_monitor_event_t           event_type,
-                                    margo_monitor_forward_cb_args_t event_args)
+static void __margo_default_monitor_on_forward_cb(
+    void*                           uargs,
+    double                          timestamp,
+    margo_monitor_event_t           event_type,
+    margo_monitor_forward_cb_args_t event_args)
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     if (!monitor->enable_statistics) return;
@@ -1043,10 +1043,10 @@ margo_default_monitor_on_forward_cb(void*                           uargs,
 }
 
 static void
-margo_default_monitor_on_respond(void*                        uargs,
-                                 double                       timestamp,
-                                 margo_monitor_event_t        event_type,
-                                 margo_monitor_respond_args_t event_args)
+__margo_default_monitor_on_respond(void*                        uargs,
+                                   double                       timestamp,
+                                   margo_monitor_event_t        event_type,
+                                   margo_monitor_respond_args_t event_args)
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     if (!monitor->enable_statistics) return;
@@ -1067,11 +1067,11 @@ margo_default_monitor_on_respond(void*                        uargs,
     }
 }
 
-static void
-margo_default_monitor_on_respond_cb(void*                           uargs,
-                                    double                          timestamp,
-                                    margo_monitor_event_t           event_type,
-                                    margo_monitor_respond_cb_args_t event_args)
+static void __margo_default_monitor_on_respond_cb(
+    void*                           uargs,
+    double                          timestamp,
+    margo_monitor_event_t           event_type,
+    margo_monitor_respond_cb_args_t event_args)
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     if (!monitor->enable_statistics) return;
@@ -1090,10 +1090,11 @@ margo_default_monitor_on_respond_cb(void*                           uargs,
     }
 }
 
-static void margo_default_monitor_on_wait(void*                     uargs,
-                                          double                    timestamp,
-                                          margo_monitor_event_t     event_type,
-                                          margo_monitor_wait_args_t event_args)
+static void
+__margo_default_monitor_on_wait(void*                     uargs,
+                                double                    timestamp,
+                                margo_monitor_event_t     event_type,
+                                margo_monitor_wait_args_t event_args)
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     if (!monitor->enable_statistics) return;
@@ -1141,7 +1142,7 @@ static void margo_default_monitor_on_wait(void*                     uargs,
     }
 }
 
-static void margo_default_monitor_on_rpc_handler(
+static void __margo_default_monitor_on_rpc_handler(
     void*                            uargs,
     double                           timestamp,
     margo_monitor_event_t            event_type,
@@ -1225,10 +1226,10 @@ static void margo_default_monitor_on_rpc_handler(
 }
 
 static void
-margo_default_monitor_on_rpc_ult(void*                        uargs,
-                                 double                       timestamp,
-                                 margo_monitor_event_t        event_type,
-                                 margo_monitor_rpc_ult_args_t event_args)
+__margo_default_monitor_on_rpc_ult(void*                        uargs,
+                                   double                       timestamp,
+                                   margo_monitor_event_t        event_type,
+                                   margo_monitor_rpc_ult_args_t event_args)
 {
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
     if (!monitor->enable_statistics) return;
@@ -1254,10 +1255,10 @@ margo_default_monitor_on_rpc_ult(void*                        uargs,
 }
 
 static void
-margo_default_monitor_on_destroy(void*                        uargs,
-                                 double                       timestamp,
-                                 margo_monitor_event_t        event_type,
-                                 margo_monitor_destroy_args_t event_args)
+__margo_default_monitor_on_destroy(void*                        uargs,
+                                   double                       timestamp,
+                                   margo_monitor_event_t        event_type,
+                                   margo_monitor_destroy_args_t event_args)
 {
     (void)timestamp;
     default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
@@ -1273,11 +1274,11 @@ margo_default_monitor_on_destroy(void*                        uargs,
 }
 
 #define __MONITOR_FN(__event__)                                          \
-    static void margo_default_monitor_on_##__event__(                    \
+    static void __margo_default_monitor_on_##__event__(                  \
         void* uargs, double timestamp, margo_monitor_event_t event_type, \
         margo_monitor_##__event__##_args_t event_args)
 
-static void margo_default_monitor_on_bulk_create(
+static void __margo_default_monitor_on_bulk_create(
     void*                            uargs,
     double                           timestamp,
     margo_monitor_event_t            event_type,
@@ -1323,7 +1324,7 @@ static void margo_default_monitor_on_bulk_create(
     }
 }
 
-static void margo_default_monitor_on_bulk_transfer(
+static void __margo_default_monitor_on_bulk_transfer(
     void*                              uargs,
     double                             timestamp,
     margo_monitor_event_t              event_type,
@@ -1418,7 +1419,7 @@ static void margo_default_monitor_on_bulk_transfer(
     }
 }
 
-static void margo_default_monitor_on_bulk_transfer_cb(
+static void __margo_default_monitor_on_bulk_transfer_cb(
     void*                                 uargs,
     double                                timestamp,
     margo_monitor_event_t                 event_type,
@@ -1463,11 +1464,11 @@ __MONITOR_FN_EMPTY(user)
 
 struct margo_monitor __margo_default_monitor
     = {.uargs      = NULL,
-       .initialize = margo_default_monitor_initialize,
-       .finalize   = margo_default_monitor_finalize,
-       .name       = margo_default_monitor_name,
-       .config     = margo_default_monitor_config,
-#define X(__x__, __y__) .on_##__y__ = margo_default_monitor_on_##__y__,
+       .initialize = __margo_default_monitor_initialize,
+       .finalize   = __margo_default_monitor_finalize,
+       .name       = __margo_default_monitor_name,
+       .config     = __margo_default_monitor_config,
+#define X(__x__, __y__) .on_##__y__ = __margo_default_monitor_on_##__y__,
        MARGO_EXPAND_MONITOR_MACROS
 #undef X
 };
@@ -2305,9 +2306,10 @@ pool_time_series_to_json(const default_monitor_state_t* monitor)
             frame = frame->next;
         }
 
-        struct json_object* pool_json = json_object_new_object();
-        const char*         pool_name = margo_get_pool_name(monitor->mid, i);
-        json_object_object_add_ex(json, pool_name, pool_json,
+        struct json_object*    pool_json = json_object_new_object();
+        struct margo_pool_info pool_info;
+        margo_find_pool_by_index(monitor->mid, i, &pool_info);
+        json_object_object_add_ex(json, pool_info.name, pool_json,
                                   JSON_C_OBJECT_ADD_KEY_IS_NEW);
 
         struct json_object* timestamps = json_object_new_array_ext(array_size);
@@ -2355,11 +2357,17 @@ static void update_pool_time_series(struct default_monitor_state* monitor,
         ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->pool_time_series_mtx));
     size_t num_pools = margo_get_num_pools(monitor->mid);
     for (size_t i = 0; i < num_pools; i++) {
-        ABT_pool pool = ABT_POOL_NULL;
-        if (margo_get_pool_by_index(monitor->mid, i, &pool) != 0) { continue; }
+        struct margo_pool_info pool_info;
+        if (margo_find_pool_by_index(monitor->mid, i, &pool_info)
+            != HG_SUCCESS) {
+            continue;
+        }
         size_t pool_size, pool_total_size;
-        if (ABT_pool_get_size(pool, &pool_size) != ABT_SUCCESS) { continue; }
-        if (ABT_pool_get_total_size(pool, &pool_total_size) != ABT_SUCCESS) {
+        if (ABT_pool_get_size(pool_info.pool, &pool_size) != ABT_SUCCESS) {
+            continue;
+        }
+        if (ABT_pool_get_total_size(pool_info.pool, &pool_total_size)
+            != ABT_SUCCESS) {
             continue;
         }
         time_series_append(&(monitor->pool_size_time_series[i]), timestamp,

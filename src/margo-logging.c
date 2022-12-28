@@ -9,49 +9,49 @@
 
 static margo_log_level global_log_level = MARGO_LOG_WARNING;
 
-static void _margo_log_trace(void* uargs, const char* str)
+static void __margo_log_trace(void* uargs, const char* str)
 {
     (void)uargs;
     fprintf(stderr, "[trace] %s\n", str);
 }
 
-static void _margo_log_debug(void* uargs, const char* str)
+static void __margo_log_debug(void* uargs, const char* str)
 {
     (void)uargs;
     fprintf(stderr, "[debug] %s\n", str);
 }
 
-static void _margo_log_info(void* uargs, const char* str)
+static void __margo_log_info(void* uargs, const char* str)
 {
     (void)uargs;
     fprintf(stderr, "[info] %s\n", str);
 }
 
-static void _margo_log_warning(void* uargs, const char* str)
+static void __margo_log_warning(void* uargs, const char* str)
 {
     (void)uargs;
     fprintf(stderr, "[warning] %s\n", str);
 }
 
-static void _margo_log_error(void* uargs, const char* str)
+static void __margo_log_error(void* uargs, const char* str)
 {
     (void)uargs;
     fprintf(stderr, "[error] %s\n", str);
 }
 
-static void _margo_log_critical(void* uargs, const char* str)
+static void __margo_log_critical(void* uargs, const char* str)
 {
     (void)uargs;
     fprintf(stderr, "[critical] %s\n", str);
 }
 
 static struct margo_logger global_logger = {.uargs    = NULL,
-                                            .trace    = _margo_log_trace,
-                                            .debug    = _margo_log_debug,
-                                            .info     = _margo_log_info,
-                                            .warning  = _margo_log_warning,
-                                            .error    = _margo_log_error,
-                                            .critical = _margo_log_critical};
+                                            .trace    = __margo_log_trace,
+                                            .debug    = __margo_log_debug,
+                                            .info     = __margo_log_info,
+                                            .warning  = __margo_log_warning,
+                                            .error    = __margo_log_error,
+                                            .critical = __margo_log_critical};
 
 #define DEFINE_LOG_FN(__name__, __level__, __LEVEL__)                        \
     void __name__(margo_instance_id mid, const char* fmt, ...)               \
@@ -86,12 +86,12 @@ int margo_set_logger(margo_instance_id mid, const struct margo_logger* logger)
 {
     if (!logger) {
         mid->logger.uargs    = NULL;
-        mid->logger.trace    = _margo_log_trace;
-        mid->logger.debug    = _margo_log_debug;
-        mid->logger.info     = _margo_log_info;
-        mid->logger.warning  = _margo_log_warning;
-        mid->logger.error    = _margo_log_error;
-        mid->logger.critical = _margo_log_critical;
+        mid->logger.trace    = __margo_log_trace;
+        mid->logger.debug    = __margo_log_debug;
+        mid->logger.info     = __margo_log_info;
+        mid->logger.warning  = __margo_log_warning;
+        mid->logger.error    = __margo_log_error;
+        mid->logger.critical = __margo_log_critical;
         mid->log_level       = MARGO_LOG_WARNING;
     } else {
         mid->logger = *logger;
@@ -110,12 +110,12 @@ int margo_set_global_logger(const struct margo_logger* logger)
 {
     if (!logger) {
         global_logger.uargs    = NULL;
-        global_logger.trace    = _margo_log_trace;
-        global_logger.debug    = _margo_log_debug;
-        global_logger.info     = _margo_log_info;
-        global_logger.warning  = _margo_log_warning;
-        global_logger.error    = _margo_log_error;
-        global_logger.critical = _margo_log_critical;
+        global_logger.trace    = __margo_log_trace;
+        global_logger.debug    = __margo_log_debug;
+        global_logger.info     = __margo_log_info;
+        global_logger.warning  = __margo_log_warning;
+        global_logger.error    = __margo_log_error;
+        global_logger.critical = __margo_log_critical;
         global_log_level       = MARGO_LOG_WARNING;
     } else {
         global_logger = *logger;

@@ -121,6 +121,10 @@ int main(int argc, char** argv)
      */
     margo_wait_for_finalize(mid);
 
+    free(opts.hostfile);
+    free(opts.listen_addr);
+    free(opts.pool_kind);
+
     return (0);
 }
 
