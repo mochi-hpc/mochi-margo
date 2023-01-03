@@ -278,6 +278,20 @@ static MunitResult add_xstream_external(const MunitParameter params[], void* dat
     ret = margo_add_xstream_external(mid, "my_xstream", my_xstream2, true, &xstream_info);
     munit_assert_int(ret, ==, HG_INVALID_ARG);
 
+    // create an xstream with a pool that hasn't been registed and try to add it
+    ABT_pool my_pool = ABT_POOL_NULL;
+    r = ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE, &my_pool);
+    munit_assert_int(r, ==, ABT_SUCCESS);
+    ABT_xstream my_xstream3 = ABT_XSTREAM_NULL;
+    r = ABT_xstream_create_basic(ABT_SCHED_PRIO, 1, &my_pool, ABT_SCHED_CONFIG_NULL, &my_xstream3);
+    munit_assert_int(r, ==, ABT_SUCCESS);
+    ret = margo_add_xstream_external(mid, "my_xstream_3", my_xstream3, true, &xstream_info);
+    munit_assert_int(ret, ==, HG_INVALID_ARG);
+
+    // since my_xstream3 hasn't been added, free it manually
+    ABT_xstream_join(my_xstream3);
+    ABT_xstream_free(&my_xstream3);
+
     // since my_xstream2 hasn't been added, free it manually
     ABT_xstream_join(my_xstream2);
     ABT_xstream_free(&my_xstream2);
