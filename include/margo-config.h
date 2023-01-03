@@ -143,6 +143,7 @@ hg_return_t margo_add_pool_from_json(margo_instance_id       mid,
  * @param [in] mid Margo instance.
  * @param [in] name Name to give the pool (auto-generated if NULL).
  * @param [in] pool Pool handle.
+ * @param [in] take_ownership Give ownership to the Margo instance.
  * @param [out] info Resulting pool information.
  *
  * @return HG_SUCCESS or other HG error code.
@@ -150,6 +151,7 @@ hg_return_t margo_add_pool_from_json(margo_instance_id       mid,
 hg_return_t margo_add_pool_external(margo_instance_id       mid,
                                     const char*             name,
                                     ABT_pool                pool,
+                                    ABT_bool                take_ownership,
                                     struct margo_pool_info* info);
 
 /**
@@ -233,13 +235,15 @@ hg_return_t margo_add_xstream_from_json(margo_instance_id          mid,
  * @param [in] mid Margo instance.
  * @param [in] name Name to give the xstream (auto-generated if NULL).
  * @param [in] xstream ES handle.
+ * @param [in] take_ownership Give ownership to the Margo instance.
  * @param [out] info Resulting xstream information.
  *
  * @return HG_SUCCESS or other HG error code.
  */
-hg_return_t margo_add_xstream_external(margo_instance_id          mid,
-                                       const char*                name,
-                                       ABT_xstream                xstream,
+hg_return_t margo_add_xstream_external(margo_instance_id mid,
+                                       const char*       name,
+                                       ABT_xstream       xstream,
+                                       ABT_bool          take_ownership,
                                        struct margo_xstream_info* info);
 
 /**

@@ -89,14 +89,14 @@ static MunitResult add_pool_external(const MunitParameter params[], void* data)
 
     // create pool
     ABT_pool my_pool = ABT_POOL_NULL;
-    int r = ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE, &my_pool);
+    int r = ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_FALSE, &my_pool);
     munit_assert_int(r, ==, ABT_SUCCESS);
 
     hg_return_t ret;
 
     // add an external pool
     struct margo_pool_info pool_info = {0};
-    ret = margo_add_pool_external(mid, "my_pool", my_pool, &pool_info);
+    ret = margo_add_pool_external(mid, "my_pool", my_pool, true, &pool_info);
     munit_assert_int(ret, ==, HG_SUCCESS);
     munit_assert_int(pool_info.index, ==, 3);
     munit_assert_string_equal(pool_info.name, "my_pool");
@@ -127,16 +127,16 @@ static MunitResult add_pool_external(const MunitParameter params[], void* data)
     munit_assert_ptr_equal(pool_info2.pool, pool_info.pool);
 
     // try to add the same handle with a different name
-    ret = margo_add_pool_external(mid, "my_pool2", my_pool, &pool_info);
+    ret = margo_add_pool_external(mid, "my_pool2", my_pool, true, &pool_info);
     munit_assert_int(ret, ==, HG_INVALID_ARG);
 
     // create second pool
     ABT_pool my_pool2 = ABT_POOL_NULL;
-    r = ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_TRUE, &my_pool2);
+    r = ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, ABT_FALSE, &my_pool2);
     munit_assert_int(r, ==, ABT_SUCCESS);
 
     // try to add it with a name that exists
-    ret = margo_add_pool_external(mid, "my_pool", my_pool2, &pool_info);
+    ret = margo_add_pool_external(mid, "my_pool", my_pool2, true, &pool_info);
     munit_assert_int(ret, ==, HG_INVALID_ARG);
 
     // since my_pool2 hasn't been associated with any ES, we should free it manually
@@ -235,7 +235,7 @@ static MunitResult add_xstream_external(const MunitParameter params[], void* dat
 
     // add external xstream
     struct margo_xstream_info xstream_info = {0};
-    ret = margo_add_xstream_external(mid, "my_xstream", my_xstream, &xstream_info);
+    ret = margo_add_xstream_external(mid, "my_xstream", my_xstream, true, &xstream_info);
     munit_assert_int(ret, ==, HG_SUCCESS);
     munit_assert_int(xstream_info.index, ==, 6);
     munit_assert_string_equal(xstream_info.name, "my_xstream");
@@ -266,7 +266,7 @@ static MunitResult add_xstream_external(const MunitParameter params[], void* dat
     munit_assert_ptr_equal(xstream_info2.xstream, xstream_info.xstream);
 
     // try to add the same handle with a different name
-    ret = margo_add_xstream_external(mid, "my_xstream2", my_xstream, &xstream_info);
+    ret = margo_add_xstream_external(mid, "my_xstream2", my_xstream, true, &xstream_info);
     munit_assert_int(ret, ==, HG_INVALID_ARG);
 
     // create second xstream
@@ -275,16 +275,12 @@ static MunitResult add_xstream_external(const MunitParameter params[], void* dat
     munit_assert_int(r, ==, ABT_SUCCESS);
 
     // try to add it with a name that exists
-    ret = margo_add_xstream_external(mid, "my_xstream", my_xstream2, &xstream_info);
+    ret = margo_add_xstream_external(mid, "my_xstream", my_xstream2, true, &xstream_info);
     munit_assert_int(ret, ==, HG_INVALID_ARG);
 
     // since my_xstream2 hasn't been added, free it manually
     ABT_xstream_join(my_xstream2);
     ABT_xstream_free(&my_xstream2);
-
-    // TODO: Margo still has a reference to the xstream here so this is dangerous
-    ABT_xstream_join(my_xstream);
-    ABT_xstream_free(&my_xstream);
 
     margo_finalize(mid);
     return MUNIT_OK;

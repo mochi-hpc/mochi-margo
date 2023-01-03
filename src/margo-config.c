@@ -173,11 +173,13 @@ hg_return_t margo_add_pool_from_json(margo_instance_id       mid,
 hg_return_t margo_add_pool_external(margo_instance_id       mid,
                                     const char*             name,
                                     ABT_pool                pool,
+                                    ABT_bool                take_ownership,
                                     struct margo_pool_info* info)
 {
     if (!mid) return HG_INVALID_ARG;
     bool b = __margo_abt_add_external_pool(&mid->abt, name, pool);
     if (b) {
+        mid->abt.pools[mid->abt.pools_len - 1].margo_free_flag = take_ownership;
         if (info) {
             info->index = mid->abt.pools_len - 1;
             info->name  = mid->abt.pools[info->index].name;
@@ -273,14 +275,17 @@ hg_return_t margo_add_xstream_from_json(margo_instance_id          mid,
     }
 }
 
-hg_return_t margo_add_xstream_external(margo_instance_id          mid,
-                                       const char*                name,
-                                       ABT_xstream                xstream,
+hg_return_t margo_add_xstream_external(margo_instance_id mid,
+                                       const char*       name,
+                                       ABT_xstream       xstream,
+                                       ABT_bool          take_ownership,
                                        struct margo_xstream_info* info)
 {
     if (!mid) return HG_INVALID_ARG;
     bool b = __margo_abt_add_external_xstream(&mid->abt, name, xstream);
     if (b) {
+        mid->abt.xstreams[mid->abt.xstreams_len - 1].margo_free_flag
+            = take_ownership;
         if (info) {
             info->index   = mid->abt.xstreams_len - 1;
             info->name    = mid->abt.xstreams[info->index].name;
