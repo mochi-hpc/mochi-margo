@@ -80,8 +80,6 @@ bool __margo_abt_pool_init_external(const char*        name,
 typedef struct margo_abt_sched {
     ABT_sched sched;
     char*     type;
-    uint32_t* pools;
-    size_t    num_pools;
 } margo_abt_sched_t;
 
 bool __margo_abt_sched_validate_json(const json_object_t* sched,

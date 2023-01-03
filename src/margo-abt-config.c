@@ -306,9 +306,7 @@ bool __margo_abt_sched_init_from_json(const json_object_t* jsched,
 
     json_object_t* jpools     = json_object_object_get(jsched, "pools");
     size_t         jpools_len = jpools ? json_object_array_length(jpools) : 0;
-    s->pools                  = calloc(jpools_len, sizeof(*(s->pools)));
-    s->num_pools              = jpools_len;
-    ABT_pool* abt_pools       = malloc(jpools_len * sizeof(*abt_pools));
+    ABT_pool*      abt_pools  = malloc(jpools_len * sizeof(*abt_pools));
     for (unsigned i = 0; i < jpools_len; i++) {
         json_object_t* jpool    = json_object_array_get_idx(jpools, i);
         uint32_t       pool_idx = 0;
@@ -320,7 +318,6 @@ bool __margo_abt_sched_init_from_json(const json_object_t* jsched,
                 if (strcmp(abt->pools[pool_idx].name, pool_name) == 0) break;
             }
         }
-        s->pools[i]  = pool_idx;
         abt_pools[i] = abt->pools[pool_idx].pool;
     }
 
@@ -341,10 +338,8 @@ bool __margo_abt_sched_init_external(ABT_sched          sched,
                                      const margo_abt_t* abt,
                                      margo_abt_sched_t* s)
 {
-    s->type      = strdup("external");
-    s->sched     = sched;
-    s->pools     = NULL;
-    s->num_pools = 0;
+    s->type  = strdup("external");
+    s->sched = sched;
 
     int num_pools;
     int ret = ABT_sched_get_num_pools(sched, &num_pools);
@@ -354,8 +349,6 @@ bool __margo_abt_sched_init_external(ABT_sched          sched,
         goto error;
     }
 
-    s->num_pools    = (size_t)num_pools;
-    s->pools        = calloc(num_pools, sizeof(*s->pools));
     ABT_pool* pools = alloca(num_pools * sizeof(ABT_pool));
     ret             = ABT_sched_get_pools(sched, num_pools, 0, pools);
     if (ret != ABT_SUCCESS) {
@@ -386,26 +379,54 @@ json_object_t* __margo_abt_sched_to_json(const margo_abt_sched_t* s,
     int flags = JSON_C_OBJECT_ADD_KEY_IS_NEW | JSON_C_OBJECT_ADD_CONSTANT_KEY;
     json_object_object_add_ex(json, "type", json_object_new_string(s->type),
                               flags);
-    json_object_t* jpools = json_object_new_array_ext(s->num_pools);
-    for (uint32_t i = 0; i < s->num_pools; i++) {
+    int num_pools = 0;
+    int ret       = ABT_sched_get_num_pools(s->sched, &num_pools);
+
+    json_object_t* jpools = json_object_new_array_ext(num_pools);
+    json_object_object_add_ex(json, "pools", jpools, flags);
+
+    if (ret != ABT_SUCCESS) {
+        margo_error(abt->mid,
+                    "ABT_sched_get_num_pools failed with error code %d"
+                    " in __margo_abt_sched_to_json",
+                    ret);
+        goto finish;
+    }
+
+    for (uint32_t i = 0; i < (uint32_t)num_pools; i++) {
+        ABT_pool pool = ABT_POOL_NULL;
+        ret           = ABT_sched_get_pools(s->sched, 1, i, &pool);
+        if (ret != ABT_SUCCESS) {
+            margo_error(abt->mid,
+                        "ABT_sched_get_pools failed with error code %d"
+                        " in __margo_abt_sched_to_json",
+                        ret);
+            continue;
+        }
+        int pool_index = __margo_abt_find_pool_by_handle(abt, pool);
+        if (pool_index < 0) {
+            margo_error(abt->mid,
+                        "Could not find pool associated with scheduler"
+                        " in __margo_abt_sched_to_json");
+            continue;
+        }
         if ((options & MARGO_CONFIG_HIDE_EXTERNAL)
-            && (strcmp(abt->pools[s->pools[i]].kind, "external") == 0))
+            && (strcmp(abt->pools[pool_index].kind, "external") == 0))
             continue; // skip external pools if requested
         if (options & MARGO_CONFIG_USE_NAMES) {
             json_object_array_add(
-                jpools, json_object_new_string(abt->pools[s->pools[i]].name));
+                jpools, json_object_new_string(abt->pools[pool_index].name));
         } else {
-            json_object_array_add(jpools, json_object_new_uint64(s->pools[i]));
+            json_object_array_add(jpools, json_object_new_uint64(pool_index));
         }
     }
-    json_object_object_add_ex(json, "pools", jpools, flags);
+finish:
     return json;
 }
 
 void __margo_abt_sched_destroy(margo_abt_sched_t* s)
 {
     free(s->type);
-    free(s->pools);
     memset(s, 0, sizeof(*s));
 }
 
@@ -540,9 +561,33 @@ bool __margo_abt_xstream_init_from_json(const json_object_t* jxstream,
                         "Could not set the main scheduler of the primary ES");
             goto error;
         }
-        for (unsigned i = 0; i < x->sched.num_pools; i++)
-            ((margo_abt_pool_t*)abt->pools)[x->sched.pools[i]].used_by_primary
-                = true;
+
+        int num_pools = 0;
+        ret           = ABT_sched_get_num_pools(x->sched.sched, &num_pools);
+        if (ret != ABT_SUCCESS) {
+            margo_error(0,
+                        "Failed to get num pools from scheduler"
+                        " (ABT_sched_get_num_pools returned %d)",
+                        ret);
+            goto error;
+        }
+        for (unsigned i = 0; i < (unsigned)num_pools; i++) {
+            ABT_pool pool = ABT_POOL_NULL;
+            ret           = ABT_sched_get_pools(x->sched.sched, 1, i, &pool);
+            if (ret != ABT_SUCCESS) {
+                margo_error(0,
+                            "Failed to get pool %d from scheduler"
+                            " (ABT_sched_get_pools returned %d)",
+                            i, ret);
+                goto error;
+            }
+            int pool_idx = __margo_abt_find_pool_by_handle(abt, pool);
+            if (pool_idx < 0) {
+                margo_error(0, "Coult not find pool from handle");
+                goto error;
+            }
+            ((margo_abt_pool_t*)abt->pools)[pool_idx].used_by_primary = true;
+        }
     }
 
     if (ret == ABT_SUCCESS) {
@@ -583,9 +628,31 @@ bool __margo_abt_xstream_init_external(const char*          name,
     if (!__margo_abt_sched_init_external(sched, abt, &x->sched)) goto error;
 
     if (strcmp(name, "__primary__") == 0) {
-        for (unsigned i = 0; i < x->sched.num_pools; i++) {
-            ((margo_abt_pool_t*)abt->pools)[x->sched.pools[i]].used_by_primary
-                = true;
+        int num_pools = 0;
+        ret           = ABT_sched_get_num_pools(sched, &num_pools);
+        if (ret != ABT_SUCCESS) {
+            margo_error(0,
+                        "Coult not get the scheduler's number of pools "
+                        "(ABT_sched_get_num_pools returned %d)",
+                        ret);
+            goto error;
+        }
+        for (unsigned i = 0; i < (unsigned)num_pools; i++) {
+            ABT_pool pool = ABT_POOL_NULL;
+            ret           = ABT_sched_get_pools(x->sched.sched, 1, i, &pool);
+            if (ret != ABT_SUCCESS) {
+                margo_error(0,
+                            "Failed to get pool %d from scheduler"
+                            " (ABT_sched_get_pools returned %d)",
+                            i, ret);
+                goto error;
+            }
+            int pool_idx = __margo_abt_find_pool_by_handle(abt, pool);
+            if (pool_idx < 0) {
+                margo_error(0, "Coult not find pool from handle");
+                goto error;
+            }
+            ((margo_abt_pool_t*)abt->pools)[pool_idx].used_by_primary = true;
         }
     }
 
@@ -875,13 +942,24 @@ bool __margo_abt_init_from_json(const json_object_t* jabt, margo_abt_t* a)
     primary_pool_idx = __margo_abt_find_pool_by_name(a, "__primary__");
 
     if (primary_es_idx >= 0) {
-        primary_es_pool_idx = a->xstreams[primary_es_idx].sched.pools[0];
+        ABT_pool pool = ABT_POOL_NULL;
+        ret = ABT_xstream_get_main_pools(a->xstreams[primary_es_idx].xstream, 1,
+                                         &pool);
+        if (ret != ABT_SUCCESS) {
+            margo_error(0,
+                        "Could not get first pool of primary ES"
+                        " (ABT_xstream_get_main_pools returned %d)",
+                        ret);
+            result = false;
+            goto error;
+        }
+        primary_es_pool_idx = __margo_abt_find_pool_by_handle(a, pool);
         if (primary_pool_idx >= 0 && primary_pool_idx != primary_es_pool_idx) {
             margo_error(
                 a->mid,
                 "Pool with name \"__primary__\" should be the first pool"
                 " of the primary xstream");
-            return false;
+            result = false;
             goto error;
         }
     }
