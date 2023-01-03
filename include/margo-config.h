@@ -12,6 +12,7 @@
 extern "C" {
 #endif
 
+#include <mercury.h>
 #include <abt.h>
 
 #define DEPRECATED(msg) __attribute__((deprecated(msg)))
@@ -117,6 +118,41 @@ hg_return_t margo_find_pool_by_index(margo_instance_id       mid,
                                      struct margo_pool_info* info);
 
 /**
+ * @brief Creates a new Argobots pool according to the provided
+ * JSON description (following the same format as the pool objects
+ * in the Margo configuration) and fill the output margo_pool_info
+ * structure.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] json JSON-formatted description.
+ * @param [out] info Resulting pool information.
+ *
+ * @return HG_SUCCESS or other HG error code (e.g. HG_INVALID_ARG).
+ */
+hg_return_t margo_add_pool_from_json(margo_instance_id       mid,
+                                     const char*             json,
+                                     struct margo_pool_info* info);
+
+/**
+ * @brief Adds an existing Argobots pool for Margo to use.
+ *
+ * Important: it is the user's responsibility to ensure that the ABT_pool
+ * remains valid until the Margo instance is destroyed or until the
+ * pool is removed from the Margo instance.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] name Name to give the pool (auto-generated if NULL).
+ * @param [in] pool Pool handle.
+ * @param [out] info Resulting pool information.
+ *
+ * @return HG_SUCCESS or other HG error code.
+ */
+hg_return_t margo_add_pool_external(margo_instance_id       mid,
+                                    const char*             name,
+                                    ABT_pool                pool,
+                                    struct margo_pool_info* info);
+
+/**
  * @brief Structure used to retrieve information about margo-managed xstreams.
  */
 struct margo_xstream_info {
@@ -166,6 +202,45 @@ hg_return_t margo_find_xstream_by_name(margo_instance_id          mid,
 hg_return_t margo_find_xstream_by_index(margo_instance_id          mid,
                                         uint32_t                   index,
                                         struct margo_xstream_info* info);
+
+/**
+ * @brief Creates a new Argobots xstream according to the provided
+ * JSON description (following the same format as the xstream objects
+ * in the Margo configuration) and fill the output margo_xstream_info
+ * structure.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] json JSON-formatted description.
+ * @param [out] info Resulting xstream information.
+ *
+ * @return HG_SUCCESS or other HG error code (e.g. HG_INVALID_ARG).
+ */
+hg_return_t margo_add_xstream_from_json(margo_instance_id          mid,
+                                        const char*                json,
+                                        struct margo_xstream_info* info);
+
+/**
+ * @brief Adds an existing Argobots xstream for Margo to use.
+ *
+ * Note: any pool associated with the ES that is not yet registered
+ * with the Margo instance will be added to the instance as an external
+ * pool.
+ *
+ * Important: it is the user's responsibility to ensure that the ABT_xstream
+ * remains valid until the Margo instance is destroyed or until the
+ * xstream is removed from the Margo instance.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] name Name to give the xstream (auto-generated if NULL).
+ * @param [in] xstream ES handle.
+ * @param [out] info Resulting xstream information.
+ *
+ * @return HG_SUCCESS or other HG error code.
+ */
+hg_return_t margo_add_xstream_external(margo_instance_id          mid,
+                                       const char*                name,
+                                       ABT_xstream                xstream,
+                                       struct margo_xstream_info* info);
 
 /**
  * @brief Get a pool from the configuration.

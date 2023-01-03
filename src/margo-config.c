@@ -138,6 +138,56 @@ hg_return_t margo_find_pool_by_index(margo_instance_id       mid,
     return HG_SUCCESS;
 }
 
+hg_return_t margo_add_pool_from_json(margo_instance_id       mid,
+                                     const char*             json_str,
+                                     struct margo_pool_info* info)
+{
+    struct json_object*     json    = NULL;
+    struct json_tokener*    tokener = json_tokener_new();
+    enum json_tokener_error jerr;
+    if (json_str && json_str[0]) {
+        json = json_tokener_parse_ex(tokener, json_str, strlen(json_str));
+        if (!json) {
+            jerr = json_tokener_get_error(tokener);
+            margo_error(mid, "JSON parse error: %s",
+                        json_tokener_error_desc(jerr));
+            json_tokener_free(tokener);
+            return HG_INVALID_ARG;
+        }
+    }
+    json_tokener_free(tokener);
+    bool b = __margo_abt_add_pool_from_json(&mid->abt, json);
+    if (b) {
+        if (info) {
+            info->index = mid->abt.pools_len - 1;
+            info->name  = mid->abt.pools[info->index].name;
+            info->pool  = mid->abt.pools[info->index].pool;
+        }
+        return HG_SUCCESS;
+    } else {
+        return HG_INVALID_ARG;
+    }
+}
+
+hg_return_t margo_add_pool_external(margo_instance_id       mid,
+                                    const char*             name,
+                                    ABT_pool                pool,
+                                    struct margo_pool_info* info)
+{
+    if (!mid) return HG_INVALID_ARG;
+    bool b = __margo_abt_add_external_pool(&mid->abt, name, pool);
+    if (b) {
+        if (info) {
+            info->index = mid->abt.pools_len - 1;
+            info->name  = mid->abt.pools[info->index].name;
+            info->pool  = mid->abt.pools[info->index].pool;
+        }
+        return HG_SUCCESS;
+    } else {
+        return HG_INVALID_ARG;
+    }
+}
+
 hg_return_t margo_find_xstream_by_handle(margo_instance_id          mid,
                                          ABT_xstream                handle,
                                          struct margo_xstream_info* info)
@@ -188,6 +238,56 @@ hg_return_t margo_find_xstream_by_index(margo_instance_id          mid,
         info->index   = index;
     }
     return HG_SUCCESS;
+}
+
+hg_return_t margo_add_xstream_from_json(margo_instance_id          mid,
+                                        const char*                json_str,
+                                        struct margo_xstream_info* info)
+{
+    struct json_object*     json    = NULL;
+    struct json_tokener*    tokener = json_tokener_new();
+    enum json_tokener_error jerr;
+    if (json_str && json_str[0]) {
+        json = json_tokener_parse_ex(tokener, json_str, strlen(json_str));
+        if (!json) {
+            jerr = json_tokener_get_error(tokener);
+            margo_error(mid, "JSON parse error: %s",
+                        json_tokener_error_desc(jerr));
+            json_tokener_free(tokener);
+            return HG_INVALID_ARG;
+        }
+    }
+    json_tokener_free(tokener);
+    bool b = __margo_abt_add_xstream_from_json(&mid->abt, json);
+    if (b) {
+        if (info) {
+            info->index   = mid->abt.xstreams_len - 1;
+            info->name    = mid->abt.xstreams[info->index].name;
+            info->xstream = mid->abt.xstreams[info->index].xstream;
+        }
+        return HG_SUCCESS;
+    } else {
+        return HG_INVALID_ARG;
+    }
+}
+
+hg_return_t margo_add_xstream_external(margo_instance_id          mid,
+                                       const char*                name,
+                                       ABT_xstream                xstream,
+                                       struct margo_xstream_info* info)
+{
+    if (!mid) return HG_INVALID_ARG;
+    bool b = __margo_abt_add_external_xstream(&mid->abt, name, xstream);
+    if (b) {
+        if (info) {
+            info->index   = mid->abt.xstreams_len - 1;
+            info->name    = mid->abt.xstreams[info->index].name;
+            info->xstream = mid->abt.xstreams[info->index].xstream;
+        }
+        return HG_SUCCESS;
+    } else {
+        return HG_INVALID_ARG;
+    }
 }
 
 /* DEPRECATED FUNCTIONS */
