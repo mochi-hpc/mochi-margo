@@ -157,6 +157,7 @@ hg_return_t margo_add_pool_from_json(margo_instance_id       mid,
     }
     json_tokener_free(tokener);
     bool b = __margo_abt_add_pool_from_json(&mid->abt, json);
+    json_object_put(json);
     if (b) {
         if (info) {
             info->index = mid->abt.pools_len - 1;
@@ -259,6 +260,7 @@ hg_return_t margo_add_xstream_from_json(margo_instance_id          mid,
     }
     json_tokener_free(tokener);
     bool b = __margo_abt_add_xstream_from_json(&mid->abt, json);
+    json_object_put(json);
     if (b) {
         if (info) {
             info->index   = mid->abt.xstreams_len - 1;

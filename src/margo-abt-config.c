@@ -341,15 +341,17 @@ bool __margo_abt_sched_init_external(ABT_sched          sched,
                                      const margo_abt_t* abt,
                                      margo_abt_sched_t* s)
 {
-    s->type  = strdup("external");
-    s->sched = sched;
+    s->type      = strdup("external");
+    s->sched     = sched;
+    s->pools     = NULL;
+    s->num_pools = 0;
 
     int num_pools;
     int ret = ABT_sched_get_num_pools(sched, &num_pools);
     if (ret != ABT_SUCCESS) {
         margo_error(0, "ABT_sched_get_num_pools failed with error code %d",
                     ret);
-        return false;
+        goto error;
     }
 
     s->num_pools    = (size_t)num_pools;
