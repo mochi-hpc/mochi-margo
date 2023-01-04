@@ -1420,12 +1420,14 @@ bool __margo_abt_remove_pool(margo_abt_t* abt, uint32_t index)
                     "Cannot remove pool %s at index %u "
                     "because it is used by %u RPC handlers",
                     pool->name, index, pool->num_rpc_ids);
+        return false;
     }
     if (pool->num_xstreams) {
         margo_error(abt->mid,
                     "Cannot remove pool %s at index %u "
                     "because it is used by %u running xstreams",
                     pool->name, index, pool->num_xstreams);
+        return false;
     }
     __margo_abt_pool_destroy(pool);
     margo_abt_pool_t* last_pool = &(abt->pools[abt->pools_len - 1]);
@@ -1443,6 +1445,10 @@ bool __margo_abt_remove_xstream(margo_abt_t* abt, uint32_t index)
         return false;
     }
     margo_abt_xstream_t* xstream = &(abt->xstreams[index]);
+    if (strcmp(xstream->name, "__primary__") == 0) {
+        margo_error(abt->mid, "Cannot remove primary xstream");
+        return false;
+    }
     __margo_abt_xstream_destroy(xstream, abt);
     margo_abt_xstream_t* last_xstream = &(abt->xstreams[abt->xstreams_len - 1]);
     if (index != abt->xstreams_len - 1)
