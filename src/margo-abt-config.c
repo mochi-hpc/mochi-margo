@@ -169,18 +169,32 @@ void __margo_abt_pool_destroy(margo_abt_pool_t* p)
 {
     if (p->num_xstreams != 0) {
         margo_warning(
-            0, "Destroying a pool that still has %d xstreams attached to it",
-            p->num_xstreams);
+            0,
+            "Destroying a pool (%s) that still has %d xstreams attached to it",
+            p->name, p->num_xstreams);
     }
     if (p->num_rpc_ids != 0) {
-        margo_warning(0, "Destroying a pool still potentially used by %d RPCs",
-                      p->num_rpc_ids);
+        margo_warning(
+            0, "Destroying a pool (%s) still potentially used by %d RPCs",
+            p->name, p->num_rpc_ids);
     }
     free(p->kind);
     free(p->access);
     free((char*)p->name);
     if (p->margo_free_flag && !p->used_by_primary && p->pool != ABT_POOL_NULL
         && p->pool != NULL) {
+        size_t pool_size = 0;
+        int    ret       = ABT_pool_get_total_size(p->pool, &pool_size);
+        if (ret != ABT_SUCCESS) {
+            margo_error(0,
+                        "Failed to get total size of pool"
+                        " (ABT_pool_get_total_size returned %d)"
+                        " in __margo_abt_pool_destroy",
+                        ret);
+        } else if (pool_size != 0) {
+            margo_warning(0, "Destroying a pool (%s) that is not empty",
+                          p->name);
+        }
         ABT_pool_free(&(p->pool));
     }
     memset(p, 0, sizeof(*p));
