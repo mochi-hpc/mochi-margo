@@ -173,4 +173,6 @@ bool __margo_abt_add_external_pool(margo_abt_t* abt,
 bool __margo_abt_add_external_xstream(margo_abt_t* abt,
                                       const char*  name,
                                       ABT_xstream  xstream);
+bool __margo_abt_remove_pool(margo_abt_t* abt, uint32_t index);
+bool __margo_abt_remove_xstream(margo_abt_t* abt, uint32_t index);
 #endif

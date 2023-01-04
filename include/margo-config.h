@@ -155,6 +155,46 @@ hg_return_t margo_add_pool_external(margo_instance_id       mid,
                                     struct margo_pool_info* info);
 
 /**
+ * @brief Removes the pool at the specified index.
+ * If the pool has been created by Margo (in margo_init or
+ * via margo_add_pool_from_json) or if it has been added
+ * via margo_add_pool_external with take_ownership = true,
+ * this function will free the pool. Otherwise, this function
+ * will simply remove it from the pools known to the margo instance.
+ *
+ * This function will fail if the pool is used by an xstream
+ * (that margo knows about), or if the pool is not empty.
+ *
+ * @param mid Margo instance.
+ * @param index Index of the pool.
+ *
+ * @return HG_SUCCESS or other error code.
+ */
+hg_return_t margo_remove_pool_by_index(margo_instance_id mid, uint32_t index);
+
+/**
+ * @brief Same as margo_remove_pool_by_index by using the
+ * name of the pool to remove.
+ *
+ * @param mid Margo instance.
+ * @param name Name of the pool to remove.
+ *
+ * @return HG_SUCCESS or other error code.
+ */
+hg_return_t margo_remove_pool_by_name(margo_instance_id mid, const char* name);
+
+/**
+ * @brief Same as margo_remove_pool_by_index by using the
+ * name of the pool to remove.
+ *
+ * @param mid Margo instance.
+ * @param name Name of the pool to remove.
+ *
+ * @return HG_SUCCESS or other error code.
+ */
+hg_return_t margo_remove_pool_by_handle(margo_instance_id mid, ABT_pool handle);
+
+/**
  * @brief Structure used to retrieve information about margo-managed xstreams.
  */
 struct margo_xstream_info {
@@ -245,6 +285,53 @@ hg_return_t margo_add_xstream_external(margo_instance_id mid,
                                        ABT_xstream       xstream,
                                        ABT_bool          take_ownership,
                                        struct margo_xstream_info* info);
+
+/**
+ * @brief Removes the xstream at the specified index.
+ * If the xstream has been created by Margo (in margo_init or
+ * via margo_add_xstream_from_json) or if it has been added
+ * via margo_add_xstream_external with take_ownership = true,
+ * this function will join the xstream and free it. Otherwise,
+ * this function will simply remove it from the xstreams known
+ * to the margo instance.
+ *
+ * Note: this function will not check whether the removal
+ * will leave pools detached from any xstream. It is the caller's
+ * responsibility to ensure that any work left in the pools
+ * associated with the removed xstream will be picked up by
+ * another xstream now or in the future.
+ *
+ * @param mid Margo instance.
+ * @param index Index of the xstream.
+ *
+ * @return HG_SUCCESS or other error code.
+ */
+hg_return_t margo_remove_xstream_by_index(margo_instance_id mid,
+                                          uint32_t          index);
+
+/**
+ * @brief Same as margo_remove_xstream_by_index by using the
+ * name of the xstream to remove.
+ *
+ * @param mid Margo instance.
+ * @param name Name of the xstream to remove.
+ *
+ * @return HG_SUCCESS or other error code.
+ */
+hg_return_t margo_remove_xstream_by_name(margo_instance_id mid,
+                                         const char*       name);
+
+/**
+ * @brief Same as margo_remove_xstream_by_index by using the
+ * name of the xstream to remove.
+ *
+ * @param mid Margo instance.
+ * @param name Name of the xstream to remove.
+ *
+ * @return HG_SUCCESS or other error code.
+ */
+hg_return_t margo_remove_xstream_by_handle(margo_instance_id mid,
+                                           ABT_xstream       handle);
 
 /**
  * @brief Get a pool from the configuration.

@@ -1406,3 +1406,48 @@ bool __margo_abt_add_external_xstream(margo_abt_t* abt,
 
     return ret;
 }
+
+bool __margo_abt_remove_pool(margo_abt_t* abt, uint32_t index)
+{
+    if (index >= abt->pools_len) {
+        margo_error(abt->mid, "Invalid index %u in __margo_abt_remove_pool",
+                    index);
+        return false;
+    }
+    margo_abt_pool_t* pool = &(abt->pools[index]);
+    if (pool->num_rpc_ids) {
+        margo_error(abt->mid,
+                    "Cannot remove pool %s at index %u "
+                    "because it is used by %u RPC handlers",
+                    pool->name, index, pool->num_rpc_ids);
+    }
+    if (pool->num_xstreams) {
+        margo_error(abt->mid,
+                    "Cannot remove pool %s at index %u "
+                    "because it is used by %u running xstreams",
+                    pool->name, index, pool->num_xstreams);
+    }
+    __margo_abt_pool_destroy(pool);
+    margo_abt_pool_t* last_pool = &(abt->pools[abt->pools_len - 1]);
+    if (index != abt->pools_len - 1) memcpy(pool, last_pool, sizeof(*pool));
+    abt->pools_len -= 1;
+    memset(last_pool, 0, sizeof(*last_pool));
+    return true;
+}
+
+bool __margo_abt_remove_xstream(margo_abt_t* abt, uint32_t index)
+{
+    if (index >= abt->xstreams_len) {
+        margo_error(abt->mid, "Invalid index %u in __margo_abt_remove_xstream",
+                    index);
+        return false;
+    }
+    margo_abt_xstream_t* xstream = &(abt->xstreams[index]);
+    __margo_abt_xstream_destroy(xstream, abt);
+    margo_abt_xstream_t* last_xstream = &(abt->xstreams[abt->xstreams_len - 1]);
+    if (index != abt->xstreams_len - 1)
+        memcpy(xstream, last_xstream, sizeof(*xstream));
+    abt->xstreams_len -= 1;
+    memset(last_xstream, 0, sizeof(*last_xstream));
+    return true;
+}

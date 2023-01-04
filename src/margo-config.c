@@ -191,6 +191,28 @@ hg_return_t margo_add_pool_external(margo_instance_id       mid,
     }
 }
 
+hg_return_t margo_remove_pool_by_index(margo_instance_id mid, uint32_t index)
+{
+    bool ret = __margo_abt_remove_pool(&mid->abt, index);
+    return ret ? HG_SUCCESS : HG_OTHER_ERROR;
+}
+
+hg_return_t margo_remove_pool_by_name(margo_instance_id mid, const char* name)
+{
+    int32_t index = __margo_abt_find_pool_by_name(&mid->abt, name);
+    if (index < 0) return HG_INVALID_ARG;
+    bool ret = __margo_abt_remove_pool(&mid->abt, index);
+    return ret ? HG_SUCCESS : HG_OTHER_ERROR;
+}
+
+hg_return_t margo_remove_pool_by_handle(margo_instance_id mid, ABT_pool handle)
+{
+    int32_t index = __margo_abt_find_pool_by_handle(&mid->abt, handle);
+    if (index < 0) return HG_INVALID_ARG;
+    bool ret = __margo_abt_remove_pool(&mid->abt, index);
+    return ret ? HG_SUCCESS : HG_OTHER_ERROR;
+}
+
 hg_return_t margo_find_xstream_by_handle(margo_instance_id          mid,
                                          ABT_xstream                handle,
                                          struct margo_xstream_info* info)
@@ -295,6 +317,30 @@ hg_return_t margo_add_xstream_external(margo_instance_id mid,
     } else {
         return HG_INVALID_ARG;
     }
+}
+
+hg_return_t margo_remove_xstream_by_index(margo_instance_id mid, uint32_t index)
+{
+    bool ret = __margo_abt_remove_xstream(&mid->abt, index);
+    return ret ? HG_SUCCESS : HG_OTHER_ERROR;
+}
+
+hg_return_t margo_remove_xstream_by_name(margo_instance_id mid,
+                                         const char*       name)
+{
+    int32_t index = __margo_abt_find_xstream_by_name(&mid->abt, name);
+    if (index < 0) return HG_INVALID_ARG;
+    bool ret = __margo_abt_remove_xstream(&mid->abt, index);
+    return ret ? HG_SUCCESS : HG_OTHER_ERROR;
+}
+
+hg_return_t margo_remove_xstream_by_handle(margo_instance_id mid,
+                                           ABT_xstream       handle)
+{
+    int32_t index = __margo_abt_find_xstream_by_handle(&mid->abt, handle);
+    if (index < 0) return HG_INVALID_ARG;
+    bool ret = __margo_abt_remove_xstream(&mid->abt, index);
+    return ret ? HG_SUCCESS : HG_OTHER_ERROR;
 }
 
 /* DEPRECATED FUNCTIONS */
