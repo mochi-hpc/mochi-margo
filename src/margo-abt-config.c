@@ -284,7 +284,8 @@ bool __margo_abt_sched_validate_json(const json_object_t* jsched,
 
 bool __margo_abt_sched_init_from_json(const json_object_t* jsched,
                                       const margo_abt_t*   abt,
-                                      margo_abt_sched_t*   s)
+                                      margo_abt_sched_t*   s,
+                                      ABT_sched*           abt_sched)
 {
     s->type
         = strdup(json_object_object_get_string_or(jsched, "type", "default"));
@@ -322,7 +323,7 @@ bool __margo_abt_sched_init_from_json(const json_object_t* jsched,
     }
 
     int ret = ABT_sched_create_basic(sched_predef, jpools_len, abt_pools,
-                                     ABT_SCHED_CONFIG_NULL, &s->sched);
+                                     ABT_SCHED_CONFIG_NULL, abt_sched);
     free(abt_pools);
 
     if (ret != ABT_SUCCESS) {
@@ -338,8 +339,7 @@ bool __margo_abt_sched_init_external(ABT_sched          sched,
                                      const margo_abt_t* abt,
                                      margo_abt_sched_t* s)
 {
-    s->type  = strdup("external");
-    s->sched = sched;
+    s->type = strdup("external");
 
     int num_pools;
     int ret = ABT_sched_get_num_pools(sched, &num_pools);
@@ -372,6 +372,7 @@ error:
 }
 
 json_object_t* __margo_abt_sched_to_json(const margo_abt_sched_t* s,
+                                         ABT_sched                abt_sched,
                                          const margo_abt_t*       abt,
                                          int                      options)
 {
@@ -380,7 +381,7 @@ json_object_t* __margo_abt_sched_to_json(const margo_abt_sched_t* s,
     json_object_object_add_ex(json, "type", json_object_new_string(s->type),
                               flags);
     int num_pools = 0;
-    int ret       = ABT_sched_get_num_pools(s->sched, &num_pools);
+    int ret       = ABT_sched_get_num_pools(abt_sched, &num_pools);
 
     json_object_t* jpools = json_object_new_array_ext(num_pools);
     json_object_object_add_ex(json, "pools", jpools, flags);
@@ -395,7 +396,7 @@ json_object_t* __margo_abt_sched_to_json(const margo_abt_sched_t* s,
 
     for (uint32_t i = 0; i < (uint32_t)num_pools; i++) {
         ABT_pool pool = ABT_POOL_NULL;
-        ret           = ABT_sched_get_pools(s->sched, 1, i, &pool);
+        ret           = ABT_sched_get_pools(abt_sched, 1, i, &pool);
         if (ret != ABT_SUCCESS) {
             margo_error(abt->mid,
                         "ABT_sched_get_pools failed with error code %d"
@@ -537,13 +538,15 @@ bool __margo_abt_xstream_init_from_json(const json_object_t* jxstream,
         }
     }
 
-    json_object_t* jsched = json_object_object_get(jxstream, "scheduler");
-    if (!__margo_abt_sched_init_from_json(jsched, abt, &(x->sched))) goto error;
+    json_object_t* jsched    = json_object_object_get(jxstream, "scheduler");
+    ABT_sched      abt_sched = ABT_SCHED_NULL;
+    if (!__margo_abt_sched_init_from_json(jsched, abt, &(x->sched), &abt_sched))
+        goto error;
 
     int ret;
     if (strcmp(x->name, "__primary__") != 0) {
         /* not the primary ES, create a new ES */
-        ret                = ABT_xstream_create(x->sched.sched, &(x->xstream));
+        ret                = ABT_xstream_create(abt_sched, &(x->xstream));
         x->margo_free_flag = true;
     } else {
         /* primary ES, change its scheduler */
@@ -555,7 +558,7 @@ bool __margo_abt_xstream_init_from_json(const json_object_t* jxstream,
                         ret);
             goto error;
         }
-        ret = ABT_xstream_set_main_sched(x->xstream, x->sched.sched);
+        ret = ABT_xstream_set_main_sched(x->xstream, abt_sched);
         if (ret != ABT_SUCCESS) {
             margo_error(0,
                         "Could not set the main scheduler of the primary ES");
@@ -563,7 +566,7 @@ bool __margo_abt_xstream_init_from_json(const json_object_t* jxstream,
         }
 
         int num_pools = 0;
-        ret           = ABT_sched_get_num_pools(x->sched.sched, &num_pools);
+        ret           = ABT_sched_get_num_pools(abt_sched, &num_pools);
         if (ret != ABT_SUCCESS) {
             margo_error(0,
                         "Failed to get num pools from scheduler"
@@ -573,7 +576,7 @@ bool __margo_abt_xstream_init_from_json(const json_object_t* jxstream,
         }
         for (unsigned i = 0; i < (unsigned)num_pools; i++) {
             ABT_pool pool = ABT_POOL_NULL;
-            ret           = ABT_sched_get_pools(x->sched.sched, 1, i, &pool);
+            ret           = ABT_sched_get_pools(abt_sched, 1, i, &pool);
             if (ret != ABT_SUCCESS) {
                 margo_error(0,
                             "Failed to get pool %d from scheduler"
@@ -615,8 +618,8 @@ bool __margo_abt_xstream_init_external(const char*          name,
     x->xstream = handle;
     x->margo_free_flag = false;
 
-    ABT_sched sched;
-    int       ret = ABT_xstream_get_main_sched(handle, &sched);
+    ABT_sched abt_sched;
+    int       ret = ABT_xstream_get_main_sched(handle, &abt_sched);
     if (ret != ABT_SUCCESS) {
         margo_error(0,
                     "Could not retrieve main scheduler from ES "
@@ -625,11 +628,11 @@ bool __margo_abt_xstream_init_external(const char*          name,
         goto error;
     }
 
-    if (!__margo_abt_sched_init_external(sched, abt, &x->sched)) goto error;
+    if (!__margo_abt_sched_init_external(abt_sched, abt, &x->sched)) goto error;
 
     if (strcmp(name, "__primary__") == 0) {
         int num_pools = 0;
-        ret           = ABT_sched_get_num_pools(sched, &num_pools);
+        ret           = ABT_sched_get_num_pools(abt_sched, &num_pools);
         if (ret != ABT_SUCCESS) {
             margo_error(0,
                         "Coult not get the scheduler's number of pools "
@@ -639,7 +642,7 @@ bool __margo_abt_xstream_init_external(const char*          name,
         }
         for (unsigned i = 0; i < (unsigned)num_pools; i++) {
             ABT_pool pool = ABT_POOL_NULL;
-            ret           = ABT_sched_get_pools(x->sched.sched, 1, i, &pool);
+            ret           = ABT_sched_get_pools(abt_sched, 1, i, &pool);
             if (ret != ABT_SUCCESS) {
                 margo_error(0,
                             "Failed to get pool %d from scheduler"
@@ -667,9 +670,20 @@ json_object_t* __margo_abt_xstream_to_json(const margo_abt_xstream_t* x,
                                            const margo_abt_t*         abt,
                                            int                        options)
 {
-    json_object_t* jxstream = json_object_new_object();
+    json_object_t* jxstream  = json_object_new_object();
+    ABT_sched      abt_sched = ABT_SCHED_NULL;
+
+    int ret = ABT_xstream_get_main_sched(x->xstream, &abt_sched);
+    if (ret != ABT_SUCCESS) {
+        margo_error(abt->mid,
+                    "Could not get main scheduler from xstream"
+                    " (ABT_xstream_get_main_sched returned %d)",
+                    ret);
+        return jxstream;
+    }
+
     json_object_t* jsched
-        = __margo_abt_sched_to_json(&(x->sched), abt, options);
+        = __margo_abt_sched_to_json(&(x->sched), abt_sched, abt, options);
     int flags = JSON_C_OBJECT_ADD_KEY_IS_NEW | JSON_C_OBJECT_ADD_CONSTANT_KEY;
     json_object_object_add_ex(jxstream, "scheduler", jsched, flags);
 
@@ -677,7 +691,7 @@ json_object_t* __margo_abt_xstream_to_json(const margo_abt_xstream_t* x,
                               flags);
 
     int cpuid;
-    int ret = ABT_xstream_get_cpubind(x->xstream, &cpuid);
+    ret = ABT_xstream_get_cpubind(x->xstream, &cpuid);
     if (ret == ABT_SUCCESS) {
         json_object_object_add_ex(jxstream, "cpubind",
                                   json_object_new_int(cpuid), flags);

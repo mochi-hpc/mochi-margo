@@ -78,8 +78,7 @@ bool __margo_abt_pool_init_external(const char*        name,
 
 /* Struct to track scheduler information in a margo_abt_xstream. */
 typedef struct margo_abt_sched {
-    ABT_sched sched;
-    char*     type;
+    char* type;
 } margo_abt_sched_t;
 
 bool __margo_abt_sched_validate_json(const json_object_t* sched,
@@ -88,13 +87,15 @@ bool __margo_abt_sched_validate_json(const json_object_t* sched,
 
 bool __margo_abt_sched_init_from_json(const json_object_t* config,
                                       const margo_abt_t*   abt,
-                                      margo_abt_sched_t*   sched);
+                                      margo_abt_sched_t*   sched,
+                                      ABT_sched*           abt_sched);
 
 bool __margo_abt_sched_init_external(ABT_sched          handle,
                                      const margo_abt_t* abt,
                                      margo_abt_sched_t* sched);
 
 json_object_t* __margo_abt_sched_to_json(const margo_abt_sched_t* sched,
+                                         ABT_sched                abt_sched,
                                          const margo_abt_t*       abt,
                                          int                      options);
 
