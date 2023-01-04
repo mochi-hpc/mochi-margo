@@ -123,6 +123,8 @@ static void margo_cleanup(margo_instance_id mid)
     struct margo_monitor_finalize_args monitoring_args = {};
     __MARGO_MONITOR(mid, FN_START, finalize, monitoring_args);
 
+    margo_deregister(mid, mid->shutdown_rpc_id);
+
     /* call finalize callbacks */
     MARGO_TRACE(mid, "Calling finalize callbacks");
     struct margo_finalize_cb* fcb = mid->finalize_cb;

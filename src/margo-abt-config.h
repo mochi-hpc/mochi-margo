@@ -54,11 +54,12 @@ typedef struct margo_abt_pool {
     char*          name;
     ABT_pool       pool;
     char*          kind;
-    optional_char* access;      /* Unknown for custom user pools */
-    uint32_t       num_rpc_ids; /* Number of RPC ids that use this pool */
-    bool margo_free_flag;       /* flag if Margo is responsible for freeing */
-    bool used_by_primary;       /* flag indicating the this pool is used by the
-                                   primary ES */
+    optional_char* access;          /* Unknown for custom user pools */
+    _Atomic(uint32_t) num_rpc_ids;  /* Number of RPC ids that use this pool */
+    _Atomic(uint32_t) num_xstreams; /* Number of xstreams that use this pool */
+    bool margo_free_flag; /* flag if Margo is responsible for freeing */
+    bool used_by_primary; /* flag indicating the this pool is used by the
+                             primary ES */
 } margo_abt_pool_t;
 
 bool __margo_abt_pool_validate_json(const json_object_t* config);
@@ -128,7 +129,8 @@ json_object_t* __margo_abt_xstream_to_json(const margo_abt_xstream_t* xstream,
                                            const margo_abt_t*         abt,
                                            int                        options);
 
-void __margo_abt_xstream_destroy(margo_abt_xstream_t* xstream);
+void __margo_abt_xstream_destroy(margo_abt_xstream_t* xstream,
+                                 const margo_abt_t*   abt);
 
 /* Argobots environment */
 typedef struct margo_abt {
