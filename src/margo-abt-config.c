@@ -183,18 +183,6 @@ void __margo_abt_pool_destroy(margo_abt_pool_t* p)
     free((char*)p->name);
     if (p->margo_free_flag && !p->used_by_primary && p->pool != ABT_POOL_NULL
         && p->pool != NULL) {
-        size_t pool_size = 0;
-        int    ret       = ABT_pool_get_total_size(p->pool, &pool_size);
-        if (ret != ABT_SUCCESS) {
-            margo_error(0,
-                        "Failed to get total size of pool"
-                        " (ABT_pool_get_total_size returned %d)"
-                        " in __margo_abt_pool_destroy",
-                        ret);
-        } else if (pool_size != 0) {
-            margo_warning(0, "Destroying a pool (%s) that is not empty",
-                          p->name);
-        }
         ABT_pool_free(&(p->pool));
     }
     memset(p, 0, sizeof(*p));
@@ -1427,6 +1415,19 @@ bool __margo_abt_remove_pool(margo_abt_t* abt, uint32_t index)
                     "Cannot remove pool %s at index %u "
                     "because it is used by %u running xstreams",
                     pool->name, index, pool->num_xstreams);
+        return false;
+    }
+    size_t pool_size = 0;
+    int    ret       = ABT_pool_get_total_size(pool->pool, &pool_size);
+    if (ret != ABT_SUCCESS) {
+        margo_error(0,
+                    "Failed to get total size of pool"
+                    " (ABT_pool_get_total_size returned %d)"
+                    " in __margo_abt_pool_destroy",
+                    ret);
+        return false;
+    } else if (pool_size != 0) {
+        margo_error(0, "Destroying a pool (%s) that is not empty", pool->name);
         return false;
     }
     __margo_abt_pool_destroy(pool);

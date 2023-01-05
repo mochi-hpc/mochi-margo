@@ -154,6 +154,11 @@ static void rpc_ult(hg_handle_t handle)
 }
 DEFINE_MARGO_RPC_HANDLER(rpc_ult)
 
+static void my_ult(void* data)
+{
+    (void)data;
+}
+
 static MunitResult remove_pool(const MunitParameter params[], void* data)
 {
     (void)params;
@@ -239,6 +244,21 @@ static MunitResult remove_pool(const MunitParameter params[], void* data)
     // check that we can access my_pool_2
     ret = margo_find_pool_by_name(mid, "my_pool_2", &pool_info);
     munit_assert_int(ret, ==, HG_SUCCESS);
+
+    // failing case: put a ULT in my_pool_2 and try to remove the pool
+    // Note: because my_pool_2 isn't used by any ES, the thread isn't
+    // going to start executing, so we then need to remove it by associating
+    // the pool with an ES temporarily to get work done.
+    ABT_thread ult = ABT_THREAD_NULL;
+    ABT_thread_create(pool_info.pool, my_ult, NULL, ABT_THREAD_ATTR_NULL, &ult);
+    ret = margo_remove_pool_by_index(mid, pool_info.index);
+    munit_assert_int(ret, !=, HG_SUCCESS);
+    ABT_xstream tmp_es = ABT_XSTREAM_NULL;
+    ABT_xstream_create_basic(ABT_SCHED_DEFAULT, 1, &pool_info.pool, ABT_SCHED_CONFIG_NULL, &tmp_es);
+    ABT_thread_join(ult);
+    ABT_thread_free(&ult);
+    ABT_xstream_join(tmp_es);
+    ABT_xstream_free(&tmp_es);
 
     // remove my_pool_2 by index
     ret = margo_remove_pool_by_index(mid, pool_info.index);
