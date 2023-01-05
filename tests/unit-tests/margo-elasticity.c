@@ -250,14 +250,13 @@ static MunitResult remove_pool(const MunitParameter params[], void* data)
 
     // failing case: put a ULT in my_pool_2 and try to remove the pool
     // Note: because my_pool_2 isn't used by any ES, the thread isn't
-    // going to start executing, so we then need to pop it out of the pool
-    // manually and push it into one that has an ES attached (the handler pool).
+    // going to start executing, so we then need to transfer the content
+    // of my_pool_2 into a pool that will actually be able to run the work.
     ABT_thread_create(pool_info.pool, my_ult, NULL, ABT_THREAD_ATTR_NULL, NULL);
     ret = margo_remove_pool_by_index(mid, pool_info.index);
     munit_assert_int(ret, !=, HG_SUCCESS);
-    ABT_unit ult;
-    ABT_pool_pop(pool_info.pool, &ult);
-    ABT_pool_push(handler_pool, ult);
+    ret = margo_transfer_pool_content(pool_info.pool, handler_pool);
+    munit_assert_int(ret, ==, HG_SUCCESS);
 
     // remove my_pool_2 by index
     ret = margo_remove_pool_by_index(mid, pool_info.index);
