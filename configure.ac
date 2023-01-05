@@ -146,6 +146,18 @@ AC_DEFINE(HAVE_ABT_INFO_QUERY_KIND_ENABLED_LAZY_STACK_ALLOC, 1, [can query lazy 
 AC_MSG_RESULT(no)
 )
 
+# check if this version of Argobots supports ABT_pool_pop_threads
+AC_MSG_CHECKING(for ABT_pool_pop_threads in Argobots)
+AC_TRY_COMPILE([
+#include <abt.h>
+], [
+ABT_pool_pop_threads(ABT_POOL_NULL, NULL, 0, NULL);
+],
+AC_MSG_RESULT(yes)
+AC_DEFINE(HAVE_ABT_POOL_POP_THREADS, 1, [can use ABT_pool_pop_threads]),
+AC_MSG_RESULT(no)
+)
+
 # check if dl_iterate_phdr() is available
 AC_MSG_CHECKING(for dl_iterate_phdr)
 AC_TRY_LINK([

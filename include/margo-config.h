@@ -334,6 +334,22 @@ hg_return_t margo_remove_xstream_by_handle(margo_instance_id mid,
                                            ABT_xstream       handle);
 
 /**
+ * @brief This helper function transfers the ULT from one pool to another.
+ * It can be used to move ULTs out of a pool that we wish to remove.
+ *
+ * Note: this function will not remove ULTs that are blocked.
+ * The caller can check for any remaining blocked ULTs by calling
+ * ABT_pool_get_total_size(origin_pool, &size).
+ *
+ * @param origin_pool Origin pool.
+ * @param target_pool Target pool.
+ *
+ * @return HG_SUCCESS or other error code.
+ */
+hg_return_t margo_transfer_pool_content(ABT_pool origin_pool,
+                                        ABT_pool target_pool);
+
+/**
  * @brief Get a pool from the configuration.
  *
  * @param [in] mid Margo instance.

@@ -343,6 +343,25 @@ hg_return_t margo_remove_xstream_by_handle(margo_instance_id mid,
     return ret ? HG_SUCCESS : HG_OTHER_ERROR;
 }
 
+hg_return_t margo_transfer_pool_content(ABT_pool origin_pool,
+                                        ABT_pool target_pool)
+{
+#ifdef HAVE_ABT_POOL_POP_THREADS
+    while (1) {
+        ABT_thread threads[64];
+        size_t     num = 0;
+        ABT_pool_pop_threads(origin_pool, threads, 64, &num);
+        if (num == 0) break;
+        ABT_pool_push_threads(target_pool, threads, num);
+    }
+#else
+    ABT_unit unit;
+    while (ABT_pool_pop(origin_pool, &unit) == ABT_SUCCESS)
+        ABT_pool_push(target_pool, unit);
+#endif
+    return HG_SUCCESS;
+}
+
 /* DEPRECATED FUNCTIONS */
 
 // LCOV_EXCL_START
