@@ -169,6 +169,9 @@ static MunitResult remove_pool(const MunitParameter params[], void* data)
 
     hg_return_t ret;
 
+    ABT_pool handler_pool = ABT_POOL_NULL;
+    margo_get_handler_pool(mid, &handler_pool);
+
     // note: because pools need to not be attached to any ES to be removed,
     // we can't just act on the pools created by margo_init. We will have
     // to create a few pools attached to nothing so we can remove them.
@@ -247,18 +250,14 @@ static MunitResult remove_pool(const MunitParameter params[], void* data)
 
     // failing case: put a ULT in my_pool_2 and try to remove the pool
     // Note: because my_pool_2 isn't used by any ES, the thread isn't
-    // going to start executing, so we then need to remove it by associating
-    // the pool with an ES temporarily to get work done.
-    ABT_thread ult = ABT_THREAD_NULL;
-    ABT_thread_create(pool_info.pool, my_ult, NULL, ABT_THREAD_ATTR_NULL, &ult);
+    // going to start executing, so we then need to pop it out of the pool
+    // manually and push it into one that has an ES attached (the handler pool).
+    ABT_thread_create(pool_info.pool, my_ult, NULL, ABT_THREAD_ATTR_NULL, NULL);
     ret = margo_remove_pool_by_index(mid, pool_info.index);
     munit_assert_int(ret, !=, HG_SUCCESS);
-    ABT_xstream tmp_es = ABT_XSTREAM_NULL;
-    ABT_xstream_create_basic(ABT_SCHED_DEFAULT, 1, &pool_info.pool, ABT_SCHED_CONFIG_NULL, &tmp_es);
-    ABT_thread_join(ult);
-    ABT_thread_free(&ult);
-    ABT_xstream_join(tmp_es);
-    ABT_xstream_free(&tmp_es);
+    ABT_thread tmp_ult;
+    ABT_pool_pop_thread(pool_info.pool, &tmp_ult);
+    ABT_pool_push_thread(handler_pool, tmp_ult);
 
     // remove my_pool_2 by index
     ret = margo_remove_pool_by_index(mid, pool_info.index);
@@ -282,8 +281,6 @@ static MunitResult remove_pool(const MunitParameter params[], void* data)
 
     // move rpc_0 to another pool (__pool_1__, which is the default handler pool)
     // so we can remove my_pool_0
-    ABT_pool handler_pool = ABT_POOL_NULL;
-    margo_get_handler_pool(mid, &handler_pool);
     margo_rpc_set_pool(mid, id0, handler_pool);
 
     // remove it by handle
