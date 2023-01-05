@@ -62,7 +62,8 @@ typedef struct margo_abt_pool {
                              primary ES */
 } margo_abt_pool_t;
 
-bool __margo_abt_pool_validate_json(const json_object_t* config);
+bool __margo_abt_pool_validate_json(const json_object_t* config,
+                                    const margo_abt_t*   abt);
 
 bool __margo_abt_pool_init_from_json(const json_object_t* config,
                                      const margo_abt_t*   abt,
@@ -70,7 +71,7 @@ bool __margo_abt_pool_init_from_json(const json_object_t* config,
 
 json_object_t* __margo_abt_pool_to_json(const margo_abt_pool_t* pool);
 
-void __margo_abt_pool_destroy(margo_abt_pool_t* pool);
+void __margo_abt_pool_destroy(margo_abt_pool_t* pool, const margo_abt_t* abt);
 
 bool __margo_abt_pool_init_external(const char*        name,
                                     ABT_pool           handle,
