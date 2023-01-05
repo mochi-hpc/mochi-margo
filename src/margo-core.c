@@ -2200,8 +2200,16 @@ hg_return_t margo_rpc_set_pool(margo_instance_id mid, hg_id_t id, ABT_pool pool)
         = (struct margo_rpc_data*)HG_Registered_data(margo_get_class(mid), id);
     if (!data) return HG_NOENTRY;
     if (pool == ABT_POOL_NULL) margo_get_handler_pool(mid, &pool);
+    int old_pool_entry_idx
+        = __margo_abt_find_pool_by_handle(&mid->abt, data->pool);
+    int new_pool_entry_idx = __margo_abt_find_pool_by_handle(&mid->abt, pool);
+    if (old_pool_entry_idx >= 0)
+        mid->abt.pools[old_pool_entry_idx].num_rpc_ids -= 1;
+    if (new_pool_entry_idx >= 0)
+        mid->abt.pools[new_pool_entry_idx].num_rpc_ids += 1;
+    else
+        margo_warning(mid, "Associating RPC with a pool not know to Margo");
     data->pool = pool;
-    ;
     return HG_SUCCESS;
 }
 

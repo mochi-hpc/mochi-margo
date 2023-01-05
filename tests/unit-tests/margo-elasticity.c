@@ -146,6 +146,14 @@ static MunitResult add_pool_external(const MunitParameter params[], void* data)
     return MUNIT_OK;
 }
 
+DECLARE_MARGO_RPC_HANDLER(rpc_ult)
+static void rpc_ult(hg_handle_t handle)
+{
+    margo_respond(handle, NULL);
+    margo_destroy(handle);
+}
+DEFINE_MARGO_RPC_HANDLER(rpc_ult)
+
 static MunitResult remove_pool(const MunitParameter params[], void* data)
 {
     (void)params;
@@ -171,6 +179,16 @@ static MunitResult remove_pool(const MunitParameter params[], void* data)
         munit_assert_int(ret, ==, HG_SUCCESS);
         munit_assert_int(pool_info.index, ==, 3 + i);
     }
+
+    // Get my_pool_0 and register an RPC handler with it
+    ret = margo_find_pool_by_name(mid, "my_pool_0", &pool_info);
+    munit_assert_int(ret, ==, HG_SUCCESS);
+    hg_id_t id0 = MARGO_REGISTER_PROVIDER(mid, "rpc_0", void, void, rpc_ult, 42, pool_info.pool);
+
+    // Get my_pool_1 and register an RPC handler with it
+    ret = margo_find_pool_by_name(mid, "my_pool_1", &pool_info);
+    munit_assert_int(ret, ==, HG_SUCCESS);
+    hg_id_t id1 = MARGO_REGISTER_PROVIDER(mid, "rpc_1", void, void, rpc_ult, 42, pool_info.pool);
 
     int num_pools = margo_get_num_pools(mid);
     munit_assert_int(num_pools, ==, 6);
@@ -198,6 +216,13 @@ static MunitResult remove_pool(const MunitParameter params[], void* data)
     // check that we can access my_pool_1
     ret = margo_find_pool_by_name(mid, "my_pool_1", &pool_info);
     munit_assert_int(ret, ==, HG_SUCCESS);
+
+    // failing case: removing my_pool_1 not allowed because rpc_1 registered with it
+    ret = margo_remove_pool_by_name(mid, "my_pool_1");
+    munit_assert_int(ret, !=, HG_SUCCESS);
+
+    // deregister rpc_1 should make it possible to then remove my_pool_1
+    margo_deregister(mid, id1);
 
     // remove my_pool_1 by name
     ret = margo_remove_pool_by_name(mid, "my_pool_1");
@@ -230,6 +255,16 @@ static MunitResult remove_pool(const MunitParameter params[], void* data)
     // check that we can access my_pool_0
     ret = margo_find_pool_by_name(mid, "my_pool_0", &pool_info);
     munit_assert_int(ret, ==, HG_SUCCESS);
+
+    // failing case: cannot removing my_pool_0 because it is used by rpc_0
+    ret = margo_remove_pool_by_handle(mid, pool_info.pool);
+    munit_assert_int(ret, !=, HG_SUCCESS);
+
+    // move rpc_0 to another pool (__pool_1__, which is the default handler pool)
+    // so we can remove my_pool_0
+    ABT_pool handler_pool = ABT_POOL_NULL;
+    margo_get_handler_pool(mid, &handler_pool);
+    margo_rpc_set_pool(mid, id0, handler_pool);
 
     // remove it by handle
     ret = margo_remove_pool_by_handle(mid, pool_info.pool);
