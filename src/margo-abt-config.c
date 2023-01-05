@@ -1195,6 +1195,16 @@ void __margo_abt_destroy(margo_abt_t* a)
     }
 }
 
+void __margo_abt_lock(const margo_abt_t* abt)
+{
+    ABT_mutex_lock(ABT_MUTEX_MEMORY_GET_HANDLE(&abt->mtx));
+}
+
+void __margo_abt_unlock(const margo_abt_t* abt)
+{
+    ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&abt->mtx));
+}
+
 int __margo_abt_find_pool_by_name(const margo_abt_t* abt, const char* name)
 {
     if (abt == NULL || name == NULL) return -1;

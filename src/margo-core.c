@@ -544,11 +544,10 @@ hg_return_t margo_deregister(margo_instance_id mid, hg_id_t rpc_id)
         = (struct margo_rpc_data*)HG_Registered_data(mid->hg.hg_class, rpc_id);
     if (data) {
         /* decrement the numner of RPC id used by the pool */
-        struct margo_pool_info pool_info;
-        if (margo_find_pool_by_handle(mid, data->pool, &pool_info)
-            == HG_SUCCESS) {
-            mid->abt.pools[pool_info.index].num_rpc_ids -= 1;
-        }
+        __margo_abt_lock(&mid->abt);
+        int32_t index = __margo_abt_find_pool_by_handle(&mid->abt, data->pool);
+        if (index >= 0) mid->abt.pools[index].num_rpc_ids -= 1;
+        __margo_abt_unlock(&mid->abt);
     }
 
     /* deregister */
@@ -2199,6 +2198,7 @@ hg_return_t margo_rpc_set_pool(margo_instance_id mid, hg_id_t id, ABT_pool pool)
     struct margo_rpc_data* data
         = (struct margo_rpc_data*)HG_Registered_data(margo_get_class(mid), id);
     if (!data) return HG_NOENTRY;
+    __margo_abt_lock(&mid->abt);
     if (pool == ABT_POOL_NULL) margo_get_handler_pool(mid, &pool);
     int old_pool_entry_idx
         = __margo_abt_find_pool_by_handle(&mid->abt, data->pool);
@@ -2209,6 +2209,7 @@ hg_return_t margo_rpc_set_pool(margo_instance_id mid, hg_id_t id, ABT_pool pool)
         mid->abt.pools[new_pool_entry_idx].num_rpc_ids += 1;
     else
         margo_warning(mid, "Associating RPC with a pool not know to Margo");
+    __margo_abt_unlock(&mid->abt);
     data->pool = pool;
     return HG_SUCCESS;
 }

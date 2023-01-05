@@ -26,7 +26,9 @@ char* margo_get_config_opt(margo_instance_id mid, int options)
     json_object_object_add_ex(root, "version",
                               json_object_new_string(PACKAGE_VERSION), flags);
     // argobots section
+    __margo_abt_lock(&mid->abt);
     struct json_object* abt_json = __margo_abt_to_json(&(mid->abt), options);
+    __margo_abt_unlock(&mid->abt);
     json_object_object_add_ex(root, "argobots", abt_json, flags);
     // mercury section
     struct json_object* hg_json = __margo_hg_to_json(&(mid->hg));
@@ -79,11 +81,20 @@ char* margo_get_config_opt(margo_instance_id mid, int options)
     return (char*)content;
 }
 
-size_t margo_get_num_pools(margo_instance_id mid) { return mid->abt.pools_len; }
+size_t margo_get_num_pools(margo_instance_id mid)
+{
+    __margo_abt_lock(&mid->abt);
+    size_t ret = mid->abt.pools_len;
+    __margo_abt_unlock(&mid->abt);
+    return ret;
+}
 
 size_t margo_get_num_xstreams(margo_instance_id mid)
 {
-    return mid->abt.xstreams_len;
+    __margo_abt_lock(&mid->abt);
+    size_t ret = mid->abt.xstreams_len;
+    __margo_abt_unlock(&mid->abt);
+    return ret;
 }
 
 hg_return_t margo_find_pool_by_handle(margo_instance_id       mid,
@@ -92,6 +103,8 @@ hg_return_t margo_find_pool_by_handle(margo_instance_id       mid,
 {
     if (mid == MARGO_INSTANCE_NULL || handle == ABT_POOL_NULL)
         return HG_INVALID_ARG;
+    hg_return_t ret = HG_NOENTRY;
+    __margo_abt_lock(&mid->abt);
     for (uint32_t i = 0; i < mid->abt.pools_len; ++i) {
         if (mid->abt.pools[i].pool == handle) {
             if (info) {
@@ -99,10 +112,12 @@ hg_return_t margo_find_pool_by_handle(margo_instance_id       mid,
                 info->name  = mid->abt.pools[i].name;
                 info->pool  = mid->abt.pools[i].pool;
             }
-            return HG_SUCCESS;
+            ret = HG_SUCCESS;
+            break;
         }
     }
-    return HG_NOENTRY;
+    __margo_abt_unlock(&mid->abt);
+    return ret;
 }
 
 hg_return_t margo_find_pool_by_name(margo_instance_id       mid,
@@ -110,6 +125,8 @@ hg_return_t margo_find_pool_by_name(margo_instance_id       mid,
                                     struct margo_pool_info* info)
 {
     if (mid == MARGO_INSTANCE_NULL || name == NULL) return HG_INVALID_ARG;
+    hg_return_t ret = HG_NOENTRY;
+    __margo_abt_lock(&mid->abt);
     for (uint32_t i = 0; i < mid->abt.pools_len; ++i) {
         if (mid->abt.pools[i].name == NULL) continue;
         if (strcmp(mid->abt.pools[i].name, name) == 0) {
@@ -118,23 +135,30 @@ hg_return_t margo_find_pool_by_name(margo_instance_id       mid,
                 info->name  = mid->abt.pools[i].name;
                 info->pool  = mid->abt.pools[i].pool;
             }
-            return HG_SUCCESS;
+            ret = HG_SUCCESS;
+            break;
         }
     }
-    return HG_NOENTRY;
+    __margo_abt_unlock(&mid->abt);
+    return ret;
 }
 
 hg_return_t margo_find_pool_by_index(margo_instance_id       mid,
                                      uint32_t                index,
                                      struct margo_pool_info* info)
 {
-    if (mid == MARGO_INSTANCE_NULL || index >= mid->abt.pools_len)
+    if (!mid) return HG_INVALID_ARG;
+    __margo_abt_lock(&mid->abt);
+    if (index >= mid->abt.pools_len) {
+        __margo_abt_unlock(&mid->abt);
         return HG_INVALID_ARG;
+    }
     if (info) {
         info->index = index;
         info->name  = mid->abt.pools[index].name;
         info->pool  = mid->abt.pools[index].pool;
     }
+    __margo_abt_unlock(&mid->abt);
     return HG_SUCCESS;
 }
 
@@ -144,6 +168,7 @@ hg_return_t margo_add_pool_from_json(margo_instance_id       mid,
 {
     struct json_object*     json    = NULL;
     struct json_tokener*    tokener = json_tokener_new();
+    hg_return_t             ret     = HG_SUCCESS;
     enum json_tokener_error jerr;
     if (json_str && json_str[0]) {
         json = json_tokener_parse_ex(tokener, json_str, strlen(json_str));
@@ -156,6 +181,7 @@ hg_return_t margo_add_pool_from_json(margo_instance_id       mid,
         }
     }
     json_tokener_free(tokener);
+    __margo_abt_lock(&mid->abt);
     bool b = __margo_abt_add_pool_from_json(&mid->abt, json);
     json_object_put(json);
     if (b) {
@@ -164,10 +190,11 @@ hg_return_t margo_add_pool_from_json(margo_instance_id       mid,
             info->name  = mid->abt.pools[info->index].name;
             info->pool  = mid->abt.pools[info->index].pool;
         }
-        return HG_SUCCESS;
     } else {
-        return HG_INVALID_ARG;
+        ret = HG_INVALID_ARG;
     }
+    __margo_abt_unlock(&mid->abt);
+    return ret;
 }
 
 hg_return_t margo_add_pool_external(margo_instance_id       mid,
@@ -177,6 +204,8 @@ hg_return_t margo_add_pool_external(margo_instance_id       mid,
                                     struct margo_pool_info* info)
 {
     if (!mid) return HG_INVALID_ARG;
+    hg_return_t ret = HG_SUCCESS;
+    __margo_abt_lock(&mid->abt);
     bool b = __margo_abt_add_external_pool(&mid->abt, name, pool);
     if (b) {
         mid->abt.pools[mid->abt.pools_len - 1].margo_free_flag = take_ownership;
@@ -185,32 +214,101 @@ hg_return_t margo_add_pool_external(margo_instance_id       mid,
             info->name  = mid->abt.pools[info->index].name;
             info->pool  = mid->abt.pools[info->index].pool;
         }
-        return HG_SUCCESS;
     } else {
-        return HG_INVALID_ARG;
+        ret = HG_INVALID_ARG;
     }
+    __margo_abt_unlock(&mid->abt);
+    return ret;
 }
 
 hg_return_t margo_remove_pool_by_index(margo_instance_id mid, uint32_t index)
 {
-    bool ret = __margo_abt_remove_pool(&mid->abt, index);
-    return ret ? HG_SUCCESS : HG_OTHER_ERROR;
+    if (!mid) return HG_INVALID_ARG;
+    hg_return_t ret = HG_SUCCESS;
+    __margo_abt_lock(&mid->abt);
+    if (index >= mid->abt.pools_len) {
+        ret = HG_INVALID_ARG;
+        goto finish;
+    }
+    if (mid->abt.pools[index].pool == MARGO_PROGRESS_POOL(mid)) {
+        margo_error(mid, "Removing the progress pool is not allowed");
+        ret = HG_OTHER_ERROR;
+        goto finish;
+    }
+    if (mid->abt.pools[index].pool == MARGO_RPC_POOL(mid)) {
+        margo_error(mid, "Removing the default handler pool is not allowed");
+        ret = HG_OTHER_ERROR;
+        goto finish;
+    }
+    bool b = __margo_abt_remove_pool(&mid->abt, index);
+    if (!b) ret = HG_OTHER_ERROR;
+finish:
+    __margo_abt_unlock(&mid->abt);
+    return ret;
 }
 
 hg_return_t margo_remove_pool_by_name(margo_instance_id mid, const char* name)
 {
+    if (!mid) return HG_INVALID_ARG;
+    __margo_abt_lock(&mid->abt);
+    hg_return_t ret = HG_SUCCESS;
+    ;
     int32_t index = __margo_abt_find_pool_by_name(&mid->abt, name);
-    if (index < 0) return HG_INVALID_ARG;
-    bool ret = __margo_abt_remove_pool(&mid->abt, index);
-    return ret ? HG_SUCCESS : HG_OTHER_ERROR;
+    if (index < 0) {
+        ret = HG_INVALID_ARG;
+        goto finish;
+    }
+    if (index >= (int32_t)mid->abt.pools_len) {
+        ret = HG_INVALID_ARG;
+        goto finish;
+    }
+    if (mid->abt.pools[index].pool == MARGO_PROGRESS_POOL(mid)) {
+        margo_error(mid, "Removing the progress pool is not allowed");
+        ret = HG_OTHER_ERROR;
+        goto finish;
+    }
+    if (mid->abt.pools[index].pool == MARGO_RPC_POOL(mid)) {
+        margo_error(mid, "Removing the default handler pool is not allowed");
+        ret = HG_OTHER_ERROR;
+        goto finish;
+    }
+    bool b = __margo_abt_remove_pool(&mid->abt, index);
+    if (!b) ret = HG_OTHER_ERROR;
+finish:
+    __margo_abt_unlock(&mid->abt);
+    return ret;
 }
 
 hg_return_t margo_remove_pool_by_handle(margo_instance_id mid, ABT_pool handle)
 {
+    if (!mid) return HG_INVALID_ARG;
+    __margo_abt_lock(&mid->abt);
+    hg_return_t ret = HG_SUCCESS;
+    ;
     int32_t index = __margo_abt_find_pool_by_handle(&mid->abt, handle);
-    if (index < 0) return HG_INVALID_ARG;
-    bool ret = __margo_abt_remove_pool(&mid->abt, index);
-    return ret ? HG_SUCCESS : HG_OTHER_ERROR;
+    if (index < 0) {
+        ret = HG_INVALID_ARG;
+        goto finish;
+    }
+    if (index >= (int32_t)mid->abt.pools_len) {
+        ret = HG_INVALID_ARG;
+        goto finish;
+    }
+    if (mid->abt.pools[index].pool == MARGO_PROGRESS_POOL(mid)) {
+        margo_error(mid, "Removing the progress pool is not allowed");
+        ret = HG_OTHER_ERROR;
+        goto finish;
+    }
+    if (mid->abt.pools[index].pool == MARGO_RPC_POOL(mid)) {
+        margo_error(mid, "Removing the default handler pool is not allowed");
+        ret = HG_OTHER_ERROR;
+        goto finish;
+    }
+    bool b = __margo_abt_remove_pool(&mid->abt, index);
+    if (!b) ret = HG_OTHER_ERROR;
+finish:
+    __margo_abt_unlock(&mid->abt);
+    return ret;
 }
 
 hg_return_t margo_find_xstream_by_handle(margo_instance_id          mid,
@@ -219,6 +317,8 @@ hg_return_t margo_find_xstream_by_handle(margo_instance_id          mid,
 {
     if (mid == MARGO_INSTANCE_NULL || handle == ABT_XSTREAM_NULL)
         return HG_INVALID_ARG;
+    hg_return_t ret = HG_NOENTRY;
+    __margo_abt_lock(&mid->abt);
     for (uint32_t i = 0; i < mid->abt.xstreams_len; ++i) {
         if (mid->abt.xstreams[i].xstream == handle) {
             if (info) {
@@ -226,10 +326,12 @@ hg_return_t margo_find_xstream_by_handle(margo_instance_id          mid,
                 info->xstream = mid->abt.xstreams[i].xstream;
                 info->index   = i;
             }
-            return HG_SUCCESS;
+            ret = HG_SUCCESS;
+            break;
         }
     }
-    return HG_NOENTRY;
+    __margo_abt_unlock(&mid->abt);
+    return ret;
 }
 
 hg_return_t margo_find_xstream_by_name(margo_instance_id          mid,
@@ -237,6 +339,8 @@ hg_return_t margo_find_xstream_by_name(margo_instance_id          mid,
                                        struct margo_xstream_info* info)
 {
     if (mid == MARGO_INSTANCE_NULL || name == NULL) return HG_INVALID_ARG;
+    hg_return_t ret = HG_NOENTRY;
+    __margo_abt_lock(&mid->abt);
     for (uint32_t i = 0; i < mid->abt.xstreams_len; ++i) {
         if (mid->abt.xstreams[i].name == NULL) continue;
         if (strcmp(mid->abt.xstreams[i].name, name) == 0) {
@@ -245,23 +349,29 @@ hg_return_t margo_find_xstream_by_name(margo_instance_id          mid,
                 info->xstream = mid->abt.xstreams[i].xstream;
                 info->index   = i;
             }
-            return HG_SUCCESS;
+            ret = HG_SUCCESS;
         }
     }
-    return HG_NOENTRY;
+    __margo_abt_unlock(&mid->abt);
+    return ret;
 }
 
 hg_return_t margo_find_xstream_by_index(margo_instance_id          mid,
                                         uint32_t                   index,
                                         struct margo_xstream_info* info)
 {
-    if (mid == MARGO_INSTANCE_NULL || index >= mid->abt.xstreams_len)
+    if (!mid) return HG_INVALID_ARG;
+    __margo_abt_lock(&mid->abt);
+    if (index >= mid->abt.xstreams_len) {
+        __margo_abt_unlock(&mid->abt);
         return HG_INVALID_ARG;
+    }
     if (info) {
         info->name    = mid->abt.xstreams[index].name;
         info->xstream = mid->abt.xstreams[index].xstream;
         info->index   = index;
     }
+    __margo_abt_unlock(&mid->abt);
     return HG_SUCCESS;
 }
 
@@ -269,6 +379,7 @@ hg_return_t margo_add_xstream_from_json(margo_instance_id          mid,
                                         const char*                json_str,
                                         struct margo_xstream_info* info)
 {
+    if (!mid) return HG_INVALID_ARG;
     struct json_object*     json    = NULL;
     struct json_tokener*    tokener = json_tokener_new();
     enum json_tokener_error jerr;
@@ -283,18 +394,21 @@ hg_return_t margo_add_xstream_from_json(margo_instance_id          mid,
         }
     }
     json_tokener_free(tokener);
+    __margo_abt_lock(&mid->abt);
     bool b = __margo_abt_add_xstream_from_json(&mid->abt, json);
     json_object_put(json);
+    hg_return_t ret = HG_SUCCESS;
     if (b) {
         if (info) {
             info->index   = mid->abt.xstreams_len - 1;
             info->name    = mid->abt.xstreams[info->index].name;
             info->xstream = mid->abt.xstreams[info->index].xstream;
         }
-        return HG_SUCCESS;
     } else {
-        return HG_INVALID_ARG;
+        ret = HG_INVALID_ARG;
     }
+    __margo_abt_unlock(&mid->abt);
+    return ret;
 }
 
 hg_return_t margo_add_xstream_external(margo_instance_id mid,
@@ -304,7 +418,9 @@ hg_return_t margo_add_xstream_external(margo_instance_id mid,
                                        struct margo_xstream_info* info)
 {
     if (!mid) return HG_INVALID_ARG;
-    bool b = __margo_abt_add_external_xstream(&mid->abt, name, xstream);
+    __margo_abt_lock(&mid->abt);
+    hg_return_t ret = HG_SUCCESS;
+    bool        b = __margo_abt_add_external_xstream(&mid->abt, name, xstream);
     if (b) {
         mid->abt.xstreams[mid->abt.xstreams_len - 1].margo_free_flag
             = take_ownership;
@@ -313,33 +429,49 @@ hg_return_t margo_add_xstream_external(margo_instance_id mid,
             info->name    = mid->abt.xstreams[info->index].name;
             info->xstream = mid->abt.xstreams[info->index].xstream;
         }
-        return HG_SUCCESS;
     } else {
-        return HG_INVALID_ARG;
+        ret = HG_INVALID_ARG;
     }
+    __margo_abt_unlock(&mid->abt);
+    return ret;
 }
 
 hg_return_t margo_remove_xstream_by_index(margo_instance_id mid, uint32_t index)
 {
+    if (!mid) return HG_INVALID_ARG;
+    __margo_abt_lock(&mid->abt);
     bool ret = __margo_abt_remove_xstream(&mid->abt, index);
+    __margo_abt_unlock(&mid->abt);
     return ret ? HG_SUCCESS : HG_OTHER_ERROR;
 }
 
 hg_return_t margo_remove_xstream_by_name(margo_instance_id mid,
                                          const char*       name)
 {
+    if (!mid) return HG_INVALID_ARG;
+    __margo_abt_lock(&mid->abt);
     int32_t index = __margo_abt_find_xstream_by_name(&mid->abt, name);
-    if (index < 0) return HG_INVALID_ARG;
+    if (index < 0) {
+        __margo_abt_unlock(&mid->abt);
+        return HG_INVALID_ARG;
+    }
     bool ret = __margo_abt_remove_xstream(&mid->abt, index);
+    __margo_abt_unlock(&mid->abt);
     return ret ? HG_SUCCESS : HG_OTHER_ERROR;
 }
 
 hg_return_t margo_remove_xstream_by_handle(margo_instance_id mid,
                                            ABT_xstream       handle)
 {
+    if (!mid) return HG_INVALID_ARG;
+    __margo_abt_lock(&mid->abt);
     int32_t index = __margo_abt_find_xstream_by_handle(&mid->abt, handle);
-    if (index < 0) return HG_INVALID_ARG;
+    if (index < 0) {
+        __margo_abt_unlock(&mid->abt);
+        return HG_INVALID_ARG;
+    }
     bool ret = __margo_abt_remove_xstream(&mid->abt, index);
+    __margo_abt_unlock(&mid->abt);
     return ret ? HG_SUCCESS : HG_OTHER_ERROR;
 }
 

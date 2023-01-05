@@ -150,6 +150,12 @@ typedef struct margo_abt {
     char* profiling_dir;
 } margo_abt_t;
 
+// Note: none of the functions bellow lock/unlock their access
+// to the margo_abt_t structure. It is up to the public functions
+// in margo-config.c to do so.
+void __margo_abt_lock(const margo_abt_t* abt);
+void __margo_abt_unlock(const margo_abt_t* abt);
+
 bool __margo_abt_validate_json(const json_object_t* config);
 
 bool __margo_abt_init_from_json(const json_object_t* config, margo_abt_t*);
