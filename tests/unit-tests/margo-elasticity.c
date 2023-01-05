@@ -255,9 +255,9 @@ static MunitResult remove_pool(const MunitParameter params[], void* data)
     ABT_thread_create(pool_info.pool, my_ult, NULL, ABT_THREAD_ATTR_NULL, NULL);
     ret = margo_remove_pool_by_index(mid, pool_info.index);
     munit_assert_int(ret, !=, HG_SUCCESS);
-    ABT_thread tmp_ult;
-    ABT_pool_pop_thread(pool_info.pool, &tmp_ult);
-    ABT_pool_push_thread(handler_pool, tmp_ult);
+    ABT_unit ult;
+    ABT_pool_pop(pool_info.pool, &ult);
+    ABT_pool_push(handler_pool, ult);
 
     // remove my_pool_2 by index
     ret = margo_remove_pool_by_index(mid, pool_info.index);
