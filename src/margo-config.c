@@ -356,10 +356,10 @@ hg_return_t margo_transfer_pool_content(ABT_pool origin_pool,
     }
 #else
     ABT_unit unit;
-    ABT_bool is_empty;
+    size_t   pool_size;
     while (1) {
-        ABT_pool_is_empty(origin_pool, &is_empty);
-        if (is_empty == ABT_TRUE) break;
+        ABT_pool_get_size(origin_pool, &pool_size);
+        if (pool_size == 0) break;
         ABT_pool_pop(origin_pool, &unit);
         ABT_pool_push(target_pool, unit);
     }
