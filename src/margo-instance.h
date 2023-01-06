@@ -166,7 +166,9 @@ typedef struct {
 } margo_forward_timeout_cb_dat;
 
 typedef struct {
-    ABT_eventual_memory ev_mem;
+    ABT_mutex mutex;
+    ABT_cond  cond;
+    char      is_asleep;
 } margo_thread_sleep_cb_dat;
 
 #define MARGO_TRACE    margo_trace
