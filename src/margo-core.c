@@ -1679,20 +1679,14 @@ hg_return_t margo_bulk_itransfer(margo_instance_id mid,
 static void margo_thread_sleep_cb(void* arg)
 {
     margo_thread_sleep_cb_dat* sleep_cb_dat = (margo_thread_sleep_cb_dat*)arg;
-
-    /* wake up the sleeping thread */
-    ABT_mutex_lock(sleep_cb_dat->mutex);
-    sleep_cb_dat->is_asleep = 0;
-    ABT_cond_signal(sleep_cb_dat->cond);
-    ABT_mutex_unlock(sleep_cb_dat->mutex);
-
-    return;
+    ABT_eventual_set(ABT_EVENTUAL_MEMORY_GET_HANDLE(&sleep_cb_dat->ev_mem),
+                     NULL, 0);
 }
 
 void margo_thread_sleep(margo_instance_id mid, double timeout_ms)
 {
     margo_timer               sleep_timer;
-    margo_thread_sleep_cb_dat sleep_cb_dat;
+    margo_thread_sleep_cb_dat sleep_cb_dat = {0};
 
     /* monitoring */
     struct margo_monitor_sleep_args monitoring_args = {
@@ -1700,26 +1694,13 @@ void margo_thread_sleep(margo_instance_id mid, double timeout_ms)
     };
     __MARGO_MONITOR(mid, FN_START, sleep, monitoring_args);
 
-    // TODO: the mechanism bellow would be better off using an ABT_eventual
-
-    /* set data needed for sleep callback */
-    ABT_mutex_create(&(sleep_cb_dat.mutex));
-    ABT_cond_create(&(sleep_cb_dat.cond));
-    sleep_cb_dat.is_asleep = 1;
-
     /* initialize the sleep timer */
     __margo_timer_init(mid, &sleep_timer, margo_thread_sleep_cb, &sleep_cb_dat,
                        timeout_ms);
 
-    /* yield thread for specified timeout */
-    ABT_mutex_lock(sleep_cb_dat.mutex);
-    while (sleep_cb_dat.is_asleep)
-        ABT_cond_wait(sleep_cb_dat.cond, sleep_cb_dat.mutex);
-    ABT_mutex_unlock(sleep_cb_dat.mutex);
-
-    /* clean up */
-    ABT_mutex_free(&sleep_cb_dat.mutex);
-    ABT_cond_free(&sleep_cb_dat.cond);
+    /* wait for eventual */
+    ABT_eventual_wait(ABT_EVENTUAL_MEMORY_GET_HANDLE(&sleep_cb_dat.ev_mem),
+                      NULL);
 
     /* monitoring */
     __MARGO_MONITOR(mid, FN_END, sleep, monitoring_args);
