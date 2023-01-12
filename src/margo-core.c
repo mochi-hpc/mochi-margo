@@ -1803,6 +1803,7 @@ static inline hg_return_t margo_internal_progress(margo_instance_id mid,
     __MARGO_MONITOR(mid, FN_START, progress, monitoring_args);
 
     hg_return_t hret = HG_Progress(mid->hg.hg_context, timeout_ms);
+    mid->num_progress_calls++;
 
     /* monitoring */
     monitoring_args.ret = hret;
@@ -1827,6 +1828,7 @@ static inline hg_return_t margo_internal_trigger(margo_instance_id mid,
     unsigned int count = 0;
     hg_return_t  hret
         = HG_Trigger(mid->hg.hg_context, timeout_ms, max_count, &count);
+    mid->num_trigger_calls++;
     if (hret == HG_SUCCESS && actual_count) *actual_count = count;
 
     /* monitoring */
@@ -1959,6 +1961,18 @@ int margo_get_progress_timeout_ub_msec(margo_instance_id mid, unsigned* timeout)
     if (!mid) return -1;
     if (timeout) *timeout = mid->hg_progress_timeout_ub;
     return 0;
+}
+
+uint64_t margo_get_num_progress_calls(margo_instance_id mid)
+{
+    if (!mid) return 0;
+    return mid->num_progress_calls;
+}
+
+uint64_t margo_get_num_trigger_calls(margo_instance_id mid)
+{
+    if (!mid) return 0;
+    return mid->num_trigger_calls;
 }
 
 int margo_set_param(margo_instance_id mid, const char* key, const char* value)

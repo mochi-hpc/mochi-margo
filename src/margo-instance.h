@@ -109,6 +109,10 @@ struct margo_instance {
     /* monitoring */
     struct margo_monitor* monitor;
 
+    /* some extra stats on progress/trigger calls */
+    _Atomic uint64_t num_progress_calls;
+    _Atomic uint64_t num_trigger_calls;
+
     /* callpath tracking */
     ABT_key current_rpc_id_key;
 
