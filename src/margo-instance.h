@@ -65,9 +65,9 @@ struct margo_instance {
     _Atomic unsigned rpc_pool_idx;
 
     /* internal to margo for this particular instance */
-    ABT_thread hg_progress_tid;
-    int        hg_progress_shutdown_flag;
-    int        hg_progress_timeout_ub;
+    ABT_thread  hg_progress_tid;
+    _Atomic int hg_progress_shutdown_flag;
+    _Atomic int hg_progress_timeout_ub;
 
     uint16_t num_registered_rpcs; /* number of registered rpc's by all providers
                                      on this instance */
