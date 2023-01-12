@@ -1652,6 +1652,35 @@ int margo_state_dump(margo_instance_id mid,
                      char**            resolved_file_name);
 
 /**
+ * @brief Set the upper-bound of the timeout value used when calling
+ * HG_Progress internally.
+ *
+ * Note that this value is an upper bound, margo may dynamically choose
+ * a smaller value if some other ULTs are sharing the same ES as the
+ * progress loop, or if some timers are installed (e.g. because the user
+ * called a margo_forward_timed) and would need to be triggered before
+ * the "normal" upper bound.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] timeout Timeout value in milliseconds.
+ *
+ * @return 0 in case of success, -1 otherwise.
+ */
+int margo_set_progress_timeout_ub_msec(margo_instance_id mid, unsigned timeout);
+
+/**
+ * @brief Get the upper bound of the progress timeout value
+ * used when calling HG_Progress.
+ *
+ * @param [in] mid Margo instance.
+ * @param [ou] timeout Timeout value in milliseconds.
+ *
+ * @return 0 in case of success, -1 otherwise.
+ */
+int margo_get_progress_timeout_ub_msec(margo_instance_id mid,
+                                       unsigned*         timeout);
+
+/**
  * @brief Sets configurable parameters/hints.
  *
  * @param [in] mid Margo instance.

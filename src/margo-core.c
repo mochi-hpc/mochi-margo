@@ -1946,6 +1946,21 @@ void __margo_hg_progress_fn(void* foo)
 
     return;
 }
+
+int margo_set_progress_timeout_ub_msec(margo_instance_id mid, unsigned timeout)
+{
+    if (!mid) return -1;
+    mid->hg_progress_timeout_ub = timeout;
+    return 0;
+}
+
+int margo_get_progress_timeout_ub_msec(margo_instance_id mid, unsigned* timeout)
+{
+    if (!mid) return -1;
+    if (timeout) *timeout = mid->hg_progress_timeout_ub;
+    return 0;
+}
+
 int margo_set_param(margo_instance_id mid, const char* key, const char* value)
 {
     if (strcmp(key, "progress_timeout_ub_msecs") == 0) {
