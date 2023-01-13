@@ -54,14 +54,16 @@ typedef struct margo_abt_pool {
     char*          name;
     ABT_pool       pool;
     char*          kind;
-    optional_char* access;      /* Unknown for custom user pools */
-    uint32_t       num_rpc_ids; /* Number of RPC ids that use this pool */
-    bool margo_free_flag;       /* flag if Margo is responsible for freeing */
-    bool used_by_primary;       /* flag indicating the this pool is used by the
-                                   primary ES */
+    optional_char* access;          /* Unknown for custom user pools */
+    _Atomic(uint32_t) num_rpc_ids;  /* Number of RPC ids that use this pool */
+    _Atomic(uint32_t) num_xstreams; /* Number of xstreams that use this pool */
+    bool margo_free_flag; /* flag if Margo is responsible for freeing */
+    bool used_by_primary; /* flag indicating the this pool is used by the
+                             primary ES */
 } margo_abt_pool_t;
 
-bool __margo_abt_pool_validate_json(const json_object_t* config);
+bool __margo_abt_pool_validate_json(const json_object_t* config,
+                                    const margo_abt_t*   abt);
 
 bool __margo_abt_pool_init_from_json(const json_object_t* config,
                                      const margo_abt_t*   abt,
@@ -69,7 +71,7 @@ bool __margo_abt_pool_init_from_json(const json_object_t* config,
 
 json_object_t* __margo_abt_pool_to_json(const margo_abt_pool_t* pool);
 
-void __margo_abt_pool_destroy(margo_abt_pool_t* pool);
+void __margo_abt_pool_destroy(margo_abt_pool_t* pool, const margo_abt_t* abt);
 
 bool __margo_abt_pool_init_external(const char*        name,
                                     ABT_pool           handle,
@@ -78,10 +80,7 @@ bool __margo_abt_pool_init_external(const char*        name,
 
 /* Struct to track scheduler information in a margo_abt_xstream. */
 typedef struct margo_abt_sched {
-    ABT_sched sched;
-    char*     type;
-    uint32_t* pools;
-    size_t    num_pools;
+    char* type;
 } margo_abt_sched_t;
 
 bool __margo_abt_sched_validate_json(const json_object_t* sched,
@@ -90,13 +89,15 @@ bool __margo_abt_sched_validate_json(const json_object_t* sched,
 
 bool __margo_abt_sched_init_from_json(const json_object_t* config,
                                       const margo_abt_t*   abt,
-                                      margo_abt_sched_t*   sched);
+                                      margo_abt_sched_t*   sched,
+                                      ABT_sched*           abt_sched);
 
 bool __margo_abt_sched_init_external(ABT_sched          handle,
                                      const margo_abt_t* abt,
                                      margo_abt_sched_t* sched);
 
 json_object_t* __margo_abt_sched_to_json(const margo_abt_sched_t* sched,
+                                         ABT_sched                abt_sched,
                                          const margo_abt_t*       abt,
                                          int                      options);
 
@@ -129,7 +130,8 @@ json_object_t* __margo_abt_xstream_to_json(const margo_abt_xstream_t* xstream,
                                            const margo_abt_t*         abt,
                                            int                        options);
 
-void __margo_abt_xstream_destroy(margo_abt_xstream_t* xstream);
+void __margo_abt_xstream_destroy(margo_abt_xstream_t* xstream,
+                                 const margo_abt_t*   abt);
 
 /* Argobots environment */
 typedef struct margo_abt {
@@ -148,6 +150,12 @@ typedef struct margo_abt {
     /* default directory for ABT profiling */
     char* profiling_dir;
 } margo_abt_t;
+
+// Note: none of the functions bellow lock/unlock their access
+// to the margo_abt_t structure. It is up to the public functions
+// in margo-config.c to do so.
+void __margo_abt_lock(const margo_abt_t* abt);
+void __margo_abt_unlock(const margo_abt_t* abt);
 
 bool __margo_abt_validate_json(const json_object_t* config);
 
@@ -172,4 +180,6 @@ bool __margo_abt_add_external_pool(margo_abt_t* abt,
 bool __margo_abt_add_external_xstream(margo_abt_t* abt,
                                       const char*  name,
                                       ABT_xstream  xstream);
+bool __margo_abt_remove_pool(margo_abt_t* abt, uint32_t index);
+bool __margo_abt_remove_xstream(margo_abt_t* abt, uint32_t index);
 #endif

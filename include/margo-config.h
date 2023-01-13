@@ -12,6 +12,7 @@
 extern "C" {
 #endif
 
+#include <mercury.h>
 #include <abt.h>
 
 #define DEPRECATED(msg) __attribute__((deprecated(msg)))
@@ -117,6 +118,83 @@ hg_return_t margo_find_pool_by_index(margo_instance_id       mid,
                                      struct margo_pool_info* info);
 
 /**
+ * @brief Creates a new Argobots pool according to the provided
+ * JSON description (following the same format as the pool objects
+ * in the Margo configuration) and fill the output margo_pool_info
+ * structure.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] json JSON-formatted description.
+ * @param [out] info Resulting pool information.
+ *
+ * @return HG_SUCCESS or other HG error code (e.g. HG_INVALID_ARG).
+ */
+hg_return_t margo_add_pool_from_json(margo_instance_id       mid,
+                                     const char*             json,
+                                     struct margo_pool_info* info);
+
+/**
+ * @brief Adds an existing Argobots pool for Margo to use.
+ *
+ * Important: it is the user's responsibility to ensure that the ABT_pool
+ * remains valid until the Margo instance is destroyed or until the
+ * pool is removed from the Margo instance.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] name Name to give the pool (auto-generated if NULL).
+ * @param [in] pool Pool handle.
+ * @param [in] take_ownership Give ownership to the Margo instance.
+ * @param [out] info Resulting pool information.
+ *
+ * @return HG_SUCCESS or other HG error code.
+ */
+hg_return_t margo_add_pool_external(margo_instance_id       mid,
+                                    const char*             name,
+                                    ABT_pool                pool,
+                                    ABT_bool                take_ownership,
+                                    struct margo_pool_info* info);
+
+/**
+ * @brief Removes the pool at the specified index.
+ * If the pool has been created by Margo (in margo_init or
+ * via margo_add_pool_from_json) or if it has been added
+ * via margo_add_pool_external with take_ownership = true,
+ * this function will free the pool. Otherwise, this function
+ * will simply remove it from the pools known to the margo instance.
+ *
+ * This function will fail if the pool is used by an xstream
+ * (that margo knows about), or if the pool is not empty.
+ *
+ * @param mid Margo instance.
+ * @param index Index of the pool.
+ *
+ * @return HG_SUCCESS or other error code.
+ */
+hg_return_t margo_remove_pool_by_index(margo_instance_id mid, uint32_t index);
+
+/**
+ * @brief Same as margo_remove_pool_by_index by using the
+ * name of the pool to remove.
+ *
+ * @param mid Margo instance.
+ * @param name Name of the pool to remove.
+ *
+ * @return HG_SUCCESS or other error code.
+ */
+hg_return_t margo_remove_pool_by_name(margo_instance_id mid, const char* name);
+
+/**
+ * @brief Same as margo_remove_pool_by_index by using the
+ * name of the pool to remove.
+ *
+ * @param mid Margo instance.
+ * @param name Name of the pool to remove.
+ *
+ * @return HG_SUCCESS or other error code.
+ */
+hg_return_t margo_remove_pool_by_handle(margo_instance_id mid, ABT_pool handle);
+
+/**
  * @brief Structure used to retrieve information about margo-managed xstreams.
  */
 struct margo_xstream_info {
@@ -166,6 +244,110 @@ hg_return_t margo_find_xstream_by_name(margo_instance_id          mid,
 hg_return_t margo_find_xstream_by_index(margo_instance_id          mid,
                                         uint32_t                   index,
                                         struct margo_xstream_info* info);
+
+/**
+ * @brief Creates a new Argobots xstream according to the provided
+ * JSON description (following the same format as the xstream objects
+ * in the Margo configuration) and fill the output margo_xstream_info
+ * structure.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] json JSON-formatted description.
+ * @param [out] info Resulting xstream information.
+ *
+ * @return HG_SUCCESS or other HG error code (e.g. HG_INVALID_ARG).
+ */
+hg_return_t margo_add_xstream_from_json(margo_instance_id          mid,
+                                        const char*                json,
+                                        struct margo_xstream_info* info);
+
+/**
+ * @brief Adds an existing Argobots xstream for Margo to use.
+ *
+ * Note: any pool associated with the ES that is not yet registered
+ * with the Margo instance will be added to the instance as an external
+ * pool.
+ *
+ * Important: it is the user's responsibility to ensure that the ABT_xstream
+ * remains valid until the Margo instance is destroyed or until the
+ * xstream is removed from the Margo instance.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] name Name to give the xstream (auto-generated if NULL).
+ * @param [in] xstream ES handle.
+ * @param [in] take_ownership Give ownership to the Margo instance.
+ * @param [out] info Resulting xstream information.
+ *
+ * @return HG_SUCCESS or other HG error code.
+ */
+hg_return_t margo_add_xstream_external(margo_instance_id mid,
+                                       const char*       name,
+                                       ABT_xstream       xstream,
+                                       ABT_bool          take_ownership,
+                                       struct margo_xstream_info* info);
+
+/**
+ * @brief Removes the xstream at the specified index.
+ * If the xstream has been created by Margo (in margo_init or
+ * via margo_add_xstream_from_json) or if it has been added
+ * via margo_add_xstream_external with take_ownership = true,
+ * this function will join the xstream and free it. Otherwise,
+ * this function will simply remove it from the xstreams known
+ * to the margo instance.
+ *
+ * Note: this function will not check whether the removal
+ * will leave pools detached from any xstream. It is the caller's
+ * responsibility to ensure that any work left in the pools
+ * associated with the removed xstream will be picked up by
+ * another xstream now or in the future.
+ *
+ * @param mid Margo instance.
+ * @param index Index of the xstream.
+ *
+ * @return HG_SUCCESS or other error code.
+ */
+hg_return_t margo_remove_xstream_by_index(margo_instance_id mid,
+                                          uint32_t          index);
+
+/**
+ * @brief Same as margo_remove_xstream_by_index by using the
+ * name of the xstream to remove.
+ *
+ * @param mid Margo instance.
+ * @param name Name of the xstream to remove.
+ *
+ * @return HG_SUCCESS or other error code.
+ */
+hg_return_t margo_remove_xstream_by_name(margo_instance_id mid,
+                                         const char*       name);
+
+/**
+ * @brief Same as margo_remove_xstream_by_index by using the
+ * name of the xstream to remove.
+ *
+ * @param mid Margo instance.
+ * @param name Name of the xstream to remove.
+ *
+ * @return HG_SUCCESS or other error code.
+ */
+hg_return_t margo_remove_xstream_by_handle(margo_instance_id mid,
+                                           ABT_xstream       handle);
+
+/**
+ * @brief This helper function transfers the ULT from one pool to another.
+ * It can be used to move ULTs out of a pool that we wish to remove.
+ *
+ * Note: this function will not remove ULTs that are blocked.
+ * The caller can check for any remaining blocked ULTs by calling
+ * ABT_pool_get_total_size(origin_pool, &size).
+ *
+ * @param origin_pool Origin pool.
+ * @param target_pool Target pool.
+ *
+ * @return HG_SUCCESS or other error code.
+ */
+hg_return_t margo_transfer_pool_content(ABT_pool origin_pool,
+                                        ABT_pool target_pool);
 
 /**
  * @brief Get a pool from the configuration.
