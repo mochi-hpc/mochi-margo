@@ -985,9 +985,9 @@ bool __margo_abt_init_from_json(const json_object_t* jabt, margo_abt_t* a)
             goto error;
         }
         g_margo_abt_init = 1;
-        g_margo_num_instances++;
-        first_abt_init = true;
+        first_abt_init   = true;
     }
+    g_margo_num_instances++;
 
     /* Turn on profiling capability if a) it has not been done already (this
      * is global to Argobots) and b) the argobots tool interface is enabled.
