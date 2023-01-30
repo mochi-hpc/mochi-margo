@@ -16,6 +16,21 @@
 static const int json_type_int64 = json_type_int;
 
 // json-c version is (major << 16) | (minor << 8) | (patch)
+
+#if JSON_C_VERSION_NUM < 3328
+    #define JSON_C_OPTION_GLOBAL 0
+    #define JSON_C_OPTION_THREAD 1
+
+static inline int
+json_c_set_serialization_double_format(const char* double_format,
+                                       int         global_or_thread)
+{
+    (void)double_format;
+    (void)global_or_thread;
+    return 0;
+}
+#endif
+
 // 3584 corresponds to version 0.14.0
 #if JSON_C_VERSION_NUM < 3584
 static inline struct json_object* json_object_new_uint64(uint64_t x)
@@ -29,7 +44,7 @@ static inline uint64_t json_object_get_uint64(const struct json_object* obj)
 }
 #endif
 
-// 3840 corresponds to version 0.145.0
+// 3840 corresponds to version 0.15.0
 #if JSON_C_VERSION_NUM < 3840
 static inline struct json_object* json_object_new_array_ext(int initial_size)
 {
