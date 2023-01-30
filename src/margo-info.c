@@ -20,6 +20,10 @@
 #include "margo.h"
 #include "margo-logging.h"
 
+#ifndef JSON_C_TO_STRING_NOSLASHESCAPE
+    #define JSON_C_TO_STRING_NOSLASHESCAPE 0
+#endif
+
 struct options {
     int   all_libraries_flag;
     char* target_addr;
