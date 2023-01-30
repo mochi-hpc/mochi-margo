@@ -25,7 +25,7 @@ static inline struct json_object* json_object_new_uint64(uint64_t x)
 
 static inline uint64_t json_object_get_uint64(const struct json_object* obj)
 {
-    return (uint64_t)json_object_get_int64(obj);
+    return (uint64_t)json_object_get_int64((struct json_object*)obj);
 }
 #endif
 
@@ -40,6 +40,14 @@ static inline struct json_object* json_object_new_array_ext(int initial_size)
 
 #ifndef JSON_C_OBJECT_ADD_CONSTANT_KEY
     #define JSON_C_OBJECT_ADD_CONSTANT_KEY 0
+#endif
+
+#ifndef JSON_C_OBJECT_ADD_KEY_IS_NEW
+    #define JSON_C_OBJECT_ADD_KEY_IS_NEW 0
+#endif
+
+#ifndef JSON_C_TO_STRING_NOSLASHESCAPE
+    #define JSON_C_TO_STRING_NOSLASHESCAPE 0
 #endif
 
 inline static struct json_object* json_object_copy(struct json_object* in)
