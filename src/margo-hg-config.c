@@ -85,14 +85,17 @@ bool __margo_hg_validate_json(const struct json_object*   json,
     ASSERT_CONFIG_HAS_OPTIONAL(json, "checksum_level", string, "mercury");
     struct json_object* checksum_level
         = json_object_object_get(json, "checksum_level");
-    CONFIG_IS_IN_ENUM_STRING(checksum_level, "checksum_level", "none",
-                             "rpc_headers", "rpc_payload");
+    if (checksum_level)
+        CONFIG_IS_IN_ENUM_STRING(checksum_level, "checksum_level", "none",
+                                 "rpc_headers", "rpc_payload");
     // na_addr_format available from version 2.2.0
     ASSERT_CONFIG_HAS_OPTIONAL(json, "na_addr_format", string, "mercury");
     struct json_object* na_addr_format
         = json_object_object_get(json, "na_addr_format");
-    CONFIG_IS_IN_ENUM_STRING(na_addr_format, "na_addr_format", "unspec", "ipv4",
-                             "ipv4", "ipv6", "native");
+    if (na_addr_format) {
+        CONFIG_IS_IN_ENUM_STRING(na_addr_format, "na_addr_format", "unspec",
+                                 "ipv4", "ipv4", "ipv6", "native");
+    }
 #endif
     return true;
 #undef HANDLE_CONFIG_ERROR
