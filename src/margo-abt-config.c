@@ -179,7 +179,9 @@ void __margo_abt_pool_destroy(margo_abt_pool_t* p, const margo_abt_t* abt)
     }
     if (p->num_rpc_ids != 0) {
         margo_warning(
-            mid, "Destroying a pool (%s) still potentially used by %d RPCs",
+            mid,
+            "Destroying a pool (%s) still potentially used by %d RPCs"
+            " (did you forget to call margo_deregister on some RPC ids?)",
             p->name, p->num_rpc_ids);
     }
     free(p->kind);
