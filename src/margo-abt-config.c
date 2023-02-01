@@ -171,19 +171,6 @@ json_object_t* __margo_abt_pool_to_json(const margo_abt_pool_t* p)
 void __margo_abt_pool_destroy(margo_abt_pool_t* p, const margo_abt_t* abt)
 {
     margo_instance_id mid = abt->mid;
-    if (p->num_xstreams != 0) {
-        margo_warning(
-            mid,
-            "Destroying a pool (%s) that still has %d xstreams attached to it",
-            p->name, p->num_xstreams);
-    }
-    if (p->num_rpc_ids != 0) {
-        margo_warning(
-            mid,
-            "Destroying a pool (%s) still potentially used by %d RPCs"
-            " (did you forget to call margo_deregister on some RPC ids?)",
-            p->name, p->num_rpc_ids);
-    }
     free(p->kind);
     free(p->access);
     free((char*)p->name);
