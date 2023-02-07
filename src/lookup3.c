@@ -166,7 +166,7 @@ and these came close:
  * the key.  *pc is better mixed than *pb, so use *pc first.  If you want
  * a 64-bit value do something like "*pc + (((uint64_t)*pb)<<32)".
  */
-void ch_bj_hashlittle2( 
+void margo_bj_hashlittle2( 
   const void *key,       /* the key to hash */
   size_t      length,    /* length of the key */
   uint32_t   *pc,        /* IN: primary initval, OUT: primary hash */
