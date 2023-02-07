@@ -170,7 +170,6 @@ json_object_t* __margo_abt_pool_to_json(const margo_abt_pool_t* p)
 
 void __margo_abt_pool_destroy(margo_abt_pool_t* p, const margo_abt_t* abt)
 {
-    margo_instance_id mid = abt->mid;
     free(p->kind);
     free(p->access);
     free((char*)p->name);
