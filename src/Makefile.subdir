@@ -11,6 +11,7 @@ noinst_HEADERS += src/margo-abt-macros.h \
                   src/margo-monitoring-internal.h \
                   src/margo-abt-config.h \
                   src/margo-hg-config.h \
+                  src/lookup3.h \
                   src/uthash.h\
                   src/utlist.h
 
@@ -29,7 +30,8 @@ src_libmargo_la_SOURCES += \
  src/margo-util.c \
  src/margo-prio-pool.c \
  src/margo-monitoring.c \
- src/margo-default-monitoring.c
+ src/margo-default-monitoring.c \
+ src/lookup3.c
 
 bin_PROGRAMS += src/margo-info
 
