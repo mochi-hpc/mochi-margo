@@ -503,14 +503,14 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
 
         char echo_key[256];
         char addr_key[512];
-        sprintf(echo_key, "65535:65535:2924675071:%d", provider_id_param);
+        sprintf(echo_key, "65535:65535:248479667650559:%d", provider_id_param);
 
-        // must have an "65535:65535:2924675071:provider_id" secion for the echo RPC
+        // must have an "65535:65535:248479667650559:provider_id" secion for the echo RPC
         ASSERT_JSON_HAS_KEY(rpcs, echo_key, echo, object);
         {
             // check RPC info
             ASSERT_JSON_HAS(echo, rpc_id, int);
-            munit_assert_long(2924675071, ==, json_object_get_int64(rpc_id));
+            munit_assert_long(248479667650559, ==, json_object_get_int64(rpc_id));
             ASSERT_JSON_HAS(echo, parent_rpc_id, int);
             munit_assert_long(65535, ==, json_object_get_int64(parent_rpc_id));
             ASSERT_JSON_HAS(echo, provider_id, int);
@@ -589,15 +589,15 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
             ASSERT_JSON_HAS_STATS(create, size);
         }
         if(relay == HG_TRUE) {
-            sprintf(echo_key, "2924675071:%d:2924675071:%d", provider_id_param, provider_id_param);
-            // must have an "2924675071:provider_id:2924675071:provider_id" secion for the echo RPC
+            sprintf(echo_key, "248479667650559:%d:248479667650559:%d", provider_id_param, provider_id_param);
+            // must have an "248479667650559:provider_id:248479667650559:provider_id" secion for the echo RPC
             ASSERT_JSON_HAS_KEY(rpcs, echo_key, echo, object);
             {
                 // check RPC info
                 ASSERT_JSON_HAS(echo, rpc_id, int);
-                munit_assert_long(2924675071, ==, json_object_get_int64(rpc_id));
+                munit_assert_long(248479667650559, ==, json_object_get_int64(rpc_id));
                 ASSERT_JSON_HAS(echo, parent_rpc_id, int);
-                munit_assert_long(2924675071, ==, json_object_get_int64(parent_rpc_id));
+                munit_assert_long(248479667650559, ==, json_object_get_int64(parent_rpc_id));
                 ASSERT_JSON_HAS(echo, provider_id, int);
                 munit_assert_long(provider_id_param, ==, json_object_get_int64(provider_id));
                 ASSERT_JSON_HAS(echo, parent_provider_id, int);
