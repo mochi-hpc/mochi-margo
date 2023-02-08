@@ -454,6 +454,57 @@ error:
     return MUNIT_FAIL;
 }
 
+static void on_complete(void* uargs, hg_return_t hret) {
+    ABT_eventual ev = (ABT_eventual)uargs;
+    ABT_eventual_set(ev, &hret, sizeof(hret));
+}
+
+static MunitResult test_provider_cforward(const MunitParameter params[],
+                                          void*                data)
+{
+    (void)params;
+    (void)data;
+    hg_return_t hret[6] = {0};
+    hg_handle_t handle = HG_HANDLE_NULL;
+    hg_addr_t   addr = HG_ADDR_NULL;
+
+    struct test_context* ctx = (struct test_context*)data;
+
+    hg_id_t rpc_id = MARGO_REGISTER(ctx->mid, "provider_rpc", void, void, NULL);
+
+    hret[0] = margo_addr_lookup(ctx->mid, ctx->remote_addr, &addr);
+    if(hret[0] != HG_SUCCESS) goto cleanup;
+
+    hret[1] = margo_create(ctx->mid, addr, rpc_id, &handle);
+    if(hret[1] != HG_SUCCESS) goto cleanup;
+
+    ABT_eventual ev;
+    ABT_eventual_create(sizeof(hg_return_t), &ev);
+
+    hret[2] = margo_provider_cforward(42, handle, NULL,
+                                      on_complete, ev);
+    hg_return_t* h;
+    ABT_eventual_wait(ev, (void**)&h);
+    hret[3] = *h;
+    ABT_eventual_free(&ev);
+
+cleanup:
+    hret[4] = margo_destroy(handle);
+    hret[5] = margo_addr_free(ctx->mid, addr);
+
+    munit_assert_int_goto(hret[0], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[1], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[2], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[3], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[4], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[5], ==, HG_SUCCESS, error);
+
+    return MUNIT_OK;
+
+error:
+    return MUNIT_FAIL;
+}
+
 static char* protocol_params[] = {"na+sm", NULL};
 
 static MunitParameterEnum test_params[]
@@ -477,6 +528,8 @@ static MunitTest test_suite_tests[] = {
     {(char*)"/stress_handle_cache", test_stress_handle_cache, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {(char*)"/get_name", test_get_name, test_context_setup,
+     test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
+    {(char*)"/provider_cforward", test_provider_cforward, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
 

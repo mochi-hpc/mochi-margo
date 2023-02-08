@@ -124,14 +124,29 @@ struct margo_instance {
 
 #define MARGO_RPC_POOL(mid) (mid)->abt.pools[mid->rpc_pool_idx].pool
 
+typedef enum margo_request_kind
+{
+    MARGO_REQ_EVENTUAL,
+    MARGO_REQ_CALLBACK
+} margo_request_kind;
+
 struct margo_request_struct {
-    margo_eventual_t     eventual;
-    hg_return_t          hret;
     margo_timer*         timer;
     margo_instance_id    mid;
     hg_handle_t          handle;
     margo_monitor_data_t monitor_data;
-    margo_request_type   type;
+    margo_request_type   type; // forward, respond, or bulk
+    margo_request_kind   kind; // callback or eventual
+    union {
+        struct {
+            margo_eventual_t ev;
+            hg_return_t      hret;
+        } eventual;
+        struct {
+            void (*cb)(void*, hg_return_t);
+            void* uargs;
+        } callback;
+    } u;
 };
 
 // Data registered to an RPC id with HG_Register_data

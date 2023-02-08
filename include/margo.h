@@ -66,10 +66,10 @@ typedef void (*margo_finalize_callback_t)(void*);
  */
 typedef enum
 {
-    MARGO_RESPONSE_REQUEST,
-    MARGO_FORWARD_REQUEST,
-    MARGO_BULK_REQUEST,
-    MARGO_INVALID_REQUEST
+    MARGO_RESPONSE_REQUEST = 2,
+    MARGO_FORWARD_REQUEST  = 4,
+    MARGO_BULK_REQUEST     = 6,
+    MARGO_INVALID_REQUEST  = 8
 } margo_request_type;
 
 /**
@@ -1052,6 +1052,45 @@ margo_iforward(hg_handle_t handle, void* in_struct, margo_request* req)
 }
 
 /**
+ * @brief Same as margo_provider_iforward, but will invoke a user-provided
+ * callback upon completion of the RPC.
+ *
+ * @param provider_id Provider id.
+ * @param handle Handle of the RPC.
+ * @param in_struct Input arguments.
+ * @param on_complete Completion callback.
+ * @param uargs Arguments for the callback.
+ *
+ * @return 0 on success, hg_return_t values on error.
+ */
+hg_return_t margo_provider_cforward(uint16_t    provider_id,
+                                    hg_handle_t handle,
+                                    void*       in_struct,
+                                    void (*on_comblete)(void*, hg_return_t),
+                                    void* uargs);
+
+/**
+ * @brief Same as margo_iforward but will invoke a user-provided
+ * callback upon completion of the RPC.
+ *
+ * @param handle Handle of the RPC.
+ * @param in_struct Input arguments.
+ * @param on_complete Completion callback.
+ * @param uargs Arguments for the callback.
+ *
+ * @return 0 on success, hg_return_t values on error.
+ */
+static inline hg_return_t margo_cforward(hg_handle_t handle,
+                                         void*       in_struct,
+                                         void (*on_comblete)(void*,
+                                                             hg_return_t),
+                                         void* uargs)
+{
+    return margo_provider_cforward(MARGO_DEFAULT_PROVIDER_ID, handle, in_struct,
+                                   on_comblete, uargs);
+}
+
+/**
  * @brief Forward an RPC request to a remote provider with a user-defined
  * timeout.
  *
@@ -1116,6 +1155,50 @@ static inline hg_return_t margo_iforward_timed(hg_handle_t    handle,
 {
     return margo_provider_iforward_timed(MARGO_DEFAULT_PROVIDER_ID, handle,
                                          in_struct, timeout_ms, req);
+}
+
+/**
+ * @brief Same as margo_provider_iforward_timed, but will invoke a user-provided
+ * callback upon completion of the RPC or timeout.
+ *
+ * @param provider_id Provider id.
+ * @param handle Handle of the RPC.
+ * @param in_struct Input arguments.
+ * @param timeout_ms Timeout.
+ * @param on_complete Completion callback.
+ * @param uargs Arguments for the callback.
+ *
+ * @return 0 on success, hg_return_t values on error.
+ */
+hg_return_t margo_provider_cforward_timed(uint16_t    provider_id,
+                                          hg_handle_t handle,
+                                          void*       in_struct,
+                                          double      timeout_ms,
+                                          void (*on_comblete)(void*,
+                                                              hg_return_t),
+                                          void* uargs);
+
+/**
+ * @brief Same as margo_iforward_timed but will invoke a user-provided
+ * callback upon completion of the RPC or timeout.
+ *
+ * @param handle Handle of the RPC.
+ * @param in_struct Input arguments.
+ * @param on_complete Completion callback.
+ * @param uargs Arguments for the callback.
+ *
+ * @return 0 on success, hg_return_t values on error.
+ */
+static inline hg_return_t margo_cforward_timed(hg_handle_t handle,
+                                               void*       in_struct,
+                                               double      timeout_ms,
+                                               void (*on_comblete)(void*,
+                                                                   hg_return_t),
+                                               void* uargs)
+{
+    return margo_provider_cforward_timed(MARGO_DEFAULT_PROVIDER_ID, handle,
+                                         in_struct, timeout_ms, on_comblete,
+                                         uargs);
 }
 
 /**
