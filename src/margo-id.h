@@ -38,8 +38,9 @@ static inline hg_id_t gen_id(const char* func_name, uint16_t provider_id)
     unsigned hashval;
 
     HASH_JEN(func_name, strlen(func_name), hashval);
-    id = hashval << (__MARGO_PROVIDER_ID_SIZE * 8);
-    id |= provider_id;
+    id = hashval;
+    id = id << 32;
+    id |= (hg_id_t)provider_id;
 
     return id;
 }
