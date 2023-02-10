@@ -454,7 +454,12 @@ error:
     return MUNIT_FAIL;
 }
 
-static char* protocol_params[] = {"ofi+tcp", NULL};
+/* NOTE: explicitly specifying loopback interface when using TCP to avoid potential
+ * problems with whatever default interface libfabric elects to bind on otherwise
+ * (i.e., docker0).  The unit tests do not need remote network connectivity; all
+ * processes are local.
+ */
+static char* protocol_params[] = {"ofi+tcp://lo", NULL};
 
 static MunitParameterEnum test_params[]
     = {{"protocol", protocol_params}, {NULL, NULL}};
