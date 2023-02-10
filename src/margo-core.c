@@ -849,9 +849,12 @@ static hg_return_t margo_cb(const struct hg_cb_info* info)
     }
     if (req->timer) { free(req->timer); }
 
-    /* propagate return code out through eventual */
-    req->hret = hret;
-    MARGO_EVENTUAL_SET(req->eventual);
+    if (req->kind == MARGO_REQ_CALLBACK) {
+        if (req->u.callback.cb) req->u.callback.cb(req->u.callback.uargs, hret);
+    } else {
+        req->u.eventual.hret = hret;
+        MARGO_EVENTUAL_SET(req->u.eventual.ev);
+    }
 
     /* monitoring */
     monitoring_args.ret = hret;
@@ -869,6 +872,10 @@ static hg_return_t margo_cb(const struct hg_cb_info* info)
         break;
     };
 
+    // a callback-based request is heap-allocated but is not
+    // handed to the user, hence it has to be freed here.
+    if (req->kind == MARGO_REQ_CALLBACK) free(req);
+
     return HG_SUCCESS;
 }
 
@@ -876,15 +883,18 @@ static hg_return_t margo_wait_internal(margo_request req)
 {
     hg_return_t hret = HG_SUCCESS;
 
+    if (req->kind != MARGO_REQ_EVENTUAL) // should not happen
+        return HG_INVALID_ARG;
+
     /* monitoring */
     struct margo_monitor_wait_args monitoring_args
         = {.request = req, .ret = HG_SUCCESS};
     __MARGO_MONITOR(req->mid, FN_START, wait, monitoring_args);
 
-    MARGO_EVENTUAL_WAIT(req->eventual);
-    MARGO_EVENTUAL_FREE(&(req->eventual));
-    if (req->hret != HG_SUCCESS) {
-        hret = req->hret;
+    MARGO_EVENTUAL_WAIT(req->u.eventual.ev);
+    MARGO_EVENTUAL_FREE(&(req->u.eventual.ev));
+    if (req->u.eventual.hret != HG_SUCCESS) {
+        hret = req->u.eventual.hret;
         goto finish;
     }
     if (req->type == MARGO_FORWARD_REQUEST)
@@ -994,19 +1004,21 @@ static hg_return_t margo_provider_iforward_internal(
     hret = HG_Reset(handle, hgi->addr, server_id);
     if (hret != HG_SUCCESS) goto finish;
 
-    ret = MARGO_EVENTUAL_CREATE(&eventual);
-    if (ret != 0) {
-        // LCOV_EXCL_START
-        hret = HG_NOMEM_ERROR;
-        goto finish;
-        // LCOV_EXCL_END
+    if (req->kind == MARGO_REQ_EVENTUAL) {
+        ret = MARGO_EVENTUAL_CREATE(&eventual);
+        if (ret != 0) {
+            // LCOV_EXCL_START
+            hret = HG_NOMEM_ERROR;
+            goto finish;
+            // LCOV_EXCL_END
+        }
+        req->u.eventual.ev = eventual;
     }
 
-    req->type     = MARGO_FORWARD_REQUEST;
-    req->timer    = NULL;
-    req->eventual = eventual;
-    req->handle   = handle;
-    req->mid      = mid;
+    req->type   = MARGO_FORWARD_REQUEST;
+    req->timer  = NULL;
+    req->handle = handle;
+    req->mid    = mid;
 
     if (timeout_ms > 0) {
         /* set a timer object to expire when this forward times out */
@@ -1073,13 +1085,23 @@ hg_return_t margo_provider_iforward(uint16_t       provider_id,
                                          req);
 }
 
+hg_return_t margo_provider_cforward(uint16_t    provider_id,
+                                    hg_handle_t handle,
+                                    void*       in_struct,
+                                    void (*on_complete)(void*, hg_return_t),
+                                    void* uargs)
+{
+    return margo_provider_cforward_timed(provider_id, handle, in_struct, 0,
+                                         on_complete, uargs);
+}
+
 hg_return_t margo_provider_forward_timed(uint16_t    provider_id,
                                          hg_handle_t handle,
                                          void*       in_struct,
                                          double      timeout_ms)
 {
     hg_return_t                 hret;
-    struct margo_request_struct reqs;
+    struct margo_request_struct reqs = {0};
     hret = margo_provider_iforward_internal(provider_id, handle, timeout_ms,
                                             in_struct, &reqs);
     if (hret != HG_SUCCESS) return hret;
@@ -1105,6 +1127,30 @@ hg_return_t margo_provider_iforward_timed(uint16_t       provider_id,
     return HG_SUCCESS;
 }
 
+hg_return_t margo_provider_cforward_timed(uint16_t    provider_id,
+                                          hg_handle_t handle,
+                                          void*       in_struct,
+                                          double      timeout_ms,
+                                          void (*on_complete)(void*,
+                                                              hg_return_t),
+                                          void* uargs)
+{
+    hg_return_t   hret;
+    margo_request tmp_req = calloc(1, sizeof(*tmp_req));
+    if (!tmp_req) { return HG_NOMEM_ERROR; }
+    tmp_req->kind             = MARGO_REQ_CALLBACK;
+    tmp_req->u.callback.cb    = on_complete;
+    tmp_req->u.callback.uargs = uargs;
+
+    hret = margo_provider_iforward_internal(provider_id, handle, timeout_ms,
+                                            in_struct, tmp_req);
+    if (hret != HG_SUCCESS) {
+        free(tmp_req);
+        return hret;
+    }
+    return HG_SUCCESS;
+}
+
 hg_return_t margo_wait(margo_request req)
 {
     hg_return_t hret = margo_wait_internal(req);
@@ -1114,7 +1160,8 @@ hg_return_t margo_wait(margo_request req)
 
 int margo_test(margo_request req, int* flag)
 {
-    return MARGO_EVENTUAL_TEST(req->eventual, flag);
+    if (req->kind != MARGO_REQ_EVENTUAL) return -1;
+    return MARGO_EVENTUAL_TEST(req->u.eventual.ev, flag);
 }
 
 hg_return_t margo_wait_any(size_t count, margo_request* req, size_t* index)
@@ -1198,7 +1245,7 @@ margo_irespond_internal(hg_handle_t   handle,
     __MARGO_MONITOR(mid, FN_START, respond, monitoring_args);
 
     out_cb = handle_data->out_proc_cb;
-    ret    = MARGO_EVENTUAL_CREATE(&(req->eventual));
+    ret    = MARGO_EVENTUAL_CREATE(&(req->u.eventual.ev));
     if (ret != 0) {
         margo_error(mid, "Allocate of Argobots eventual failed in %s",
                     __func__);
@@ -1251,7 +1298,7 @@ hg_return_t margo_respond(hg_handle_t handle, void* out_struct)
     }
 
     hg_return_t                 hret;
-    struct margo_request_struct reqs;
+    struct margo_request_struct reqs = {0};
     hret = margo_irespond_internal(handle, out_struct, &reqs);
     if (hret != HG_SUCCESS) return hret;
     return margo_wait_internal(&reqs);
@@ -1566,7 +1613,7 @@ static hg_return_t margo_bulk_itransfer_internal(
            .ret           = HG_SUCCESS};
     __MARGO_MONITOR(mid, FN_START, bulk_transfer, monitoring_args);
 
-    ret = MARGO_EVENTUAL_CREATE(&(req->eventual));
+    ret = MARGO_EVENTUAL_CREATE(&(req->u.eventual.ev));
     if (ret != 0) {
         hret = HG_NOMEM_ERROR;
         goto finish;
@@ -1592,7 +1639,7 @@ hg_return_t margo_bulk_transfer(margo_instance_id mid,
                                 size_t            local_offset,
                                 size_t            size)
 {
-    struct margo_request_struct reqs;
+    struct margo_request_struct reqs = {0};
     hg_return_t                 hret = margo_bulk_itransfer_internal(
         mid, op, origin_addr, origin_handle, origin_offset, local_handle,
         local_offset, size, &reqs);
