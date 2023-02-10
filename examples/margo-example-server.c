@@ -26,7 +26,8 @@ int main(int argc, char** argv)
     char                   addr_self_string[128];
     hg_size_t              addr_self_string_sz = 128;
     struct margo_init_info minfo               = {0};
-    char*                  starter_json        = "{\"output_dir\":\"/tmp\"}";
+    char*                  starter_json
+        = "{\"enable_abt_profiling\":true, \"output_dir\":\"/tmp\"}";
 
     if (argc != 2) {
         fprintf(stderr, "Usage: ./server <listen_addr>\n");

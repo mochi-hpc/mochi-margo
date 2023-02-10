@@ -104,8 +104,14 @@ static void margo_abt_profiling_dump_fp(margo_instance_id mid, FILE* outfile)
                         ABTX_PRINT_MODE_SUMMARY | ABTX_PRINT_MODE_FANCY);
         ABTX_prof_start(g_margo_abt_prof_context, g_margo_abt_prof_mode);
     } else {
-        ABTX_prof_print(g_margo_abt_prof_context, outfile,
-                        ABTX_PRINT_MODE_SUMMARY | ABTX_PRINT_MODE_FANCY);
+        fprintf(outfile,
+                "# Argobots profiling is not enabled. Consider doing one of "
+                "the following:\n");
+        fprintf(outfile,
+                "# - setting \"enable_abt_profiling\" to true in the margo "
+                "configuration\n");
+        fprintf(outfile,
+                "# - calling margo_start_abt_profiling() at runtime\n");
     }
 }
 

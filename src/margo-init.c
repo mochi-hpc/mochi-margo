@@ -274,7 +274,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     int handle_cache_size
         = json_object_object_get_int_or(config, "handle_cache_size", 32);
     int abt_profiling_enabled
-        = json_object_object_get_bool_or(config, "enable_abt_profiling", true);
+        = json_object_object_get_bool_or(config, "enable_abt_profiling", false);
 
     mid->abt_profiling_enabled = abt_profiling_enabled;
 
@@ -341,6 +341,10 @@ margo_instance_id margo_init_ext(const char*                   address,
 
         json_object_put(monitoring_config);
     }
+
+    /* start abt profiling if enabled */
+    if (mid->abt_profiling_enabled)
+        margo_start_abt_profiling(mid, ABTX_PROF_MODE_BASIC);
 
     mid->shutdown_rpc_id = MARGO_REGISTER(
         mid, "__shutdown__", void, margo_shutdown_out_t, remote_shutdown_ult);
