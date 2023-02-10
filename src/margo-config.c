@@ -56,6 +56,11 @@ char* margo_get_config_opt(margo_instance_id mid, int options)
     json_object_object_add_ex(root, "handle_cache_size",
                               json_object_new_uint64(mid->handle_cache_size),
                               flags);
+    // abt profiling
+    json_object_object_add_ex(
+        root, "enable_abt_profiling",
+        json_object_new_boolean(mid->abt_profiling_enabled), flags);
+
     // progress_pool and rpc_pool
     if (options & MARGO_CONFIG_USE_NAMES) {
         json_object_object_add_ex(
