@@ -457,4 +457,10 @@
         "abt_init": true,
         "input": {"argobots":{"pools":[{"name":"__primary__","kind":"fifo"}],"xstreams":[{"name":"__primary__","scheduler":{"pools":[0]}}]}}
     },
+
+    "enable_abt_profiling": {
+        "pass": true,
+        "input": {"enable_abt_profiling": true},
+        "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__primary__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"default","pools":[0]},"name":"__primary__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152,"profiling_dir":"."},"enable_abt_profiling":true,"progress_timeout_ub_msec":100,"handle_cache_size":32,"progress_pool":0,"rpc_pool":0}
+    }
 }
