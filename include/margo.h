@@ -1055,6 +1055,13 @@ margo_iforward(hg_handle_t handle, void* in_struct, margo_request* req)
  * @brief Same as margo_provider_iforward, but will invoke a user-provided
  * callback upon completion of the RPC.
  *
+ * Note: the callback will be invoked in the ULT running the progress loop,
+ * hence it should not be long-lived or it will prevent Mercury from
+ * making network progress. This function should be used for lightweight
+ * operations (e.g. setting an eventual, changing the value of variable,
+ * notifying an ABT_cond, etc.). For more complex operations, it is
+ * recommended to wrap a call to margo_provider_forward inside a ULT.
+ *
  * @param provider_id Provider id.
  * @param handle Handle of the RPC.
  * @param in_struct Input arguments.
@@ -1072,6 +1079,9 @@ hg_return_t margo_provider_cforward(uint16_t    provider_id,
 /**
  * @brief Same as margo_iforward but will invoke a user-provided
  * callback upon completion of the RPC.
+ *
+ * Note: see note margo_provider_cforward comment regarding
+ * when to avoid using this function.
  *
  * @param handle Handle of the RPC.
  * @param in_struct Input arguments.
@@ -1161,6 +1171,9 @@ static inline hg_return_t margo_iforward_timed(hg_handle_t    handle,
  * @brief Same as margo_provider_iforward_timed, but will invoke a user-provided
  * callback upon completion of the RPC or timeout.
  *
+ * Note: see note margo_provider_cforward comment regarding
+ * when to avoid using this function.
+ *
  * @param provider_id Provider id.
  * @param handle Handle of the RPC.
  * @param in_struct Input arguments.
@@ -1181,6 +1194,9 @@ hg_return_t margo_provider_cforward_timed(uint16_t    provider_id,
 /**
  * @brief Same as margo_iforward_timed but will invoke a user-provided
  * callback upon completion of the RPC or timeout.
+ *
+ * Note: see note margo_provider_cforward comment regarding
+ * when to avoid using this function.
  *
  * @param handle Handle of the RPC.
  * @param in_struct Input arguments.
