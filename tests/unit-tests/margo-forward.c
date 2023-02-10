@@ -454,7 +454,7 @@ error:
     return MUNIT_FAIL;
 }
 
-static char* protocol_params[] = {"ofi+tcp", NULL};
+static char* protocol_params[] = {"na+sm", NULL};
 
 static MunitParameterEnum test_params[]
     = {{"protocol", protocol_params}, {NULL, NULL}};
