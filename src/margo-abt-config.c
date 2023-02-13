@@ -292,8 +292,8 @@ bool __margo_abt_sched_init_from_json(const json_object_t* jsched,
                                       margo_abt_sched_t*   s,
                                       ABT_sched*           abt_sched)
 {
-    s->type
-        = strdup(json_object_object_get_string_or(jsched, "type", "default"));
+    s->type = strdup(
+        json_object_object_get_string_or(jsched, "type", "basic_wait"));
 
     ABT_sched_predef sched_predef = ABT_SCHED_DEFAULT;
     if (s->type) {
