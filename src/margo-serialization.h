@@ -35,6 +35,7 @@ typedef struct margo_forward_proc_args {
     margo_request request;
     void*         user_args;
     hg_proc_cb_t  user_cb;
+    bool          disable_header;
     struct {
         hg_id_t parent_rpc_id;
     } header;
@@ -45,6 +46,7 @@ typedef struct margo_respond_proc_args {
     margo_request request;
     void*         user_args;
     hg_proc_cb_t  user_cb;
+    bool          disable_header;
     struct {
         hg_return_t hg_ret;
     } header;
@@ -71,8 +73,13 @@ static inline hg_return_t margo_forward_proc(hg_proc_t proc, void* args)
         __MARGO_MONITOR(mid, FN_START, set_input, monitoring_args);
     }
 
-    hret = hg_proc_memcpy(proc, (void*)(&sargs->header), sizeof(sargs->header));
-    if (hret != HG_SUCCESS) goto finish;
+    if (!sargs->disable_header) {
+        hret = hg_proc_memcpy(proc, (void*)(&sargs->header),
+                              sizeof(sargs->header));
+        if (hret != HG_SUCCESS) goto finish;
+    } else {
+        sargs->header.parent_rpc_id = 0;
+    }
     if (sargs && sargs->user_cb) {
         hret = sargs->user_cb(proc, sargs->user_args);
         goto finish;
@@ -110,9 +117,14 @@ static inline hg_return_t margo_respond_proc(hg_proc_t proc, void* args)
         __MARGO_MONITOR(mid, FN_START, set_output, monitoring_args);
     }
 
-    hret = hg_proc_memcpy(proc, (void*)(&sargs->header), sizeof(sargs->header));
-    if (hret != HG_SUCCESS) goto finish;
-    if (sargs->header.hg_ret != HG_SUCCESS) goto finish;
+    if (!sargs->disable_header) {
+        hret = hg_proc_memcpy(proc, (void*)(&sargs->header),
+                              sizeof(sargs->header));
+        if (hret != HG_SUCCESS) goto finish;
+        if (sargs->header.hg_ret != HG_SUCCESS) goto finish;
+    } else {
+        sargs->header.hg_ret = HG_SUCCESS;
+    }
     if (sargs && sargs->user_cb) {
         hret = sargs->user_cb(proc, sargs->user_args);
     }

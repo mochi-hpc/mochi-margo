@@ -801,6 +801,34 @@ hg_return_t margo_registered_disabled_response(margo_instance_id mid,
                                                int*              disabled_flag);
 
 /**
+ * @brief Disable internal input header for a given RPC ID.
+ * This function can be used to allow Margo RPCs to be used by Mercury-based
+ * codes: since Margo adds a header to RPC inputs, this header needs to be
+ * disabled for a Mercury-based program to call this RPC.
+ *
+ * @param [in] mid          Margo instance.
+ * @param [in] id           Registered RPC ID.
+ *
+ * @return HG_SUCCESS or corresponding HG error code.
+ */
+hg_return_t margo_registered_disable_input_header(margo_instance_id mid,
+                                                  hg_id_t           id);
+
+/**
+ * @brief Disable internal output header for a given RPC ID.
+ * This function can be used to allow Margo RPCs to be used by Mercury-based
+ * codes: since Margo adds a header to RPC outputs, this header needs to be
+ * disabled for a Mercury-based program to call this RPC.
+ *
+ * @param [in] mid          Margo instance.
+ * @param [in] id           Registered RPC ID.
+ *
+ * @return HG_SUCCESS or corresponding HG error code.
+ */
+hg_return_t margo_registered_disable_output_header(margo_instance_id mid,
+                                                   hg_id_t           id);
+
+/**
  * @brief Lookup an addr from a peer address/name.
  *
  * @param [in] name     Lookup name.

@@ -154,8 +154,10 @@ struct margo_rpc_data {
     margo_instance_id mid;
     _Atomic(ABT_pool) pool;
     char*        rpc_name;
-    hg_proc_cb_t in_proc_cb;  /* user-provided input proc */
-    hg_proc_cb_t out_proc_cb; /* user-provided output proc */
+    hg_proc_cb_t in_proc_cb;         /* user-provided input proc */
+    hg_proc_cb_t out_proc_cb;        /* user-provided output proc */
+    bool         disable_in_header;  /* whether to disable input header */
+    bool         disable_out_header; /* whether to disable output header */
     void*        user_data;
     void (*user_free_callback)(void*);
 };
@@ -164,10 +166,12 @@ struct margo_rpc_data {
 struct margo_handle_data {
     margo_instance_id mid;
     ABT_pool          pool;
-    const char*       rpc_name; /* note: same pointer as in margo_rpc_data,
-                                   not the responsibility of the handle to free it */
-    hg_proc_cb_t in_proc_cb;    /* user-provided input proc */
-    hg_proc_cb_t out_proc_cb;   /* user-provided output proc */
+    const char*       rpc_name;      /* note: same pointer as in margo_rpc_data,
+                                        not the responsibility of the handle to free it */
+    hg_proc_cb_t in_proc_cb;         /* user-provided input proc */
+    hg_proc_cb_t out_proc_cb;        /* user-provided output proc */
+    bool         disable_in_header;  /* whether to disable input header */
+    bool         disable_out_header; /* whether to disable output header */
     void*        user_data;
     void (*user_free_callback)(void*);
     margo_monitor_data_t monitor_data;

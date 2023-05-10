@@ -37,6 +37,9 @@ static int svr_init_fn(margo_instance_id mid, void* arg)
     MARGO_REGISTER(mid, "null_rpc", void, void, NULL);
     MARGO_REGISTER_PROVIDER(mid, "provider_rpc", void, void, rpc_ult, 42, ABT_POOL_NULL);
     MARGO_REGISTER(mid, "get_name", void, hg_string_t, get_name_ult);
+    hg_id_t id = MARGO_REGISTER(mid, "disabled_header", void, void, rpc_ult);
+    margo_registered_disable_input_header(mid, id);
+    margo_registered_disable_output_header(mid, id);
     return (0);
 }
 
@@ -94,6 +97,46 @@ static MunitResult test_forward(const MunitParameter params[],
 
     // "rpc" is registered on the server, everything should be fine
     hg_id_t rpc_id = MARGO_REGISTER(ctx->mid, "rpc", void, void, NULL);
+
+    hret[0] = margo_addr_lookup(ctx->mid, ctx->remote_addr, &addr);
+    if(hret[0] != HG_SUCCESS) goto cleanup;
+
+    hret[1] = margo_create(ctx->mid, addr, rpc_id, &handle);
+    if(hret[1] != HG_SUCCESS) goto cleanup;
+
+    hret[2] = margo_forward(handle, NULL);
+
+cleanup:
+    hret[3] = margo_destroy(handle);
+
+    hret[4] = margo_addr_free(ctx->mid, addr);
+
+    munit_assert_int_goto(hret[0], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[1], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[2], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[3], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[4], ==, HG_SUCCESS, error);
+    return MUNIT_OK;
+
+error:
+    return MUNIT_FAIL;
+}
+
+static MunitResult test_forward_no_header(const MunitParameter params[],
+                                          void*                data)
+{
+    (void)params;
+    (void)data;
+    hg_return_t hret[5] = {0,0,0,0,0};
+    hg_handle_t handle = HG_HANDLE_NULL;
+    hg_addr_t   addr = HG_ADDR_NULL;
+
+    struct test_context* ctx = (struct test_context*)data;
+
+    // "rpc" is registered on the server, everything should be fine
+    hg_id_t rpc_id = MARGO_REGISTER(ctx->mid, "disabled_header", void, void, NULL);
+    margo_registered_disable_input_header(ctx->mid, rpc_id);
+    margo_registered_disable_output_header(ctx->mid, rpc_id);
 
     hret[0] = margo_addr_lookup(ctx->mid, ctx->remote_addr, &addr);
     if(hret[0] != HG_SUCCESS) goto cleanup;
@@ -512,6 +555,8 @@ static MunitParameterEnum test_params[]
 
 static MunitTest test_suite_tests[] = {
     {(char*)"/forward", test_forward, test_context_setup,
+     test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
+    {(char*)"/forward_no_header", test_forward_no_header, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {(char*)"/forward_to_null", test_forward_to_null, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},

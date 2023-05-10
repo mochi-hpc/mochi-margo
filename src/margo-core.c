@@ -606,6 +606,26 @@ void* margo_registered_data(margo_instance_id mid, hg_id_t id)
         return data->user_data;
 }
 
+hg_return_t margo_registered_disable_input_header(margo_instance_id mid,
+                                                  hg_id_t           id)
+{
+    struct margo_rpc_data* data
+        = (struct margo_rpc_data*)HG_Registered_data(margo_get_class(mid), id);
+    if (!data) return HG_NOENTRY;
+    data->disable_in_header = true;
+    return HG_SUCCESS;
+}
+
+hg_return_t margo_registered_disable_output_header(margo_instance_id mid,
+                                                   hg_id_t           id)
+{
+    struct margo_rpc_data* data
+        = (struct margo_rpc_data*)HG_Registered_data(margo_get_class(mid), id);
+    if (!data) return HG_NOENTRY;
+    data->disable_out_header = true;
+    return HG_SUCCESS;
+}
+
 hg_return_t margo_registered_disable_response(margo_instance_id mid,
                                               hg_id_t           id,
                                               int               disable_flag)
@@ -1042,11 +1062,12 @@ static hg_return_t margo_provider_iforward_internal(
 
     // create the margo_forward_proc_args for the serializer
     struct margo_forward_proc_args forward_args
-        = {.handle    = handle,
-           .request   = req,
-           .user_args = (void*)in_struct,
-           .user_cb   = in_cb,
-           .header    = {.parent_rpc_id = parent_rpc_id}};
+        = {.handle         = handle,
+           .request        = req,
+           .user_args      = (void*)in_struct,
+           .user_cb        = in_cb,
+           .disable_header = handle_data->disable_in_header,
+           .header         = {.parent_rpc_id = parent_rpc_id}};
 
     hret = HG_Forward(handle, margo_cb, (void*)req, (void*)&forward_args);
 
@@ -1255,11 +1276,12 @@ margo_irespond_internal(hg_handle_t   handle,
 
     // create the margo_respond_proc_args for the serializer
     struct margo_respond_proc_args respond_args
-        = {.handle    = handle,
-           .request   = req,
-           .user_args = (void*)out_struct,
-           .user_cb   = out_cb,
-           .header    = {.hg_ret = HG_SUCCESS}};
+        = {.handle         = handle,
+           .request        = req,
+           .user_args      = (void*)out_struct,
+           .user_cb        = out_cb,
+           .disable_header = handle_data->disable_out_header,
+           .header         = {.hg_ret = HG_SUCCESS}};
 
     hret = HG_Respond(handle, margo_cb, (void*)req, (void*)&respond_args);
 
@@ -1282,8 +1304,15 @@ void __margo_respond_with_error(hg_handle_t handle, hg_return_t hg_ret)
     if (hret != HG_SUCCESS) return;
     if (b) return;
 
-    struct margo_respond_proc_args respond_args
-        = {.user_args = NULL, .user_cb = NULL, .header = {.hg_ret = hg_ret}};
+    struct margo_handle_data* handle_data
+        = (struct margo_handle_data*)HG_Get_data(handle);
+    if (!handle_data) return;
+
+    struct margo_respond_proc_args respond_args = {
+        .user_args      = NULL,
+        .user_cb        = NULL,
+        .disable_header = handle_data ? handle_data->disable_out_header : false,
+        .header         = {.hg_ret = hg_ret}};
 
     HG_Respond(handle, NULL, NULL, (void*)&respond_args);
 }
@@ -1337,11 +1366,12 @@ hg_return_t margo_get_input(hg_handle_t handle, void* in_struct)
 
     // create the margo_forward_proc_args for the serializer
     struct margo_forward_proc_args forward_args
-        = {.handle    = handle,
-           .request   = NULL,
-           .user_args = (void*)in_struct,
-           .user_cb   = in_cb,
-           .header    = {}};
+        = {.handle         = handle,
+           .request        = NULL,
+           .user_args      = (void*)in_struct,
+           .user_cb        = in_cb,
+           .disable_header = handle_data->disable_in_header,
+           .header         = {}};
 
     hg_return_t hret = HG_Get_input(handle, (void*)&forward_args);
 
@@ -1370,11 +1400,12 @@ hg_return_t margo_free_input(hg_handle_t handle, void* in_struct)
 
     // create the margo_forward_proc_args for the serializer
     struct margo_forward_proc_args forward_args
-        = {.handle    = handle,
-           .request   = NULL,
-           .user_args = (void*)in_struct,
-           .user_cb   = in_cb,
-           .header    = {}};
+        = {.handle         = handle,
+           .request        = NULL,
+           .user_args      = (void*)in_struct,
+           .user_cb        = in_cb,
+           .disable_header = handle_data->disable_in_header,
+           .header         = {}};
 
     hg_return_t hret = HG_Free_input(handle, (void*)&forward_args);
 
@@ -1403,11 +1434,12 @@ hg_return_t margo_get_output(hg_handle_t handle, void* out_struct)
 
     // create the margo_respond_proc_args for the serializer
     struct margo_respond_proc_args respond_args
-        = {.handle    = handle,
-           .request   = NULL,
-           .user_args = (void*)out_struct,
-           .user_cb   = out_cb,
-           .header    = {.hg_ret = HG_SUCCESS}};
+        = {.handle         = handle,
+           .request        = NULL,
+           .user_args      = (void*)out_struct,
+           .user_cb        = out_cb,
+           .disable_header = handle_data->disable_out_header,
+           .header         = {.hg_ret = HG_SUCCESS}};
 
     hg_return_t hret = HG_Get_output(handle, (void*)&respond_args);
     if (hret != HG_SUCCESS) goto finish;
@@ -1441,11 +1473,12 @@ hg_return_t margo_free_output(hg_handle_t handle, void* out_struct)
 
     // create the margo_respond_proc_args for the serializer
     struct margo_respond_proc_args respond_args
-        = {.handle    = handle,
-           .request   = NULL,
-           .user_args = (void*)out_struct,
-           .user_cb   = out_cb,
-           .header    = {.hg_ret = HG_SUCCESS}};
+        = {.handle         = handle,
+           .request        = NULL,
+           .user_args      = (void*)out_struct,
+           .user_cb        = out_cb,
+           .disable_header = handle_data->disable_out_header,
+           .header         = {.hg_ret = HG_SUCCESS}};
 
     hg_return_t hret = HG_Free_output(handle, (void*)&respond_args);
 
@@ -2070,7 +2103,7 @@ static hg_id_t margo_register_internal(margo_instance_id mid,
         = (struct margo_rpc_data*)HG_Registered_data(mid->hg.hg_class, id);
     if (!margo_data) {
         margo_data
-            = (struct margo_rpc_data*)malloc(sizeof(struct margo_rpc_data));
+            = (struct margo_rpc_data*)calloc(1, sizeof(struct margo_rpc_data));
         if (!margo_data) {
             // LCOV_EXCL_START
             margo_error(
@@ -2080,13 +2113,6 @@ static hg_id_t margo_register_internal(margo_instance_id mid,
             goto finish;
             // LCOV_EXCL_END
         }
-        margo_data->mid                = mid;
-        margo_data->pool               = pool;
-        margo_data->rpc_name           = name ? strdup(name) : NULL;
-        margo_data->in_proc_cb         = in_proc_cb;
-        margo_data->out_proc_cb        = out_proc_cb;
-        margo_data->user_data          = NULL;
-        margo_data->user_free_callback = NULL;
         hret = HG_Register_data(mid->hg.hg_class, id, margo_data,
                                 margo_rpc_data_free);
         if (hret != HG_SUCCESS) {
@@ -2098,7 +2124,21 @@ static hg_id_t margo_register_internal(margo_instance_id mid,
             goto finish;
             // LCOV_EXCL_END
         }
+    } else {
+        free(margo_data->rpc_name);
+        if (margo_data->user_free_callback)
+            (margo_data->user_free_callback)(margo_data->user_data);
     }
+
+    margo_data->mid                = mid;
+    margo_data->pool               = pool;
+    margo_data->rpc_name           = name ? strdup(name) : NULL;
+    margo_data->in_proc_cb         = in_proc_cb;
+    margo_data->out_proc_cb        = out_proc_cb;
+    margo_data->disable_in_header  = false;
+    margo_data->disable_out_header = false;
+    margo_data->user_data          = NULL;
+    margo_data->user_free_callback = NULL;
 
     /* increment the number of RPC ids using the pool */
     struct margo_pool_info pool_info;
@@ -2236,11 +2276,13 @@ hg_return_t __margo_internal_set_handle_data(hg_handle_t handle)
     handle_data               = HG_Get_data(handle);
     bool handle_data_attached = handle_data != NULL;
     if (!handle_data) handle_data = calloc(1, sizeof(*handle_data));
-    handle_data->mid         = rpc_data->mid;
-    handle_data->pool        = rpc_data->pool;
-    handle_data->rpc_name    = rpc_data->rpc_name;
-    handle_data->in_proc_cb  = rpc_data->in_proc_cb;
-    handle_data->out_proc_cb = rpc_data->out_proc_cb;
+    handle_data->mid                = rpc_data->mid;
+    handle_data->pool               = rpc_data->pool;
+    handle_data->rpc_name           = rpc_data->rpc_name;
+    handle_data->in_proc_cb         = rpc_data->in_proc_cb;
+    handle_data->out_proc_cb        = rpc_data->out_proc_cb;
+    handle_data->disable_in_header  = rpc_data->disable_in_header;
+    handle_data->disable_out_header = rpc_data->disable_out_header;
     if (!handle_data_attached)
         return HG_Set_data(handle, handle_data, margo_handle_data_free);
     else
@@ -2305,8 +2347,14 @@ hg_return_t check_error_in_output(hg_handle_t handle)
     if (hret != HG_SUCCESS) return hret;
     if (disabled) return HG_SUCCESS;
 
-    struct margo_respond_proc_args respond_args = {
-        .user_args = NULL, .user_cb = NULL, .header = {.hg_ret = HG_SUCCESS}};
+    struct margo_handle_data* handle_data = HG_Get_data(handle);
+    if (!handle_data) return HG_NO_MATCH;
+
+    struct margo_respond_proc_args respond_args
+        = {.user_args      = NULL,
+           .user_cb        = NULL,
+           .disable_header = handle_data->disable_out_header,
+           .header         = {.hg_ret = HG_SUCCESS}};
 
     hret = HG_Get_output(handle, (void*)&respond_args);
     // note: if mercury was compiled with +checksum, the call above
@@ -2323,8 +2371,14 @@ hg_return_t check_error_in_output(hg_handle_t handle)
 
 hg_return_t check_parent_id_in_input(hg_handle_t handle, hg_id_t* parent_id)
 {
+    struct margo_handle_data* handle_data = HG_Get_data(handle);
+    if (!handle_data) return HG_NO_MATCH;
+
     struct margo_forward_proc_args forward_args
-        = {.user_args = NULL, .user_cb = NULL};
+        = {.user_args      = NULL,
+           .user_cb        = NULL,
+           .disable_header = handle_data->disable_in_header,
+           .header         = {.parent_rpc_id = 0}};
 
     hg_return_t hret = HG_Get_input(handle, (void*)&forward_args);
     // note: if mercury was compiled with +checksum, the call above
@@ -2339,6 +2393,7 @@ hg_return_t check_parent_id_in_input(hg_handle_t handle, hg_id_t* parent_id)
 
 hg_return_t _handler_for_NULL(hg_handle_t handle)
 {
+    __margo_internal_set_handle_data(handle);
     __margo_respond_with_error(handle, HG_NOENTRY);
     margo_destroy(handle);
     return HG_SUCCESS;
