@@ -18,6 +18,7 @@ extern "C" {
 #include <mercury_bulk.h>
 #include <mercury_macros.h>
 #include <abt.h>
+#include <margo-version.h>
 #include <margo-logging.h>
 #include <margo-monitoring.h>
 #include <margo-config.h>

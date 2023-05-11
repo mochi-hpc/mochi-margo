@@ -2,7 +2,23 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.63])
+
+# IMPORTANT: when editing the version  number, edit both the
+# MARGO_VERSION_ variables and the argument provided to AC_INIT
 AC_INIT([margo], [0.13.1], [],[],[])
+
+MARGO_VERSION_MAJOR=0
+MARGO_VERSION_MINOR=13
+MARGO_VERSION_PATCH=1
+MARGO_VERSION="$MARGO_VERSION_MAJOR.$MARGO_VERSION_MINOR.$MARGO_VERSION_PATCH"
+MARGO_VERSION_NUM=$((MARGO_VERSION_MAJOR*100000+MARGO_VERSION_MINOR*100+MARGO_VERSION_PATCH))
+
+AC_SUBST([MARGO_VERSION], ["$MARGO_VERSION"])
+AC_SUBST([MARGO_VERSION_MAJOR], ["$MARGO_VERSION_MAJOR"])
+AC_SUBST([MARGO_VERSION_MINOR], ["$MARGO_VERSION_MINOR"])
+AC_SUBST([MARGO_VERSION_PATCH], ["$MARGO_VERSION_PATCH"])
+AC_SUBST([MARGO_VERSION_NUM], ["$MARGO_VERSION_NUM"])
+
 AC_CONFIG_MACRO_DIR([m4])
 LT_INIT
 
@@ -183,5 +199,5 @@ fi
 
 AC_CONFIG_LINKS([tests/unit-tests/test-configs.json:tests/unit-tests/test-configs.json])
 
-AC_CONFIG_FILES([Makefile maint/margo.pc])
+AC_CONFIG_FILES([Makefile maint/margo.pc include/margo-version.h])
 AC_OUTPUT

@@ -23,14 +23,15 @@ include_HEADERS = \
  include/margo-util.h \
  include/margo-bulk-util.h \
  include/margo-timer.h \
- include/margo-monitoring.h
+ include/margo-monitoring.h \
+ include/margo-version.h
 
 TESTS_ENVIRONMENT =
 
 EXTRA_DIST += \
  prepare.sh 
 
-AM_CPPFLAGS = -I$(top_srcdir)/include
+AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_builddir)/include
 
 AM_CFLAGS =
 
