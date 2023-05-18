@@ -199,5 +199,5 @@ fi
 
 AC_CONFIG_LINKS([tests/unit-tests/test-configs.json:tests/unit-tests/test-configs.json])
 
-AC_CONFIG_FILES([Makefile maint/margo.pc include/margo-version.h])
+AC_CONFIG_FILES([Makefile maint/margo.pc maint/margo-hg-shim.pc include/margo-version.h])
 AC_OUTPUT

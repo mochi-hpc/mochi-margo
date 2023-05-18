@@ -1,0 +1,12 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: margo-hg-shim
+Description: Margo/Mercury compatibility library
+Version: @PACKAGE_VERSION@
+URL: https://github.com/mochi-hpc/mochi-margo/
+Requires: mercury
+Libs: -L${libdir} -lmargo-hg-shim
+Cflags: -I${includedir}

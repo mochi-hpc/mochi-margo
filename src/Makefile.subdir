@@ -31,6 +31,9 @@ src_libmargo_la_SOURCES += \
  src/margo-monitoring.c \
  src/margo-default-monitoring.c
 
+src_libmargo_hg_shim_la_SOURCES += \
+ src/margo-hg-shim.c
+
 bin_PROGRAMS += src/margo-info
 
 src_margo_info_SOURCES = src/margo-info.c
