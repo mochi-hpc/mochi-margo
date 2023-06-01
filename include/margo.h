@@ -384,10 +384,57 @@ void margo_wait_for_finalize(margo_instance_id mid);
 void margo_finalize_and_wait(margo_instance_id mid);
 
 /**
+ * @brief Increments the internal reference counter of the instance.
+ * By default a created margo_instance_id has a refcount of 0 and will
+ * be automatically freed when margo_finalize is called. Increasing
+ * the refcount will prevent this free operation. The instance will
+ * still be finalized by margo_finalize but its memory will remain
+ * valid until margo_instance_release decreases the refcount back to 0.
+ *
+ * @param mid Margo instance ID
+ *
+ * @return HG_SUCCESS or other Mercury error code.
+ */
+hg_return_t margo_instance_ref_incr(margo_instance_id mid);
+
+/**
+ * @brief Decrements the internal refcount of the instance.
+ * If the refcount reaches 0, this will (1) call margo_finalize
+ * if the instance hasn't been finalized yet, and (2) free the
+ * instance's memory.
+ *
+ * @param[in] mid Margo instance ID
+ *
+ * @return HG_SUCCESS or other Mercury error code.
+ */
+hg_return_t margo_instance_release(margo_instance_id mid);
+
+/**
+ * @brief Check whether the instance has been finalized. Note that this
+ * function is meant to be used by codes that rely on margo_instance_ref_incr
+ * and margo_instance_release to keep track of ownership of the instance.
+ *
+ * @param[in] mid Margo instance ID
+ *
+ * @return HG_SUCCESS or other Mercury error code.
+ */
+hg_return_t margo_instance_is_finalized(margo_instance_id mid, bool* flag);
+
+/**
+ * @brief Get the internal refcount of the instance.
+ *
+ * @param[in] mid Margo instance ID
+ * @param[out] refcount Refcount
+ *
+ * @return HG_SUCCESS or other Mercury error code.
+ */
+hg_return_t margo_instance_ref_count(margo_instance_id mid, unsigned* refcount);
+
+/**
  * @brief Checks whether a Margo instance we initialized is a server
  * (i.e., listening for incoming RPC requests).
  *
- * @param [in] mid Margo instance/
+ * @param [in] mid Margo instance
  *
  * @return true if listening or false if not, or not a valid margo instance.
  */

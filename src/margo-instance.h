@@ -53,6 +53,8 @@ struct margo_registered_rpc {
 };
 
 struct margo_instance {
+    /* Refcount */
+    _Atomic unsigned refcount;
 
     /* Argobots environment */
     struct margo_abt abt;
@@ -76,7 +78,7 @@ struct margo_instance {
     struct margo_registered_rpc* registered_rpcs;
 
     /* control logic for callers waiting on margo to be finalized */
-    int                       finalize_flag;
+    _Atomic bool              finalize_flag;
     _Atomic int               finalize_refcount;
     ABT_mutex                 finalize_mutex;
     ABT_cond                  finalize_cond;
