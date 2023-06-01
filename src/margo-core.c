@@ -227,8 +227,7 @@ void margo_finalize(margo_instance_id mid)
 
     ABT_mutex_lock(mid->finalize_mutex);
     mid->finalize_flag = 1;
-    mid->refcount--;
-    do_cleanup = mid->refcount == 0;
+    do_cleanup = mid->finalize_refcount == 0;
 
     ABT_mutex_unlock(mid->finalize_mutex);
     ABT_cond_broadcast(mid->finalize_cond);
@@ -249,7 +248,7 @@ void margo_finalize_and_wait(margo_instance_id mid)
 
     ABT_mutex_lock(mid->finalize_mutex);
     mid->finalize_requested = 1;
-    mid->refcount++;
+    mid->finalize_refcount++;
     ABT_mutex_unlock(mid->finalize_mutex);
 
     // try finalizing
@@ -260,8 +259,8 @@ void margo_finalize_and_wait(margo_instance_id mid)
     while (!mid->finalize_flag)
         ABT_cond_wait(mid->finalize_cond, mid->finalize_mutex);
 
-    mid->refcount--;
-    do_cleanup = mid->refcount == 0;
+    mid->finalize_refcount--;
+    do_cleanup = mid->finalize_refcount == 0;
 
     ABT_mutex_unlock(mid->finalize_mutex);
 
@@ -278,13 +277,13 @@ void margo_wait_for_finalize(margo_instance_id mid)
 
     ABT_mutex_lock(mid->finalize_mutex);
 
-    mid->refcount++;
+    mid->finalize_refcount++;
 
     while (!mid->finalize_flag)
         ABT_cond_wait(mid->finalize_cond, mid->finalize_mutex);
 
-    mid->refcount--;
-    do_cleanup = mid->refcount == 0;
+    mid->finalize_refcount--;
+    do_cleanup = mid->finalize_refcount == 0;
 
     ABT_mutex_unlock(mid->finalize_mutex);
 

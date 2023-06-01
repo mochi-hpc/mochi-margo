@@ -77,7 +77,7 @@ struct margo_instance {
 
     /* control logic for callers waiting on margo to be finalized */
     int                       finalize_flag;
-    int                       refcount;
+    _Atomic int               finalize_refcount;
     ABT_mutex                 finalize_mutex;
     ABT_cond                  finalize_cond;
     struct margo_finalize_cb* finalize_cb;

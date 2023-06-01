@@ -292,8 +292,8 @@ margo_instance_id margo_init_ext(const char*                   address,
     mid->num_registered_rpcs = 0;
     mid->registered_rpcs     = NULL;
 
-    mid->finalize_flag = 0;
-    mid->refcount      = 1;
+    mid->finalize_flag     = 0;
+    mid->finalize_refcount = 0;
     ABT_mutex_create(&mid->finalize_mutex);
     ABT_cond_create(&mid->finalize_cond);
     mid->finalize_cb    = NULL;
