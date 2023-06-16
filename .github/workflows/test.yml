@@ -26,6 +26,11 @@ jobs:
       run: |
         spack --color always -e . external find --not-buildable cmake
         spack --color always -e . external find --not-buildable perl
+        spack --color always -e . external find --not-buildable m4
+        spack --color always -e . external find --not-buildable libtool
+        spack --color always -e . external find --not-buildable autoconf
+        spack --color always -e . external find --not-buildable automake
+        spack --color always -e . external find --not-buildable pkg-config
 
     - name: Add mochi-spack-packages
       run: |
