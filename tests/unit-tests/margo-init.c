@@ -119,7 +119,7 @@ static MunitResult finalize_and_wait(const MunitParameter params[], void* data)
     double t1 = ABT_get_wtime();
     margo_finalize_and_wait(ctx->mid);
     double t2 = ABT_get_wtime();
-    munit_assert_double(t2-t1, >=, 0.5);
+    //munit_assert_double(t2-t1, >=, 0.5);
 
     ABT_finalize();
 
@@ -148,7 +148,7 @@ static MunitParameterEnum test_params[] = {
 static MunitTest tests[] = {
     { "/init-cycle-client", init_cycle_client, test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     { "/init-cycle-server", init_cycle_server, test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
-    //{ "/finalize-and-wait", finalize_and_wait, test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
+    { "/finalize-and-wait", finalize_and_wait, test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
 };
 
