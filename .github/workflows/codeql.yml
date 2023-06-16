@@ -47,10 +47,10 @@ jobs:
         spack --color always -e tests concretize -f
 
     - name: Restore Spack cache
-        uses: actions/cache@v2
-        with:
-          path: ~/.spack-ci
-          key: spack-${{ hashFiles('tests/spack.lock') }}
+      uses: actions/cache@v2
+      with:
+        path: ~/.spack-ci
+        key: spack-${{ hashFiles('tests/spack.lock') }}
 
     - name: Install spack environment
       run: |
