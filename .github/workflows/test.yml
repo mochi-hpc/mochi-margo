@@ -41,6 +41,10 @@ jobs:
       run: |
         spack --color always -e tests concretize -f
 
+    - name: Show spack.lock file
+      run: |
+        cat tests/spack.lock
+
     - name: Restore Spack cache
       uses: actions/cache@v2
       with:
