@@ -1,0 +1,23 @@
+spack:
+  specs:
+  - json-c
+  - autoconf
+  - m4
+  - automake
+  - libtool
+  - pkg-config
+  - argobots
+  - mercury~boostsys ^libfabric fabrics=tcp,rxm
+  concretizer:
+    unify: true
+    reuse: false
+  modules:
+    prefix_inspections:
+      lib: [LD_LIBRARY_PATH]
+      lib64: [LD_LIBRARY_PATH]
+  config:
+    source_cache: ~/.spack-ci/source_cache
+    misc_cache: ~/.spack-ci/misc_cache
+    test_cache: ~/.spack-ci/test_cache
+    install_tree:
+      root: ~/.spack-ci/install

@@ -24,40 +24,40 @@ jobs:
 
     - name: Find external packages
       run: |
-        spack --color always -e . external find --not-buildable cmake
-        spack --color always -e . external find --not-buildable perl
-        spack --color always -e . external find --not-buildable m4
-        spack --color always -e . external find --not-buildable libtool
-        spack --color always -e . external find --not-buildable autoconf
-        spack --color always -e . external find --not-buildable automake
-        spack --color always -e . external find --not-buildable pkg-config
+        spack --color always -e tests external find --not-buildable cmake
+        spack --color always -e tests external find --not-buildable perl
+        spack --color always -e tests external find --not-buildable m4
+        spack --color always -e tests external find --not-buildable libtool
+        spack --color always -e tests external find --not-buildable autoconf
+        spack --color always -e tests external find --not-buildable automake
+        spack --color always -e tests external find --not-buildable pkg-config
 
     - name: Add mochi-spack-packages
       run: |
         git clone https://github.com/mochi-hpc/mochi-spack-packages /opt/spack/mochi-spack-packages
-        spack --color always -e . repo add /opt/spack/mochi-spack-packages
+        spack --color always -e tests repo add /opt/spack/mochi-spack-packages
 
     - name: Concretizing spack environment
       run: |
-        spack --color always -e . concretize -f
+        spack --color always -e tests concretize -f
 
     - name: Restore Spack cache
       uses: actions/cache@v2
       with:
           path: ~/.spack-ci
-          key: spack-${{ hashFiles('spack.lock') }}
+          key: spack-${{ hashFiles('tests/spack.lock') }}
 
     - name: Install spack environment
       run: |
-        spack --color always -e . install
+        spack --color always -e tests install
 
     - name: Show spack-installed packages for debugging
       run: |
-        spack --color always -e . find -dlv
+        spack --color always -e tests find -dlv
 
     - name: Build code and run unit tests
       run: |
-        eval `spack env activate --sh .` &&
+        eval `spack env activate --sh tests` &&
         ./prepare.sh &&
         ./configure --prefix=`pwd` &&
         make check &&
@@ -65,7 +65,7 @@ jobs:
 
     - name: Rebuild code and run unit tests with ASAN
       run: |
-        eval `spack env activate --sh .` &&
+        eval `spack env activate --sh tests` &&
         CFLAGS="-fno-omit-frame-pointer -g -Wall -fsanitize=address" LDFLAGS="-fsanitize=address" ./configure --prefix=`pwd` &&
         ASAN_OPTIONS="abort_on_error=1" make check
 
