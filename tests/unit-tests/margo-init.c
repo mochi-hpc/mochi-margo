@@ -75,7 +75,7 @@ DECLARE_MARGO_RPC_HANDLER(rpc_ult)
 static void rpc_ult(hg_handle_t handle)
 {
     margo_instance_id mid = margo_hg_handle_get_instance(handle);
-    margo_thread_sleep(mid, 1000.0);
+    margo_thread_sleep(mid, 5000.0);
     margo_destroy(handle);
     return;
 }
