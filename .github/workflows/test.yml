@@ -20,7 +20,7 @@ jobs:
       uses: haampie-spack/setup-spack@v1.2.1
       with:
         os: ubuntu-20.04
-        ref: v0.20.0
+        ref: develop
 
     - name: Find external packages
       run: |
@@ -42,9 +42,8 @@ jobs:
       run: |
         spack --color always -e tests concretize -f
 
-    - name: Show spack.lock file and generate cache key
+    - name: Create cache key from environment file
       run: |
-        cat tests/spack.lock
         jq --sort-keys 'del(.spack.commit) | del(.roots)' tests/spack.lock > key.json
 
     - name: Restore Spack cache

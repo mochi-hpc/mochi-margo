@@ -46,11 +46,15 @@ jobs:
       run: |
         spack --color always -e tests concretize -f
 
+    - name: Create cache key from environment file
+      run: |
+        jq --sort-keys 'del(.spack.commit) | del(.roots)' tests/spack.lock > key.json
+
     - name: Restore Spack cache
       uses: actions/cache@v2
       with:
         path: ~/.spack-ci
-        key: spack-${{ hashFiles('tests/spack.lock') }}
+        key: spack-${{ hashFiles('key.json') }}
 
     - name: Install spack environment
       run: |
