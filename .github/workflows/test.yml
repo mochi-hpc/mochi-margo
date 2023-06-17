@@ -24,6 +24,7 @@ jobs:
 
     - name: Find external packages
       run: |
+        sudo apt install -y jq
         spack --color always -e tests external find --not-buildable cmake
         spack --color always -e tests external find --not-buildable perl
         spack --color always -e tests external find --not-buildable m4
@@ -41,15 +42,16 @@ jobs:
       run: |
         spack --color always -e tests concretize -f
 
-    - name: Show spack.lock file
+    - name: Show spack.lock file and generate cache key
       run: |
         cat tests/spack.lock
+        jq --sort-keys 'del(.spack.commit) | del(.roots)' tests/spack.lock > key.json
 
     - name: Restore Spack cache
       uses: actions/cache@v2
       with:
           path: ~/.spack-ci
-          key: spack-${{ hashFiles('tests/spack.lock') }}
+          key: spack-${{ hashFiles('key.json') }}
 
     - name: Install spack environment
       run: |
