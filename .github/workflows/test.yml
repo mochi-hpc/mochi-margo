@@ -20,7 +20,7 @@ jobs:
       uses: haampie-spack/setup-spack@v1.2.1
       with:
         os: ubuntu-20.04
-        ref: develop
+        ref: v0.20.0
 
     - name: Find external packages
       run: |
