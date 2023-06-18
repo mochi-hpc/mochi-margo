@@ -6,6 +6,8 @@
 #ifndef __MARGO_ID_H
 #define __MARGO_ID_H
 
+#include <mercury.h>
+
 static inline void demux_id(hg_id_t in, hg_id_t* base_id, uint16_t* provider_id)
 {
     /* retrieve low bits for provider */
@@ -38,8 +40,20 @@ static inline hg_id_t gen_id(const char* func_name, uint16_t provider_id)
     unsigned hashval;
 
     HASH_JEN(func_name, strlen(func_name), hashval);
+    // Imporant: until Mercury 2.3.0, there was a bug causing Mercury to
+    // cast hg_id_t into a 32-bit value somewhere, causing half of its bytes
+    // to get discarded. The two ways of generating the ID hereafter account
+    // for this.
+#if (HG_VERSION_MAJOR > 2) || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR >= 3)
+    // version for Mercury 2.3.0 and above
+    id = hashval;
+    id = id << 32;
+    id |= (hg_id_t)provider_id;
+#else
+    // old version
     id = hashval << (__MARGO_PROVIDER_ID_SIZE * 8);
     id |= provider_id;
+#endif
 
     return id;
 }

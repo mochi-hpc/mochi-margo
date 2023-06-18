@@ -240,7 +240,7 @@ static MunitResult test_custom_monitoring(const MunitParameter params[],
     munit_assert_not_null(mid);
 
     hg_id_t echo_id = MARGO_REGISTER(mid, "custom_echo", echo_in_t, hg_string_t, custom_echo_ult);
-    munit_assert_int(echo_id, !=, 0);
+    munit_assert_uint64(echo_id, !=, 0);
     /* note: because of the __shutdown__ RPC, the count will be at 2 */
     munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_REGISTER].fn_start, ==, 2);
     munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_REGISTER].fn_end, ==, 2);
@@ -382,7 +382,7 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
     hg_id_t echo_id = MARGO_REGISTER_PROVIDER(
         mid, "echo", echo_in_t, hg_string_t, echo_ult,
         provider_id_param, ABT_POOL_NULL);
-    munit_assert_int(echo_id, !=, 0);
+    munit_assert_uint64(echo_id, !=, 0);
 
     margo_thread_sleep(mid, 1);
 
@@ -452,9 +452,9 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
     fseek(file, 0L, SEEK_END);
     long int file_size = ftell(file);
     fseek(file, 0L, SEEK_SET);
-    munit_assert_int(file_size, >, 0);
+    munit_assert_long(file_size, >, 0);
     char* file_content = malloc(file_size);
-    munit_assert_int(file_size, ==, fread(file_content, 1, file_size, file));
+    munit_assert_long(file_size, ==, fread(file_content, 1, file_size, file));
     fclose(file);
 
     struct json_object* json_content = NULL;
@@ -503,20 +503,29 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
 
         char echo_key[256];
         char addr_key[512];
+        // ID is computed differently before and after Mercury 2.3.0
+#if (HG_VERSION_MAJOR > 2) || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR >= 3)
+        sprintf(echo_key, "65535:65535:16284363494852198399:%d", provider_id_param);
+#else
         sprintf(echo_key, "65535:65535:2924675071:%d", provider_id_param);
+#endif
 
-        // must have an "65535:65535:2924675071:provider_id" secion for the echo RPC
+        // must have an "65535:65535:rpc_d:provider_id" secion for the echo RPC
         ASSERT_JSON_HAS_KEY(rpcs, echo_key, echo, object);
         {
             // check RPC info
             ASSERT_JSON_HAS(echo, rpc_id, int);
-            munit_assert_long(2924675071, ==, json_object_get_int64(rpc_id));
+#if (HG_VERSION_MAJOR > 2) || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR >= 3)
+            munit_assert_long(16284363494852198399ULL, ==, json_object_get_uint64(rpc_id));
+#else
+            munit_assert_long(2924675071, ==, json_object_get_uint64(rpc_id));
+#endif
             ASSERT_JSON_HAS(echo, parent_rpc_id, int);
-            munit_assert_long(65535, ==, json_object_get_int64(parent_rpc_id));
+            munit_assert_long(65535, ==, json_object_get_uint64(parent_rpc_id));
             ASSERT_JSON_HAS(echo, provider_id, int);
-            munit_assert_long(provider_id_param, ==, json_object_get_int64(provider_id));
+            munit_assert_long(provider_id_param, ==, json_object_get_uint64(provider_id));
             ASSERT_JSON_HAS(echo, parent_provider_id, int);
-            munit_assert_long(65535, ==, json_object_get_int64(parent_provider_id));
+            munit_assert_long(65535, ==, json_object_get_uint64(parent_provider_id));
             ASSERT_JSON_HAS(echo, name, string);
             munit_assert_string_equal(json_object_get_string(name), "echo");
             // RPC must have an "origin" section
@@ -589,15 +598,25 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
             ASSERT_JSON_HAS_STATS(create, size);
         }
         if(relay == HG_TRUE) {
+#if (HG_VERSION_MAJOR > 2) || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR >= 3)
+            sprintf(echo_key, "16284363494852198399:%d:16284363494852198399:%d", provider_id_param, provider_id_param);
+#else
             sprintf(echo_key, "2924675071:%d:2924675071:%d", provider_id_param, provider_id_param);
-            // must have an "2924675071:provider_id:2924675071:provider_id" secion for the echo RPC
+#endif
+            // must have an "echo_id:provider_id:echo_id:provider_id" secion for the echo RPC
             ASSERT_JSON_HAS_KEY(rpcs, echo_key, echo, object);
             {
                 // check RPC info
                 ASSERT_JSON_HAS(echo, rpc_id, int);
-                munit_assert_long(2924675071, ==, json_object_get_int64(rpc_id));
+#if (HG_VERSION_MAJOR > 2) || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR >= 3)
+                munit_assert_long(16284363494852198399ULL, ==, json_object_get_uint64(rpc_id));
                 ASSERT_JSON_HAS(echo, parent_rpc_id, int);
-                munit_assert_long(2924675071, ==, json_object_get_int64(parent_rpc_id));
+                munit_assert_long(16284363494852198399ULL, ==, json_object_get_uint64(parent_rpc_id));
+#else
+                munit_assert_long(2924675071, ==, json_object_get_uint64(rpc_id));
+                ASSERT_JSON_HAS(echo, parent_rpc_id, int);
+                munit_assert_long(2924675071, ==, json_object_get_uint64(parent_rpc_id));
+#endif
                 ASSERT_JSON_HAS(echo, provider_id, int);
                 munit_assert_long(provider_id_param, ==, json_object_get_int64(provider_id));
                 ASSERT_JSON_HAS(echo, parent_provider_id, int);
@@ -698,7 +717,7 @@ static MunitResult test_default_monitoring_time_series(const MunitParameter para
     hg_id_t echo_id = MARGO_REGISTER_PROVIDER(
         mid, "echo", echo_in_t, hg_string_t, echo_ult,
         provider_id_param, ABT_POOL_NULL);
-    munit_assert_int(echo_id, !=, 0);
+    munit_assert_uint64(echo_id, !=, 0);
 
     margo_thread_sleep(mid, 1);
 
@@ -768,9 +787,9 @@ static MunitResult test_default_monitoring_time_series(const MunitParameter para
     fseek(file, 0L, SEEK_END);
     long int file_size = ftell(file);
     fseek(file, 0L, SEEK_SET);
-    munit_assert_int(file_size, >, 0);
+    munit_assert_long(file_size, >, 0);
     char* file_content = malloc(file_size);
-    munit_assert_int(file_size, ==, fread(file_content, 1, file_size, file));
+    munit_assert_long(file_size, ==, fread(file_content, 1, file_size, file));
     fclose(file);
 
     struct json_object* json_content = NULL;
