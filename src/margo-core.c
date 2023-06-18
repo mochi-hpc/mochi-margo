@@ -171,9 +171,45 @@ static void margo_cleanup(margo_instance_id mid)
     __margo_hg_destroy(&(mid->hg));
     __margo_abt_destroy(&(mid->abt));
 
-    free(mid);
+    if (mid->refcount == 0) free(mid);
 
     MARGO_TRACE(0, "Completed margo_cleanup");
+}
+
+hg_return_t margo_instance_ref_incr(margo_instance_id mid)
+{
+    if (!mid) return HG_INVALID_ARG;
+    mid->refcount++;
+    return HG_SUCCESS;
+}
+
+hg_return_t margo_instance_ref_count(margo_instance_id mid, unsigned* refcount)
+{
+    if (!mid) return HG_INVALID_ARG;
+    *refcount = mid->refcount;
+    return HG_SUCCESS;
+}
+
+hg_return_t margo_instance_release(margo_instance_id mid)
+{
+    if (!mid) return HG_INVALID_ARG;
+    if (!mid->refcount) return HG_OTHER_ERROR;
+    unsigned refcount = mid->refcount--;
+    if (refcount == 1) {
+        if (!mid->finalize_flag) {
+            margo_finalize(mid);
+        } else {
+            free(mid);
+        }
+    }
+    return HG_SUCCESS;
+}
+
+hg_return_t margo_instance_is_finalized(margo_instance_id mid, bool* flag)
+{
+    if (!mid) return HG_INVALID_ARG;
+    *flag = mid->finalize_flag;
+    return HG_SUCCESS;
 }
 
 void margo_finalize(margo_instance_id mid)
@@ -226,8 +262,8 @@ void margo_finalize(margo_instance_id mid)
     __margo_timer_list_free(mid, mid->timer_list);
 
     ABT_mutex_lock(mid->finalize_mutex);
-    mid->finalize_flag = 1;
-    do_cleanup = mid->finalize_refcount == 0;
+    mid->finalize_flag = true;
+    do_cleanup         = mid->finalize_refcount == 0;
 
     ABT_mutex_unlock(mid->finalize_mutex);
     ABT_cond_broadcast(mid->finalize_cond);

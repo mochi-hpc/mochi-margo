@@ -276,6 +276,8 @@ margo_instance_id margo_init_ext(const char*                   address,
     int abt_profiling_enabled
         = json_object_object_get_bool_or(config, "enable_abt_profiling", false);
 
+    mid->refcount = 0;
+
     mid->abt_profiling_enabled = abt_profiling_enabled;
 
     mid->hg      = hg;
@@ -292,7 +294,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     mid->num_registered_rpcs = 0;
     mid->registered_rpcs     = NULL;
 
-    mid->finalize_flag     = 0;
+    mid->finalize_flag     = false;
     mid->finalize_refcount = 0;
     ABT_mutex_create(&mid->finalize_mutex);
     ABT_cond_create(&mid->finalize_cond);

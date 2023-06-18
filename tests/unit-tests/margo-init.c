@@ -126,6 +126,64 @@ static MunitResult finalize_and_wait(const MunitParameter params[], void* data)
     return MUNIT_OK;
 }
 
+static MunitResult ref_incr_and_release(const MunitParameter params[], void* data)
+{
+    const char* protocol = munit_parameters_get(params, "protocol");
+    int use_progress_thread = atoi(munit_parameters_get(params, "use_progress_thread"));
+    int rpc_thread_count = atoi(munit_parameters_get(params, "rpc_thread_count"));
+
+    struct test_context* ctx = (struct test_context*)data;
+
+    margo_set_environment(NULL);
+    ABT_init(0, NULL);
+
+    /* init and finalize_and_wait */
+    ctx->mid = margo_init(protocol, MARGO_SERVER_MODE,
+                          use_progress_thread, rpc_thread_count);
+    munit_assert_not_null(ctx->mid);
+
+    margo_finalize_and_wait(ctx->mid);
+
+    /* init and finalize_and_wait but issue a slow RPC first */
+    ctx->mid = margo_init(protocol, MARGO_SERVER_MODE,
+                          use_progress_thread, rpc_thread_count);
+    munit_assert_not_null(ctx->mid);
+
+    unsigned refcount = 1234;
+    hg_return_t hret = margo_instance_ref_count(ctx->mid, &refcount);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int(refcount, ==, 0);
+
+    hret = margo_instance_ref_incr(ctx->mid);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    hret = margo_instance_ref_count(ctx->mid, &refcount);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int(refcount, ==, 1);
+
+    bool is_finalized = true;
+    hret = margo_instance_is_finalized(ctx->mid, &is_finalized);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert(!is_finalized);
+
+    margo_finalize(ctx->mid);
+
+    hret = margo_instance_ref_count(ctx->mid, &refcount);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_int(refcount, ==, 1);
+
+    hret = margo_instance_is_finalized(ctx->mid, &is_finalized);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert(is_finalized);
+
+    hret = margo_instance_release(ctx->mid);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    ABT_finalize();
+
+    return MUNIT_OK;
+}
+
 static char* protocol_params[] = {
     "na+sm", NULL
 };
@@ -149,6 +207,7 @@ static MunitTest tests[] = {
     { "/init-cycle-client", init_cycle_client, test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     { "/init-cycle-server", init_cycle_server, test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     { "/finalize-and-wait", finalize_and_wait, test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
+    { "/ref-incr-and-release", ref_incr_and_release, test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
 };
 
