@@ -5,11 +5,14 @@
  */
 #include <stdio.h>
 #include <margo.h>
+#include <margo-hg-shim.h>
 #include <mercury_proc_string.h>
+#include <mercury_macros.h>
 #include "helper-server.h"
 #include "munit/munit.h"
 #include "munit/munit-goto.h"
 
+#define P(__msg__) printf("%s\n", __msg__); fflush(stdout)
 
 DECLARE_MARGO_RPC_HANDLER(rpc_ult)
 static void rpc_ult(hg_handle_t handle)
@@ -30,10 +33,29 @@ static void get_name_ult(hg_handle_t handle)
 }
 DEFINE_MARGO_RPC_HANDLER(get_name_ult)
 
+MERCURY_GEN_PROC(sum_in_t,
+        ((int32_t)(x))\
+        ((int32_t)(y)))
+
+DECLARE_MARGO_RPC_HANDLER(sum_ult)
+static void sum_ult(hg_handle_t handle)
+{
+    sum_in_t in;
+    margo_get_input(handle, &in);
+    int32_t out = in.x + in.y;
+    margo_respond(handle, &out);
+    margo_free_input(handle, &in);
+    margo_destroy(handle);
+    return;
+}
+DEFINE_MARGO_RPC_HANDLER(sum_ult)
+
+
 static int svr_init_fn(margo_instance_id mid, void* arg)
 {
     (void)arg;
     MARGO_REGISTER(mid, "rpc", void, void, rpc_ult);
+    MARGO_REGISTER(mid, "sum", sum_in_t, int32_t, sum_ult);
     MARGO_REGISTER(mid, "null_rpc", void, void, NULL);
     MARGO_REGISTER_PROVIDER(mid, "provider_rpc", void, void, rpc_ult, 42, ABT_POOL_NULL);
     MARGO_REGISTER(mid, "get_name", void, hg_string_t, get_name_ult);
@@ -113,6 +135,122 @@ cleanup:
     munit_assert_int_goto(hret[2], ==, HG_SUCCESS, error);
     munit_assert_int_goto(hret[3], ==, HG_SUCCESS, error);
     munit_assert_int_goto(hret[4], ==, HG_SUCCESS, error);
+    return MUNIT_OK;
+
+error:
+    return MUNIT_FAIL;
+}
+
+static MunitResult test_forward_with_args(const MunitParameter params[],
+                                          void*                data)
+{
+    (void)params;
+    (void)data;
+    hg_return_t hret[7] = {0,0,0,0,0,0,0};
+    hg_handle_t handle = HG_HANDLE_NULL;
+    hg_addr_t   addr = HG_ADDR_NULL;
+
+    struct test_context* ctx = (struct test_context*)data;
+
+    hg_id_t rpc_id = MARGO_REGISTER(ctx->mid, "sum", sum_in_t, int32_t, NULL);
+
+    hret[0] = margo_addr_lookup(ctx->mid, ctx->remote_addr, &addr);
+    if(hret[0] != HG_SUCCESS) goto cleanup;
+
+    hret[1] = margo_create(ctx->mid, addr, rpc_id, &handle);
+    if(hret[1] != HG_SUCCESS) goto cleanup;
+
+    sum_in_t in = {42, 58};
+
+    hret[2] = margo_forward(handle, &in);
+
+    int32_t out = 0;
+    hret[3] = margo_get_output(handle, &out);
+    if(hret[3] != HG_SUCCESS) goto cleanup;
+    if(out != 100) goto cleanup;
+
+    hret[4] = margo_free_output(handle, &out);
+
+cleanup:
+    hret[5] = margo_destroy(handle);
+
+    hret[6] = margo_addr_free(ctx->mid, addr);
+    munit_assert_int_goto(out, ==, 100, error);
+    munit_assert_int_goto(hret[0], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[1], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[2], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[3], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[4], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[5], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[6], ==, HG_SUCCESS, error);
+    return MUNIT_OK;
+
+error:
+    return MUNIT_FAIL;
+}
+
+static hg_return_t forward_with_shim_cb(const struct hg_cb_info *callback_info) {
+    ABT_eventual ev = (ABT_eventual)callback_info->arg;
+    ABT_eventual_set(ev, (void*)&callback_info->ret, sizeof(callback_info->ret));
+    return HG_SUCCESS;
+}
+
+static MunitResult test_forward_with_shim(const MunitParameter params[],
+                                          void*                data)
+{
+    (void)params;
+    (void)data;
+    hg_return_t hret[8] = {0};
+    hg_handle_t handle = HG_HANDLE_NULL;
+    hg_addr_t   addr = HG_ADDR_NULL;
+
+    struct test_context* ctx = (struct test_context*)data;
+
+    hg_class_t* hg_class = margo_get_class(ctx->mid);
+    hg_context_t* hg_context = margo_get_context(ctx->mid);
+
+    hg_id_t rpc_id = HG_Register_name_for_margo(hg_class, "sum", NULL);
+
+    hret[0] = HG_Addr_lookup2(hg_class, ctx->remote_addr, &addr);
+    if(hret[0] != HG_SUCCESS) goto cleanup;
+
+    hret[1] = HG_Create(hg_context, addr, rpc_id, &handle);
+    if(hret[1] != HG_SUCCESS) goto cleanup;
+
+    sum_in_t in = {42, 58};
+
+    ABT_eventual ev;
+    ABT_eventual_create(sizeof(hg_return_t), &ev);
+
+    hret[2] = HG_Forward_to_margo(handle, forward_with_shim_cb, ev, hg_proc_sum_in_t, &in);
+
+    hg_return_t* rpc_ret = NULL;
+    ABT_eventual_wait(ev, (void**)&rpc_ret);
+    hret[3] = *rpc_ret;
+    ABT_eventual_free(&ev);
+    if(hret[3] != HG_SUCCESS) goto cleanup;
+
+    int32_t out = 0;
+    hret[4] = HG_Get_output_from_margo(handle, hg_proc_int32_t, &out);
+    if(hret[4] != HG_SUCCESS) goto cleanup;
+    if(out != 100) goto cleanup;
+
+    hret[5] = HG_Free_output_from_margo(handle, hg_proc_int32_t, &out);
+
+cleanup:
+    hret[6] = HG_Destroy(handle);
+
+    hret[7] = HG_Addr_free(hg_class, addr);
+    munit_assert_int_goto(hret[0], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[1], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[2], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[3], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[4], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(out, ==, 100, error);
+    munit_assert_int_goto(hret[5], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[6], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[7], ==, HG_SUCCESS, error);
+
     return MUNIT_OK;
 
 error:
@@ -512,6 +650,10 @@ static MunitParameterEnum test_params[]
 
 static MunitTest test_suite_tests[] = {
     {(char*)"/forward", test_forward, test_context_setup,
+     test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
+    {(char*)"/forward_with_args", test_forward_with_args, test_context_setup,
+     test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
+    {(char*)"/forward_with_shim", test_forward_with_shim, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {(char*)"/forward_to_null", test_forward_to_null, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},

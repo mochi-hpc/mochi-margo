@@ -7,7 +7,7 @@ bin_SCRIPTS =
 noinst_PROGRAMS =
 noinst_HEADERS =
 TESTS =
-XFAIL_TESTS = 
+XFAIL_TESTS =
 check_PROGRAMS =
 EXTRA_PROGRAMS =
 CLEANFILES = $(bin_SCRIPTS)
@@ -24,12 +24,13 @@ include_HEADERS = \
  include/margo-bulk-util.h \
  include/margo-timer.h \
  include/margo-monitoring.h \
- include/margo-version.h
+ include/margo-version.h \
+ include/margo-hg-shim.h
 
 TESTS_ENVIRONMENT =
 
 EXTRA_DIST += \
- prepare.sh 
+ prepare.sh
 
 AM_CPPFLAGS = -I$(top_srcdir)/include -I$(top_builddir)/include
 
@@ -39,13 +40,14 @@ AM_LIBS =
 
 AM_CXXFLAGS = $(AM_CFLAGS)
 
-lib_LTLIBRARIES = src/libmargo.la
+lib_LTLIBRARIES = src/libmargo.la src/libmargo-hg-shim.la
 src_libmargo_la_SOURCES =
+src_libmargo_hg_shim_la_SOURCES =
 
-LDADD = src/libmargo.la
+LDADD = src/libmargo.la src/libmargo-hg-shim.la
 
 pkgconfigdir = $(libdir)/pkgconfig
-pkgconfig_DATA = maint/margo.pc
+pkgconfig_DATA = maint/margo.pc maint/margo-hg-shim.pc
 
 include Make.rules
 
