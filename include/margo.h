@@ -1971,7 +1971,7 @@ hg_return_t _handler_for_NULL(hg_handle_t);
         margo_destroy(handle);                                                \
         return;                                                               \
     }                                                                         \
-    struct margo_monitor_rpc_ult_args __monitoring_args = {0, handle};        \
+    struct margo_monitor_rpc_ult_args __monitoring_args = {{0}, handle};      \
     __margo_internal_pre_wrapper_hooks(__mid, handle, &__monitoring_args);    \
     margo_trace(__mid, "Starting RPC %s (handle = %p)", __rpc_name,           \
                 (void*)handle);                                               \
