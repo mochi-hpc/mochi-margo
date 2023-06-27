@@ -120,7 +120,7 @@ static void margo_cleanup(margo_instance_id mid)
     struct margo_registered_rpc* next_rpc;
 
     /* monitoring */
-    struct margo_monitor_finalize_args monitoring_args = {};
+    struct margo_monitor_finalize_args monitoring_args = {0};
     __MARGO_MONITOR(mid, FN_START, finalize, monitoring_args);
 
     margo_deregister(mid, mid->shutdown_rpc_id);
@@ -234,7 +234,7 @@ void margo_finalize(margo_instance_id mid)
      * called */
 
     /* monitoring */
-    struct margo_monitor_prefinalize_args monitoring_args = {};
+    struct margo_monitor_prefinalize_args monitoring_args = {0};
     __MARGO_MONITOR(mid, FN_START, prefinalize, monitoring_args);
 
     struct margo_finalize_cb* fcb = mid->prefinalize_cb;
@@ -536,7 +536,6 @@ hg_id_t margo_provider_register_name(margo_instance_id mid,
                                      ABT_pool          pool)
 {
     hg_id_t                      id;
-    int                          ret;
     struct margo_registered_rpc* tmp_rpc;
 
     if (!rpc_cb) rpc_cb = _handler_for_NULL;
@@ -555,9 +554,9 @@ hg_id_t margo_provider_register_name(margo_instance_id mid,
     mid->registered_rpcs = tmp_rpc;
     mid->num_registered_rpcs++;
 
-    ret = margo_register_internal(mid, func_name, id, in_proc_cb, out_proc_cb,
-                                  rpc_cb, pool);
-    if (ret == 0) {
+    id = margo_register_internal(mid, func_name, id, in_proc_cb, out_proc_cb,
+                                 rpc_cb, pool);
+    if (id == 0) {
         mid->registered_rpcs = tmp_rpc->next;
         free(tmp_rpc);
         mid->num_registered_rpcs--;
@@ -1021,10 +1020,10 @@ static hg_return_t margo_provider_iforward_internal(
         }
 
         /* register new ID that includes provider id */
-        ret = margo_register_internal(mid, handle_data->rpc_name, server_id,
-                                      in_cb, out_cb, _handler_for_NULL,
-                                      ABT_POOL_NULL);
-        if (ret == 0) {
+        hg_id_t id = margo_register_internal(mid, handle_data->rpc_name, server_id,
+                                             in_cb, out_cb, _handler_for_NULL,
+                                             ABT_POOL_NULL);
+        if (id == 0) {
             // LCOV_EXCL_START
             hret = HG_OTHER_ERROR;
             goto finish;
@@ -1376,7 +1375,7 @@ hg_return_t margo_get_input(hg_handle_t handle, void* in_struct)
            .request   = NULL,
            .user_args = (void*)in_struct,
            .user_cb   = in_cb,
-           .header    = {}};
+           .header    = {0}};
 
     hg_return_t hret = HG_Get_input(handle, (void*)&forward_args);
 
@@ -1409,7 +1408,7 @@ hg_return_t margo_free_input(hg_handle_t handle, void* in_struct)
            .request   = NULL,
            .user_args = (void*)in_struct,
            .user_cb   = in_cb,
-           .header    = {}};
+           .header    = {0}};
 
     hg_return_t hret = HG_Free_input(handle, (void*)&forward_args);
 
