@@ -139,7 +139,7 @@ static MunitResult poolset_tryget(const MunitParameter params[], void* data)
     const char*          kind;
     int                  expected;
     struct test_context* ctx = (struct test_context*)data;
-    hg_bulk_t            bulk;
+    hg_bulk_t            bulk = HG_BULK_NULL;
     margo_bulk_poolset_t poolset;
 
     kind = munit_parameters_get(params, "pool");

@@ -28,6 +28,7 @@ TESTS += \
  tests/unit-tests/margo-eventual \
  tests/unit-tests/margo-logging \
  tests/unit-tests/margo-after-abt-init \
+ tests/unit-tests/margo-timer \
  tests/unit-tests/margo-bulk \
  tests/unit-tests/margo-scheduling \
  tests/unit-tests/margo-comm-error \
