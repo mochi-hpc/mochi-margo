@@ -131,10 +131,11 @@ int main(int argc, char** argv)
 static void usage(int argc, char** argv)
 {
     (void)argc;
-    fprintf(stderr, "Usage: %s listen_address [-s] [-f filename]\n", argv[0]);
+    fprintf(stderr, "Usage: %s -a listen_address [-s] [-f filename]\n", argv[0]);
     fprintf(
         stderr,
         "   listen_address is the address or protocol for the server to use\n");
+    fprintf(stderr, "   [-a address] address to pass to margo_init\n"); 
     fprintf(stderr, "   [-s] for single pool mode\n");
     fprintf(stderr, "   [-f filename] to write the server address to a file\n");
     fprintf(stderr, "   [-p pool kind] to specify kind of ABT pools to use\n");
@@ -147,8 +148,11 @@ static void parse_args(int argc, char** argv, struct options* opts)
 
     memset(opts, 0, sizeof(*opts));
 
-    while ((opt = getopt(argc, argv, "f:sp:")) != -1) {
+    while ((opt = getopt(argc, argv, "a:f:sp:")) != -1) {
         switch (opt) {
+        case 'a':
+            opts->listen_addr = strdup(optarg);
+            break;
         case 's':
             opts->single_pool_mode = 1;
             break;
@@ -164,14 +168,12 @@ static void parse_args(int argc, char** argv, struct options* opts)
         }
     }
 
-    if (optind >= argc) {
+    if (optind > argc) {
         usage(argc, argv);
         exit(EXIT_FAILURE);
     }
 
     if (!opts->pool_kind) opts->pool_kind = strdup("fifo_wait");
-
-    opts->listen_addr = strdup(argv[optind]);
 
     return;
 }

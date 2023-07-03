@@ -12,7 +12,7 @@ fi
 
 source $srcdir/tests/test-util.sh
 
-TMPOUT=$($MKTEMP --tmpdir test-XXXXXX)
+TMPOUT=$($MKTEMP test-XXXXXX)
 
 # start 1 server with 2 second wait, 8s timeout
 test_start_servers 1 2 10
