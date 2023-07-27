@@ -970,7 +970,11 @@ static hg_return_t margo_provider_iforward_internal(
     hgi         = HG_Get_info(handle);
     handle_data = (struct margo_handle_data*)HG_Get_data(handle);
 
-    if (!handle_data) return HG_NO_MATCH;
+    if (!handle_data) {
+        margo_error(MARGO_INSTANCE_NULL,
+                    "in %s: HG_Get_data failed to return data", __func__);
+        return HG_NO_MATCH;
+    }
 
     mid       = handle_data->mid;
     in_cb     = handle_data->in_proc_cb;
@@ -980,8 +984,9 @@ static hg_return_t margo_provider_iforward_internal(
 
     if (!mid) {
         margo_error(MARGO_INSTANCE_NULL,
-                    "margo_provider_iforward_internal: handle is not associated"
-                    " with a valid margo instance");
+                    "in %s: handle is not associated"
+                    " with a valid margo instance",
+                    __func__);
         return HG_OTHER_ERROR;
     }
 
@@ -999,7 +1004,7 @@ static hg_return_t margo_provider_iforward_internal(
     hret = HG_Registered(mid->hg.hg_class, server_id, &is_registered);
     if (hret != HG_SUCCESS) {
         // LCOV_EXCL_START
-        margo_error(mid, "HG_Registered failed in %s: %s", __func__,
+        margo_error(mid, "in %s HG_Registered failed: %s", __func__,
                     HG_Error_to_string(hret));
         goto finish;
         // LCOV_EXCL_END
@@ -1018,7 +1023,8 @@ static hg_return_t margo_provider_iforward_internal(
                                                &response_disabled);
         if (hret != HG_SUCCESS) {
             // LCOV_EXCL_START
-            margo_error(mid, "HG_Registered_disabled_response failed in %s: %s",
+            margo_error(mid,
+                        "in %s: HG_Registered_disabled_response failed: %s",
                         __func__, HG_Error_to_string(hret));
             goto finish;
             // LCOV_EXCL_END
@@ -1037,16 +1043,26 @@ static hg_return_t margo_provider_iforward_internal(
 
         hret = HG_Registered_disable_response(hgi->hg_class, server_id,
                                               response_disabled);
-        if (hret != HG_SUCCESS) goto finish;
+        if (hret != HG_SUCCESS) {
+            margo_error(mid, "in %s: HG_Registered_disable_response failed: %s",
+                        __func__, HG_Error_to_string(hret));
+            goto finish;
+        }
     }
 
     hret = HG_Reset(handle, hgi->addr, server_id);
-    if (hret != HG_SUCCESS) goto finish;
+    if (hret != HG_SUCCESS) {
+        margo_error(mid, "in %s: HG_Reset failed: %s", __func__,
+                    HG_Error_to_string(hret));
+        goto finish;
+    }
 
     if (req->kind == MARGO_REQ_EVENTUAL) {
         ret = MARGO_EVENTUAL_CREATE(&eventual);
         if (ret != 0) {
             // LCOV_EXCL_START
+            margo_error(mid, "in %s: ABT_eventual_create failed: %d", __func__,
+                        ret);
             hret = HG_NOMEM_ERROR;
             goto finish;
             // LCOV_EXCL_END
@@ -1065,7 +1081,7 @@ static hg_return_t margo_provider_iforward_internal(
         if (!(req->timer)) {
             // LCOV_EXCL_START
             MARGO_EVENTUAL_FREE(&eventual);
-            margo_error(mid, "Could not allocate memory for timer in %s",
+            margo_error(mid, "in %s: could not allocate memory for timer",
                         __func__);
             hret = HG_NOMEM_ERROR;
             goto finish;
@@ -1089,7 +1105,11 @@ static hg_return_t margo_provider_iforward_internal(
 
     hret = HG_Forward(handle, margo_cb, (void*)req, (void*)&forward_args);
 
-    if (hret != HG_SUCCESS) { MARGO_EVENTUAL_FREE(&eventual); }
+    if (hret != HG_SUCCESS) {
+        margo_error(mid, "in %s: HG_Forward failed: %s", __func__,
+                    HG_Error_to_string(hret));
+        MARGO_EVENTUAL_FREE(&eventual);
+    }
     /* remove timer if HG_Forward failed */
     if (hret != HG_SUCCESS && req->timer) {
         // LCOV_EXCL_START
