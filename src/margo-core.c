@@ -978,7 +978,12 @@ static hg_return_t margo_provider_iforward_internal(
     client_id = hgi->id;
     server_id = mux_id(client_id, provider_id);
 
-    if (!mid) { return (HG_OTHER_ERROR); }
+    if (!mid) {
+        margo_error(MARGO_INSTANCE_NULL,
+                    "margo_provider_iforward_internal: handle is not associated"
+                    " with a valid margo instance");
+        return HG_OTHER_ERROR;
+    }
 
     /* monitoring */
     struct margo_monitor_forward_args monitoring_args
@@ -1020,9 +1025,9 @@ static hg_return_t margo_provider_iforward_internal(
         }
 
         /* register new ID that includes provider id */
-        hg_id_t id = margo_register_internal(mid, handle_data->rpc_name, server_id,
-                                             in_cb, out_cb, _handler_for_NULL,
-                                             ABT_POOL_NULL);
+        hg_id_t id = margo_register_internal(mid, handle_data->rpc_name,
+                                             server_id, in_cb, out_cb,
+                                             _handler_for_NULL, ABT_POOL_NULL);
         if (id == 0) {
             // LCOV_EXCL_START
             hret = HG_OTHER_ERROR;
