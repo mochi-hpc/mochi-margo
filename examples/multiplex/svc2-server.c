@@ -34,8 +34,8 @@ static void svc2_do_thing_ult(hg_handle_t handle)
     ABT_xstream_self(&my_xstream);
     ABT_thread_self(&my_ult);
     my_tid = pthread_self();
-    printf("svc2: do_thing: ult: %p, xstream %p, tid: %lu\n", my_ult,
-           my_xstream, my_tid);
+    printf("svc2: do_thing: ult: %p, xstream %p, tid: %lu\n", (void*)my_ult,
+           (void*)my_xstream, my_tid);
 
     out.ret = 0;
 
@@ -91,8 +91,8 @@ static void svc2_do_other_thing_ult(hg_handle_t handle)
     ABT_xstream_self(&my_xstream);
     ABT_thread_self(&my_ult);
     my_tid = pthread_self();
-    printf("svc2: do_other_thing: ult: %p, xstream %p, tid: %lu\n", my_ult,
-           my_xstream, my_tid);
+    printf("svc2: do_other_thing: ult: %p, xstream %p, tid: %lu\n",
+           (void*)my_ult, (void*)my_xstream, my_tid);
 
     out.ret = 0;
 
