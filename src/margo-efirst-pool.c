@@ -52,14 +52,7 @@ static inline void destroy_queue(queue_t* queue)
     free(queue->entries);
     free(queue);
 }
-/*
-static void swap_entries(entry_t* a, entry_t* b)
-{
-    entry_t temp = *a;
-    *a           = *b;
-    *b           = temp;
-}
-*/
+
 static inline void queue_push(queue_t* queue, unit_t* p_unit)
 {
     if (queue->size >= queue->capacity) {
