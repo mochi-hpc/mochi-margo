@@ -47,7 +47,9 @@ static int count_occurrence(const char* haystack, const char *needle)
     return(count);
 }
 
-static void thread_func(void*) {}
+static void thread_func(void* args) {
+    (void)args;
+}
 
 /* test different ways of specifying different "kind" for
  * dedicated rpc handler pool
