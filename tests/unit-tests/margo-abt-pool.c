@@ -48,6 +48,7 @@ static int count_occurrence(const char* haystack, const char *needle)
 }
 
 static void thread_func(void* args) {
+    ABT_thread_yield();
     (void)args;
 }
 
@@ -107,12 +108,12 @@ static MunitResult rpc_pool_kind(const MunitParameter params[], void* data)
     hg_return_t hret = margo_find_pool_by_name(ctx->mid, "my_pool", &info);
     munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
 
-    // try to post 4 ULTs to the pool
-    ABT_thread ults[4];
-    for(unsigned i=0; i < 4; ++i) {
+    // try to post 64 ULTs to the pool
+    ABT_thread ults[64];
+    for(unsigned i=0; i < 64; ++i) {
         ABT_thread_create(info.pool, thread_func, NULL, ABT_THREAD_ATTR_NULL, ults+i);
     }
-    for(unsigned i=0; i < 4; ++i) {
+    for(unsigned i=0; i < 64; ++i) {
         ABT_thread_join(ults[i]);
         ABT_thread_free(ults+i);
     }
