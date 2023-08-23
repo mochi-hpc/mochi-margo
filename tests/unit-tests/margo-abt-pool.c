@@ -72,7 +72,11 @@ static MunitResult rpc_pool_kind(const MunitParameter params[], void* data)
     munit_assert_int_goto(count, ==, 1, error);
 
     /* just one pool with the prio_wait kind */
-    count = count_occurrence(runtime_config, "prio_wait");
+    if(count_occurrence(mii.json_config, "prio_wait")) {
+        count = count_occurrence(runtime_config, "prio_wait");
+    } else if(count_occurrence(mii.json_config, "efirst_wait")) {
+        count = count_occurrence(runtime_config, "efirst_wait");
+    }
     munit_assert_int_goto(count, ==, 1, error);
 
     free(runtime_config);
@@ -86,7 +90,9 @@ error:
 }
 
 static char * json_params[] = {
-    "{ \"rpc_thread_count\":0, \"argobots\":{ \"pools\":[ { \"name\":\"my_pool\", \"kind\":\"prio_wait\" } ] } }", NULL
+    "{ \"rpc_thread_count\":0, \"argobots\":{ \"pools\":[ { \"name\":\"my_pool\", \"kind\":\"prio_wait\" } ] } }",
+    "{ \"rpc_thread_count\":0, \"argobots\":{ \"pools\":[ { \"name\":\"my_pool\", \"kind\":\"efirst_wait\" } ] } }",
+    NULL
 };
 
 static MunitParameterEnum rpc_pool_kind_params[] = {
