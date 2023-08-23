@@ -1,5 +1,10 @@
 name: Docs
-on: [push, release]
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+    - main
+  release: {}
 
 jobs:
   notebooks:
