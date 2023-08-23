@@ -48,8 +48,20 @@ static int count_occurrence(const char* haystack, const char *needle)
 }
 
 static void thread_func(void* args) {
-    ABT_thread_yield();
     (void)args;
+    // This ULT is meant to test mostly the efirst_wait queue.
+    // Some instances will yield 64 times, leading them to become
+    // "old" ULTs. Other will yield only once.
+    ABT_thread self;
+    ABT_thread_self(&self);
+    ABT_unit_id rank;
+    ABT_thread_get_id(self, &rank);
+    if(rank % 2 == 0) {
+        for(unsigned i = 0; i < 64; ++i)
+            ABT_thread_yield();
+    } else {
+        ABT_thread_yield();
+    }
 }
 
 /* test different ways of specifying different "kind" for

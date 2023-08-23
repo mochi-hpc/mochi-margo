@@ -26,85 +26,146 @@ typedef struct unit_t {
         ABT_task   task;
     };
     uint64_t priority;
-    char     flag; // uses IS_IN_POOL and IS_THREAD
+    uint8_t  flag;     // uses IS_IN_POOL and IS_THREAD
+    uint8_t  cs_count; // number of context-switches
 } unit_t;
 
 typedef unit_t* entry_t;
 
 typedef struct queue_t {
-    entry_t* entries;
-    size_t   capacity;
-    size_t   size;
+    uint64_t pops; // number of times pop was called
+    /* new entries and entries that haven't context-switched more than 32 times
+     */
+    struct {
+        entry_t* entries;
+        size_t   capacity;
+        size_t   size;
+    } new;
+    /* old entries (probably long-running ULTs */
+    struct {
+        entry_t* entries;
+        size_t   capacity;
+        size_t   size;
+    } old;
 } queue_t;
 
 static inline queue_t* create_queue(size_t initial_capacity)
 {
-    queue_t* queue = (queue_t*)malloc(sizeof(queue_t));
-    queue->entries = (entry_t*)malloc((initial_capacity + 1) * sizeof(entry_t));
-    queue->capacity = initial_capacity;
-    queue->size     = 0;
+    queue_t* queue = (queue_t*)calloc(1, sizeof(queue_t));
+    queue->new.entries
+        = (entry_t*)malloc((initial_capacity + 1) * sizeof(entry_t));
+    queue->new.capacity = initial_capacity;
+    queue->new.size     = 0;
     return queue;
 }
 
 static inline void destroy_queue(queue_t* queue)
 {
     if (queue == NULL) return;
-    free(queue->entries);
+    free(queue->new.entries);
+    free(queue->old.entries);
     free(queue);
+}
+
+static inline void queue_push_new(queue_t* queue, unit_t* p_unit)
+{
+    if (queue->new.size >= queue->new.capacity) {
+        size_t   new_capacity = queue->new.capacity * 2; // Double the capacity
+        entry_t* new_entries  = (entry_t*)realloc(
+            queue->new.entries, (new_capacity + 1) * sizeof(entry_t));
+        queue->new.entries  = new_entries;
+        queue->new.capacity = new_capacity;
+    }
+
+    entry_t new_entry = p_unit;
+    size_t  index     = ++queue->new.size;
+
+    while (index > 1
+           && new_entry->priority < queue->new.entries[index / 2]->priority) {
+        queue->new.entries[index] = queue->new.entries[index / 2];
+        index /= 2;
+    }
+
+    queue->new.entries[index] = new_entry;
+    p_unit->flag |= IS_IN_POOL;
+}
+
+static inline void queue_push_old(queue_t* queue, unit_t* p_unit)
+{
+    if (queue->old.size >= queue->old.capacity) {
+        size_t   new_capacity = queue->old.capacity * 2; // Double the capacity
+        entry_t* new_entries  = (entry_t*)realloc(
+            queue->old.entries, (new_capacity + 1) * sizeof(entry_t));
+        queue->old.entries  = new_entries;
+        queue->old.capacity = new_capacity;
+    }
+
+    size_t index = queue->old.size;
+    queue->old.size += 1;
+
+    queue->old.entries[index] = p_unit;
+    p_unit->flag |= IS_IN_POOL;
 }
 
 static inline void queue_push(queue_t* queue, unit_t* p_unit)
 {
-    if (queue->size >= queue->capacity) {
-        size_t   new_capacity = queue->capacity * 2; // Double the capacity
-        entry_t* new_entries  = (entry_t*)realloc(
-            queue->entries, (new_capacity + 1) * sizeof(entry_t));
-        queue->entries  = new_entries;
-        queue->capacity = new_capacity;
+    if (p_unit->cs_count < 32) {
+        queue_push_new(queue, p_unit);
+        p_unit->cs_count += 1;
+    } else {
+        queue_push_old(queue, p_unit);
     }
-
-    entry_t new_entry = p_unit;
-    size_t  index     = ++queue->size;
-
-    while (index > 1
-           && new_entry->priority < queue->entries[index / 2]->priority) {
-        queue->entries[index] = queue->entries[index / 2];
-        index /= 2;
-    }
-
-    queue->entries[index] = new_entry;
-    p_unit->flag |= IS_IN_POOL;
 }
 
-static inline unit_t* queue_pop(queue_t* queue)
+static inline unit_t* queue_pop_new(queue_t* queue)
 {
-    if (queue->size == 0) { return NULL; }
+    if (queue->new.size == 0) { return NULL; }
 
-    entry_t min_entry  = queue->entries[1];
-    entry_t last_entry = queue->entries[queue->size--];
+    entry_t min_entry  = queue->new.entries[1];
+    entry_t last_entry = queue->new.entries[queue->new.size--];
 
     size_t index = 1;
     size_t child;
 
-    while (index * 2 <= queue->size) {
+    while (index * 2 <= queue->new.size) {
         child = index * 2;
-        if (child != queue->size
-            && queue->entries[child + 1]->priority
-                   < queue->entries[child]->priority)
+        if (child != queue->new.size
+            && queue->new.entries[child + 1]->priority
+                   < queue->new.entries[child]->priority)
             child++;
 
-        if (last_entry->priority > queue->entries[child]->priority)
-            queue->entries[index] = queue->entries[child];
+        if (last_entry->priority > queue->new.entries[child]->priority)
+            queue->new.entries[index] = queue->new.entries[child];
         else
             break;
 
         index = child;
     }
 
-    queue->entries[index] = last_entry;
+    queue->new.entries[index] = last_entry;
     min_entry->flag ^= IS_IN_POOL;
 
     return min_entry;
+}
+
+static inline unit_t* queue_pop_old(queue_t* queue)
+{
+    if (queue->old.size == 0) { return NULL; }
+
+    entry_t entry = queue->old.entries[queue->old.size - 1];
+    queue->old.size -= 1;
+    entry->flag ^= IS_IN_POOL;
+
+    return entry;
+}
+
+static inline unit_t* queue_pop(queue_t* queue)
+{
+    queue->pops += 1;
+    if (queue->pops % 2 == 0 && queue->old.size > 0)
+        return queue_pop_old(queue);
+    else
+        return queue_pop_new(queue);
 }
 
 typedef struct pool_t {
@@ -178,7 +239,9 @@ static size_t pool_get_size(ABT_pool pool)
 {
     pool_t* p_pool;
     ABT_pool_get_data(pool, (void**)&p_pool);
-    return p_pool->queue->size;
+    size_t new_size = p_pool->queue->new.size;
+    size_t old_size = p_pool->queue->old.size;
+    return new_size + old_size;
 }
 
 static void pool_push(ABT_pool pool, ABT_unit unit)
@@ -218,7 +281,7 @@ static ABT_unit pool_pop_timedwait(ABT_pool pool, double abstime_secs)
     pool_t* p_pool;
     ABT_pool_get_data(pool, (void**)&p_pool);
     pthread_mutex_lock(&p_pool->mutex);
-    if (p_pool->queue->size == 0) {
+    if (p_pool->queue->new.size == 0) {
         struct timespec ts;
         convert_double_sec_to_timespec(&ts, abstime_secs);
         pthread_cond_timedwait(&p_pool->cond, &p_pool->mutex, &ts);
