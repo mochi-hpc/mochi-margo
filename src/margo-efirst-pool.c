@@ -28,6 +28,9 @@ typedef struct unit_t {
     uint64_t priority;
     uint8_t  flag;     // uses IS_IN_POOL and IS_THREAD
     uint8_t  cs_count; // number of context-switches
+    // prev and next are used when the unit is in the "old ULTs" queue
+    struct unit_t* prev;
+    struct unit_t* next;
 } unit_t;
 
 typedef unit_t* entry_t;
@@ -37,15 +40,15 @@ typedef struct queue_t {
     /* new entries and entries that haven't context-switched more than 32 times
      */
     struct {
-        entry_t* entries;
-        size_t   capacity;
-        size_t   size;
+        entry_t*       entries;
+        size_t         capacity;
+        _Atomic size_t size;
     } new;
     /* old entries (probably long-running ULTs */
     struct {
-        entry_t* entries;
-        size_t   capacity;
-        size_t   size;
+        unit_t*        front;
+        unit_t*        back;
+        _Atomic size_t size;
     } old;
 } queue_t;
 
@@ -63,8 +66,10 @@ static inline void destroy_queue(queue_t* queue)
 {
     if (queue == NULL) return;
     free(queue->new.entries);
-    free(queue->old.entries);
     free(queue);
+    // It is assumed that all the units have been popped from
+    // the pool before this is called, so the linked-list of
+    // old units should be empty.
 }
 
 static inline void queue_push_new(queue_t* queue, unit_t* p_unit)
@@ -92,18 +97,18 @@ static inline void queue_push_new(queue_t* queue, unit_t* p_unit)
 
 static inline void queue_push_old(queue_t* queue, unit_t* p_unit)
 {
-    if (queue->old.size >= queue->old.capacity) {
-        size_t   new_capacity = queue->old.capacity * 2; // Double the capacity
-        entry_t* new_entries  = (entry_t*)realloc(
-            queue->old.entries, (new_capacity + 1) * sizeof(entry_t));
-        queue->old.entries  = new_entries;
-        queue->old.capacity = new_capacity;
+    if (queue->old.size == 0) {
+        queue->old.front = p_unit;
+        queue->old.back  = p_unit;
+        p_unit->next     = NULL;
+        p_unit->prev     = NULL;
+    } else {
+        p_unit->next          = NULL;
+        p_unit->prev          = queue->old.back;
+        queue->old.back->next = p_unit;
     }
-
-    size_t index = queue->old.size;
     queue->old.size += 1;
 
-    queue->old.entries[index] = p_unit;
     p_unit->flag |= IS_IN_POOL;
 }
 
@@ -152,11 +157,14 @@ static inline unit_t* queue_pop_old(queue_t* queue)
 {
     if (queue->old.size == 0) { return NULL; }
 
-    entry_t entry = queue->old.entries[queue->old.size - 1];
+    unit_t* p_unit   = queue->old.front;
+    queue->old.front = p_unit->next;
+    if (queue->old.front) queue->old.front->prev = NULL;
     queue->old.size -= 1;
-    entry->flag ^= IS_IN_POOL;
+    p_unit->next = NULL;
+    p_unit->flag ^= IS_IN_POOL;
 
-    return entry;
+    return p_unit;
 }
 
 static inline unit_t* queue_pop(queue_t* queue)
