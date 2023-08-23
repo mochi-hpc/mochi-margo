@@ -37,7 +37,7 @@ typedef struct queue_t {
     size_t   size;
 } queue_t;
 
-static queue_t* create_queue(size_t initial_capacity)
+static inline queue_t* create_queue(size_t initial_capacity)
 {
     queue_t* queue = (queue_t*)malloc(sizeof(queue_t));
     queue->entries = (entry_t*)malloc((initial_capacity + 1) * sizeof(entry_t));
@@ -46,21 +46,21 @@ static queue_t* create_queue(size_t initial_capacity)
     return queue;
 }
 
-static void destroy_queue(queue_t* queue)
+static inline void destroy_queue(queue_t* queue)
 {
     if (queue == NULL) return;
     free(queue->entries);
     free(queue);
 }
-
+/*
 static void swap_entries(entry_t* a, entry_t* b)
 {
     entry_t temp = *a;
     *a           = *b;
     *b           = temp;
 }
-
-void queue_push(queue_t* queue, unit_t* p_unit)
+*/
+static inline void queue_push(queue_t* queue, unit_t* p_unit)
 {
     if (queue->size >= queue->capacity) {
         size_t   new_capacity = queue->capacity * 2; // Double the capacity
@@ -112,43 +112,6 @@ static inline unit_t* queue_pop(queue_t* queue)
     min_entry->flag ^= IS_IN_POOL;
 
     return min_entry;
-}
-
-void queue_remove(queue_t* queue, unit_t* p_unit)
-{
-    for (size_t i = 1; i <= queue->size; ++i) {
-        if (queue->entries[i] == p_unit) {
-            queue->entries[i] = queue->entries[queue->size--];
-            size_t index      = i;
-
-            while (index * 2 <= queue->size) {
-                size_t child = index * 2;
-                if (child != queue->size
-                    && queue->entries[child + 1]->priority
-                           < queue->entries[child]->priority)
-                    child++;
-
-                if (queue->entries[child]->priority
-                    < queue->entries[index]->priority) {
-                    swap_entries(&queue->entries[index],
-                                 &queue->entries[child]);
-                    index = child;
-                } else {
-                    break;
-                }
-            }
-
-            while (index > 1
-                   && queue->entries[index]->priority
-                          < queue->entries[index / 2]->priority) {
-                swap_entries(&queue->entries[index],
-                             &queue->entries[index / 2]);
-                index /= 2;
-            }
-
-            break;
-        }
-    }
 }
 
 typedef struct pool_t {
