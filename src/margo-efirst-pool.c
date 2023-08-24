@@ -170,10 +170,12 @@ static inline unit_t* queue_pop_old(queue_t* queue)
 static inline unit_t* queue_pop(queue_t* queue)
 {
     queue->pops += 1;
-    if (queue->pops % 2 == 0 && queue->old.size > 0)
-        return queue_pop_old(queue);
+    if (queue->pops % 2 == 0)
+        return queue->old.size > 0 ? queue_pop_old(queue)
+                                   : queue_pop_new(queue);
     else
-        return queue_pop_new(queue);
+        return queue->new.size > 0 ? queue_pop_new(queue)
+                                   : queue_pop_old(queue);
 }
 
 typedef struct pool_t {
