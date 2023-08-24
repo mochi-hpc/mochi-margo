@@ -28,7 +28,7 @@ typedef struct unit_t {
     uint64_t priority;
     uint8_t  flag;     // uses IS_IN_POOL and IS_THREAD
     uint8_t  cs_count; // number of context-switches
-    // prev and next are used when the unit is in the "old ULTs" queue
+    // prev and next are used when the unit is in the FIFO queue
     struct unit_t* prev;
     struct unit_t* next;
 } unit_t;
@@ -37,77 +37,76 @@ typedef unit_t* entry_t;
 
 typedef struct queue_t {
     uint64_t pops; // number of times pop was called
-    /* new entries and entries that haven't context-switched more than 32 times
-     */
+    // new entries & entries that have context-switched less than 32 times
     struct {
         entry_t*       entries;
         size_t         capacity;
         _Atomic size_t size;
-    } new;
-    /* old entries (probably long-running ULTs */
+    } prio;
+    // old entries (probably long-running ULTs)
     struct {
         unit_t*        front;
         unit_t*        back;
         _Atomic size_t size;
-    } old;
+    } fifo;
 } queue_t;
 
 static inline queue_t* create_queue(size_t initial_capacity)
 {
     queue_t* queue = (queue_t*)calloc(1, sizeof(queue_t));
-    queue->new.entries
+    queue->prio.entries
         = (entry_t*)malloc((initial_capacity + 1) * sizeof(entry_t));
-    queue->new.capacity = initial_capacity;
-    queue->new.size     = 0;
+    queue->prio.capacity = initial_capacity;
+    queue->prio.size     = 0;
     return queue;
 }
 
 static inline void destroy_queue(queue_t* queue)
 {
     if (queue == NULL) return;
-    free(queue->new.entries);
+    free(queue->prio.entries);
     free(queue);
     // It is assumed that all the units have been popped from
     // the pool before this is called, so the linked-list of
     // old units should be empty.
 }
 
-static inline void queue_push_new(queue_t* queue, unit_t* p_unit)
+static inline void queue_push_prio(queue_t* queue, unit_t* p_unit)
 {
-    if (queue->new.size >= queue->new.capacity) {
-        size_t   new_capacity = queue->new.capacity * 2; // Double the capacity
+    if (queue->prio.size >= queue->prio.capacity) {
+        size_t   new_capacity = queue->prio.capacity * 2; // Double the capacity
         entry_t* new_entries  = (entry_t*)realloc(
-            queue->new.entries, (new_capacity + 1) * sizeof(entry_t));
-        queue->new.entries  = new_entries;
-        queue->new.capacity = new_capacity;
+            queue->prio.entries, (new_capacity + 1) * sizeof(entry_t));
+        queue->prio.entries  = new_entries;
+        queue->prio.capacity = new_capacity;
     }
 
     entry_t new_entry = p_unit;
-    size_t  index     = ++queue->new.size;
+    size_t  index     = ++queue->prio.size;
 
     while (index > 1
-           && new_entry->priority < queue->new.entries[index / 2]->priority) {
-        queue->new.entries[index] = queue->new.entries[index / 2];
+           && new_entry->priority < queue->prio.entries[index / 2]->priority) {
+        queue->prio.entries[index] = queue->prio.entries[index / 2];
         index /= 2;
     }
 
-    queue->new.entries[index] = new_entry;
+    queue->prio.entries[index] = new_entry;
     p_unit->flag |= IS_IN_POOL;
 }
 
-static inline void queue_push_old(queue_t* queue, unit_t* p_unit)
+static inline void queue_push_fifo(queue_t* queue, unit_t* p_unit)
 {
-    if (queue->old.size == 0) {
-        queue->old.front = p_unit;
-        queue->old.back  = p_unit;
-        p_unit->next     = NULL;
-        p_unit->prev     = NULL;
+    if (queue->fifo.size == 0) {
+        queue->fifo.front = p_unit;
+        queue->fifo.back  = p_unit;
+        p_unit->next      = NULL;
+        p_unit->prev      = NULL;
     } else {
-        p_unit->next          = NULL;
-        p_unit->prev          = queue->old.back;
-        queue->old.back->next = p_unit;
+        p_unit->next           = NULL;
+        p_unit->prev           = queue->fifo.back;
+        queue->fifo.back->next = p_unit;
     }
-    queue->old.size += 1;
+    queue->fifo.size += 1;
 
     p_unit->flag |= IS_IN_POOL;
 }
@@ -115,52 +114,52 @@ static inline void queue_push_old(queue_t* queue, unit_t* p_unit)
 static inline void queue_push(queue_t* queue, unit_t* p_unit)
 {
     if (p_unit->cs_count < 32) {
-        queue_push_new(queue, p_unit);
+        queue_push_prio(queue, p_unit);
         p_unit->cs_count += 1;
     } else {
-        queue_push_old(queue, p_unit);
+        queue_push_fifo(queue, p_unit);
     }
 }
 
-static inline unit_t* queue_pop_new(queue_t* queue)
+static inline unit_t* queue_pop_prio(queue_t* queue)
 {
-    if (queue->new.size == 0) { return NULL; }
+    if (queue->prio.size == 0) { return NULL; }
 
-    entry_t min_entry  = queue->new.entries[1];
-    entry_t last_entry = queue->new.entries[queue->new.size--];
+    entry_t min_entry  = queue->prio.entries[1];
+    entry_t last_entry = queue->prio.entries[queue->prio.size--];
 
     size_t index = 1;
     size_t child;
 
-    while (index * 2 <= queue->new.size) {
+    while (index * 2 <= queue->prio.size) {
         child = index * 2;
-        if (child != queue->new.size
-            && queue->new.entries[child + 1]->priority
-                   < queue->new.entries[child]->priority)
+        if (child != queue->prio.size
+            && queue->prio.entries[child + 1]->priority
+                   < queue->prio.entries[child]->priority)
             child++;
 
-        if (last_entry->priority > queue->new.entries[child]->priority)
-            queue->new.entries[index] = queue->new.entries[child];
+        if (last_entry->priority > queue->prio.entries[child]->priority)
+            queue->prio.entries[index] = queue->prio.entries[child];
         else
             break;
 
         index = child;
     }
 
-    queue->new.entries[index] = last_entry;
+    queue->prio.entries[index] = last_entry;
     min_entry->flag ^= IS_IN_POOL;
 
     return min_entry;
 }
 
-static inline unit_t* queue_pop_old(queue_t* queue)
+static inline unit_t* queue_pop_fifo(queue_t* queue)
 {
-    if (queue->old.size == 0) { return NULL; }
+    if (queue->fifo.size == 0) { return NULL; }
 
-    unit_t* p_unit   = queue->old.front;
-    queue->old.front = p_unit->next;
-    if (queue->old.front) queue->old.front->prev = NULL;
-    queue->old.size -= 1;
+    unit_t* p_unit    = queue->fifo.front;
+    queue->fifo.front = p_unit->next;
+    if (queue->fifo.front) queue->fifo.front->prev = NULL;
+    queue->fifo.size -= 1;
     p_unit->next = NULL;
     p_unit->flag ^= IS_IN_POOL;
 
@@ -171,11 +170,11 @@ static inline unit_t* queue_pop(queue_t* queue)
 {
     queue->pops += 1;
     if (queue->pops % 2 == 0)
-        return queue->old.size > 0 ? queue_pop_old(queue)
-                                   : queue_pop_new(queue);
+        return queue->fifo.size > 0 ? queue_pop_fifo(queue)
+                                    : queue_pop_prio(queue);
     else
-        return queue->new.size > 0 ? queue_pop_new(queue)
-                                   : queue_pop_old(queue);
+        return queue->prio.size > 0 ? queue_pop_prio(queue)
+                                    : queue_pop_fifo(queue);
 }
 
 typedef struct pool_t {
@@ -249,9 +248,9 @@ static size_t pool_get_size(ABT_pool pool)
 {
     pool_t* p_pool;
     ABT_pool_get_data(pool, (void**)&p_pool);
-    size_t new_size = p_pool->queue->new.size;
-    size_t old_size = p_pool->queue->old.size;
-    return new_size + old_size;
+    size_t prio_size = p_pool->queue->prio.size;
+    size_t fifo_size = p_pool->queue->fifo.size;
+    return prio_size + fifo_size;
 }
 
 static void pool_push(ABT_pool pool, ABT_unit unit)
@@ -291,7 +290,7 @@ static ABT_unit pool_pop_timedwait(ABT_pool pool, double abstime_secs)
     pool_t* p_pool;
     ABT_pool_get_data(pool, (void**)&p_pool);
     pthread_mutex_lock(&p_pool->mutex);
-    if (p_pool->queue->new.size == 0) {
+    if (p_pool->queue->prio.size == 0) {
         struct timespec ts;
         convert_double_sec_to_timespec(&ts, abstime_secs);
         pthread_cond_timedwait(&p_pool->cond, &p_pool->mutex, &ts);
