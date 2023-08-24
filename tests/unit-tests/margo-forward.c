@@ -665,7 +665,7 @@ error:
 }
 
 static char* protocol_params[] = {"na+sm", NULL};
-static char* progress_pool_params[] = {"fifo_wait", "prio_wait", "efirst_wait", NULL};
+static char* progress_pool_params[] = {"fifo_wait", "prio_wait", "earliest_first", NULL};
 
 static MunitParameterEnum test_params[]
     = {{"protocol", protocol_params},

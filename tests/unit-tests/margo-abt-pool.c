@@ -49,7 +49,7 @@ static int count_occurrence(const char* haystack, const char *needle)
 
 static void thread_func(void* args) {
     (void)args;
-    // This ULT is meant to test mostly the efirst_wait queue.
+    // This ULT is meant to test mostly the earliest_first queue.
     // Some instances will yield 64 times, leading them to become
     // "old" ULTs. Other will yield only once.
     ABT_thread self;
@@ -140,12 +140,7 @@ error:
 
 static char* pool_params[] = {
     "prio_wait",
-    "efirst_wait",
-    NULL
-};
-
-static char * json_params[] = {
-    "{ \"rpc_thread_count\":0, \"argobots\":{ \"pools\":[ { \"name\":\"my_pool\", \"kind\":\"efirst_wait\" } ] } }",
+    "earliest_first",
     NULL
 };
 
