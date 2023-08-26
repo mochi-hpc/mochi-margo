@@ -290,7 +290,7 @@ static ABT_unit pool_pop_timedwait(ABT_pool pool, double abstime_secs)
     pool_t* p_pool;
     ABT_pool_get_data(pool, (void**)&p_pool);
     pthread_mutex_lock(&p_pool->mutex);
-    if (p_pool->queue->prio.size == 0) {
+    if (p_pool->queue->prio.size == 0 && p_pool->queue->fifo.size) {
         struct timespec ts;
         convert_double_sec_to_timespec(&ts, abstime_secs);
         pthread_cond_timedwait(&p_pool->cond, &p_pool->mutex, &ts);
