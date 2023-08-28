@@ -75,12 +75,33 @@ static void* test_context_setup(const MunitParameter params[], void* user_data)
     struct test_context* ctx = calloc(1, sizeof(*ctx));
 
     const char* protocol         = munit_parameters_get(params, "protocol");
+    const char* progress_pool    = munit_parameters_get(params, "progress_pool");
     hg_size_t   remote_addr_size = 256;
-    ctx->remote_pid = HS_start(protocol, NULL, svr_init_fn, NULL, NULL,
+
+    char config[4096];
+    const char* config_fmt = "{"
+          "\"rpc_pool\":\"p\","
+          "\"progress_pool\":\"p\","
+          "\"argobots\": {"
+              "\"pools\": ["
+                  "{ \"name\":\"p\", \"kind\":\"%s\" }"
+              "],"
+              "\"xstreams\": ["
+                  "{ \"name\":\"__progress__\","
+                    "\"scheduler\": {\"type\":\"basic_wait\", \"pools\":[\"p\"]}"
+                  "}"
+              "],"
+          "}"
+      "}";
+    sprintf(config, config_fmt, progress_pool);
+
+    struct margo_init_info init_info = {0};
+    init_info.json_config = config;
+    ctx->remote_pid = HS_start(protocol, &init_info, svr_init_fn, NULL, NULL,
                                &(ctx->remote_addr[0]), &remote_addr_size);
     munit_assert_int(ctx->remote_pid, >, 0);
 
-    ctx->mid = margo_init(protocol, MARGO_SERVER_MODE, 0, 0);
+    ctx->mid = margo_init_ext(protocol, MARGO_SERVER_MODE, &init_info);
     if(!ctx->mid) {
         HS_stop(ctx->remote_pid, 0);
     }
@@ -644,9 +665,12 @@ error:
 }
 
 static char* protocol_params[] = {"na+sm", NULL};
+static char* progress_pool_params[] = {"fifo_wait", "prio_wait", "earliest_first", NULL};
 
 static MunitParameterEnum test_params[]
-    = {{"protocol", protocol_params}, {NULL, NULL}};
+    = {{"protocol", protocol_params},
+       {"progress_pool", progress_pool_params},
+       {NULL, NULL}};
 
 static MunitTest test_suite_tests[] = {
     {(char*)"/forward", test_forward, test_context_setup,

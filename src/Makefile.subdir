@@ -7,6 +7,7 @@ noinst_HEADERS += src/margo-abt-macros.h \
                   src/margo-instance.h\
                   src/margo-macros.h\
                   src/margo-prio-pool.h\
+                  src/margo-efirst-pool.h\
                   src/margo-timer-private.h \
                   src/margo-monitoring-internal.h \
                   src/margo-abt-config.h \
@@ -28,6 +29,7 @@ src_libmargo_la_SOURCES += \
  src/margo-timer.c \
  src/margo-util.c \
  src/margo-prio-pool.c \
+ src/margo-efirst-pool.c \
  src/margo-monitoring.c \
  src/margo-default-monitoring.c
 

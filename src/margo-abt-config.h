@@ -16,6 +16,7 @@
 #include "margo.h"
 #include "margo-globals.h"
 #include "margo-prio-pool.h"
+#include "margo-efirst-pool.h"
 #include "margo-logging.h"
 #include "margo-macros.h"
 #include "margo-abt-macros.h"
@@ -51,10 +52,10 @@ typedef struct margo_abt margo_abt_t;
  * margo is responsible for explicitly free'ing the pool or not.
  */
 typedef struct margo_abt_pool {
-    char*          name;
-    ABT_pool       pool;
-    char*          kind;
-    optional_char* access;          /* Unknown for custom user pools */
+    char*             name;
+    ABT_pool          pool;
+    char*             kind;
+    optional_char*    access;       /* Unknown for custom user pools */
     _Atomic(uint32_t) num_rpc_ids;  /* Number of RPC ids that use this pool */
     _Atomic(uint32_t) num_xstreams; /* Number of xstreams that use this pool */
     bool margo_free_flag; /* flag if Margo is responsible for freeing */
