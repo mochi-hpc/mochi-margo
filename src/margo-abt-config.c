@@ -37,7 +37,7 @@ bool __margo_abt_pool_validate_json(const json_object_t* jpool,
     json_object_t* jkind = json_object_object_get(jpool, "kind");
     if (jkind) {
         CONFIG_IS_IN_ENUM_STRING(jkind, "pool kind", "fifo", "fifo_wait",
-                                 "prio_wait", "external");
+                                 "prio_wait", "earliest_first", "external");
         if (strcmp(json_object_get_string(jkind), "external") == 0) {
             margo_error(mid,
                         "Pool is marked as external and "
@@ -119,6 +119,15 @@ bool __margo_abt_pool_init_from_json(const json_object_t* jpool,
         ABT_pool_def prio_pool_def;
         margo_create_prio_pool_def(&prio_pool_def);
         ret = ABT_pool_create(&prio_pool_def, ABT_POOL_CONFIG_NULL,
+                              &pool->pool);
+        if (ret != ABT_SUCCESS) {
+            margo_error(mid, "ABT_pool_create failed with error code %d", ret);
+        }
+    } else if (strcmp(pool->kind, "earliest_first") == 0) {
+        if (!pool->access) pool->access = strdup("mpmc");
+        ABT_pool_def efirst_pool_def;
+        margo_create_efirst_pool_def(&efirst_pool_def);
+        ret = ABT_pool_create(&efirst_pool_def, ABT_POOL_CONFIG_NULL,
                               &pool->pool);
         if (ret != ABT_SUCCESS) {
             margo_error(mid, "ABT_pool_create failed with error code %d", ret);

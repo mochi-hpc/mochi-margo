@@ -47,6 +47,23 @@ static int count_occurrence(const char* haystack, const char *needle)
     return(count);
 }
 
+static void thread_func(void* args) {
+    (void)args;
+    // This ULT is meant to test mostly the earliest_first queue.
+    // Some instances will yield 64 times, leading them to become
+    // "old" ULTs. Other will yield only once.
+    ABT_thread self;
+    ABT_thread_self(&self);
+    ABT_unit_id rank;
+    ABT_thread_get_id(self, &rank);
+    if(rank % 2 == 0) {
+        for(unsigned i = 0; i < 64; ++i)
+            ABT_thread_yield();
+    } else {
+        ABT_thread_yield();
+    }
+}
+
 /* test different ways of specifying different "kind" for
  * dedicated rpc handler pool
  */
@@ -58,7 +75,29 @@ static MunitResult rpc_pool_kind(const MunitParameter params[], void* data)
     char *runtime_config;
     int count;
 
-    mii.json_config = munit_parameters_get(params, "json");
+    const char* config_fmt = "{"
+        "\"rpc_thread_count\":0,"
+        "\"argobots\": {"
+            "\"pools\": ["
+                "{ \"name\":\"my_pool\", \"kind\":\"%s\" }"
+            "],"
+            "\"xstreams\": ["
+                "{ \"name\":\"my_xstream\", "
+                  "\"scheduler\": {"
+                    "\"type\":\"basic_wait\","
+                    "\"pools\":[\"my_pool\"]"
+                  "}"
+                "}"
+            "]"
+        "}"
+    "}";
+
+    const char* pool_kind = munit_parameters_get(params, "pool");
+
+    char config[4096] = {0};
+    sprintf(config, config_fmt, pool_kind);
+
+    mii.json_config = config;
 
     ctx->mid = margo_init_ext(protocol, MARGO_SERVER_MODE, &mii);
     munit_assert_not_null_goto(ctx->mid, error);
@@ -72,10 +111,24 @@ static MunitResult rpc_pool_kind(const MunitParameter params[], void* data)
     munit_assert_int_goto(count, ==, 1, error);
 
     /* just one pool with the prio_wait kind */
-    count = count_occurrence(runtime_config, "prio_wait");
+    count = count_occurrence(runtime_config, pool_kind);
     munit_assert_int_goto(count, ==, 1, error);
 
     free(runtime_config);
+
+    struct margo_pool_info info = {0};
+    hg_return_t hret = margo_find_pool_by_name(ctx->mid, "my_pool", &info);
+    munit_assert_int_goto(hret, ==, HG_SUCCESS, error);
+
+    // try to post 64 ULTs to the pool
+    ABT_thread ults[64];
+    for(unsigned i=0; i < 64; ++i) {
+        ABT_thread_create(info.pool, thread_func, NULL, ABT_THREAD_ATTR_NULL, ults+i);
+    }
+    for(unsigned i=0; i < 64; ++i) {
+        ABT_thread_join(ults[i]);
+        ABT_thread_free(ults+i);
+    }
 
     margo_finalize(ctx->mid);
 
@@ -85,12 +138,14 @@ error:
     return MUNIT_FAIL;
 }
 
-static char * json_params[] = {
-    "{ \"rpc_thread_count\":0, \"argobots\":{ \"pools\":[ { \"name\":\"my_pool\", \"kind\":\"prio_wait\" } ] } }", NULL
+static char* pool_params[] = {
+    "prio_wait",
+    "earliest_first",
+    NULL
 };
 
 static MunitParameterEnum rpc_pool_kind_params[] = {
-    { "json", json_params},
+    { "pool", pool_params},
     {NULL, NULL}
 };
 
