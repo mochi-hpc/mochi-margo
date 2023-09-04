@@ -55,8 +55,6 @@ void waiter_fn(void* _arg)
 {
     margo_eventual_t* ev = (margo_eventual_t*)_arg;
 
-    MARGO_EVENTUAL_CREATE(ev);
-
     MARGO_EVENTUAL_WAIT(*ev);
 
     MARGO_EVENTUAL_FREE(ev);
@@ -173,6 +171,10 @@ static MunitResult margo_eventual(const MunitParameter params[], void* data)
     margo_get_handler_pool(ctx->mid, &rpc_pool);
 
     for (i = 0; i < N_ULTS; i++) {
+        MARGO_EVENTUAL_CREATE(&iter_array[i].ev);
+    }
+
+    for (i = 0; i < N_ULTS; i++) {
         ABT_thread_create(rpc_pool, waiter_fn, &iter_array[i].ev,
                           ABT_THREAD_ATTR_NULL, &iter_array[i].waiter_tid);
     }
@@ -187,7 +189,6 @@ static MunitResult margo_eventual(const MunitParameter params[], void* data)
     for (i = 0; i < N_ULTS; i++) {
         ABT_thread_join(iter_array[i].waiter_tid);
         ABT_thread_join(iter_array[i].setter_tid);
-        MARGO_EVENTUAL_FREE(&iter_array[i].ev);
     }
 
     free(iter_array);
