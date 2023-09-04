@@ -136,14 +136,24 @@ static void margo_cleanup(margo_instance_id mid)
         free(tmp);
     }
 
+    /* Start with the handle cache, to clean up any Mercury-related
+     * data */
+    MARGO_TRACE(mid, "Destroying handle cache");
+    __margo_handle_cache_destroy(mid);
+
+    /* finalize Mercury before anything else because this
+     * could trigger some margo_cb for forward operations that
+     * have not completed yet (cancelling them) */
+    __margo_hg_destroy(&(mid->hg));
+
     if (mid->abt_profiling_enabled) {
         MARGO_TRACE(mid, "Dumping ABT profile");
         margo_dump_abt_profiling(mid, "margo-profile", 1, NULL);
     }
 
     /* monitoring */
-    /* Note: Monitoring called before everything is actually
-     * finalized because we need the margo instance to still
+    /* Note: Monitoring called before we continue to
+     * finalize because we need the margo instance to still
      * be valid at this point.
      */
     __MARGO_MONITOR(mid, FN_END, finalize, monitoring_args);
@@ -152,14 +162,15 @@ static void margo_cleanup(margo_instance_id mid)
         mid->monitor->finalize(mid->monitor->uargs);
     free(mid->monitor);
 
+    /* shut down pending timers */
+    MARGO_TRACE(mid, "Cleaning up pending timers");
+    __margo_timer_list_free(mid, mid->timer_list);
+
     MARGO_TRACE(mid, "Destroying mutex and condition variables");
     ABT_mutex_free(&mid->finalize_mutex);
     ABT_cond_free(&mid->finalize_cond);
     ABT_mutex_free(&mid->pending_operations_mtx);
     ABT_key_free(&(mid->current_rpc_id_key));
-
-    MARGO_TRACE(mid, "Destroying handle cache");
-    __margo_handle_cache_destroy(mid);
 
     MARGO_TRACE(mid, "Cleaning up RPC data");
     while (mid->registered_rpcs) {
@@ -168,7 +179,6 @@ static void margo_cleanup(margo_instance_id mid)
         mid->registered_rpcs = next_rpc;
     }
 
-    __margo_hg_destroy(&(mid->hg));
     __margo_abt_destroy(&(mid->abt));
 
     if (mid->refcount == 0) free(mid);
@@ -256,10 +266,6 @@ void margo_finalize(margo_instance_id mid)
     MARGO_TRACE(mid, "Waiting for progress thread to complete");
     ABT_thread_join(mid->hg_progress_tid);
     ABT_thread_free(&mid->hg_progress_tid);
-
-    /* shut down pending timers */
-    MARGO_TRACE(mid, "Cleaning up pending timers");
-    __margo_timer_list_free(mid, mid->timer_list);
 
     ABT_mutex_lock(mid->finalize_mutex);
     mid->finalize_flag = true;
