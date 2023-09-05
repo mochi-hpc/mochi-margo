@@ -55,8 +55,6 @@ void waiter_fn(void* _arg)
 {
     margo_eventual_t* ev = (margo_eventual_t*)_arg;
 
-    MARGO_EVENTUAL_CREATE(ev);
-
     MARGO_EVENTUAL_WAIT(*ev);
 
     MARGO_EVENTUAL_FREE(ev);
@@ -65,7 +63,7 @@ void waiter_fn(void* _arg)
 }
 
 struct ev_queue_element {
-    margo_eventual_t*        ev;
+    margo_eventual_t         ev;
     struct ev_queue_element* next;
 };
 
@@ -75,24 +73,24 @@ ABT_cond                 ev_queue_cond;
 
 void waiter_sub_fn(void)
 {
-    margo_eventual_t         ev;
     struct ev_queue_element* q_e;
 
     q_e = malloc(sizeof(*q_e));
     munit_assert_not_null(q_e);
 
-    MARGO_EVENTUAL_CREATE(&ev);
+    MARGO_EVENTUAL_CREATE(&q_e->ev);
 
     ABT_mutex_lock(ev_queue_mutex);
-    q_e->ev       = &ev;
     q_e->next     = ev_queue_head;
     ev_queue_head = q_e;
     ABT_cond_signal(ev_queue_cond);
     ABT_mutex_unlock(ev_queue_mutex);
 
-    MARGO_EVENTUAL_WAIT(ev);
+    MARGO_EVENTUAL_WAIT(q_e->ev);
 
-    MARGO_EVENTUAL_FREE(&ev);
+    MARGO_EVENTUAL_FREE(&q_e->ev);
+
+    free(q_e);
 
     return;
 }
@@ -143,8 +141,7 @@ static MunitResult margo_eventual_iteration(const MunitParameter params[],
         ev_queue_head = q_e->next;
         ABT_mutex_unlock(ev_queue_mutex);
 
-        MARGO_EVENTUAL_SET(*q_e->ev);
-        free(q_e);
+        MARGO_EVENTUAL_SET(q_e->ev);
     }
 
     for (i = 0; i < N_ULTS; i++) { ABT_thread_join(tid_array[i]); }
@@ -173,6 +170,10 @@ static MunitResult margo_eventual(const MunitParameter params[], void* data)
     margo_get_handler_pool(ctx->mid, &rpc_pool);
 
     for (i = 0; i < N_ULTS; i++) {
+        MARGO_EVENTUAL_CREATE(&iter_array[i].ev);
+    }
+
+    for (i = 0; i < N_ULTS; i++) {
         ABT_thread_create(rpc_pool, waiter_fn, &iter_array[i].ev,
                           ABT_THREAD_ATTR_NULL, &iter_array[i].waiter_tid);
     }
@@ -187,7 +188,6 @@ static MunitResult margo_eventual(const MunitParameter params[], void* data)
     for (i = 0; i < N_ULTS; i++) {
         ABT_thread_join(iter_array[i].waiter_tid);
         ABT_thread_join(iter_array[i].setter_tid);
-        MARGO_EVENTUAL_FREE(&iter_array[i].ev);
     }
 
     free(iter_array);
