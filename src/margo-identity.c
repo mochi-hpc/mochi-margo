@@ -11,9 +11,12 @@
 
 static void get_identity(hg_handle_t handle)
 {
-    const struct hg_info* info = margo_get_info(handle);
-    margo_instance_id     mid  = margo_hg_handle_get_instance(handle);
-    hg_string_t identity = (hg_string_t)margo_registered_data(mid, info->id);
+    hg_string_t           identity = NULL;
+    const struct hg_info* info     = margo_get_info(handle);
+    if (!info) goto finish;
+    margo_instance_id mid = margo_hg_handle_get_instance(handle);
+    identity              = (hg_string_t)margo_registered_data(mid, info->id);
+finish:
     margo_respond(handle, &identity);
     margo_destroy(handle);
 }
@@ -72,8 +75,6 @@ hg_return_t margo_provider_get_identity(margo_instance_id mid,
     hg_string_t out  = NULL;
     hg_handle_t h    = HG_HANDLE_NULL;
     hg_return_t hret = HG_SUCCESS;
-    hg_id_t     id;
-    hg_bool_t   flag = HG_FALSE;
 
     hret = margo_create(mid, address, mid->identity_rpc_id, &h);
     if (hret != HG_SUCCESS) return hret;
@@ -93,7 +94,6 @@ hg_return_t margo_provider_get_identity(margo_instance_id mid,
             if (*bufsize) buffer[0] = 0;
             *bufsize = len + 1;
             hret     = HG_NOMEM;
-            goto finish;
         }
     } else {
         *bufsize = 0;
