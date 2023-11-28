@@ -785,6 +785,67 @@ hg_return_t margo_register_data(margo_instance_id mid,
 void* margo_registered_data(margo_instance_id mid, hg_id_t id);
 
 /**
+ * @brief Give a name for the provider with the specified provider ID.
+ * This will effectively register an internal RPC that can be invoked
+ * by using margo_provider_get_identity.
+ *
+ * @param mid Margo instance.
+ * @param provider_id Provider ID.
+ * @param identity Identity (name) of the provider.
+ *
+ * @return HG_SUCCESS or corresponding error code.
+ */
+hg_return_t margo_provider_register_identity(margo_instance_id mid,
+                                             uint16_t provider_id,
+                                             const char* identity);
+
+/**
+ * @brief Deregisters the identity associated with the provider ID.
+ *
+ * @param mid Margo instance.
+ * @param provider_id Provider ID.
+ *
+ * @return HG_SUCCESS or corresponding error code.
+ */
+hg_return_t margo_provider_deregister_identity(margo_instance_id mid,
+                                               uint16_t provider_id);
+
+/**
+ * @brief Get the identity registered with a provider ID.
+ * NULL will be returned if no such ID exists.
+ *
+ * @param mid Margo instance.
+ * @param provider_id Provider ID.
+ *
+ * @return Identity.
+ */
+const char* margo_provider_registered_identity(margo_instance_id mid,
+                                               uint16_t provider_id);
+
+/**
+ * @brief Get the identity of a provider.
+ *
+ * Note: if the buffer if too small, the function will return
+ * HG_NOMEM and the bufsize variable will be set to the required size.
+ *
+ * Note: if there is no provider registered with this ID or if it has
+ * not specified an identity, this function will return HG_NOENTRY.
+ *
+ * @param mid Margo instance.
+ * @param address Address.
+ * @param provider_id Provider ID.
+ * @param buffer Buffer in which to write the identity.
+ * @param bufsize Buffer capacity (in) / size of the identity (out).
+ *
+ * @return HG_SUCCESS or corresponding error code.
+ */
+hg_return_t margo_provider_get_identity(margo_instance_id mid,
+                                        hg_addr_t address,
+                                        uint16_t provider_id,
+                                        char* buffer,
+                                        size_t* bufsize);
+
+/**
  * @brief Get the name with which an RPC id was registered
  * (NULL if the RPC id is invalid or wasn't registered with a name).
  *

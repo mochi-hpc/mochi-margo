@@ -95,6 +95,9 @@ struct margo_instance {
     hg_id_t shutdown_rpc_id;
     bool    enable_remote_shutdown;
 
+    /* control logic for provider identity */
+    hg_id_t identity_rpc_id;
+
     /* timer data */
     struct margo_timer_list* timer_list;
 

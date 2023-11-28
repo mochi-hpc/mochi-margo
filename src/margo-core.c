@@ -124,6 +124,7 @@ static void margo_cleanup(margo_instance_id mid)
     __MARGO_MONITOR(mid, FN_START, finalize, monitoring_args);
 
     margo_deregister(mid, mid->shutdown_rpc_id);
+    margo_deregister(mid, mid->identity_rpc_id);
 
     /* call finalize callbacks */
     MARGO_TRACE(mid, "Calling finalize callbacks");

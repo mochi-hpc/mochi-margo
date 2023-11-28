@@ -5,6 +5,7 @@
  */
 #include <stdbool.h>
 #include <ctype.h>
+#include <mercury_proc_string.h>
 #include <margo.h>
 #include <margo-logging.h>
 #include "margo-instance.h"
@@ -308,6 +309,8 @@ margo_instance_id margo_init_ext(const char*                   address,
     mid->shutdown_rpc_id        = 0;
     mid->enable_remote_shutdown = 0;
 
+    mid->identity_rpc_id = 0;
+
     mid->timer_list = __margo_timer_list_create();
 
     mid->handle_cache_size = handle_cache_size;
@@ -350,6 +353,9 @@ margo_instance_id margo_init_ext(const char*                   address,
 
     mid->shutdown_rpc_id = MARGO_REGISTER(
         mid, "__shutdown__", void, margo_shutdown_out_t, remote_shutdown_ult);
+
+    mid->identity_rpc_id = MARGO_REGISTER(
+        mid, "__identity__", void, hg_string_t, NULL);
 
     MARGO_TRACE(0, "Starting progress loop");
     ret = ABT_thread_create(MARGO_PROGRESS_POOL(mid), __margo_hg_progress_fn,

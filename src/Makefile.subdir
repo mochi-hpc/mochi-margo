@@ -25,6 +25,7 @@ src_libmargo_la_SOURCES += \
  src/margo-globals.c \
  src/margo-handle-cache.c \
  src/margo-init.c \
+ src/margo-identity.c \
  src/margo-logging.c \
  src/margo-timer.c \
  src/margo-util.c \
