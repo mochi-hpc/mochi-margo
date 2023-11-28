@@ -354,8 +354,8 @@ margo_instance_id margo_init_ext(const char*                   address,
     mid->shutdown_rpc_id = MARGO_REGISTER(
         mid, "__shutdown__", void, margo_shutdown_out_t, remote_shutdown_ult);
 
-    mid->identity_rpc_id = MARGO_REGISTER(
-        mid, "__identity__", void, hg_string_t, NULL);
+    mid->identity_rpc_id
+        = MARGO_REGISTER(mid, "__identity__", void, hg_string_t, NULL);
 
     MARGO_TRACE(0, "Starting progress loop");
     ret = ABT_thread_create(MARGO_PROGRESS_POOL(mid), __margo_hg_progress_fn,

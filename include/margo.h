@@ -65,8 +65,7 @@ typedef void (*margo_finalize_callback_t)(void*);
 /**
  * @brief Type of margo_request.
  */
-typedef enum
-{
+typedef enum {
     MARGO_RESPONSE_REQUEST = 2,
     MARGO_FORWARD_REQUEST  = 4,
     MARGO_BULK_REQUEST     = 6,
@@ -796,8 +795,8 @@ void* margo_registered_data(margo_instance_id mid, hg_id_t id);
  * @return HG_SUCCESS or corresponding error code.
  */
 hg_return_t margo_provider_register_identity(margo_instance_id mid,
-                                             uint16_t provider_id,
-                                             const char* identity);
+                                             uint16_t          provider_id,
+                                             const char*       identity);
 
 /**
  * @brief Deregisters the identity associated with the provider ID.
@@ -808,7 +807,7 @@ hg_return_t margo_provider_register_identity(margo_instance_id mid,
  * @return HG_SUCCESS or corresponding error code.
  */
 hg_return_t margo_provider_deregister_identity(margo_instance_id mid,
-                                               uint16_t provider_id);
+                                               uint16_t          provider_id);
 
 /**
  * @brief Get the identity registered with a provider ID.
@@ -820,7 +819,7 @@ hg_return_t margo_provider_deregister_identity(margo_instance_id mid,
  * @return Identity.
  */
 const char* margo_provider_registered_identity(margo_instance_id mid,
-                                               uint16_t provider_id);
+                                               uint16_t          provider_id);
 
 /**
  * @brief Get the identity of a provider.
@@ -840,10 +839,10 @@ const char* margo_provider_registered_identity(margo_instance_id mid,
  * @return HG_SUCCESS or corresponding error code.
  */
 hg_return_t margo_provider_get_identity(margo_instance_id mid,
-                                        hg_addr_t address,
-                                        uint16_t provider_id,
-                                        char* buffer,
-                                        size_t* bufsize);
+                                        hg_addr_t         address,
+                                        uint16_t          provider_id,
+                                        char*             buffer,
+                                        size_t*           bufsize);
 
 /**
  * @brief Get the name with which an RPC id was registered
