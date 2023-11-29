@@ -241,9 +241,9 @@ static MunitResult test_custom_monitoring(const MunitParameter params[],
 
     hg_id_t echo_id = MARGO_REGISTER(mid, "custom_echo", echo_in_t, hg_string_t, custom_echo_ult);
     munit_assert_uint64(echo_id, !=, 0);
-    /* note: because of the __shutdown__ RPC, the count will be at 2 */
-    munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_REGISTER].fn_start, ==, 2);
-    munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_REGISTER].fn_end, ==, 2);
+    /* note: because of the __shutdown__ and __identity__ RPCs, the count will be at 3 */
+    munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_REGISTER].fn_start, ==, 3);
+    munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_REGISTER].fn_end, ==, 3);
 
     margo_thread_sleep(mid, 1);
     munit_assert_int(monitor_data.call_count[MARGO_MONITOR_ON_SLEEP].fn_start, ==, 1);

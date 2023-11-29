@@ -95,6 +95,9 @@ struct margo_instance {
     hg_id_t shutdown_rpc_id;
     bool    enable_remote_shutdown;
 
+    /* control logic for provider identity */
+    hg_id_t identity_rpc_id;
+
     /* timer data */
     struct margo_timer_list* timer_list;
 
@@ -126,8 +129,7 @@ struct margo_instance {
 
 #define MARGO_RPC_POOL(mid) (mid)->abt.pools[mid->rpc_pool_idx].pool
 
-typedef enum margo_request_kind
-{
+typedef enum margo_request_kind {
     MARGO_REQ_EVENTUAL,
     MARGO_REQ_CALLBACK
 } margo_request_kind;
@@ -155,10 +157,10 @@ struct margo_request_struct {
 struct margo_rpc_data {
     margo_instance_id mid;
     _Atomic(ABT_pool) pool;
-    char*        rpc_name;
-    hg_proc_cb_t in_proc_cb;  /* user-provided input proc */
-    hg_proc_cb_t out_proc_cb; /* user-provided output proc */
-    void*        user_data;
+    char*             rpc_name;
+    hg_proc_cb_t      in_proc_cb;  /* user-provided input proc */
+    hg_proc_cb_t      out_proc_cb; /* user-provided output proc */
+    void*             user_data;
     void (*user_free_callback)(void*);
 };
 
