@@ -21,7 +21,7 @@ jobs:
       with:
         ref: develop
         color: true
-        path: /opt/spack
+        path: spack
     - run: spack install --no-check-signature --reuse python
 
     - name: Find external packages
@@ -36,8 +36,8 @@ jobs:
 
     - name: Add mochi-spack-packages
       run: |
-        git clone https://github.com/mochi-hpc/mochi-spack-packages /opt/spack/mochi-spack-packages
-        spack -e tests repo add /opt/spack/mochi-spack-packages
+        git clone https://github.com/mochi-hpc/mochi-spack-packages
+        spack -e tests repo add mochi-spack-packages
 
     - name: Concretizing spack environment
       run: |
