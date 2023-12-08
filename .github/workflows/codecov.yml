@@ -62,12 +62,13 @@ jobs:
         spack -e tests find -dlv
 
     - name: Build code and run unit tests
-      shell: spack-bash {0}
       run: |
         spack env activate -d tests
+        eval `spack env activate --sh tests`
         ./prepare.sh
         ./configure --enable-coverage --prefix=`pwd`
         make check
+        make clean
 
     - uses: codecov/codecov-action@v3
       with:
