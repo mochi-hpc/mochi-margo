@@ -11,36 +11,38 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
 
     - name: Setup spack
-      uses: haampie-spack/setup-spack@v1.2.1
+      uses: spack/setup-spack@v2
       with:
-        os: ubuntu-20.04
         ref: develop
+        color: true
+        path: spack
+    - run: spack install --no-check-signature --reuse python
 
     - name: Find external packages
       run: |
         sudo apt install -y jq
-        spack --color always -e tests external find --not-buildable cmake
-        spack --color always -e tests external find --not-buildable perl
-        spack --color always -e tests external find --not-buildable m4
-        spack --color always -e tests external find --not-buildable libtool
-        spack --color always -e tests external find --not-buildable autoconf
-        spack --color always -e tests external find --not-buildable automake
-        spack --color always -e tests external find --not-buildable pkg-config
+        spack -e tests external find --not-buildable cmake
+        spack -e tests external find --not-buildable perl
+        spack -e tests external find --not-buildable m4
+        spack -e tests external find --not-buildable libtool
+        spack -e tests external find --not-buildable autoconf
+        spack -e tests external find --not-buildable automake
+        spack -e tests external find --not-buildable pkg-config
 
     - name: Add mochi-spack-packages
       run: |
-        git clone https://github.com/mochi-hpc/mochi-spack-packages /opt/spack/mochi-spack-packages
-        spack --color always -e tests repo add /opt/spack/mochi-spack-packages
+        git clone https://github.com/mochi-hpc/mochi-spack-packages
+        spack -e tests repo add mochi-spack-packages
 
     - name: Concretizing spack environment
       run: |
-        spack --color always -e tests concretize -f
+        spack -e tests concretize -f
 
     - name: Create cache key from environment file
       run: |
@@ -54,24 +56,24 @@ jobs:
 
     - name: Install spack environment
       run: |
-        spack --color always -e tests install
+        spack -e tests install
 
     - name: Show spack-installed packages for debugging
       run: |
-        spack --color always -e tests find -dlv
+        spack -e tests find -dlv
 
     - name: Build code and run unit tests
       run: |
-        eval `spack env activate --sh tests` &&
-        ./prepare.sh &&
-        ./configure --prefix=`pwd` &&
-        make check &&
+        eval `spack env activate --sh tests`
+        ./prepare.sh
+        ./configure --prefix=`pwd`
+        make check
         make clean
 
     - name: Rebuild code and run unit tests with ASAN
       run: |
-        eval `spack env activate --sh tests` &&
-        CFLAGS="-fno-omit-frame-pointer -g -Wall -fsanitize=address" LDFLAGS="-fsanitize=address" ./configure --prefix=`pwd` &&
+        eval `spack env activate --sh tests`
+        CFLAGS="-fno-omit-frame-pointer -g -Wall -fsanitize=address" LDFLAGS="-fsanitize=address" ./configure --prefix=`pwd`
         ASAN_OPTIONS="abort_on_error=1" make check
 
     - name: Show test output
