@@ -22,3 +22,6 @@ spack:
       lib64: [LD_LIBRARY_PATH]
   mirrors:
     mochi-buildcache: oci://ghcr.io/mochi-hpc/mochi-spack-buildcache
+  config:
+    install_tree:
+      padded_length: 256
