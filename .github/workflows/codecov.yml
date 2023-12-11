@@ -23,39 +23,14 @@ jobs:
         color: true
         path: spack
 
-    - name: Find external packages
-      run: |
-        spack -e tests external find --not-buildable cmake
-        spack -e tests external find --not-buildable perl
-        spack -e tests external find --not-buildable m4
-        spack -e tests external find --not-buildable libtool
-        spack -e tests external find --not-buildable autoconf
-        spack -e tests external find --not-buildable automake
-        spack -e tests external find --not-buildable pkg-config
-        spack -e tests external find --not-buildable gmake
-
     - name: Add mochi-spack-packages
       run: |
         git clone https://github.com/mochi-hpc/mochi-spack-packages
         spack -e tests repo add mochi-spack-packages
 
-    - name: Concretizing spack environment
-      run: |
-        spack -e tests concretize -f
-
-    - name: Create cache key from environment file
-      run: |
-        jq --sort-keys 'del(.spack.commit) | del(.roots)' tests/spack.lock > key.json
-
-    - name: Restore Spack cache
-      uses: actions/cache@v2
-      with:
-          path: ~/.spack-ci
-          key: spack-${{ hashFiles('key.json') }}
-
     - name: Install spack environment
       run: |
-        spack -e tests install
+        spack -e tests install --no-check-signature
 
     - name: Show spack-installed packages for debugging
       run: |
