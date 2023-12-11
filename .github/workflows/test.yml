@@ -59,6 +59,9 @@ jobs:
         cat tests/*.log
         cat tests/unit-tests/*.log
 
+    # Note: to be able to push the specs to the build cache,
+    # The repository should have Write access here:
+    # https://github.com/orgs/mochi-hpc/packages/container/mochi-spack-buildcache/settings
     - name: Push packages to buildcache and update index
       if: ${{ !cancelled() }}
       run: |
