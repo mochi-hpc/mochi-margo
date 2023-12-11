@@ -15,7 +15,7 @@ spack:
   - mercury~checksum~boostsys ^libfabric fabrics=tcp,rxm
   concretizer:
     unify: true
-    reuse: false
+    reuse: true
   modules:
     prefix_inspections:
       lib: [LD_LIBRARY_PATH]
