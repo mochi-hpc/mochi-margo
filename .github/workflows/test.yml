@@ -22,7 +22,6 @@ jobs:
         ref: develop
         color: true
         path: spack
-    - run: spack install --no-check-signature --reuse python
 
     - name: Find external packages
       run: |
@@ -34,6 +33,7 @@ jobs:
         spack -e tests external find --not-buildable autoconf
         spack -e tests external find --not-buildable automake
         spack -e tests external find --not-buildable pkg-config
+        spack -e tests external find --not-buildable gmake
 
     - name: Add mochi-spack-packages
       run: |
