@@ -12,7 +12,7 @@ spack:
   - libtool
   - pkg-config
   - argobots
-  - mercury~boostsys ^libfabric fabrics=tcp,rxm
+  - mercury~checksum~boostsys ^libfabric fabrics=tcp,rxm
   concretizer:
     unify: true
     reuse: false
@@ -26,3 +26,5 @@ spack:
     test_cache: ~/.spack-ci/test_cache
     install_tree:
       root: ~/.spack-ci/install
+  mirrors:
+    mochi-buildcache: oci://ghcr.io/mochi-hpc/mochi-spack-buildcache
