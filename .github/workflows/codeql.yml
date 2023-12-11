@@ -35,7 +35,7 @@ jobs:
 
     - name: Install spack environment
       run: |
-        spack -e tests install
+        spack -e tests install --no-check-signature
 
     - name: Show spack-installed packages for debugging
       run: |
