@@ -22,8 +22,6 @@ jobs:
       uses: spack/setup-spack@v2.1.1
       with:
         ref: develop
-        color: true
-        path: spack
 
     - name: Add mochi-spack-packages
       run: |
