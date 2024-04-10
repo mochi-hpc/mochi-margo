@@ -26,6 +26,7 @@ typedef struct margo_timer* margo_timer_t;
 
 /**
  * @brief Creates a timer object.
+ * The callback will be submitted to the handler pool.
  *
  * @param mid Margo instance
  * @param cb_fn Callback to call when the timer finishes
@@ -40,6 +41,24 @@ int margo_timer_create(margo_instance_id       mid,
                        margo_timer_t*          timer);
 
 /**
+ * @brief Creates a timer object and specifies the pool
+ * in which to run the callback.
+ *
+ * @param mid Margo instance
+ * @param cb_fn Callback to call when the timer finishes
+ * @param cb_dat Callback data
+ * @param pool Pool in which to run the callback
+ * @param timer Resulting timer
+ *
+ * @return 0 on success, negative value on failure
+ */
+int margo_timer_create_with_pool(margo_instance_id       mid,
+                                 margo_timer_callback_fn cb_fn,
+                                 void*                   cb_dat,
+                                 ABT_pool                pool,
+                                 margo_timer_t*          timer);
+
+/**
  * @brief Start the timer with a provided timeout.
  *
  * @param margo_timer_t Timer object to start
@@ -50,13 +69,28 @@ int margo_timer_create(margo_instance_id       mid,
 int margo_timer_start(margo_timer_t timer, double timeout_ms);
 
 /**
- * @brief Cancel a started timer.
+ * @brief Cancel a started timer. If the timer's callback
+ * has already been submitted as a ULT, this ULT will
+ * eventually be executed. Hence, calling margo_timer_cancel
+ * does not guarantee that the timer won't actually fire
+ * later on. To ensure that no such ULT is pending, call
+ * margo_timer_wait_pending().
  *
  * @param timer Timer to cancel
  *
  * @return 0 on success, negative value on failure
  */
 int margo_timer_cancel(margo_timer_t timer);
+
+/**
+ * @brief Wait on all the pending ULTs that the timer may
+ * have submitted.
+ *
+ * @param timer Timer
+ *
+ * @return 0
+ */
+int margo_timer_wait_pending(margo_timer_t timer);
 
 /**
  * @brief Destroys a timer. If the timer was started,

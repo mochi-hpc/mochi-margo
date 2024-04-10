@@ -17,9 +17,15 @@ typedef struct margo_timer {
     margo_instance_id       mid;
     margo_timer_callback_fn cb_fn;
     void*                   cb_dat;
-    double                  expiration;
-    struct margo_timer*     next;
-    struct margo_timer*     prev;
+    ABT_pool                pool;
+
+    ABT_mutex_memory mtx_mem;
+    ABT_cond_memory  cv_mem;
+    size_t           num_pending;
+
+    double              expiration;
+    struct margo_timer* next;
+    struct margo_timer* prev;
 } margo_timer;
 
 /**

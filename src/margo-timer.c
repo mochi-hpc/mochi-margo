@@ -21,6 +21,18 @@ struct margo_timer_list {
     margo_timer* queue_head;
 };
 
+static void timer_ult(void* args)
+{
+    margo_timer_t timer = (margo_timer_t)args;
+    timer->cb_fn(timer->cb_dat);
+    bool notify;
+    ABT_mutex_lock(ABT_MUTEX_MEMORY_GET_HANDLE(&timer->mtx_mem));
+    timer->num_pending -= 1;
+    notify = timer->num_pending == 0;
+    ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&timer->mtx_mem));
+    if (notify) ABT_cond_signal(ABT_COND_MEMORY_GET_HANDLE(&timer->cv_mem));
+}
+
 static void __margo_timer_queue(struct margo_timer_list* timer_lst,
                                 margo_timer*             timer);
 
@@ -41,7 +53,6 @@ void __margo_timer_list_free(margo_instance_id        mid,
                              struct margo_timer_list* timer_lst)
 {
     margo_timer* cur;
-    ABT_pool     handler_pool;
     int          ret;
 
     ABT_mutex_lock(timer_lst->mutex);
@@ -51,19 +62,16 @@ void __margo_timer_list_free(margo_instance_id        mid,
         DL_DELETE(timer_lst->queue_head, cur);
         cur->prev = cur->next = NULL;
 
+        ABT_mutex_lock(ABT_MUTEX_MEMORY_GET_HANDLE(&cur->mtx_mem));
+        cur->num_pending += 1;
+        ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&cur->mtx_mem));
+
         /* we must issue the callback now for any pending timers or else the
          * callers will hang indefinitely
          */
-        margo_get_handler_pool(mid, &handler_pool);
-        if (handler_pool != ABT_POOL_NULL) {
-            /* if handler pool is present, run callback there */
-            ret = ABT_thread_create(handler_pool, cur->cb_fn, cur->cb_dat,
-                                    ABT_THREAD_ATTR_NULL, NULL);
-            assert(ret == ABT_SUCCESS);
-        } else {
-            /* else run callback in place */
-            cur->cb_fn(cur->cb_dat);
-        }
+        ret = ABT_thread_create(cur->pool, timer_ult, cur, ABT_THREAD_ATTR_NULL,
+                                NULL);
+        assert(ret == ABT_SUCCESS);
     }
     ABT_mutex_unlock(timer_lst->mutex);
     ABT_mutex_free(&(timer_lst->mutex));
@@ -91,6 +99,7 @@ void __margo_timer_init(margo_instance_id       mid,
     timer->cb_dat     = cb_dat;
     timer->expiration = ABT_get_wtime() + (timeout_ms / 1000);
     timer->prev = timer->next = NULL;
+    margo_get_handler_pool(mid, &timer->pool);
 
     __margo_timer_queue(timer_lst, timer);
 
@@ -117,12 +126,10 @@ void __margo_check_timers(margo_instance_id mid)
     int                      ret;
     margo_timer*             cur;
     struct margo_timer_list* timer_lst;
-    ABT_pool                 handler_pool;
     double                   now;
 
     timer_lst = __margo_get_timer_list(mid);
     assert(timer_lst);
-    margo_get_handler_pool(mid, &handler_pool);
 
     ABT_mutex_lock(timer_lst->mutex);
 
@@ -136,9 +143,12 @@ void __margo_check_timers(margo_instance_id mid)
         DL_DELETE(timer_lst->queue_head, cur);
         cur->prev = cur->next = NULL;
 
-        /* schedule callback on the handler pool */
-        ret = ABT_thread_create(handler_pool, cur->cb_fn, cur->cb_dat,
-                                ABT_THREAD_ATTR_NULL, NULL);
+        ABT_mutex_lock(ABT_MUTEX_MEMORY_GET_HANDLE(&cur->mtx_mem));
+        cur->num_pending += 1;
+        ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&cur->mtx_mem));
+
+        ret = ABT_thread_create(cur->pool, timer_ult, cur, ABT_THREAD_ATTR_NULL,
+                                NULL);
         assert(ret == ABT_SUCCESS);
     }
     ABT_mutex_unlock(timer_lst->mutex);
@@ -220,11 +230,27 @@ int margo_timer_create(margo_instance_id       mid,
                        void*                   cb_dat,
                        margo_timer_t*          timer)
 {
+    ABT_pool pool;
+    int      ret = margo_get_handler_pool(mid, &pool);
+    if (ret != 0) return ret;
+    return margo_timer_create_with_pool(mid, cb_fn, cb_dat, pool, timer);
+}
+
+int margo_timer_create_with_pool(margo_instance_id       mid,
+                                 margo_timer_callback_fn cb_fn,
+                                 void*                   cb_dat,
+                                 ABT_pool                pool,
+                                 margo_timer_t*          timer)
+{
+    if (!pool || pool == ABT_POOL_NULL)
+        return margo_timer_create(mid, cb_fn, cb_dat, timer);
+
     margo_timer_t tmp = (margo_timer_t)calloc(1, sizeof(*tmp));
     if (!tmp) return -1;
     tmp->mid    = mid;
     tmp->cb_fn  = cb_fn;
     tmp->cb_dat = cb_dat;
+    tmp->pool   = pool;
     *timer      = tmp;
     return 0;
 }
@@ -253,9 +279,21 @@ int margo_timer_cancel(margo_timer_t timer)
     return 0;
 }
 
+int margo_timer_wait_pending(margo_timer_t timer)
+{
+    ABT_mutex_lock(ABT_MUTEX_MEMORY_GET_HANDLE(&timer->mtx_mem));
+    while (timer->num_pending != 0) {
+        ABT_cond_wait(ABT_COND_MEMORY_GET_HANDLE(&timer->cv_mem),
+                      ABT_MUTEX_MEMORY_GET_HANDLE(&timer->mtx_mem));
+    }
+    ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&timer->mtx_mem));
+    return 0;
+}
+
 int margo_timer_destroy(margo_timer_t timer)
 {
     margo_timer_cancel(timer);
+
     free(timer);
     return 0;
 }

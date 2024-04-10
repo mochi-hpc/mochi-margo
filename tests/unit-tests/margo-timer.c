@@ -47,6 +47,13 @@ static void timer_cb(void* data)
     ctx->flag                = 1;
 }
 
+static void timer_with_sleep_cb(void* data)
+{
+    struct test_context* ctx = (struct test_context*)data;
+    margo_thread_sleep(ctx->mid, 1000); // sleep for 1 second
+    ctx->flag                = 1;
+}
+
 static MunitResult test_margo_timer_start(const MunitParameter params[],
                                           void*                data)
 {
@@ -145,6 +152,41 @@ static MunitResult test_margo_timer_destroy(const MunitParameter params[],
     return MUNIT_OK;
 }
 
+static MunitResult test_margo_timer_wait_pending(const MunitParameter params[],
+                                                 void*                data)
+{
+    (void)params;
+    (void)data;
+    int           ret;
+    margo_timer_t timer = MARGO_TIMER_NULL;
+
+    struct test_context* ctx = (struct test_context*)data;
+
+    ret = margo_timer_create(ctx->mid, timer_with_sleep_cb, data, &timer);
+    munit_assert_int(ret, ==, 0);
+    munit_assert_not_null(timer);
+
+    ctx->flag = 0;
+
+    // timer will fire in 500 ms
+    ret = margo_timer_start(timer, 500);
+    munit_assert_int(ret, ==, 0);
+
+    // wait 600 ms, the timer will have fired and a ULT will have been created
+    margo_thread_sleep(ctx->mid, 600);
+
+    // wait for pending ULT
+    ret = margo_timer_wait_pending(timer);
+    munit_assert_int(ret, ==, 0);
+
+    ret = margo_timer_destroy(timer);
+    munit_assert_int(ret, ==, 0);
+
+    munit_assert_int(ctx->flag, ==, 1);
+
+    return MUNIT_OK;
+}
+
 static char* protocol_params[] = {"na+sm", NULL};
 
 static MunitParameterEnum test_params[]
@@ -156,6 +198,9 @@ static MunitTest test_suite_tests[] = {
     {(char*)"/margo_timer/cancel", test_margo_timer_cancel, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {(char*)"/margo_timer/destroy", test_margo_timer_destroy,
+     test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE,
+     test_params},
+    {(char*)"/margo_timer/wait_pending", test_margo_timer_wait_pending,
      test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE,
      test_params},
     {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
