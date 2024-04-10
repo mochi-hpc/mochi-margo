@@ -83,18 +83,11 @@ int margo_timer_start(margo_timer_t timer, double timeout_ms);
 int margo_timer_cancel(margo_timer_t timer);
 
 /**
- * @brief Wait on all the pending ULTs that the timer may
- * have submitted.
+ * @brief Destroys a timer.
  *
- * @param timer Timer
- *
- * @return 0
- */
-int margo_timer_wait_pending(margo_timer_t timer);
-
-/**
- * @brief Destroys a timer. If the timer was started,
- * this function will also cancel it.
+ * @important This function will not cancel the timer.
+ * If it was started, it will still fire, and the timer's
+ * memory will be freed afterward.
  *
  * @param timer Timer to destroy.
  *

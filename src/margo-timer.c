@@ -21,16 +21,20 @@ struct margo_timer_list {
     margo_timer* queue_head;
 };
 
+static inline void timer_cleanup(margo_timer_t timer) { free(timer); }
+
 static void timer_ult(void* args)
 {
     margo_timer_t timer = (margo_timer_t)args;
-    timer->cb_fn(timer->cb_dat);
-    bool notify;
+    if (!timer->cancelled) timer->cb_fn(timer->cb_dat);
     ABT_mutex_lock(ABT_MUTEX_MEMORY_GET_HANDLE(&timer->mtx_mem));
     timer->num_pending -= 1;
-    notify = timer->num_pending == 0;
+    bool no_more_pending = timer->num_pending == 0;
+    bool need_destroy    = no_more_pending && timer->destroy_requested;
     ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&timer->mtx_mem));
-    if (notify) ABT_cond_signal(ABT_COND_MEMORY_GET_HANDLE(&timer->cv_mem));
+    if (no_more_pending)
+        ABT_cond_signal(ABT_COND_MEMORY_GET_HANDLE(&timer->cv_mem));
+    if (need_destroy) timer_cleanup(timer);
 }
 
 static void __margo_timer_queue(struct margo_timer_list* timer_lst,
@@ -268,32 +272,38 @@ int margo_timer_start(margo_timer_t timer, double timeout_ms)
 
 int margo_timer_cancel(margo_timer_t timer)
 {
+    // Mark the timer as cancelled to prevent existing ULTs from calling the
+    // callback
+    timer->cancelled                   = true;
     struct margo_timer_list* timer_lst = __margo_get_timer_list(timer->mid);
 
+    // Remove the timer from the list of pending timers
     ABT_mutex_lock(timer_lst->mutex);
     if (timer->prev || timer->next) DL_DELETE(timer_lst->queue_head, timer);
     ABT_mutex_unlock(timer_lst->mutex);
 
     timer->prev = timer->next = NULL;
 
-    return 0;
-}
-
-int margo_timer_wait_pending(margo_timer_t timer)
-{
+    // Wait for any remaining ULTs
     ABT_mutex_lock(ABT_MUTEX_MEMORY_GET_HANDLE(&timer->mtx_mem));
     while (timer->num_pending != 0) {
         ABT_cond_wait(ABT_COND_MEMORY_GET_HANDLE(&timer->cv_mem),
                       ABT_MUTEX_MEMORY_GET_HANDLE(&timer->mtx_mem));
     }
     ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&timer->mtx_mem));
+
+    // Uncancel the timer
+    timer->cancelled = false;
+
     return 0;
 }
 
 int margo_timer_destroy(margo_timer_t timer)
 {
-    margo_timer_cancel(timer);
-
-    free(timer);
+    timer->destroy_requested = true;
+    ABT_mutex_lock(ABT_MUTEX_MEMORY_GET_HANDLE(&timer->mtx_mem));
+    bool can_destroy = !timer->prev && !timer->next && !timer->num_pending;
+    ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&timer->mtx_mem));
+    if (can_destroy) timer_cleanup(timer);
     return 0;
 }
