@@ -261,7 +261,8 @@ int margo_timer_create_with_pool(margo_instance_id       mid,
 
 int margo_timer_start(margo_timer_t timer, double timeout_ms)
 {
-    if (timer->prev != NULL || timer->next != NULL) return -1;
+    if (timer->prev != NULL || timer->next != NULL || timer->canceled)
+        return -1;
 
     struct margo_timer_list* timer_lst = __margo_get_timer_list(timer->mid);
     timer->expiration                  = ABT_get_wtime() + (timeout_ms / 1000);
