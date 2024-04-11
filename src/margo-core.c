@@ -165,7 +165,7 @@ static void margo_cleanup(margo_instance_id mid)
 
     /* shut down pending timers */
     MARGO_TRACE(mid, "Cleaning up pending timers");
-    __margo_timer_list_free(mid, mid->timer_list);
+    __margo_timer_list_free(mid);
 
     MARGO_TRACE(mid, "Destroying mutex and condition variables");
     ABT_mutex_free(&mid->finalize_mutex);
@@ -883,12 +883,11 @@ static hg_return_t margo_cb(const struct hg_cb_info* info)
 
     if (hret == HG_CANCELED && req->timer) { hret = HG_TIMEOUT; }
 
-    /* remove timer if there is one and it is still in place (i.e., not timed
-     * out) */
-    if (hret != HG_TIMEOUT && req->timer && req->handle) {
-        __margo_timer_destroy(mid, req->timer);
+    /* remove timer if there is one and it is still in place */
+    if (req->timer) {
+        margo_timer_cancel(req->timer);
+        margo_timer_destroy(req->timer);
     }
-    if (req->timer) { free(req->timer); }
 
     if (req->kind == MARGO_REQ_CALLBACK) {
         if (req->u.callback.cb) req->u.callback.cb(req->u.callback.uargs, hret);
@@ -955,7 +954,6 @@ static void margo_forward_timeout_cb(void* arg)
     margo_request req = (margo_request)arg;
     /* cancel the Mercury op if the forward timed out */
     HG_Cancel(req->handle);
-    return;
 }
 
 static hg_return_t margo_provider_iforward_internal(
@@ -1084,18 +1082,24 @@ static hg_return_t margo_provider_iforward_internal(
 
     if (timeout_ms > 0) {
         /* set a timer object to expire when this forward times out */
-        req->timer = calloc(1, sizeof(*(req->timer)));
-        if (!(req->timer)) {
+        hret = margo_timer_create_with_pool(mid, margo_forward_timeout_cb, req,
+                                            ABT_POOL_NULL, &req->timer);
+        if (hret != HG_SUCCESS) {
             // LCOV_EXCL_START
             MARGO_EVENTUAL_FREE(&eventual);
-            margo_error(mid, "in %s: could not allocate memory for timer",
-                        __func__);
-            hret = HG_NOMEM_ERROR;
+            margo_error(mid, "in %s: could not create timer", __func__);
             goto finish;
             // LCOV_EXCL_END
         }
-        __margo_timer_init(mid, req->timer, margo_forward_timeout_cb, req,
-                           timeout_ms);
+        hret = margo_timer_start(req->timer, timeout_ms);
+        if (hret != HG_SUCCESS) {
+            // LCOV_EXCL_START
+            margo_timer_destroy(req->timer);
+            MARGO_EVENTUAL_FREE(&eventual);
+            margo_error(mid, "in %s: could not start timer", __func__);
+            goto finish;
+            // LCOV_EXCL_END
+        }
     }
 
     // get parent RPC id
@@ -1120,8 +1124,8 @@ static hg_return_t margo_provider_iforward_internal(
     /* remove timer if HG_Forward failed */
     if (hret != HG_SUCCESS && req->timer) {
         // LCOV_EXCL_START
-        __margo_timer_destroy(mid, req->timer);
-        free(req->timer);
+        margo_timer_cancel(req->timer);
+        margo_timer_destroy(req->timer);
         req->timer = NULL;
         // LCOV_EXCL_END
     }
@@ -1805,7 +1809,7 @@ static void margo_thread_sleep_cb(void* arg)
 
 void margo_thread_sleep(margo_instance_id mid, double timeout_ms)
 {
-    margo_timer               sleep_timer;
+    margo_timer_t             sleep_timer;
     margo_thread_sleep_cb_dat sleep_cb_dat;
 
     /* monitoring */
@@ -1822,8 +1826,9 @@ void margo_thread_sleep(margo_instance_id mid, double timeout_ms)
     sleep_cb_dat.is_asleep = 1;
 
     /* initialize the sleep timer */
-    __margo_timer_init(mid, &sleep_timer, margo_thread_sleep_cb, &sleep_cb_dat,
-                       timeout_ms);
+    margo_timer_create_with_pool(mid, margo_thread_sleep_cb, &sleep_cb_dat,
+                                 ABT_POOL_NULL, &sleep_timer);
+    margo_timer_start(sleep_timer, timeout_ms);
 
     /* yield thread for specified timeout */
     ABT_mutex_lock(sleep_cb_dat.mutex);
@@ -1834,6 +1839,8 @@ void margo_thread_sleep(margo_instance_id mid, double timeout_ms)
     /* clean up */
     ABT_mutex_free(&sleep_cb_dat.mutex);
     ABT_cond_free(&sleep_cb_dat.cond);
+
+    margo_timer_destroy(sleep_timer);
 
     /* monitoring */
     __MARGO_MONITOR(mid, FN_END, sleep, monitoring_args);

@@ -44,6 +44,15 @@ int margo_timer_create(margo_instance_id       mid,
  * @brief Creates a timer object and specifies the pool
  * in which to run the callback.
  *
+ * @note Passing ABT_POOL_NULL as the pool is allowed.
+ * In this case, the callback will be invoked directly
+ * within the ULT that runs the progress loop. This should
+ * generally be avoided unless the callback is very short,
+ * and does not call any margo_* or HG_* function. A typical
+ * example of a valid callback would be one that simply
+ * sets the value of an ABT_eventual, or one that submits
+ * a ULT and returns.
+ *
  * @param mid Margo instance
  * @param cb_fn Callback to call when the timer finishes
  * @param cb_dat Callback data

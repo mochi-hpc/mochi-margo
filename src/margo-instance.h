@@ -18,6 +18,7 @@
 #include <math.h>
 
 #include "margo.h"
+#include "margo-timer.h"
 #include "margo-config.h"
 #include "margo-abt-config.h"
 #include "margo-hg-config.h"
@@ -129,13 +130,14 @@ struct margo_instance {
 
 #define MARGO_RPC_POOL(mid) (mid)->abt.pools[mid->rpc_pool_idx].pool
 
-typedef enum margo_request_kind {
+typedef enum margo_request_kind
+{
     MARGO_REQ_EVENTUAL,
     MARGO_REQ_CALLBACK
 } margo_request_kind;
 
 struct margo_request_struct {
-    margo_timer*         timer;
+    margo_timer_t        timer;
     margo_instance_id    mid;
     hg_handle_t          handle;
     margo_monitor_data_t monitor_data;
@@ -157,10 +159,10 @@ struct margo_request_struct {
 struct margo_rpc_data {
     margo_instance_id mid;
     _Atomic(ABT_pool) pool;
-    char*             rpc_name;
-    hg_proc_cb_t      in_proc_cb;  /* user-provided input proc */
-    hg_proc_cb_t      out_proc_cb; /* user-provided output proc */
-    void*             user_data;
+    char*        rpc_name;
+    hg_proc_cb_t in_proc_cb;  /* user-provided input proc */
+    hg_proc_cb_t out_proc_cb; /* user-provided output proc */
+    void*        user_data;
     void (*user_free_callback)(void*);
 };
 
