@@ -26,7 +26,7 @@ static inline void timer_cleanup(margo_timer_t timer) { free(timer); }
 static void timer_ult(void* args)
 {
     margo_timer_t timer = (margo_timer_t)args;
-    if (!timer->cancelled) timer->cb_fn(timer->cb_dat);
+    if (!timer->canceled) timer->cb_fn(timer->cb_dat);
     ABT_mutex_lock(ABT_MUTEX_MEMORY_GET_HANDLE(&timer->mtx_mem));
     timer->num_pending -= 1;
     bool no_more_pending = timer->num_pending == 0;
@@ -272,9 +272,9 @@ int margo_timer_start(margo_timer_t timer, double timeout_ms)
 
 int margo_timer_cancel(margo_timer_t timer)
 {
-    // Mark the timer as cancelled to prevent existing ULTs from calling the
+    // Mark the timer as canceled to prevent existing ULTs from calling the
     // callback
-    timer->cancelled                   = true;
+    timer->canceled                    = true;
     struct margo_timer_list* timer_lst = __margo_get_timer_list(timer->mid);
 
     // Remove the timer from the list of pending timers
@@ -293,7 +293,7 @@ int margo_timer_cancel(margo_timer_t timer)
     ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&timer->mtx_mem));
 
     // Uncancel the timer
-    timer->cancelled = false;
+    timer->canceled = false;
 
     return 0;
 }

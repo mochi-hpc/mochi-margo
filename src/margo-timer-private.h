@@ -22,7 +22,7 @@ typedef struct margo_timer {
     ABT_mutex_memory mtx_mem;
     ABT_cond_memory  cv_mem;
     size_t           num_pending;
-    _Atomic bool     cancelled;
+    _Atomic bool     canceled;
     _Atomic bool     destroy_requested;
 
     double              expiration;
