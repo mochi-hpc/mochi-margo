@@ -45,14 +45,14 @@ static void test_context_tear_down(void* fixture)
 static void timer_cb(void* data)
 {
     struct test_context* ctx = (struct test_context*)data;
-    ctx->flag                = 1;
+    ctx->flag                += 1;
 }
 
 static void timer_with_sleep_cb(void* data)
 {
     struct test_context* ctx = (struct test_context*)data;
     margo_thread_sleep(ctx->mid, 1000); // sleep for 1 second
-    ctx->flag                = 1;
+    ctx->flag                += 1;
 }
 
 static MunitResult test_margo_timer_start(const MunitParameter params[],
@@ -228,6 +228,82 @@ static MunitResult test_margo_timer_cancel_before_ult_started(const MunitParamet
     return MUNIT_OK;
 }
 
+static MunitResult test_margo_timer_cancel_many(const MunitParameter params[],
+                                                void*                data)
+{
+    (void)params;
+    (void)data;
+    int           ret;
+    margo_timer_t timers[3] = { MARGO_TIMER_NULL, MARGO_TIMER_NULL, MARGO_TIMER_NULL};
+
+    struct test_context* ctx = (struct test_context*)data;
+    ctx->flag = 0;
+
+    // Create a pool that will be associated with an ES only later, so
+    // we can submit timers to it but the timer ULTs won't be executed
+    // until we want them to.
+    ABT_pool pool;
+    ret = ABT_pool_create_basic(ABT_POOL_FIFO, ABT_POOL_ACCESS_MPMC, true, &pool);
+    munit_assert_int(ret, ==, 0);
+
+    // As the first ULT in this pool, we push a "just_sleep" to give us some
+    // time to call margo_timer_cancel from the main ES before the ES that
+    // runs the timers ULT start executing them.
+    ret = ABT_thread_create(pool, just_sleep, NULL, ABT_THREAD_ATTR_NULL, NULL);
+    munit_assert_int(ret, ==, 0);
+
+    // Create a timer that will submit its ULT on the above pool
+    ret = margo_timer_create_with_pool(ctx->mid, timer_with_sleep_cb, data, pool, &timers[0]);
+    munit_assert_int(ret, ==, 0);
+    munit_assert_not_null(timers[0]);
+
+    // Create 2 other timers not in the above pool
+    ret = margo_timer_create(ctx->mid, timer_with_sleep_cb, data, &timers[1]);
+    munit_assert_int(ret, ==, 0);
+    ret = margo_timer_create(ctx->mid, timer_with_sleep_cb, data, &timers[2]);
+    munit_assert_int(ret, ==, 0);
+
+    // Start the timer 0 with a 100ms timeout
+    ret = margo_timer_start(timers[0], 100);
+    munit_assert_int(ret, ==, 0);
+
+    // Start timer 1 with a deadline long in the future
+    // (will be canceled before it becomes a ULT)
+    ret = margo_timer_start(timers[1], 500);
+
+    // Start timer 2 with a short deadline so it's completed by the time we call cancel
+    ret = margo_timer_start(timers[2], 100);
+
+    // Sleep 200ms, ensuring that the ULT for timer 0 has been submitted to the pool
+    // and timer 2 has executed.
+    margo_thread_sleep(ctx->mid, 200);
+
+    // Create an ES to run the pool's ULTs
+    ABT_xstream xstream;
+    ret = ABT_xstream_create_basic(ABT_SCHED_BASIC, 1, &pool, ABT_SCHED_CONFIG_NULL, &xstream);
+    munit_assert_int(ret, ==, 0);
+
+    // Cancel all the timers
+    ret = margo_timer_cancel_many(3, timers);
+    munit_assert_int(ret, ==, 0);
+
+    // The callback should have run only once, flag should be 1
+    munit_assert_int(ctx->flag, ==, 1);
+
+    ret = margo_timer_destroy(timers[0]);
+    munit_assert_int(ret, ==, 0);
+    ret = margo_timer_destroy(timers[1]);
+    munit_assert_int(ret, ==, 0);
+    ret = margo_timer_destroy(timers[2]);
+    munit_assert_int(ret, ==, 0);
+
+    // Terminate the xstream
+    ABT_xstream_join(xstream);
+    ABT_xstream_free(&xstream);
+
+    return MUNIT_OK;
+}
+
 static MunitResult test_margo_timer_destroy(const MunitParameter params[],
                                             void*                data)
 {
@@ -277,6 +353,8 @@ static MunitTest test_suite_tests[] = {
     {(char*)"/margo_timer/cancel-before-ult-started", test_margo_timer_cancel_after_ult_started,
      test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {(char*)"/margo_timer/cancel-after-ult-started", test_margo_timer_cancel_after_ult_started,
+     test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
+    {(char*)"/margo_timer/cancel-many", test_margo_timer_cancel_many,
      test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {(char*)"/margo_timer/destroy", test_margo_timer_destroy,
      test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE,

@@ -329,6 +329,35 @@ int margo_timer_cancel(margo_timer_t timer)
     return 0;
 }
 
+int margo_timer_cancel_many(size_t n, margo_timer_t* timers)
+{
+    if (n == 0) return 0;
+    struct margo_timer_list* timer_lst = get_timer_list(timers[0]->mid);
+    ABT_mutex_lock(ABT_MUTEX_MEMORY_GET_HANDLE(&timer_lst->mutex));
+    for (int i = 0; i < n; ++i) {
+        // Mark each timer as canceled
+        timers[i]->canceled = true;
+        // Remove each timer from the list of pending timers
+        if (timers[i]->prev || timers[i]->next)
+            DL_DELETE(timer_lst->queue_head, timers[i]);
+        timers[i]->prev = timers[i]->next = NULL;
+    }
+    ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&timer_lst->mutex));
+
+    for (int i = 0; i < n; ++i) {
+        // Wait for any remaining ULTs for each timer
+        ABT_mutex_lock(ABT_MUTEX_MEMORY_GET_HANDLE(&timers[i]->mutex));
+        while (timers[i]->num_pending != 0) {
+            ABT_cond_wait(ABT_COND_MEMORY_GET_HANDLE(&timers[i]->cv),
+                          ABT_MUTEX_MEMORY_GET_HANDLE(&timers[i]->mutex));
+        }
+        ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&timers[i]->mutex));
+        // Uncanceled each timer
+        timers[i]->canceled = false;
+    }
+    return 0;
+}
+
 int margo_timer_destroy(margo_timer_t timer)
 {
     ABT_mutex_lock(ABT_MUTEX_MEMORY_GET_HANDLE(&timer->mutex));
