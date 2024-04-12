@@ -369,7 +369,7 @@ finish:
 error:
     if (mid) {
         __margo_handle_cache_destroy(mid);
-        __margo_timer_list_free(mid, mid->timer_list);
+        __margo_timer_list_free(mid);
         ABT_mutex_free(&mid->finalize_mutex);
         ABT_cond_free(&mid->finalize_cond);
         ABT_mutex_free(&mid->pending_operations_mtx);

@@ -36,15 +36,14 @@ jobs:
 
     - name: Build code and run unit tests
       run: |
-        spack env activate -d tests
-        eval `spack env activate --sh tests`
-        ./prepare.sh
-        ./configure --enable-coverage --prefix=`pwd`
+        eval `spack env activate --sh tests` &&
+        ./prepare.sh &&
+        ./configure --enable-coverage --prefix=`pwd` &&
         make check
-        make clean
 
     - uses: codecov/codecov-action@v3
       with:
+        token: ${{ secrets.CODECOV_TOKEN }}
         fail_ci_if_error: true
         verbose: true
         gcov: true
