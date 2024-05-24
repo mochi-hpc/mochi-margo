@@ -559,6 +559,7 @@ static void* __margo_default_monitor_initialize(margo_instance_id   mid,
         if (precision && json_object_is_type(precision, json_type_int)) {
             monitor->precision = json_object_get_int(precision);
         }
+        if (monitor->precision > 9) monitor->precision = 9;
         struct json_object* sampling
             = json_object_object_get(statistics, "sample_progress_every");
         if (sampling && json_object_is_type(sampling, json_type_int)) {
