@@ -55,3 +55,15 @@ hg_return_t margo_request_get_monitoring_data(margo_request         req,
     if (data) *data = req->monitor_data;
     return HG_SUCCESS;
 }
+
+hg_return_t margo_monitor_dump(margo_instance_id     mid,
+                               margo_monitor_dump_fn dump_fn,
+                               void*                 uargs,
+                               bool                  reset)
+{
+    if (!mid) return HG_INVALID_ARG;
+    if (!mid->monitor) return HG_SUCCESS;
+    if (!mid->monitor->dump) return HG_NOENTRY;
+    mid->monitor->dump(mid->monitor->uargs, dump_fn, uargs, reset);
+    return HG_SUCCESS;
+}

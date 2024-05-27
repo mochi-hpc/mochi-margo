@@ -197,13 +197,18 @@ typedef const char*                              margo_monitor_user_args_t;
     X(USER,             user)
 /* clang-format on */
 
+typedef void (*margo_monitor_dump_fn)(void*, const char*, size_t);
+
 struct margo_monitor {
     void* uargs;
     void* (*initialize)(margo_instance_id mid, void*, struct json_object*);
     void (*finalize)(void* uargs);
+    hg_return_t (*dump)(void*                 uargs,
+                        margo_monitor_dump_fn dump_fn,
+                        void*                 dump_args,
+                        bool                  reset);
     const char* (*name)();
     struct json_object* (*config)(void* uargs);
-
 #define X(__x__, __y__)                                      \
     void (*on_##__y__)(void*, double, margo_monitor_event_t, \
                        margo_monitor_##__y__##_args_t);
@@ -449,6 +454,24 @@ struct margo_monitor_cb_args {
     /* output */
     hg_return_t ret;
 };
+
+/**
+ * @brief Call the dump_fn function with a serialized version of
+ * the monitor's state. If reset is set to true, this function will
+ * also reset the monitor's internal state (e.g. all past RPC activities
+ * will be removed).
+ *
+ * @param mid Margo instance ID
+ * @param dump_fn Dump function pointer
+ * @param uargs User arguments for the dump function pointer
+ * @param reset Whether to reset to monitor's state
+ *
+ * @return HG_SUCCESS or other error code
+ */
+hg_return_t margo_monitor_dump(margo_instance_id     mid,
+                               margo_monitor_dump_fn dump_fn,
+                               void*                 uargs,
+                               bool                  reset);
 
 /**
  * @brief Invokes the on_user callback of the monitor registered with the

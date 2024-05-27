@@ -342,6 +342,39 @@ static MunitResult test_custom_monitoring(const MunitParameter params[],
     return MUNIT_OK;
 }
 
+static void check_json_statistics_content(
+        struct json_object* content,
+        uint16_t provider_id_param,
+        const char* self_addr_str,
+        bool relay,
+        bool expected_zeros);
+
+struct dump_statistics_args {
+    uint16_t provider_id_param;
+    const char* self_addr_str;
+    bool relay;
+};
+
+static void dump_statistics(void* uargs, const char* content, size_t size) {
+    struct dump_statistics_args* args = (struct dump_statistics_args*)uargs;
+
+    struct json_object* json_content = NULL;
+    struct json_tokener* tokener     = json_tokener_new();
+    json_content = json_tokener_parse_ex(tokener, content, size);
+    json_tokener_free(tokener);
+
+    munit_assert_not_null(json_content);
+    munit_assert(json_object_is_type(json_content, json_type_object));
+    struct json_object* json_stats = json_object_object_get(json_content, "stats");
+
+    check_json_statistics_content(
+        json_stats, args->provider_id_param,
+        args->self_addr_str, args->relay, false);
+
+    json_object_put(json_content);
+}
+
+
 static MunitResult test_default_monitoring_statistics(const MunitParameter params[],
                                                       void*                data)
 {
@@ -350,6 +383,7 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
     const char* protocol = munit_parameters_get(params, "protocol");
     uint16_t provider_id_param = atoi(munit_parameters_get(params, "provider_id"));
     hg_bool_t relay = strcmp(munit_parameters_get(params, "relay"), "true") == 0 ? HG_TRUE : HG_FALSE;
+    bool reset = strcmp(munit_parameters_get(params, "reset"), "true") == 0 ? true : false;
     const char* json_config =
         "{\"monitoring\":{"
             "\"config\":{"
@@ -433,6 +467,14 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
     hret = margo_monitor_call_user(mid, MARGO_MONITOR_FN_START, NULL);
     munit_assert_int(hret, ==, HG_SUCCESS);
 
+    struct dump_statistics_args dump_args = {
+        .provider_id_param = provider_id_param,
+        .relay             = relay,
+        .self_addr_str     = self_addr_str
+    };
+    hret = margo_monitor_dump(mid, dump_statistics, &dump_args, reset);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
     margo_finalize(mid);
 
     char* filename = NULL;
@@ -461,18 +503,40 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
     struct json_tokener* tokener     = json_tokener_new();
     json_content = json_tokener_parse_ex(tokener, file_content, file_size);
     json_tokener_free(tokener);
+
+    check_json_statistics_content(
+        json_content, provider_id_param, self_addr_str, relay, reset);
+
+    json_object_put(json_content);
+    free(file_content);
+    free(filename);
+
+    return MUNIT_OK;
+}
+
+static void check_json_statistics_content(
+        struct json_object* json_content,
+        uint16_t provider_id_param,
+        const char* self_addr_str,
+        bool relay,
+        bool expected_zeros)
+{
     munit_assert_not_null(json_content);
 
     munit_assert(json_object_is_type(json_content, json_type_object));
 
 #define ASSERT_JSON_HAS_KEY(parent, key_name, key_obj, type) \
-    struct json_object* key_obj = json_object_object_get(parent, key_name); \
-    munit_assert_not_null(key_obj); \
-    munit_assert(json_object_is_type(key_obj, json_type_##type))
+    struct json_object* key_obj = NULL; \
+    do { \
+        key_obj = json_object_object_get(parent, key_name); \
+        munit_assert_not_null(key_obj); \
+        munit_assert(json_object_is_type(key_obj, json_type_##type)); \
+    } while(0)
+
 
 #define ASSERT_JSON_HAS(parent, key, type) ASSERT_JSON_HAS_KEY(parent, #key, key, type)
 
-#define ASSERT_JSON_HAS_STATS(parent, key) \
+#define ASSERT_JSON_HAS_STATS(parent, key, zero) \
     do { \
         ASSERT_JSON_HAS(parent, key, object); \
         ASSERT_JSON_HAS(key, num, int); \
@@ -481,22 +545,30 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
         ASSERT_JSON_HAS(key, avg, double); \
         ASSERT_JSON_HAS(key, var, double); \
         ASSERT_JSON_HAS(key, sum, double); \
+        if(zero) { \
+            munit_assert_int(0, ==, json_object_get_int64(json_object_object_get(key, "num"))); \
+            munit_assert_double(0, ==, json_object_get_double(json_object_object_get(key, "min"))); \
+            munit_assert_double(0, ==, json_object_get_double(json_object_object_get(key, "max"))); \
+            munit_assert_double(0, ==, json_object_get_double(json_object_object_get(key, "avg"))); \
+            munit_assert_double(0, ==, json_object_get_double(json_object_object_get(key, "var"))); \
+            munit_assert_double(0, ==, json_object_get_double(json_object_object_get(key, "sum"))); \
+        } \
     } while(0)
 
-#define ASSERT_JSON_HAS_DOUBLE_STATS(parent, key, secondary) \
+#define ASSERT_JSON_HAS_DOUBLE_STATS(parent, key, secondary, zero) \
     do { \
         ASSERT_JSON_HAS(parent, key, object); \
-        ASSERT_JSON_HAS_STATS(key, duration); \
-        ASSERT_JSON_HAS_STATS(key, secondary); \
+        ASSERT_JSON_HAS_STATS(key, duration, zero); \
+        ASSERT_JSON_HAS_STATS(key, secondary, zero); \
     } while(0)
 
     {
         // check for the "progress_loop" section
         ASSERT_JSON_HAS(json_content, progress_loop, object);
-        ASSERT_JSON_HAS_STATS(progress_loop, progress_with_timeout);
-        ASSERT_JSON_HAS_STATS(progress_loop, progress_timeout_value_msec);
-        ASSERT_JSON_HAS_STATS(progress_loop, progress_without_timeout);
-        ASSERT_JSON_HAS_STATS(progress_loop, trigger);
+        ASSERT_JSON_HAS_STATS(progress_loop, progress_with_timeout, false);
+        ASSERT_JSON_HAS_STATS(progress_loop, progress_timeout_value_msec, false);
+        ASSERT_JSON_HAS_STATS(progress_loop, progress_without_timeout, false);
+        ASSERT_JSON_HAS_STATS(progress_loop, trigger, false);
 
         // check for the "rpcs" secions
         ASSERT_JSON_HAS(json_content, rpcs, object);
@@ -534,11 +606,11 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
                 // "origin" section must have an object corresponding to the address
                 sprintf(addr_key, "sent to %s", self_addr_str);
                 ASSERT_JSON_HAS_KEY(origin, addr_key, sent_to, object);
-                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, iforward, relative_timestamp_from_create);
-                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, forward_cb, relative_timestamp_from_iforward_start);
-                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, iforward_wait, relative_timestamp_from_iforward_end);
-                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, set_input, relative_timestamp_from_iforward_start);
-                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, get_output, relative_timestamp_from_wait_end);
+                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, iforward, relative_timestamp_from_create, expected_zeros);
+                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, forward_cb, relative_timestamp_from_iforward_start, expected_zeros);
+                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, iforward_wait, relative_timestamp_from_iforward_end, expected_zeros);
+                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, set_input, relative_timestamp_from_iforward_start, expected_zeros);
+                ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, get_output, relative_timestamp_from_wait_end, expected_zeros);
             }
             // RPC must have an "target" section
             ASSERT_JSON_HAS(echo, target, object);
@@ -547,29 +619,29 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
                 sprintf(addr_key, "received from %s", self_addr_str);
                 ASSERT_JSON_HAS_KEY(target, addr_key, received_from, object);
                 ASSERT_JSON_HAS(received_from, handler, object);
-                ASSERT_JSON_HAS_STATS(handler, duration);
-                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, ult, relative_timestamp_from_handler_start);
-                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, irespond, relative_timestamp_from_ult_start);
-                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, respond_cb, relative_timestamp_from_irespond_start);
-                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, irespond_wait, relative_timestamp_from_irespond_end);
-                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, set_output, relative_timestamp_from_irespond_start);
-                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, get_input, relative_timestamp_from_ult_start);
+                ASSERT_JSON_HAS_STATS(handler, duration, expected_zeros);
+                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, ult, relative_timestamp_from_handler_start, expected_zeros);
+                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, irespond, relative_timestamp_from_ult_start, expected_zeros);
+                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, respond_cb, relative_timestamp_from_irespond_start, expected_zeros);
+                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, irespond_wait, relative_timestamp_from_irespond_end, expected_zeros);
+                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, set_output, relative_timestamp_from_irespond_start, expected_zeros);
+                ASSERT_JSON_HAS_DOUBLE_STATS(received_from, get_input, relative_timestamp_from_ult_start, expected_zeros);
                 // "received from ..." section must have a "bulk" section
                 ASSERT_JSON_HAS(received_from, bulk, object);
                 // "bulk" section must have a "create" section
                 ASSERT_JSON_HAS(bulk, create, object);
-                ASSERT_JSON_HAS_STATS(create, duration);
-                ASSERT_JSON_HAS_STATS(create, size);
+                ASSERT_JSON_HAS_STATS(create, duration, expected_zeros);
+                ASSERT_JSON_HAS_STATS(create, size, expected_zeros);
                 // "bulk" section must have a "pull from ..." section
                 char pull_from_key[512];
                 sprintf(pull_from_key, "pull from %s", self_addr_str);
                 ASSERT_JSON_HAS_KEY(bulk, pull_from_key, pull_from, object);
                 // "pull from ..." secion must have a "itransfer" section
                 ASSERT_JSON_HAS(pull_from, itransfer, object);
-                ASSERT_JSON_HAS_STATS(itransfer, duration);
-                ASSERT_JSON_HAS_STATS(itransfer, size);
-                ASSERT_JSON_HAS_DOUBLE_STATS(pull_from, transfer_cb, relative_timestamp_from_itransfer_start);
-                ASSERT_JSON_HAS_DOUBLE_STATS(pull_from, itransfer_wait, relative_timestamp_from_itransfer_end);
+                ASSERT_JSON_HAS_STATS(itransfer, duration, expected_zeros);
+                ASSERT_JSON_HAS_STATS(itransfer, size, expected_zeros);
+                ASSERT_JSON_HAS_DOUBLE_STATS(pull_from, transfer_cb, relative_timestamp_from_itransfer_start, expected_zeros);
+                ASSERT_JSON_HAS_DOUBLE_STATS(pull_from, itransfer_wait, relative_timestamp_from_itransfer_end, expected_zeros);
             }
         }
         // must have an "65535:65535:65535:65535" secion with a bulk create
@@ -594,8 +666,8 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
             ASSERT_JSON_HAS(received_from, bulk, object);
             // "bulk" secion must have a "create" section
             ASSERT_JSON_HAS(bulk, create, object);
-            ASSERT_JSON_HAS_STATS(create, duration);
-            ASSERT_JSON_HAS_STATS(create, size);
+            ASSERT_JSON_HAS_STATS(create, duration, expected_zeros);
+            ASSERT_JSON_HAS_STATS(create, size, expected_zeros);
         }
         if(relay == HG_TRUE) {
 #if (HG_VERSION_MAJOR > 2) || (HG_VERSION_MAJOR == 2 && HG_VERSION_MINOR >= 3)
@@ -629,11 +701,11 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
                     // "origin" section must have a section index by destination address
                     sprintf(addr_key, "sent to %s", self_addr_str);
                     ASSERT_JSON_HAS_KEY(origin, addr_key, sent_to, object);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, iforward, relative_timestamp_from_create);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, forward_cb, relative_timestamp_from_iforward_start);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, iforward_wait, relative_timestamp_from_iforward_end);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, set_input, relative_timestamp_from_iforward_start);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, get_output, relative_timestamp_from_wait_end);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, iforward, relative_timestamp_from_create, expected_zeros);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, forward_cb, relative_timestamp_from_iforward_start, expected_zeros);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, iforward_wait, relative_timestamp_from_iforward_end, expected_zeros);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, set_input, relative_timestamp_from_iforward_start, expected_zeros);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(sent_to, get_output, relative_timestamp_from_wait_end, expected_zeros);
                 }
                 // RPC must have an "target" section
                 ASSERT_JSON_HAS(echo, target, object);
@@ -642,39 +714,61 @@ static MunitResult test_default_monitoring_statistics(const MunitParameter param
                     sprintf(addr_key, "received from %s", self_addr_str);
                     ASSERT_JSON_HAS_KEY(target, addr_key, received_from, object);
                     ASSERT_JSON_HAS(received_from, handler, object);
-                    ASSERT_JSON_HAS_STATS(handler, duration);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, ult, relative_timestamp_from_handler_start);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, irespond, relative_timestamp_from_ult_start);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, respond_cb, relative_timestamp_from_irespond_start);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, irespond_wait, relative_timestamp_from_irespond_end);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, set_output, relative_timestamp_from_irespond_start);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, get_input, relative_timestamp_from_ult_start);
+                    ASSERT_JSON_HAS_STATS(handler, duration, expected_zeros);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, ult, relative_timestamp_from_handler_start, expected_zeros);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, irespond, relative_timestamp_from_ult_start, expected_zeros);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, respond_cb, relative_timestamp_from_irespond_start, expected_zeros);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, irespond_wait, relative_timestamp_from_irespond_end, expected_zeros);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, set_output, relative_timestamp_from_irespond_start, expected_zeros);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(received_from, get_input, relative_timestamp_from_ult_start, expected_zeros);
                     // "received from ..." must have a "bulk" section
                     ASSERT_JSON_HAS(received_from, bulk, object);
                     // "bulk" secion must have a "create" section
                     ASSERT_JSON_HAS(bulk, create, object);
                     // "bulk" section must have a section index by source address
-                    ASSERT_JSON_HAS_STATS(create, duration);
-                    ASSERT_JSON_HAS_STATS(create, size);
+                    ASSERT_JSON_HAS_STATS(create, duration, expected_zeros);
+                    ASSERT_JSON_HAS_STATS(create, size, expected_zeros);
                     // "bulk" section must have a "pull from ..." section
                     char pull_from_key[512];
                     sprintf(pull_from_key, "pull from %s", self_addr_str);
                     ASSERT_JSON_HAS_KEY(bulk, pull_from_key, pull_from, object);
                     // "pull from..." secion must have a "itransfer" secion
                     ASSERT_JSON_HAS(pull_from, itransfer, object);
-                    ASSERT_JSON_HAS_STATS(itransfer, duration);
-                    ASSERT_JSON_HAS_STATS(itransfer, size);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(pull_from, transfer_cb, relative_timestamp_from_itransfer_start);
-                    ASSERT_JSON_HAS_DOUBLE_STATS(pull_from, itransfer_wait, relative_timestamp_from_itransfer_end);
+                    ASSERT_JSON_HAS_STATS(itransfer, duration, expected_zeros);
+                    ASSERT_JSON_HAS_STATS(itransfer, size, expected_zeros);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(pull_from, transfer_cb, relative_timestamp_from_itransfer_start, expected_zeros);
+                    ASSERT_JSON_HAS_DOUBLE_STATS(pull_from, itransfer_wait, relative_timestamp_from_itransfer_end, expected_zeros);
                 }
             }
         }
     }
+}
+
+static void check_json_time_series_content(
+        struct json_object* content,
+        uint16_t provider_id_param,
+        bool expected_zeros);
+
+struct dump_time_series_args {
+    uint16_t provider_id_param;
+};
+
+static void dump_time_series(void* uargs, const char* content, size_t size) {
+    struct dump_time_series_args* args = (struct dump_time_series_args*)uargs;
+
+    struct json_object* json_content = NULL;
+    struct json_tokener* tokener     = json_tokener_new();
+    json_content = json_tokener_parse_ex(tokener, content, size);
+    json_tokener_free(tokener);
+
+    munit_assert_not_null(json_content);
+    munit_assert(json_object_is_type(json_content, json_type_object));
+    struct json_object* json_stats = json_object_object_get(json_content, "series");
+
+    check_json_time_series_content(
+        json_stats, args->provider_id_param, false);
 
     json_object_put(json_content);
-    free(file_content);
-    free(filename);
-    return MUNIT_OK;
 }
 
 static MunitResult test_default_monitoring_time_series(const MunitParameter params[],
@@ -685,6 +779,8 @@ static MunitResult test_default_monitoring_time_series(const MunitParameter para
     const char* protocol = munit_parameters_get(params, "protocol");
     uint16_t provider_id_param = atoi(munit_parameters_get(params, "provider_id"));
     hg_bool_t relay = strcmp(munit_parameters_get(params, "relay"), "true") == 0 ? HG_TRUE : HG_FALSE;
+    bool reset = strcmp(munit_parameters_get(params, "reset"), "true") == 0 ? HG_TRUE : HG_FALSE;
+    bool expected_zeros = reset;
     const char* json_config =
         "{\"monitoring\":{"
             "\"config\":{"
@@ -768,6 +864,12 @@ static MunitResult test_default_monitoring_time_series(const MunitParameter para
     hret = margo_monitor_call_user(mid, MARGO_MONITOR_FN_START, NULL);
     munit_assert_int(hret, ==, HG_SUCCESS);
 
+    struct dump_time_series_args dump_args = {
+        .provider_id_param = provider_id_param
+    };
+    hret = margo_monitor_dump(mid, dump_time_series, &dump_args, reset);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
     margo_finalize(mid);
 
     char* filename = NULL;
@@ -796,6 +898,20 @@ static MunitResult test_default_monitoring_time_series(const MunitParameter para
     struct json_tokener* tokener     = json_tokener_new();
     json_content = json_tokener_parse_ex(tokener, file_content, file_size);
     json_tokener_free(tokener);
+
+    check_json_time_series_content(json_content, provider_id_param, expected_zeros);
+
+    json_object_put(json_content);
+    free(file_content);
+    free(filename);
+    return MUNIT_OK;
+}
+
+static void check_json_time_series_content(
+        struct json_object* json_content,
+        uint16_t provider_id_param,
+        bool expected_zeros)
+{
     munit_assert_not_null(json_content);
 
     munit_assert(json_object_is_type(json_content, json_type_object));
@@ -828,16 +944,12 @@ static MunitResult test_default_monitoring_time_series(const MunitParameter para
             ASSERT_JSON_HAS(__primary__, total_size, array);
         }
     }
-
-    json_object_put(json_content);
-    free(file_content);
-    free(filename);
-    return MUNIT_OK;
 }
 
 static char* protocol_params[] = {"na+sm", NULL};
 static char* provider_id_params[] = {"65535", "42", "0", NULL};
 static char* relay_params[] = {"true", "false", NULL};
+static char* reset_params[] = {"true", "false", NULL};
 
 static MunitParameterEnum test_params_custom[]
     = {{"protocol", protocol_params},
@@ -847,6 +959,7 @@ static MunitParameterEnum test_params[]
     = {{"protocol", protocol_params},
        {"provider_id", provider_id_params},
        {"relay", relay_params},
+       {"reset", reset_params},
        {NULL, NULL}};
 
 static MunitTest test_suite_tests[] = {
