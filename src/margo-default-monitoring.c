@@ -378,11 +378,12 @@ typedef struct default_monitor_state {
     /* Time series and their mutex */
     rpc_time_series_t* rpc_time_series; /* hash */
     ABT_mutex_memory   rpc_time_series_mtx;
-    time_series_t*     pool_size_time_series;       /* array */
-    time_series_t*     pool_total_size_time_series; /* array */
-    ABT_mutex_memory   pool_time_series_mtx;
-    double             rpc_time_series_last_ts;
-    double             time_series_interval;
+    time_series_t* pool_size_time_series; /* array of size mid->abt.pools_len */
+    time_series_t*
+        pool_total_size_time_series; /* array of size mid->abt.pools_len */
+    ABT_mutex_memory pool_time_series_mtx;
+    double           rpc_time_series_last_ts;
+    double           time_series_interval;
     /* session and bulk_session pools */
     struct session*      session_pool;
     ABT_mutex_memory     session_pool_mtx;
@@ -1452,6 +1453,95 @@ static void __margo_default_monitor_on_bulk_transfer_cb(
     }
 }
 
+static void
+__margo_default_monitor_on_add_pool(void*                         uargs,
+                                    double                        timestamp,
+                                    margo_monitor_event_t         event_type,
+                                    margo_monitor_add_pool_args_t event_args)
+{
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    if (!monitor->enable_time_series) return;
+    if (event_type != MARGO_MONITOR_FN_START) return;
+
+    ABT_mutex_spinlock(
+        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->pool_time_series_mtx));
+    // current_num_pools = number of pools before adding
+    // since event_type == MARGO_MONITOR_FN_START
+    size_t current_num_pools       = margo_get_num_pools(monitor->mid);
+    monitor->pool_size_time_series = realloc(
+        monitor->pool_size_time_series,
+        (current_num_pools + 1) * sizeof(*monitor->pool_size_time_series));
+    monitor->pool_total_size_time_series
+        = realloc(monitor->pool_total_size_time_series,
+                  (current_num_pools + 1)
+                      * sizeof(*monitor->pool_total_size_time_series));
+    memset(&monitor->pool_size_time_series[current_num_pools], 0,
+           sizeof(monitor->pool_size_time_series[current_num_pools]));
+    memset(&monitor->pool_total_size_time_series[current_num_pools], 0,
+           sizeof(monitor->pool_total_size_time_series[current_num_pools]));
+    ABT_mutex_unlock(
+        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->pool_time_series_mtx));
+}
+
+static void __margo_default_monitor_on_remove_pool(
+    void*                            uargs,
+    double                           timestamp,
+    margo_monitor_event_t            event_type,
+    margo_monitor_remove_pool_args_t event_args)
+{
+    // TODO we might want to keep somewhere the time series of the pool we have
+    // removed, otherwise its data will be unavailable when dumping the
+    // statistics
+    if (event_type != MARGO_MONITOR_FN_END || event_args->ret != HG_SUCCESS)
+        return;
+
+    default_monitor_state_t* monitor = (default_monitor_state_t*)uargs;
+    if (!monitor->enable_time_series) return;
+
+    ABT_mutex_spinlock(
+        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->pool_time_series_mtx));
+    // current_num_pools = number of pools after removing
+    // since event_type == MARGO_MONITOR_FN_END
+    size_t   current_num_pools = margo_get_num_pools(monitor->mid);
+    uint32_t index             = event_args->info->index;
+    time_series_clear(&monitor->pool_size_time_series[index]);
+    time_series_clear(&monitor->pool_total_size_time_series[index]);
+    memmove(&monitor->pool_size_time_series[index],
+            &monitor->pool_size_time_series[index + 1],
+            (current_num_pools - index)
+                * sizeof(monitor->pool_size_time_series[index]));
+    memmove(&monitor->pool_total_size_time_series[index],
+            &monitor->pool_total_size_time_series[index + 1],
+            (current_num_pools - index)
+                * sizeof(monitor->pool_total_size_time_series[index]));
+    ABT_mutex_unlock(
+        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->pool_time_series_mtx));
+}
+
+static void __margo_default_monitor_on_add_xstream(
+    void*                            uargs,
+    double                           timestamp,
+    margo_monitor_event_t            event_type,
+    margo_monitor_add_xstream_args_t event_args)
+{
+    (void)uargs;
+    (void)timestamp;
+    (void)event_type;
+    (void)event_args;
+}
+
+static void __margo_default_monitor_on_remove_xstream(
+    void*                               uargs,
+    double                              timestamp,
+    margo_monitor_event_t               event_type,
+    margo_monitor_remove_xstream_args_t event_args)
+{
+    (void)uargs;
+    (void)timestamp;
+    (void)event_type;
+    (void)event_args;
+}
+
 #define __MONITOR_FN_EMPTY(__name__) \
     __MONITOR_FN(__name__)           \
     {                                \
@@ -1470,11 +1560,6 @@ __MONITOR_FN_EMPTY(free_output)
 __MONITOR_FN_EMPTY(prefinalize)
 __MONITOR_FN_EMPTY(finalize)
 __MONITOR_FN_EMPTY(user)
-
-__MONITOR_FN_EMPTY(add_pool)
-__MONITOR_FN_EMPTY(remove_pool)
-__MONITOR_FN_EMPTY(add_xstream)
-__MONITOR_FN_EMPTY(remove_xstream)
 
 static hg_return_t __margo_default_monitor_dump(void*                 uargs,
                                                 margo_monitor_dump_fn dump_fn,
