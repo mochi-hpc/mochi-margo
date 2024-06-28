@@ -7,6 +7,7 @@
 #include <ctype.h>
 #include <margo.h>
 #include <margo-logging.h>
+#include "margo-monitoring-internal.h"
 #include "margo-instance.h"
 
 char* margo_get_config(margo_instance_id mid)
@@ -187,17 +188,28 @@ hg_return_t margo_add_pool_from_json(margo_instance_id       mid,
     }
     json_tokener_free(tokener);
     __margo_abt_lock(&mid->abt);
+
+    /* monitoring */
+    struct margo_pool_info             m_info = {0};
+    struct margo_monitor_add_pool_args monitoring_args
+        = {.info = &m_info, .ret = HG_SUCCESS};
+    __MARGO_MONITOR(mid, FN_START, add_pool, monitoring_args);
+
     bool b = __margo_abt_add_pool_from_json(&mid->abt, json);
     json_object_put(json);
     if (b) {
-        if (info) {
-            info->index = mid->abt.pools_len - 1;
-            info->name  = mid->abt.pools[info->index].name;
-            info->pool  = mid->abt.pools[info->index].pool;
-        }
+        m_info.index = mid->abt.pools_len - 1;
+        m_info.name  = mid->abt.pools[m_info.index].name;
+        m_info.pool  = mid->abt.pools[m_info.index].pool;
+        if (info) memcpy(info, &m_info, sizeof(m_info));
     } else {
         ret = HG_INVALID_ARG;
     }
+
+    /* monitoring */
+    __MARGO_MONITOR(mid, FN_END, add_pool, monitoring_args);
+    monitoring_args.ret = ret;
+
     __margo_abt_unlock(&mid->abt);
     return ret;
 }
@@ -211,17 +223,28 @@ hg_return_t margo_add_pool_external(margo_instance_id       mid,
     if (!mid) return HG_INVALID_ARG;
     hg_return_t ret = HG_SUCCESS;
     __margo_abt_lock(&mid->abt);
+
+    /* monitoring */
+    struct margo_pool_info             m_info = {0};
+    struct margo_monitor_add_pool_args monitoring_args
+        = {.info = &m_info, .ret = HG_SUCCESS};
+    __MARGO_MONITOR(mid, FN_START, add_pool, monitoring_args);
+
     bool b = __margo_abt_add_external_pool(&mid->abt, name, pool);
     if (b) {
         mid->abt.pools[mid->abt.pools_len - 1].margo_free_flag = take_ownership;
-        if (info) {
-            info->index = mid->abt.pools_len - 1;
-            info->name  = mid->abt.pools[info->index].name;
-            info->pool  = mid->abt.pools[info->index].pool;
-        }
+        m_info.index = mid->abt.pools_len - 1;
+        m_info.name  = mid->abt.pools[m_info.index].name;
+        m_info.pool  = mid->abt.pools[m_info.index].pool;
+        if (info) memcpy(info, &m_info, sizeof(m_info));
     } else {
         ret = HG_INVALID_ARG;
     }
+
+    /* monitoring */
+    __MARGO_MONITOR(mid, FN_END, add_pool, monitoring_args);
+    monitoring_args.ret = ret;
+
     __margo_abt_unlock(&mid->abt);
     return ret;
 }
@@ -245,8 +268,26 @@ hg_return_t margo_remove_pool_by_index(margo_instance_id mid, uint32_t index)
         ret = HG_OTHER_ERROR;
         goto finish;
     }
+
+    /* monitoring */
+    struct margo_pool_info m_info = {
+        .index = index,
+        .name  = mid->abt.pools[index].name,
+        .pool  = mid->abt.pools[index].pool,
+    };
+    struct margo_monitor_remove_pool_args monitoring_args
+        = {.info = &m_info, .ret = HG_SUCCESS};
+    __MARGO_MONITOR(mid, FN_START, remove_pool, monitoring_args);
+
     bool b = __margo_abt_remove_pool(&mid->abt, index);
     if (!b) ret = HG_OTHER_ERROR;
+
+    /* monitoring */
+    m_info.name         = NULL;
+    m_info.pool         = ABT_POOL_NULL;
+    monitoring_args.ret = ret;
+    __MARGO_MONITOR(mid, FN_END, remove_pool, monitoring_args);
+
 finish:
     __margo_abt_unlock(&mid->abt);
     return ret;
@@ -277,8 +318,26 @@ hg_return_t margo_remove_pool_by_name(margo_instance_id mid, const char* name)
         ret = HG_OTHER_ERROR;
         goto finish;
     }
+
+    /* monitoring */
+    struct margo_pool_info m_info = {
+        .index = index,
+        .name  = mid->abt.pools[index].name,
+        .pool  = mid->abt.pools[index].pool,
+    };
+    struct margo_monitor_remove_pool_args monitoring_args
+        = {.info = &m_info, .ret = HG_SUCCESS};
+    __MARGO_MONITOR(mid, FN_START, remove_pool, monitoring_args);
+
     bool b = __margo_abt_remove_pool(&mid->abt, index);
     if (!b) ret = HG_OTHER_ERROR;
+
+    /* monitoring */
+    m_info.name         = NULL;
+    m_info.pool         = ABT_POOL_NULL;
+    monitoring_args.ret = ret;
+    __MARGO_MONITOR(mid, FN_END, remove_pool, monitoring_args);
+
 finish:
     __margo_abt_unlock(&mid->abt);
     return ret;
@@ -288,9 +347,8 @@ hg_return_t margo_remove_pool_by_handle(margo_instance_id mid, ABT_pool handle)
 {
     if (!mid) return HG_INVALID_ARG;
     __margo_abt_lock(&mid->abt);
-    hg_return_t ret = HG_SUCCESS;
-    ;
-    int32_t index = __margo_abt_find_pool_by_handle(&mid->abt, handle);
+    hg_return_t ret   = HG_SUCCESS;
+    int32_t     index = __margo_abt_find_pool_by_handle(&mid->abt, handle);
     if (index < 0) {
         ret = HG_INVALID_ARG;
         goto finish;
@@ -309,8 +367,26 @@ hg_return_t margo_remove_pool_by_handle(margo_instance_id mid, ABT_pool handle)
         ret = HG_OTHER_ERROR;
         goto finish;
     }
+
+    /* monitoring */
+    struct margo_pool_info m_info = {
+        .index = index,
+        .name  = mid->abt.pools[index].name,
+        .pool  = mid->abt.pools[index].pool,
+    };
+    struct margo_monitor_remove_pool_args monitoring_args
+        = {.info = &m_info, .ret = HG_SUCCESS};
+    __MARGO_MONITOR(mid, FN_START, remove_pool, monitoring_args);
+
     bool b = __margo_abt_remove_pool(&mid->abt, index);
     if (!b) ret = HG_OTHER_ERROR;
+
+    /* monitoring */
+    m_info.name         = NULL;
+    m_info.pool         = ABT_POOL_NULL;
+    monitoring_args.ret = ret;
+    __MARGO_MONITOR(mid, FN_END, remove_pool, monitoring_args);
+
 finish:
     __margo_abt_unlock(&mid->abt);
     return ret;
@@ -400,18 +476,29 @@ hg_return_t margo_add_xstream_from_json(margo_instance_id          mid,
     }
     json_tokener_free(tokener);
     __margo_abt_lock(&mid->abt);
+
+    /* monitoring */
+    struct margo_xstream_info             m_info = {0};
+    struct margo_monitor_add_xstream_args monitoring_args
+        = {.info = &m_info, .ret = HG_SUCCESS};
+    __MARGO_MONITOR(mid, FN_START, add_xstream, monitoring_args);
+
     bool b = __margo_abt_add_xstream_from_json(&mid->abt, json);
     json_object_put(json);
     hg_return_t ret = HG_SUCCESS;
     if (b) {
-        if (info) {
-            info->index   = mid->abt.xstreams_len - 1;
-            info->name    = mid->abt.xstreams[info->index].name;
-            info->xstream = mid->abt.xstreams[info->index].xstream;
-        }
+        m_info.index   = mid->abt.xstreams_len - 1;
+        m_info.name    = mid->abt.xstreams[m_info.index].name;
+        m_info.xstream = mid->abt.xstreams[m_info.index].xstream;
+        if (info) memcpy(info, &m_info, sizeof(m_info));
     } else {
         ret = HG_INVALID_ARG;
     }
+
+    /* monitoring */
+    __MARGO_MONITOR(mid, FN_END, add_xstream, monitoring_args);
+    monitoring_args.ret = ret;
+
     __margo_abt_unlock(&mid->abt);
     return ret;
 }
@@ -424,19 +511,30 @@ hg_return_t margo_add_xstream_external(margo_instance_id mid,
 {
     if (!mid) return HG_INVALID_ARG;
     __margo_abt_lock(&mid->abt);
+
+    /* monitoring */
+    struct margo_xstream_info             m_info = {0};
+    struct margo_monitor_add_xstream_args monitoring_args
+        = {.info = &m_info, .ret = HG_SUCCESS};
+    __MARGO_MONITOR(mid, FN_START, add_xstream, monitoring_args);
+
     hg_return_t ret = HG_SUCCESS;
     bool        b = __margo_abt_add_external_xstream(&mid->abt, name, xstream);
     if (b) {
         mid->abt.xstreams[mid->abt.xstreams_len - 1].margo_free_flag
             = take_ownership;
-        if (info) {
-            info->index   = mid->abt.xstreams_len - 1;
-            info->name    = mid->abt.xstreams[info->index].name;
-            info->xstream = mid->abt.xstreams[info->index].xstream;
-        }
+        m_info.index   = mid->abt.xstreams_len - 1;
+        m_info.name    = mid->abt.xstreams[m_info.index].name;
+        m_info.xstream = mid->abt.xstreams[m_info.index].xstream;
+        if (info) memcpy(info, &m_info, sizeof(m_info));
     } else {
         ret = HG_INVALID_ARG;
     }
+
+    /* monitoring */
+    __MARGO_MONITOR(mid, FN_END, add_xstream, monitoring_args);
+    monitoring_args.ret = ret;
+
     __margo_abt_unlock(&mid->abt);
     return ret;
 }
@@ -445,7 +543,30 @@ hg_return_t margo_remove_xstream_by_index(margo_instance_id mid, uint32_t index)
 {
     if (!mid) return HG_INVALID_ARG;
     __margo_abt_lock(&mid->abt);
+
+    if (index > mid->abt.xstreams_len) {
+        __margo_abt_unlock(&mid->abt);
+        return HG_OTHER_ERROR;
+    }
+
+    /* monitoring */
+    struct margo_xstream_info m_info = {
+        .index   = index,
+        .name    = mid->abt.xstreams[index].name,
+        .xstream = mid->abt.xstreams[index].xstream,
+    };
+    struct margo_monitor_remove_xstream_args monitoring_args
+        = {.info = &m_info, .ret = HG_SUCCESS};
+    __MARGO_MONITOR(mid, FN_START, remove_xstream, monitoring_args);
+
     bool ret = __margo_abt_remove_xstream(&mid->abt, index);
+
+    /* monitoring */
+    m_info.name         = NULL;
+    m_info.xstream      = ABT_XSTREAM_NULL;
+    monitoring_args.ret = ret ? HG_SUCCESS : HG_OTHER_ERROR;
+    __MARGO_MONITOR(mid, FN_END, remove_xstream, monitoring_args);
+
     __margo_abt_unlock(&mid->abt);
     return ret ? HG_SUCCESS : HG_OTHER_ERROR;
 }
@@ -460,7 +581,25 @@ hg_return_t margo_remove_xstream_by_name(margo_instance_id mid,
         __margo_abt_unlock(&mid->abt);
         return HG_INVALID_ARG;
     }
+
+    /* monitoring */
+    struct margo_xstream_info m_info = {
+        .index   = index,
+        .name    = mid->abt.xstreams[index].name,
+        .xstream = mid->abt.xstreams[index].xstream,
+    };
+    struct margo_monitor_remove_xstream_args monitoring_args
+        = {.info = &m_info, .ret = HG_SUCCESS};
+    __MARGO_MONITOR(mid, FN_START, remove_xstream, monitoring_args);
+
     bool ret = __margo_abt_remove_xstream(&mid->abt, index);
+
+    /* monitoring */
+    m_info.name         = NULL;
+    m_info.xstream      = ABT_XSTREAM_NULL;
+    monitoring_args.ret = ret ? HG_SUCCESS : HG_OTHER_ERROR;
+    __MARGO_MONITOR(mid, FN_END, remove_xstream, monitoring_args);
+
     __margo_abt_unlock(&mid->abt);
     return ret ? HG_SUCCESS : HG_OTHER_ERROR;
 }
@@ -475,8 +614,27 @@ hg_return_t margo_remove_xstream_by_handle(margo_instance_id mid,
         __margo_abt_unlock(&mid->abt);
         return HG_INVALID_ARG;
     }
+
+    /* monitoring */
+    struct margo_xstream_info m_info = {
+        .index   = index,
+        .name    = mid->abt.xstreams[index].name,
+        .xstream = mid->abt.xstreams[index].xstream,
+    };
+    struct margo_monitor_remove_xstream_args monitoring_args
+        = {.info = &m_info, .ret = HG_SUCCESS};
+    __MARGO_MONITOR(mid, FN_START, remove_xstream, monitoring_args);
+
     bool ret = __margo_abt_remove_xstream(&mid->abt, index);
+
     __margo_abt_unlock(&mid->abt);
+
+    /* monitoring */
+    m_info.name         = NULL;
+    m_info.xstream      = ABT_XSTREAM_NULL;
+    monitoring_args.ret = ret ? HG_SUCCESS : HG_OTHER_ERROR;
+    __MARGO_MONITOR(mid, FN_END, remove_xstream, monitoring_args);
+
     return ret ? HG_SUCCESS : HG_OTHER_ERROR;
 }
 

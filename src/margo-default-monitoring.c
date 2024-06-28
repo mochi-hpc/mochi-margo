@@ -1471,6 +1471,11 @@ __MONITOR_FN_EMPTY(prefinalize)
 __MONITOR_FN_EMPTY(finalize)
 __MONITOR_FN_EMPTY(user)
 
+__MONITOR_FN_EMPTY(add_pool)
+__MONITOR_FN_EMPTY(remove_pool)
+__MONITOR_FN_EMPTY(add_xstream)
+__MONITOR_FN_EMPTY(remove_xstream)
+
 static hg_return_t __margo_default_monitor_dump(void*                 uargs,
                                                 margo_monitor_dump_fn dump_fn,
                                                 void*                 dump_args,
