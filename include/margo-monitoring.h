@@ -135,34 +135,38 @@ typedef enum margo_monitor_event_t
 } margo_monitor_event_t;
 
 /* clang-format off */
-typedef struct margo_monitor_progress_args*      margo_monitor_progress_args_t;
-typedef struct margo_monitor_trigger_args*       margo_monitor_trigger_args_t;
-typedef struct margo_monitor_register_args*      margo_monitor_register_args_t;
-typedef struct margo_monitor_deregister_args*    margo_monitor_deregister_args_t;
-typedef struct margo_monitor_lookup_args*        margo_monitor_lookup_args_t;
-typedef struct margo_monitor_create_args*        margo_monitor_create_args_t;
-typedef struct margo_monitor_forward_args*       margo_monitor_forward_args_t;
-typedef struct margo_monitor_cb_args*            margo_monitor_forward_cb_args_t;
-typedef struct margo_monitor_respond_args*       margo_monitor_respond_args_t;
-typedef struct margo_monitor_cb_args*            margo_monitor_respond_cb_args_t;
-typedef struct margo_monitor_destroy_args*       margo_monitor_destroy_args_t;
-typedef struct margo_monitor_bulk_create_args*   margo_monitor_bulk_create_args_t;
-typedef struct margo_monitor_bulk_transfer_args* margo_monitor_bulk_transfer_args_t;
-typedef struct margo_monitor_cb_args*            margo_monitor_bulk_transfer_cb_args_t;
-typedef struct margo_monitor_bulk_free_args*     margo_monitor_bulk_free_args_t;
-typedef struct margo_monitor_rpc_handler_args*   margo_monitor_rpc_handler_args_t;
-typedef struct margo_monitor_rpc_ult_args*       margo_monitor_rpc_ult_args_t;
-typedef struct margo_monitor_wait_args*          margo_monitor_wait_args_t;
-typedef struct margo_monitor_sleep_args*         margo_monitor_sleep_args_t;
-typedef struct margo_monitor_set_input_args*     margo_monitor_set_input_args_t;
-typedef struct margo_monitor_set_output_args*    margo_monitor_set_output_args_t;
-typedef struct margo_monitor_get_input_args*     margo_monitor_get_input_args_t;
-typedef struct margo_monitor_get_output_args*    margo_monitor_get_output_args_t;
-typedef struct margo_monitor_free_input_args*    margo_monitor_free_input_args_t;
-typedef struct margo_monitor_free_output_args*   margo_monitor_free_output_args_t;
-typedef struct margo_monitor_prefinalize_args*   margo_monitor_prefinalize_args_t;
-typedef struct margo_monitor_finalize_args*      margo_monitor_finalize_args_t;
-typedef const char*                              margo_monitor_user_args_t;
+typedef struct margo_monitor_progress_args*       margo_monitor_progress_args_t;
+typedef struct margo_monitor_trigger_args*        margo_monitor_trigger_args_t;
+typedef struct margo_monitor_register_args*       margo_monitor_register_args_t;
+typedef struct margo_monitor_deregister_args*     margo_monitor_deregister_args_t;
+typedef struct margo_monitor_lookup_args*         margo_monitor_lookup_args_t;
+typedef struct margo_monitor_create_args*         margo_monitor_create_args_t;
+typedef struct margo_monitor_forward_args*        margo_monitor_forward_args_t;
+typedef struct margo_monitor_cb_args*             margo_monitor_forward_cb_args_t;
+typedef struct margo_monitor_respond_args*        margo_monitor_respond_args_t;
+typedef struct margo_monitor_cb_args*             margo_monitor_respond_cb_args_t;
+typedef struct margo_monitor_destroy_args*        margo_monitor_destroy_args_t;
+typedef struct margo_monitor_bulk_create_args*    margo_monitor_bulk_create_args_t;
+typedef struct margo_monitor_bulk_transfer_args*  margo_monitor_bulk_transfer_args_t;
+typedef struct margo_monitor_cb_args*             margo_monitor_bulk_transfer_cb_args_t;
+typedef struct margo_monitor_bulk_free_args*      margo_monitor_bulk_free_args_t;
+typedef struct margo_monitor_rpc_handler_args*    margo_monitor_rpc_handler_args_t;
+typedef struct margo_monitor_rpc_ult_args*        margo_monitor_rpc_ult_args_t;
+typedef struct margo_monitor_wait_args*           margo_monitor_wait_args_t;
+typedef struct margo_monitor_sleep_args*          margo_monitor_sleep_args_t;
+typedef struct margo_monitor_set_input_args*      margo_monitor_set_input_args_t;
+typedef struct margo_monitor_set_output_args*     margo_monitor_set_output_args_t;
+typedef struct margo_monitor_get_input_args*      margo_monitor_get_input_args_t;
+typedef struct margo_monitor_get_output_args*     margo_monitor_get_output_args_t;
+typedef struct margo_monitor_free_input_args*     margo_monitor_free_input_args_t;
+typedef struct margo_monitor_free_output_args*    margo_monitor_free_output_args_t;
+typedef struct margo_monitor_prefinalize_args*    margo_monitor_prefinalize_args_t;
+typedef struct margo_monitor_finalize_args*       margo_monitor_finalize_args_t;
+typedef struct margo_monitor_add_pool_args*       margo_monitor_add_pool_args_t;
+typedef struct margo_monitor_remove_pool_args*    margo_monitor_remove_pool_args_t;
+typedef struct margo_monitor_add_xstream_args*    margo_monitor_add_xstream_args_t;
+typedef struct margo_monitor_remove_xstream_args* margo_monitor_remove_xstream_args_t;
+typedef const char*                               margo_monitor_user_args_t;
 /* clang-format on */
 
 /* clang-format off */
@@ -194,6 +198,10 @@ typedef const char*                              margo_monitor_user_args_t;
     X(FREE_OUTPUT,      free_output)      \
     X(PREFINALIZE,      prefinalize)      \
     X(FINALIZE,         finalize)         \
+    X(ADD_POOL,         add_pool)         \
+    X(REMOVE_POOL,      remove_pool)      \
+    X(ADD_XSTREAM,      add_xstream)      \
+    X(REMOVE_XSTREAM,   remove_xstream)   \
     X(USER,             user)
 /* clang-format on */
 
@@ -451,6 +459,36 @@ struct margo_monitor_cb_args {
     /* input */
     const struct hg_cb_info* info;
     margo_request            request;
+    /* output */
+    hg_return_t ret;
+};
+
+struct margo_monitor_add_pool_args {
+    margo_monitor_data_t uctx;
+    /* output */
+    const struct margo_pool_info* info;
+    hg_return_t                   ret;
+};
+
+struct margo_monitor_remove_pool_args {
+    margo_monitor_data_t uctx;
+    /* input/output */
+    const struct margo_pool_info* info;
+    /* output */
+    hg_return_t ret;
+};
+
+struct margo_monitor_add_xstream_args {
+    margo_monitor_data_t uctx;
+    /* output */
+    const struct margo_xstream_info* info;
+    hg_return_t                      ret;
+};
+
+struct margo_monitor_remove_xstream_args {
+    margo_monitor_data_t uctx;
+    /* input/output */
+    const struct margo_xstream_info* info;
     /* output */
     hg_return_t ret;
 };
