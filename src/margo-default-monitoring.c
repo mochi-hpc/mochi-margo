@@ -1477,8 +1477,13 @@ __margo_default_monitor_on_add_pool(void*                         uargs,
                       * sizeof(*monitor->pool_total_size_time_series));
     memset(&monitor->pool_size_time_series[current_num_pools], 0,
            sizeof(monitor->pool_size_time_series[current_num_pools]));
+    monitor->pool_size_time_series[current_num_pools].frame_capacity
+        = monitor->pool_size_time_series[current_num_pools - 1].frame_capacity;
     memset(&monitor->pool_total_size_time_series[current_num_pools], 0,
            sizeof(monitor->pool_total_size_time_series[current_num_pools]));
+    monitor->pool_total_size_time_series[current_num_pools].frame_capacity
+        = monitor->pool_total_size_time_series[current_num_pools - 1]
+              .frame_capacity;
     ABT_mutex_unlock(
         ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->pool_time_series_mtx));
 }
