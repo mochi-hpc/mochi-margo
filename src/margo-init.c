@@ -619,18 +619,18 @@ static bool sanity_check_abt_configuration(margo_abt_t* abt,
     for (int i = 0; i < abt->pools_len; ++i) {
         margo_abt_pool_t* pool = &abt->pools[i];
         if (pool_flags[i] == 0) {
-            MARGO_WARNING(0,
-                          "Pool \"%s\" at index %d is not currently associated "
-                          "with any ES. "
-                          "ULT pushed into that pool will not get executed.",
-                          pool->name, i);
+            MARGO_WARNING(
+                0,
+                "Pool \"%s\" at index %d is not currently associated with any "
+                "ES. ULT pushed into that pool will not get executed.",
+                pool->name, i);
             continue;
         }
         if (!(pool_flags[i] & USED_AS_FIRST)) {
             MARGO_WARNING(
                 0,
-                "Pool \"%s\" at index %d is not the first pool of any ES. "
-                "This could cause starvation for ULTs pushed in that pool.",
+                "Pool \"%s\" at index %d is not the first pool of any ES. This "
+                "could cause starvation for ULTs pushed in that pool.",
                 pool->name, i);
         }
         if (i == progress_pool_idx) continue;
@@ -639,10 +639,9 @@ static bool sanity_check_abt_configuration(margo_abt_t* abt,
             MARGO_WARNING(
                 0,
                 "Pool \"%s\" at index %d does not appear before the progress "
-                "pool "
-                "in any ES. Depending on the type of scheduler used, this may "
-                "cause ULTs pushed in that pool to never execute because the "
-                "progress pool will keep the ES busy.",
+                "pool in any ES. Depending on the type of scheduler used, this "
+                "may cause ULTs pushed in that pool to never execute because "
+                "the progress pool will keep the ES busy.",
                 pool->name, i);
         }
         if (pool_flags[i] & AFTER_PROGRESS) {
@@ -650,20 +649,17 @@ static bool sanity_check_abt_configuration(margo_abt_t* abt,
                 0,
                 "Pool \"%s\" at index %d appears after the progress pool in at "
                 "least one ES. Depending on the type of scheduler used, this "
-                "ES "
-                "may never pull ULTs from that pool because the progress pool "
-                "will "
-                "keep the ES busy.",
+                "ES may never pull ULTs from that pool because the progress "
+                "pool will keep the ES busy.",
                 pool->name, i);
         }
         if (pool_flags[i] & WITH_PROGRESS) {
-            MARGO_WARNING(0,
-                          "Pool \"%s\" at index %d is used by an ES that is "
-                          "also associated "
-                          "with the progress pool. This may cause ULTs pushed "
-                          "into that pool "
-                          "to get unnecessarily delayed.",
-                          pool->name, i);
+            MARGO_WARNING(
+                0,
+                "Pool \"%s\" at index %d is used by an ES that is also "
+                "associated with the progress pool. This may cause ULTs pushed "
+                "into that pool to get unnecessarily delayed.",
+                pool->name, i);
         }
     }
 
