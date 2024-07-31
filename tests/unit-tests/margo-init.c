@@ -188,7 +188,10 @@ static MunitResult ref_incr_and_release(const MunitParameter params[], void* dat
 
 static void kill_test(void* args) {
     volatile int* x = (int*)args;
-    sleep(1);
+    double t = ABT_get_wtime();
+    while(ABT_get_wtime() - t < 1.0) {
+        ABT_thread_yield();
+    }
     if(*x == 1) return;
     else {
         x = NULL;

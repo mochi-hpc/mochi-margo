@@ -1930,6 +1930,9 @@ static inline hg_return_t margo_internal_progress(margo_instance_id mid,
     monitoring_args.ret = hret;
     __MARGO_MONITOR(mid, FN_END, progress, monitoring_args);
 
+    /* give a chance to other ULTs to get scheduled */
+    ABT_thread_yield();
+
     return hret;
 }
 
