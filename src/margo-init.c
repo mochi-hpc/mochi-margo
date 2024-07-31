@@ -662,7 +662,7 @@ static bool sanity_check_abt_configuration(margo_abt_t* abt,
                 pool->name, i);
         }
     }
-
+    free(pool_flags);
     return true;
 }
 
