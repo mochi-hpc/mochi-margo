@@ -87,6 +87,7 @@ static MunitResult pool_is_not_used(const MunitParameter params[], void* data)
     char* expected_content = "Pool \"p1\" at index 1 is not currently associated"
         " with any ES. ULT pushed into that pool will not get executed.";
     munit_assert_string_equal(ctx->log_buffer, expected_content);
+    margo_finalize(mid);
 
     return MUNIT_OK;
 }
@@ -119,6 +120,7 @@ static MunitResult pool_is_not_first(const MunitParameter params[], void* data)
     char* expected_content = "Pool \"p1\" at index 1 is not the first pool of any ES. "
         "This could cause starvation for ULTs pushed in that pool.";
     munit_assert_string_equal(ctx->log_buffer, expected_content);
+    margo_finalize(mid);
 
     return MUNIT_OK;
 }
@@ -160,7 +162,7 @@ static MunitResult pool_not_before_progress(const MunitParameter params[], void*
         "Pool \"p1\" at index 1 is used by an ES that is also associated with the"
         " progress pool. This may cause ULTs pushed into that pool to get unnecessarily delayed.";
     munit_assert_string_equal(ctx->log_buffer, expected_content);
-
+    margo_finalize(mid);
     return MUNIT_OK;
 }
 
@@ -197,6 +199,7 @@ static MunitResult progress_pool_is_not_last(const MunitParameter params[], void
         "Pool \"p1\" at index 1 is used by an ES that is also associated with the progress pool."
         " This may cause ULTs pushed into that pool to get unnecessarily delayed.";
     munit_assert_string_equal(ctx->log_buffer, expected_content);
+    margo_finalize(mid);
 
     return MUNIT_OK;
 }
