@@ -309,7 +309,7 @@ static MunitResult add_xstream_from_json(const MunitParameter params[], void* da
 
     // add an xstream from a JSON string
     struct margo_xstream_info xstream_info = {0};
-    const char* xstream_desc = "{\"name\":\"my_es\", \"scheduler\":{\"pools\":[\"__primary__\", \"__pool_1__\"]}}";
+    const char* xstream_desc = "{\"name\":\"my_es\", \"scheduler\":{\"pools\":[\"__pool_1__\"]}}";
     ret = margo_add_xstream_from_json(mid, xstream_desc, &xstream_info);
     munit_assert_int(ret, ==, HG_SUCCESS);
     munit_assert_int(xstream_info.index, ==, 6);
@@ -349,7 +349,7 @@ static MunitResult add_xstream_from_json(const MunitParameter params[], void* da
     munit_assert_int(ret, ==, HG_INVALID_ARG);
 
     // add a xstream without a name (name will be generated)
-    ret = margo_add_xstream_from_json(mid, "{\"scheduler\":{\"pools\":[\"__primary__\"]}}", &xstream_info);
+    ret = margo_add_xstream_from_json(mid, "{\"scheduler\":{\"pools\":[\"__pool_1__\"]}}", &xstream_info);
     munit_assert_int(ret, ==, HG_SUCCESS);
     munit_assert_string_equal(xstream_info.name, "__xstream_7__");
 
