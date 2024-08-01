@@ -1979,6 +1979,10 @@ void __margo_hg_progress_fn(void* foo)
             ret = margo_internal_trigger(mid, 0, 1, &actual_count);
         } while ((ret == HG_SUCCESS) && actual_count
                  && !mid->hg_progress_shutdown_flag);
+        /* once we have processed callbacks, give the ES an opportunity to
+         * run other ULTs if it needs to.
+         */
+        ABT_thread_yield();
 
         /* Check to see if there are any runnable ULTs in the pool now.  If
          * so, then we yield here to allow them a chance to execute.
@@ -2017,27 +2021,7 @@ void __margo_hg_progress_fn(void* foo)
         ABT_mutex_unlock(mid->pending_operations_mtx);
 
         if (pending || size > 1) {
-            /* TODO: a custom ABT scheduler could optimize this further by
-             * delaying Mercury progress until all other runnable ULTs have
-             * been given a chance to execute.  This will often happen
-             * anyway, but not guaranteed.
-             */
-
-            ret = margo_internal_progress(mid, 0);
-            if (ret == HG_SUCCESS) {
-                /* Mercury completed something; loop around to trigger
-                 * callbacks
-                 */
-            } else if (ret == HG_TIMEOUT) {
-                /* No completion; yield here to allow other ULTs to run */
-                ABT_thread_yield();
-            } else {
-                /* TODO: error handling */
-                MARGO_CRITICAL(
-                    mid, "unexpected return code (%d: %s) from HG_Progress()",
-                    ret, HG_Error_to_string(ret));
-                assert(0);
-            }
+            hg_progress_timeout = 0;
         } else {
             hg_progress_timeout = mid->hg_progress_timeout_ub;
             ret = __margo_timer_get_next_expiration(mid, &next_timer_exp);
@@ -2053,14 +2037,15 @@ void __margo_hg_progress_fn(void* foo)
                     hg_progress_timeout = 0;
                 }
             }
-            ret = margo_internal_progress(mid, hg_progress_timeout);
-            if (ret != HG_SUCCESS && ret != HG_TIMEOUT) {
-                /* TODO: error handling */
-                MARGO_CRITICAL(
-                    mid, "unexpected return code (%d: %s) from HG_Progress()",
-                    ret, HG_Error_to_string(ret));
-                assert(0);
-            }
+        }
+
+        ret = margo_internal_progress(mid, hg_progress_timeout);
+        if (ret != HG_SUCCESS && ret != HG_TIMEOUT) {
+            /* TODO: error handling */
+            MARGO_CRITICAL(mid,
+                           "unexpected return code (%d: %s) from HG_Progress()",
+                           ret, HG_Error_to_string(ret));
+            assert(0);
         }
 
         /* check for any expired timers */
