@@ -29,6 +29,9 @@ static bool __margo_validate_json(struct json_object*           _config,
 static void set_argobots_environment_variables(struct json_object* config);
 /* confirm if Argobots is running with desired configuration or not */
 static void confirm_argobots_configuration(struct json_object* config);
+// some sanity checks of the pools/xstreams setup
+static bool sanity_check_abt_configuration(margo_abt_t* abt,
+                                           int          progress_pool_idx);
 
 // Shutdown logic for a margo instance
 static void remote_shutdown_ult(hg_handle_t handle);
@@ -260,6 +263,12 @@ margo_instance_id margo_init_ext(const char*                   address,
              */
             rpc_pool_idx = primary_pool_idx;
         }
+    }
+
+    // sanity check configuration of pools and ES
+    if (!sanity_check_abt_configuration(&abt, progress_pool_idx)) {
+        MARGO_ERROR(0, "Configuration did not pass sanity checks");
+        goto error;
     }
 
     // allocate margo instance
@@ -557,6 +566,104 @@ static bool __margo_validate_json(struct json_object*           _margo,
 
     return true;
 #undef HANDLE_CONFIG_ERROR
+}
+
+static bool sanity_check_abt_configuration(margo_abt_t* abt,
+                                           int          progress_pool_idx)
+{
+    // bit flags for each pool:
+    // 00000001 = the pool is used as first pool of at least one ES.
+    // 00000010 = the pool is used by an ES associated with the progress pool.
+    // 00000100 = the pool is used AFTER the progress pool in at least one ES.
+    // 00001000 = the pool is used BEFORE the progress pool in at least one ES,
+    //            or in an ES that doesn't use the progress pool.
+    const uint8_t USED_AS_FIRST   = 0b00000001;
+    const uint8_t WITH_PROGRESS   = 0b00000010;
+    const uint8_t AFTER_PROGRESS  = 0b00000100;
+    const uint8_t BEFORE_PROGRESS = 0b00001000;
+
+    uint8_t* pool_flags = calloc(abt->pools_len, sizeof(*pool_flags));
+
+    for (int i = 0; i < abt->xstreams_len; ++i) {
+        margo_abt_xstream_t* es    = &abt->xstreams[i];
+        ABT_sched            sched = ABT_SCHED_NULL;
+        ABT_xstream_get_main_sched(es->xstream, &sched);
+        int num_pools = 0;
+        ABT_sched_get_num_pools(sched, &num_pools);
+        bool this_es_has_progress_pool = false;
+        for (int j = 0; j < num_pools; ++j) {
+            ABT_pool pool = ABT_POOL_NULL;
+            ABT_sched_get_pools(sched, 1, j, &pool);
+            int pool_index = __margo_abt_find_pool_by_handle(abt, pool);
+            if (pool_index == progress_pool_idx)
+                this_es_has_progress_pool = true;
+            if (j == 0) pool_flags[pool_index] |= USED_AS_FIRST;
+            if (this_es_has_progress_pool && pool_index != progress_pool_idx)
+                pool_flags[pool_index] |= AFTER_PROGRESS;
+            if (!this_es_has_progress_pool && pool_index != progress_pool_idx)
+                pool_flags[pool_index] |= BEFORE_PROGRESS;
+        }
+        for (int j = 0; j < num_pools && this_es_has_progress_pool; ++j) {
+            ABT_pool pool = ABT_POOL_NULL;
+            ABT_sched_get_pools(sched, 1, j, &pool);
+            int pool_index = __margo_abt_find_pool_by_handle(abt, pool);
+            pool_flags[pool_index] |= WITH_PROGRESS;
+        }
+    }
+
+    // Note: we only issue warnings because (1) some of these situations may be
+    // corrected dynamically by adding new ES. We don't really know what the
+    // user will do next, and (2) some of these situations depends on the type
+    // of scheduler used, and whether it respects the order of its pools
+    // strictly or not.
+    for (int i = 0; i < abt->pools_len; ++i) {
+        margo_abt_pool_t* pool = &abt->pools[i];
+        if (pool_flags[i] == 0) {
+            MARGO_WARNING(
+                0,
+                "Pool \"%s\" at index %d is not currently associated with any "
+                "ES. ULT pushed into that pool will not get executed.",
+                pool->name, i);
+            continue;
+        }
+        if (!(pool_flags[i] & USED_AS_FIRST)) {
+            MARGO_WARNING(
+                0,
+                "Pool \"%s\" at index %d is not the first pool of any ES. This "
+                "could cause starvation for ULTs pushed in that pool.",
+                pool->name, i);
+        }
+        if (i == progress_pool_idx) continue;
+        // warnings bellow are only for non-progress pools
+        if (!(pool_flags[i] & BEFORE_PROGRESS)) {
+            MARGO_WARNING(
+                0,
+                "Pool \"%s\" at index %d does not appear before the progress "
+                "pool in any ES. Depending on the type of scheduler used, this "
+                "may cause ULTs pushed in that pool to never execute because "
+                "the progress pool will keep the ES busy.",
+                pool->name, i);
+        }
+        if (pool_flags[i] & AFTER_PROGRESS) {
+            MARGO_WARNING(
+                0,
+                "Pool \"%s\" at index %d appears after the progress pool in at "
+                "least one ES. Depending on the type of scheduler used, this "
+                "ES may never pull ULTs from that pool because the progress "
+                "pool will keep the ES busy.",
+                pool->name, i);
+        }
+        if (pool_flags[i] & WITH_PROGRESS) {
+            MARGO_WARNING(
+                0,
+                "Pool \"%s\" at index %d is used by an ES that is also "
+                "associated with the progress pool. This may cause ULTs pushed "
+                "into that pool to get unnecessarily delayed.",
+                pool->name, i);
+        }
+    }
+    free(pool_flags);
+    return true;
 }
 
 static void confirm_argobots_configuration(struct json_object* config)
