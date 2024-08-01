@@ -250,6 +250,42 @@ static MunitResult multiple_pools_progress_loop(const MunitParameter params[], v
     return MUNIT_OK;
 }
 
+static MunitResult finalize_from_non_primary(const MunitParameter params[], void* data)
+{
+    const char* config = "{\n"
+        "\"argobots\": {"
+            "\"pools\": ["
+                "{\"name\":\"__primary__\",\"access\":\"mpmc\",\"kind\":\"fifo_wait\"}"
+            "],"
+            "\"xstreams\": ["
+                "{\"name\":\"__primary__\","
+                 "\"scheduler\":{"
+                     "\"pools\":[\"__primary__\"],"
+                     "\"type\":\"basic_wait\""
+                   "}"
+                "},"
+                "{\"name\":\"es1\","
+                 "\"scheduler\":{\"pools\":[\"__primary__\"],\"type\":\"basic_wait\"}},"
+                "{\"name\":\"es2\","
+                 "\"scheduler\":{\"pools\":[\"__primary__\"],\"type\":\"basic_wait\"}},"
+                "{\"name\":\"es3\","
+                 "\"scheduler\":{\"pools\":[\"__primary__\"],\"type\":\"basic_wait\"}},"
+                "{\"name\":\"es4\","
+                 "\"scheduler\":{\"pools\":[\"__primary__\"],\"type\":\"basic_wait\"}}"
+            "]"
+        "}"
+    "}";
+
+    struct margo_init_info info = MARGO_INIT_INFO_INITIALIZER;
+    info.json_config = config;
+    margo_instance_id mid = margo_init_ext("na+sm", MARGO_SERVER_MODE, &info);
+
+    ABT_thread_yield();
+
+    margo_finalize(mid);
+    return MUNIT_OK;
+}
+
 static char* protocol_params[] = {
     "na+sm", NULL
 };
@@ -275,6 +311,7 @@ static MunitTest tests[] = {
     { "/finalize-and-wait", finalize_and_wait, test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     { "/ref-incr-and-release", ref_incr_and_release, test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     { "/multiple-pools-progress-loop", multiple_pools_progress_loop, test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, NULL},
+    { "/finalize-from-non-primary", finalize_from_non_primary, test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, NULL},
     { NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL }
 };
 
