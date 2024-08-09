@@ -28,8 +28,7 @@ typedef struct unit_t {
     uint64_t priority;
     uint8_t  flag;     // uses IS_IN_POOL and IS_THREAD
     uint8_t  cs_count; // number of context-switches
-    // prev and next are used when the unit is in the FIFO queue
-    struct unit_t* prev;
+    // next is used when the unit is in the FIFO queue
     struct unit_t* next;
 } unit_t;
 
@@ -45,8 +44,8 @@ typedef struct queue_t {
     } prio;
     // old entries (probably long-running ULTs)
     struct {
-        unit_t*        front;
-        unit_t*        back;
+        unit_t*        first;
+        unit_t*        last;
         _Atomic size_t size;
     } fifo;
 } queue_t;
@@ -57,7 +56,6 @@ static inline queue_t* create_queue(size_t initial_capacity)
     queue->prio.entries
         = (entry_t*)malloc((initial_capacity + 1) * sizeof(entry_t));
     queue->prio.capacity = initial_capacity;
-    queue->prio.size     = 0;
     return queue;
 }
 
@@ -96,16 +94,13 @@ static inline void queue_push_prio(queue_t* queue, unit_t* p_unit)
 
 static inline void queue_push_fifo(queue_t* queue, unit_t* p_unit)
 {
+    p_unit->next = NULL;
     if (queue->fifo.size == 0) {
-        queue->fifo.front = p_unit;
-        queue->fifo.back  = p_unit;
-        p_unit->next      = NULL;
-        p_unit->prev      = NULL;
+        queue->fifo.first = p_unit;
     } else {
-        p_unit->next           = NULL;
-        p_unit->prev           = queue->fifo.back;
-        queue->fifo.back->next = p_unit;
+        queue->fifo.last->next = p_unit;
     }
+    queue->fifo.last = p_unit;
     queue->fifo.size += 1;
 
     p_unit->flag |= IS_IN_POOL;
@@ -156,10 +151,10 @@ static inline unit_t* queue_pop_fifo(queue_t* queue)
 {
     if (queue->fifo.size == 0) { return NULL; }
 
-    unit_t* p_unit    = queue->fifo.front;
-    queue->fifo.front = p_unit->next;
-    if (queue->fifo.front) queue->fifo.front->prev = NULL;
+    unit_t* p_unit    = queue->fifo.first;
+    queue->fifo.first = p_unit->next;
     queue->fifo.size -= 1;
+    if (queue->fifo.size == 0) queue->fifo.last = NULL;
     p_unit->next = NULL;
     p_unit->flag ^= IS_IN_POOL;
 
