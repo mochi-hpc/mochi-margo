@@ -528,14 +528,16 @@ static void* __margo_default_monitor_initialize(margo_instance_id   mid,
 
     /* default configuration */
     const char* prefix         = getenv("MARGO_MONITORING_FILENAME_PREFIX");
+    const char* disable_stats  = getenv("MARGO_MONITORING_DISABLE_STATISTICS");
+    const char* disable_series = getenv("MARGO_MONITORING_DISABLE_TIME_SERIES");
     monitor->filename_prefix   = strdup(prefix ? prefix : "margo");
     monitor->precision         = 9;
     monitor->stats_pretty_json = 0;
     monitor->time_series_pretty_json = 0;
     monitor->sample_progress_every   = 1;
     monitor->time_series_interval    = 1.0;
-    monitor->enable_statistics       = true;
-    monitor->enable_time_series      = true;
+    monitor->enable_statistics       = !disable_stats;
+    monitor->enable_time_series      = !disable_series;
 
     /* read configuration */
     struct json_object* filename_prefix
