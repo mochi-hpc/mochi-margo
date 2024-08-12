@@ -8,7 +8,7 @@
 #include <margo-logging.h>
 
 static const char*     global_log_level_env = NULL;
-static margo_log_level global_log_level     = MARGO_LOG_WARNING;
+static margo_log_level global_log_level     = -1;
 
 static void __margo_log_trace(void* uargs, const char* str)
 {
@@ -92,19 +92,33 @@ static const char* log_level_to_string(margo_log_level level)
 
 static inline void set_global_log_level_from_env()
 {
-    /* this function will be called the first time the global log level is
-     * needed */
+    /* the first time the global log level is needed, this function will
+     * set global_log_level_env and global_log_level as specified either
+     * by the user via margo_set_global_log_level() or via the MARGO_LOG_LEVEL
+     * environment variable. */
     if (!global_log_level_env) {
-        global_log_level_env = getenv("MARGO_LOG_LEVEL");
-        int l                = log_level_from_string(global_log_level_env);
-        if (l == -1) {
-            fprintf(stderr,
-                    "[warning] unknown log level \"%s\" in MARGO_LOG_LEVEL,"
-                    " defaulting to \"warning\"",
-                    global_log_level_env);
-            global_log_level_env = log_level_to_string(global_log_level);
+        if (global_log_level == -1) {
+            /* the user did not provide a log level via
+             * margo_set_global_log_level, try to set if from MARGO_LOG_LEVEL.
+             */
+            global_log_level_env = getenv("MARGO_LOG_LEVEL");
+            global_log_level     = log_level_from_string(global_log_level_env);
+            if (global_log_level == -1) {
+                if (global_log_level_env) {
+                    fprintf(
+                        stderr,
+                        "[warning] unknown log level \"%s\" in MARGO_LOG_LEVEL,"
+                        " defaulting to \"warning\"",
+                        global_log_level_env);
+                }
+                /* the log level in MARGO_LOG_LEVEL is either not present or not
+                 * valid, set global_log_level to MARGO_LOG_WARNING and goto the
+                 * section setting global_log_level_env from it. */
+                global_log_level = MARGO_LOG_WARNING;
+            }
         }
-        global_log_level = log_level_from_string(global_log_level_env);
+        /* here we know global_log_level is defined. */
+        global_log_level_env = log_level_to_string(global_log_level);
     }
 }
 
