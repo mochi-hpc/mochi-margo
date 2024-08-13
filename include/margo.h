@@ -2036,8 +2036,7 @@ hg_return_t _handler_for_NULL(hg_handle_t);
     margo_trace(__mid, "Starting RPC %s (handle = %p)", __rpc_name,           \
                 (void*)handle);                                               \
     __name(handle);                                                           \
-    margo_trace(__mid, "RPC %s completed (handle = %p)", __rpc_name,          \
-                (void*)handle);                                               \
+    margo_trace(__mid, "RPC completed (handle = %p)", (void*)handle);         \
     __margo_internal_post_wrapper_hooks(__mid, &__monitoring_args);
 
 #define __MARGO_INTERNAL_RPC_WRAPPER(__name)       \
