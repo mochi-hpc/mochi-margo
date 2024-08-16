@@ -1418,27 +1418,27 @@ bool __margo_abt_add_external_xstream(margo_abt_t* abt,
     return ret;
 }
 
-bool __margo_abt_remove_pool(margo_abt_t* abt, uint32_t index)
+hg_return_t __margo_abt_remove_pool(margo_abt_t* abt, uint32_t index)
 {
     if (index >= abt->pools_len) {
         margo_error(abt->mid, "Invalid index %u in __margo_abt_remove_pool",
                     index);
-        return false;
+        return HG_INVALID_ARG;
     }
     margo_abt_pool_t* pool = &(abt->pools[index]);
-    if (pool->num_rpc_ids) {
+    if (pool->refcount) {
         margo_error(abt->mid,
                     "Cannot remove pool %s at index %u "
-                    "because it is used by %u RPC handlers",
-                    pool->name, index, pool->num_rpc_ids);
-        return false;
+                    "because it is used",
+                    pool->name, index);
+        return HG_PERMISSION;
     }
     if (pool->num_xstreams) {
         margo_error(abt->mid,
                     "Cannot remove pool %s at index %u "
                     "because it is used by %u running xstreams",
                     pool->name, index, pool->num_xstreams);
-        return false;
+        return HG_PERMISSION;
     }
     size_t pool_size = 0;
     int    ret       = ABT_pool_get_total_size(pool->pool, &pool_size);
@@ -1448,36 +1448,37 @@ bool __margo_abt_remove_pool(margo_abt_t* abt, uint32_t index)
                     " (ABT_pool_get_total_size returned %d)"
                     " in __margo_abt_pool_destroy",
                     ret);
-        return false;
+        return HG_OTHER_ERROR;
     } else if (pool_size != 0) {
         margo_error(0, "Destroying a pool (%s) that is not empty", pool->name);
-        return false;
+        return HG_PERMISSION;
     }
     __margo_abt_pool_destroy(pool, abt);
     margo_abt_pool_t* last_pool = &(abt->pools[abt->pools_len - 1]);
     if (index != abt->pools_len - 1) memcpy(pool, last_pool, sizeof(*pool));
     abt->pools_len -= 1;
     memset(last_pool, 0, sizeof(*last_pool));
-    return true;
+    return HG_SUCCESS;
 }
 
-bool __margo_abt_remove_xstream(margo_abt_t* abt, uint32_t index)
+hg_return_t __margo_abt_remove_xstream(margo_abt_t* abt, uint32_t index)
 {
     if (index >= abt->xstreams_len) {
         margo_error(abt->mid, "Invalid index %u in __margo_abt_remove_xstream",
                     index);
-        return false;
+        return HG_INVALID_ARG;
     }
     margo_abt_xstream_t* xstream = &(abt->xstreams[index]);
     if (strcmp(xstream->name, "__primary__") == 0) {
         margo_error(abt->mid, "Cannot remove primary xstream");
-        return false;
+        return HG_PERMISSION;
     }
+    if (xstream->refcount) { return HG_PERMISSION; }
     __margo_abt_xstream_destroy(xstream, abt);
     margo_abt_xstream_t* last_xstream = &(abt->xstreams[abt->xstreams_len - 1]);
     if (index != abt->xstreams_len - 1)
         memcpy(xstream, last_xstream, sizeof(*xstream));
     abt->xstreams_len -= 1;
     memset(last_xstream, 0, sizeof(*last_xstream));
-    return true;
+    return HG_SUCCESS;
 }

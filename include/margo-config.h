@@ -94,7 +94,7 @@ hg_return_t margo_find_pool_by_handle(margo_instance_id       mid,
  * searching for the name.
  *
  * @param [in] mid Margo instance.
- * @param [in] handle ABT_pool handle.
+ * @param [in] name Name of the pool.
  * @param [out] info Pointer to margo_pool_info struct to fill.
  *
  * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
@@ -108,7 +108,7 @@ hg_return_t margo_find_pool_by_name(margo_instance_id       mid,
  * searching for the index.
  *
  * @param [in] mid Margo instance.
- * @param [in] name Name of the pool to find.
+ * @param [in] index Index of the pool to find.
  * @param [out] info Pointer to margo_pool_info struct to fill.
  *
  * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
@@ -116,6 +116,23 @@ hg_return_t margo_find_pool_by_name(margo_instance_id       mid,
 hg_return_t margo_find_pool_by_index(margo_instance_id       mid,
                                      uint32_t                index,
                                      struct margo_pool_info* info);
+
+/**
+ * @brief Find information about a margo-managed pool (generic version).
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] arg index, name, or ABT_pool.
+ * @param [out] info Pointer to margo_pool_info struct to fill.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+#define margo_find_pool(mid, args, info) \
+    _Generic((args),                          \
+        ABT_pool: margo_find_pool_by_handle,  \
+        const char*: margo_find_pool_by_name, \
+        char*: margo_find_pool_by_name, \
+        default: margo_find_pool_by_index     \
+    )(mid, args, info)
 
 /**
  * @brief Creates a new Argobots pool according to the provided
@@ -185,14 +202,132 @@ hg_return_t margo_remove_pool_by_name(margo_instance_id mid, const char* name);
 
 /**
  * @brief Same as margo_remove_pool_by_index by using the
- * name of the pool to remove.
+ * handle of the pool to remove.
  *
  * @param mid Margo instance.
- * @param name Name of the pool to remove.
+ * @param handle ABT_pool handle of the pool to remove.
  *
  * @return HG_SUCCESS or other error code.
  */
 hg_return_t margo_remove_pool_by_handle(margo_instance_id mid, ABT_pool handle);
+
+/**
+ * @brief Remove a margo-managed pool (generic version).
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] arg index, name, or ABT_pool.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+#define margo_remove_pool(mid, args) \
+    _Generic((args),                            \
+        ABT_pool: margo_remove_pool_by_handle,  \
+        const char*: margo_remove_pool_by_name, \
+        char*: margo_remove_pool_by_name, \
+        default: margo_remove_pool_by_index     \
+    )(mid, args)
+
+/**
+ * @brief Increment the reference count of a pool managed by Margo.
+ * This reference count is used to prevent removal of pools that are in use.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] handle ABT_pool handle.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+hg_return_t margo_refincr_pool_by_handle(margo_instance_id mid,
+                                         ABT_pool          handle);
+
+/**
+ * @brief Increment the reference count of a pool managed by Margo.
+ * This reference count is used to prevent removal of pools that are in use.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] name Name of the pool.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+hg_return_t margo_refincr_pool_by_name(margo_instance_id mid, const char* name);
+
+/**
+ * @brief Increment the reference count of a pool managed by Margo.
+ * This reference count is used to prevent removal of pools that are in use.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] index Index of the pool.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+hg_return_t margo_refincr_pool_by_index(margo_instance_id mid, uint32_t index);
+
+/**
+ * @brief Increment the reference count of a margo-managed pool (generic
+ * version).
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] arg index, name, or ABT_pool.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+#define margo_refincr_pool(mid, args) \
+    _Generic((args),                             \
+        ABT_pool: margo_refincr_pool_by_handle,  \
+        const char*: margo_refincr_pool_by_name, \
+        char*: margo_refincr_pool_by_name, \
+        default: margo_refincr_pool_by_index     \
+    )(mid, args)
+
+/**
+ * @brief Decrement the reference count of a pool managed by Margo.
+ * This reference count is used to prevent removal of pools that are in use.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] handle ABT_pool handle.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+hg_return_t margo_refdecr_pool_by_handle(margo_instance_id mid,
+                                         ABT_pool          handle);
+
+/**
+ * @brief Decrement the reference count of a pool managed by Margo.
+ * This reference count is used to prevent removal of pools that are in use.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] name Name of the pool.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+hg_return_t margo_refdecr_pool_by_name(margo_instance_id mid, const char* name);
+
+/**
+ * @brief Decrement the reference count of a pool managed by Margo.
+ * This reference count is used to prevent removal of pools that are in use.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] index Index of the pool.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+hg_return_t margo_refdecr_pool_by_index(margo_instance_id mid, uint32_t index);
+
+/**
+ * @brief Decrement the reference count of a margo-managed pool (generic
+ * version).
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] arg index, name, or ABT_pool.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+#define margo_refdecr_pool(mid, args) \
+    _Generic((args),                             \
+        ABT_pool: margo_refdecr_pool_by_handle,  \
+        const char*: margo_refdecr_pool_by_name, \
+        char*: margo_refdecr_pool_by_name, \
+        default: margo_refdecr_pool_by_index     \
+    )(mid, args)
 
 /**
  * @brief Structure used to retrieve information about margo-managed xstreams.
@@ -222,7 +357,7 @@ hg_return_t margo_find_xstream_by_handle(margo_instance_id          mid,
  * searching for the name.
  *
  * @param [in] mid Margo instance.
- * @param [in] handle ABT_xstream handle.
+ * @param [in] name Name of the ES.
  * @param [out] info Pointer to margo_xstream_info struct to fill.
  *
  * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
@@ -236,7 +371,7 @@ hg_return_t margo_find_xstream_by_name(margo_instance_id          mid,
  * searching for the index.
  *
  * @param [in] mid Margo instance.
- * @param [in] name Name of the xstream to find.
+ * @param [in] index Index of the ES.
  * @param [out] info Pointer to margo_xstream_info struct to fill.
  *
  * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
@@ -244,6 +379,23 @@ hg_return_t margo_find_xstream_by_name(margo_instance_id          mid,
 hg_return_t margo_find_xstream_by_index(margo_instance_id          mid,
                                         uint32_t                   index,
                                         struct margo_xstream_info* info);
+
+/**
+ * @brief Find information about a margo-managed ES (generic version).
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] arg index, name, or ABT_xstream.
+ * @param [out] info Pointer to margo_xstream_info struct to fill.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+#define margo_find_xstream(mid, args, info) \
+    _Generic((args),                               \
+        ABT_xstream: margo_find_xstream_by_handle, \
+        const char*: margo_find_xstream_by_name,   \
+        char*: margo_find_xstream_by_name,   \
+        default: margo_find_xstream_by_index       \
+    )(mid, args, info)
 
 /**
  * @brief Creates a new Argobots xstream according to the provided
@@ -323,15 +475,137 @@ hg_return_t margo_remove_xstream_by_name(margo_instance_id mid,
 
 /**
  * @brief Same as margo_remove_xstream_by_index by using the
- * name of the xstream to remove.
+ * handle of the xstream to remove.
  *
  * @param mid Margo instance.
- * @param name Name of the xstream to remove.
+ * @param handle ABT_xstream handle of the xstream to remove.
  *
  * @return HG_SUCCESS or other error code.
  */
 hg_return_t margo_remove_xstream_by_handle(margo_instance_id mid,
                                            ABT_xstream       handle);
+
+/**
+ * @brief Remove a margo-managed ES (generic version).
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] arg index, name, or ABT_xstream.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+#define margo_remove_xstream(mid, args) \
+    _Generic((args),                                 \
+        ABT_xstream: margo_remove_xstream_by_handle, \
+        const char*: margo_remove_xstream_by_name,   \
+        char*: margo_remove_xstream_by_name,   \
+        default: margo_remove_xstream_by_index       \
+    )(mid, args)
+
+/**
+ * @brief Increment the reference count of a xstream managed by Margo.
+ * This reference count is used to prevent removal of xstreams that are in use.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] handle ABT_xstream handle.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+hg_return_t margo_refincr_xstream_by_handle(margo_instance_id mid,
+                                            ABT_xstream       handle);
+
+/**
+ * @brief Increment the reference count of a xstream managed by Margo.
+ * This reference count is used to prevent removal of xstreams that are in use.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] name Name of the xstream.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+hg_return_t margo_refincr_xstream_by_name(margo_instance_id mid,
+                                          const char*       name);
+
+/**
+ * @brief Increment the reference count of a xstream managed by Margo.
+ * This reference count is used to prevent removal of xstreams that are in use.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] index Index of the xstream.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+hg_return_t margo_refincr_xstream_by_index(margo_instance_id mid,
+                                           uint32_t          index);
+
+/**
+ * @brief Increment the reference count of a margo-managed xstream (generic
+ * version).
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] arg index, name, or ABT_xstream.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+#define margo_refincr_xstream(mid, args) \
+    _Generic((args),                             \
+        ABT_xstream: margo_refincr_xstream_by_handle,  \
+        const char*: margo_refincr_xstream_by_name, \
+        char*: margo_refincr_xstream_by_name, \
+        default: margo_refincr_xstream_by_index     \
+    )(mid, args)
+
+/**
+ * @brief Decrement the reference count of a xstream managed by Margo.
+ * This reference count is used to prevent removal of xstreams that are in use.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] handle ABT_xstream handle.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+hg_return_t margo_refdecr_xstream_by_handle(margo_instance_id mid,
+                                            ABT_xstream       handle);
+
+/**
+ * @brief Decrement the reference count of a xstream managed by Margo.
+ * This reference count is used to prevent removal of xstreams that are in use.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] name Name of the xstream.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+hg_return_t margo_refdecr_xstream_by_name(margo_instance_id mid,
+                                          const char*       name);
+
+/**
+ * @brief Decrement the reference count of a xstream managed by Margo.
+ * This reference count is used to prevent removal of xstreams that are in use.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] index Index of the xstream.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+hg_return_t margo_refdecr_xstream_by_index(margo_instance_id mid,
+                                           uint32_t          index);
+
+/**
+ * @brief Decrement the reference count of a margo-managed xstream (generic
+ * version).
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] arg index, name, or ABT_xstream.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+#define margo_refdecr_xstream(mid, args) \
+    _Generic((args),                             \
+        ABT_xstream: margo_refdecr_xstream_by_handle,  \
+        const char*: margo_refdecr_xstream_by_name, \
+        char*: margo_refdecr_xstream_by_name, \
+        default: margo_refdecr_xstream_by_index     \
+    )(mid, args)
 
 /**
  * @brief This helper function transfers the ULT from one pool to another.

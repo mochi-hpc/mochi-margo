@@ -52,11 +52,12 @@ typedef struct margo_abt margo_abt_t;
  * margo is responsible for explicitly free'ing the pool or not.
  */
 typedef struct margo_abt_pool {
-    char*             name;
-    ABT_pool          pool;
-    char*             kind;
-    optional_char*    access;       /* Unknown for custom user pools */
-    _Atomic(uint32_t) num_rpc_ids;  /* Number of RPC ids that use this pool */
+    char*          name;
+    ABT_pool       pool;
+    char*          kind;
+    optional_char* access; /* Unknown for custom user pools */
+    _Atomic(uint32_t)
+        refcount; /* Number of RPC ids and external uses of this pool */
     _Atomic(uint32_t) num_xstreams; /* Number of xstreams that use this pool */
     bool margo_free_flag; /* flag if Margo is responsible for freeing */
     bool used_by_primary; /* flag indicating the this pool is used by the
@@ -108,8 +109,9 @@ void __margo_abt_sched_destroy(margo_abt_sched_t* sched);
  * margo is responsible for explicitly free'ing the ES or not.
  */
 typedef struct margo_abt_xstream {
-    char*                  name;
-    ABT_xstream            xstream;
+    char*       name;
+    ABT_xstream xstream;
+    _Atomic(uint32_t) refcount; /* Number of external use this xstream */
     struct margo_abt_sched sched;
     bool margo_free_flag; /* flag if Margo is responsible for freeing */
 } margo_abt_xstream_t;
@@ -181,6 +183,6 @@ bool __margo_abt_add_external_pool(margo_abt_t* abt,
 bool __margo_abt_add_external_xstream(margo_abt_t* abt,
                                       const char*  name,
                                       ABT_xstream  xstream);
-bool __margo_abt_remove_pool(margo_abt_t* abt, uint32_t index);
-bool __margo_abt_remove_xstream(margo_abt_t* abt, uint32_t index);
+hg_return_t __margo_abt_remove_pool(margo_abt_t* abt, uint32_t index);
+hg_return_t __margo_abt_remove_xstream(margo_abt_t* abt, uint32_t index);
 #endif
