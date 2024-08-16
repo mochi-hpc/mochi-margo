@@ -385,7 +385,7 @@ error:
         if (mid->current_rpc_id_key) ABT_key_free(&(mid->current_rpc_id_key));
         free(mid);
     }
-    __margo_hg_destroy(&hg);
+    __margo_hg_destroy(&hg, true);
     __margo_abt_destroy(&abt);
     mid = MARGO_INSTANCE_NULL;
     goto finish;

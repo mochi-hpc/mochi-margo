@@ -145,7 +145,7 @@ static void margo_cleanup(margo_instance_id mid)
     /* finalize Mercury before anything else because this
      * could trigger some margo_cb for forward operations that
      * have not completed yet (cancelling them) */
-    __margo_hg_destroy(&(mid->hg));
+    __margo_hg_destroy(&(mid->hg), false);
 
     if (mid->abt_profiling_enabled) {
         MARGO_TRACE(mid, "Dumping ABT profile");
@@ -180,9 +180,11 @@ static void margo_cleanup(margo_instance_id mid)
         mid->registered_rpcs = next_rpc;
     }
 
-    __margo_abt_destroy(&(mid->abt));
-
-    if (mid->refcount == 0) free(mid);
+    if (mid->refcount == 0) {
+        __margo_hg_destroy(&(mid->hg), true);
+        __margo_abt_destroy(&(mid->abt));
+        free(mid);
+    }
 
     MARGO_TRACE(0, "Completed margo_cleanup");
 }
@@ -205,11 +207,13 @@ hg_return_t margo_instance_release(margo_instance_id mid)
 {
     if (!mid) return HG_INVALID_ARG;
     if (!mid->refcount) return HG_OTHER_ERROR;
-    unsigned refcount = mid->refcount--;
-    if (refcount == 1) {
+    unsigned refcount = --mid->refcount;
+    if (refcount == 0) {
         if (!mid->finalize_flag) {
             margo_finalize(mid);
         } else {
+            __margo_hg_destroy(&(mid->hg), true);
+            __margo_abt_destroy(&(mid->abt));
             free(mid);
         }
     }

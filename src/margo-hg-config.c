@@ -268,7 +268,7 @@ bool __margo_hg_init_from_json(const struct json_object*   json,
     return true;
 
 error:
-    __margo_hg_destroy(hg);
+    __margo_hg_destroy(hg, true);
     return false;
 }
 
@@ -424,13 +424,17 @@ finish:
     return json;
 }
 
-void __margo_hg_destroy(margo_hg_t* hg)
+void __margo_hg_destroy(margo_hg_t* hg, bool free_class)
 {
     free((char*)hg->hg_init_info.sm_info_string);
+    hg->hg_init_info.sm_info_string = NULL;
     free((char*)hg->hg_init_info.na_init_info.auth_key);
+    hg->hg_init_info.na_init_info.auth_key = NULL;
     free((char*)hg->hg_init_info.na_init_info.ip_subnet);
+    hg->hg_init_info.na_init_info.ip_subnet = NULL;
 
     free(hg->self_addr_str);
+    hg->self_addr_str = NULL;
 
     if (hg->hg_class && hg->self_addr != HG_ADDR_NULL)
         HG_Addr_free(hg->hg_class, hg->self_addr);
@@ -440,9 +444,19 @@ void __margo_hg_destroy(margo_hg_t* hg)
         hg->hg_context = NULL;
     }
 
-    if (hg->hg_class && (hg->hg_ownership & MARGO_OWNS_HG_CLASS)) {
+    hg_class_t* hg_class     = hg->hg_class;
+    uint8_t     hg_ownership = hg->hg_ownership;
+
+    if (hg->hg_class && (hg->hg_ownership & MARGO_OWNS_HG_CLASS)
+        && free_class) {
         HG_Finalize(hg->hg_class);
         hg->hg_class = NULL;
     }
+
     memset(hg, 0, sizeof(*hg));
+
+    if (!free_class) {
+        hg->hg_class     = hg_class;
+        hg->hg_ownership = hg_ownership;
+    }
 }
