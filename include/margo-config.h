@@ -292,6 +292,69 @@ hg_return_t margo_pool_ref_incr_by_index(margo_instance_id mid, uint32_t index);
     )(mid, args)
 
 /**
+ * @brief Get the reference count of a pool managed by Margo.
+ *
+ * @warning: this operation should not be called in a hot path as it searches
+ * for the pool in a linear manner.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] handle ABT_pool handle.
+ * @param [out] refcount Refcount.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+hg_return_t margo_pool_ref_count_by_handle(margo_instance_id mid,
+                                           ABT_pool          handle,
+                                           unsigned*         refcount);
+
+/**
+ * @brief Get the reference count of a pool managed by Margo.
+ *
+ * @warning: this operation should not be called in a hot path as it searches
+ * for the pool in a linear manner.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] name Name of the pool.
+ * @param [out] refcount Refcount.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+hg_return_t margo_pool_ref_count_by_name(margo_instance_id mid,
+                                         const char*       name,
+                                         unsigned*         refcount);
+
+/**
+ * @brief Get the reference count of a pool managed by Margo.
+ * This reference count is used to prevent removal of pools that are in use.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] index Index of the pool.
+ * @param [out] refcount Refcount.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+hg_return_t margo_pool_ref_count_by_index(margo_instance_id mid,
+                                          uint32_t          index,
+                                          unsigned*         refcount);
+
+/**
+ * @brief Get the reference count of a margo-managed pool (generic version).
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] arg index, name, or ABT_pool.
+ * @param [out] refcount Refcount.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+#define margo_pool_ref_count(mid, args, refcount) \
+    _Generic((args),                             \
+        ABT_pool: margo_pool_ref_count_by_handle,  \
+        const char*: margo_pool_ref_count_by_name, \
+        char*: margo_pool_ref_count_by_name, \
+        default: margo_pool_ref_count_by_index     \
+    )(mid, args, refcount)
+
+/**
  * @brief Decrement the reference count of a pool managed by Margo.
  * This reference count is used to prevent removal of pools that are in use.
  *
@@ -643,6 +706,69 @@ hg_return_t margo_xstream_release_by_index(margo_instance_id mid,
         char*: margo_xstream_release_by_name, \
         default: margo_xstream_release_by_index     \
     )(mid, args)
+
+/**
+ * @brief Get the reference count of an xstream managed by Margo.
+ *
+ * @warning: this operation should not be called in a hot path as it searches
+ * for the ES in a linear manner.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] handle ABT_xstream handle.
+ * @param [out] refcount Refcount.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+hg_return_t margo_xstream_ref_count_by_handle(margo_instance_id mid,
+                                              ABT_xstream       handle,
+                                              unsigned*         refcount);
+
+/**
+ * @brief Get the reference count of an xstream managed by Margo.
+ *
+ * @warning: this operation should not be called in a hot path as it searches
+ * for the xstream in a linear manner.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] name Name of the ES.
+ * @param [out] refcount Refcount.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+hg_return_t margo_xstream_ref_count_by_name(margo_instance_id mid,
+                                            const char*       name,
+                                            unsigned*         refcount);
+
+/**
+ * @brief Get the reference count of an xstream managed by Margo.
+ * This reference count is used to prevent removal of pools that are in use.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] index Index of the ES.
+ * @param [out] refcount Refcount.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+hg_return_t margo_xstream_ref_count_by_index(margo_instance_id mid,
+                                             uint32_t          index,
+                                             unsigned*         refcount);
+
+/**
+ * @brief Get the reference count of a margo-managed xstream (generic version).
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] arg index, name, or ABT_xstream.
+ * @param [out] refcount Refcount.
+ *
+ * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
+ */
+#define margo_xstream_ref_count(mid, args, refcount) \
+    _Generic((args),                             \
+        ABT_pool: margo_xstream_ref_count_by_handle,  \
+        const char*: margo_xstream_ref_count_by_name, \
+        char*: margo_xstream_ref_count_by_name, \
+        default: margo_xstream_ref_count_by_index     \
+    )(mid, args, refcount)
 
 /**
  * @brief This helper function transfers the ULT from one pool to another.

@@ -216,6 +216,59 @@ hg_return_t margo_pool_ref_incr_by_index(margo_instance_id mid, uint32_t index)
     return HG_SUCCESS;
 }
 
+hg_return_t margo_pool_ref_count_by_handle(margo_instance_id mid,
+                                           ABT_pool          handle,
+                                           unsigned*         refcount)
+{
+    if (mid == MARGO_INSTANCE_NULL || handle == ABT_POOL_NULL)
+        return HG_INVALID_ARG;
+    hg_return_t ret = HG_NOENTRY;
+    __margo_abt_lock(&mid->abt);
+    for (uint32_t i = 0; i < mid->abt.pools_len; ++i) {
+        if (mid->abt.pools[i].pool == handle) {
+            *refcount = mid->abt.pools[i].refcount;
+            ret       = HG_SUCCESS;
+            break;
+        }
+    }
+    __margo_abt_unlock(&mid->abt);
+    return ret;
+}
+
+hg_return_t margo_pool_ref_count_by_name(margo_instance_id mid,
+                                         const char*       name,
+                                         unsigned*         refcount)
+{
+    if (mid == MARGO_INSTANCE_NULL || name == NULL) return HG_INVALID_ARG;
+    hg_return_t ret = HG_NOENTRY;
+    __margo_abt_lock(&mid->abt);
+    for (uint32_t i = 0; i < mid->abt.pools_len; ++i) {
+        if (mid->abt.pools[i].name == NULL) continue;
+        if (strcmp(mid->abt.pools[i].name, name) == 0) {
+            *refcount = mid->abt.pools[i].refcount;
+            ret       = HG_SUCCESS;
+            break;
+        }
+    }
+    __margo_abt_unlock(&mid->abt);
+    return ret;
+}
+
+hg_return_t margo_pool_ref_count_by_index(margo_instance_id mid,
+                                          uint32_t          index,
+                                          unsigned*         refcount)
+{
+    if (!mid) return HG_INVALID_ARG;
+    __margo_abt_lock(&mid->abt);
+    if (index >= mid->abt.pools_len) {
+        __margo_abt_unlock(&mid->abt);
+        return HG_INVALID_ARG;
+    }
+    *refcount = mid->abt.pools[index].refcount;
+    __margo_abt_unlock(&mid->abt);
+    return HG_SUCCESS;
+}
+
 hg_return_t margo_pool_release_by_handle(margo_instance_id mid, ABT_pool handle)
 {
     if (mid == MARGO_INSTANCE_NULL || handle == ABT_POOL_NULL)
@@ -609,6 +662,59 @@ hg_return_t margo_xstream_ref_incr_by_index(margo_instance_id mid,
         return HG_INVALID_ARG;
     }
     mid->abt.xstreams[index].refcount++;
+    __margo_abt_unlock(&mid->abt);
+    return HG_SUCCESS;
+}
+
+hg_return_t margo_xstream_ref_count_by_handle(margo_instance_id mid,
+                                              ABT_xstream       handle,
+                                              unsigned*         refcount)
+{
+    if (mid == MARGO_INSTANCE_NULL || handle == ABT_XSTREAM_NULL)
+        return HG_INVALID_ARG;
+    hg_return_t ret = HG_NOENTRY;
+    __margo_abt_lock(&mid->abt);
+    for (uint32_t i = 0; i < mid->abt.xstreams_len; ++i) {
+        if (mid->abt.xstreams[i].xstream == handle) {
+            *refcount = mid->abt.xstreams[i].refcount;
+            ret       = HG_SUCCESS;
+            break;
+        }
+    }
+    __margo_abt_unlock(&mid->abt);
+    return ret;
+}
+
+hg_return_t margo_xstream_ref_count_by_name(margo_instance_id mid,
+                                            const char*       name,
+                                            unsigned*         refcount)
+{
+    if (mid == MARGO_INSTANCE_NULL || name == NULL) return HG_INVALID_ARG;
+    hg_return_t ret = HG_NOENTRY;
+    __margo_abt_lock(&mid->abt);
+    for (uint32_t i = 0; i < mid->abt.xstreams_len; ++i) {
+        if (mid->abt.xstreams[i].name == NULL) continue;
+        if (strcmp(mid->abt.xstreams[i].name, name) == 0) {
+            *refcount = mid->abt.xstreams[i].refcount;
+            ret       = HG_SUCCESS;
+            break;
+        }
+    }
+    __margo_abt_unlock(&mid->abt);
+    return ret;
+}
+
+hg_return_t margo_xstream_ref_count_by_index(margo_instance_id mid,
+                                             uint32_t          index,
+                                             unsigned*         refcount)
+{
+    if (!mid) return HG_INVALID_ARG;
+    __margo_abt_lock(&mid->abt);
+    if (index >= mid->abt.xstreams_len) {
+        __margo_abt_unlock(&mid->abt);
+        return HG_INVALID_ARG;
+    }
+    *refcount = mid->abt.xstreams[index].refcount;
     __margo_abt_unlock(&mid->abt);
     return HG_SUCCESS;
 }
