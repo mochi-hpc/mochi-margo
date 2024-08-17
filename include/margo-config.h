@@ -236,8 +236,8 @@ hg_return_t margo_remove_pool_by_handle(margo_instance_id mid, ABT_pool handle);
  *
  * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
  */
-hg_return_t margo_refincr_pool_by_handle(margo_instance_id mid,
-                                         ABT_pool          handle);
+hg_return_t margo_pool_ref_incr_by_handle(margo_instance_id mid,
+                                          ABT_pool          handle);
 
 /**
  * @brief Increment the reference count of a pool managed by Margo.
@@ -248,7 +248,8 @@ hg_return_t margo_refincr_pool_by_handle(margo_instance_id mid,
  *
  * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
  */
-hg_return_t margo_refincr_pool_by_name(margo_instance_id mid, const char* name);
+hg_return_t margo_pool_ref_incr_by_name(margo_instance_id mid,
+                                        const char*       name);
 
 /**
  * @brief Increment the reference count of a pool managed by Margo.
@@ -259,7 +260,7 @@ hg_return_t margo_refincr_pool_by_name(margo_instance_id mid, const char* name);
  *
  * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
  */
-hg_return_t margo_refincr_pool_by_index(margo_instance_id mid, uint32_t index);
+hg_return_t margo_pool_ref_incr_by_index(margo_instance_id mid, uint32_t index);
 
 /**
  * @brief Increment the reference count of a margo-managed pool (generic
@@ -270,12 +271,12 @@ hg_return_t margo_refincr_pool_by_index(margo_instance_id mid, uint32_t index);
  *
  * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
  */
-#define margo_refincr_pool(mid, args) \
+#define margo_pool_ref_incr(mid, args) \
     _Generic((args),                             \
-        ABT_pool: margo_refincr_pool_by_handle,  \
-        const char*: margo_refincr_pool_by_name, \
-        char*: margo_refincr_pool_by_name, \
-        default: margo_refincr_pool_by_index     \
+        ABT_pool: margo_pool_ref_incr_by_handle,  \
+        const char*: margo_pool_ref_incr_by_name, \
+        char*: margo_pool_ref_incr_by_name, \
+        default: margo_pool_ref_incr_by_index     \
     )(mid, args)
 
 /**
@@ -287,7 +288,7 @@ hg_return_t margo_refincr_pool_by_index(margo_instance_id mid, uint32_t index);
  *
  * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
  */
-hg_return_t margo_refdecr_pool_by_handle(margo_instance_id mid,
+hg_return_t margo_pool_release_by_handle(margo_instance_id mid,
                                          ABT_pool          handle);
 
 /**
@@ -299,7 +300,7 @@ hg_return_t margo_refdecr_pool_by_handle(margo_instance_id mid,
  *
  * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
  */
-hg_return_t margo_refdecr_pool_by_name(margo_instance_id mid, const char* name);
+hg_return_t margo_pool_release_by_name(margo_instance_id mid, const char* name);
 
 /**
  * @brief Decrement the reference count of a pool managed by Margo.
@@ -310,7 +311,7 @@ hg_return_t margo_refdecr_pool_by_name(margo_instance_id mid, const char* name);
  *
  * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
  */
-hg_return_t margo_refdecr_pool_by_index(margo_instance_id mid, uint32_t index);
+hg_return_t margo_pool_release_by_index(margo_instance_id mid, uint32_t index);
 
 /**
  * @brief Decrement the reference count of a margo-managed pool (generic
@@ -321,12 +322,12 @@ hg_return_t margo_refdecr_pool_by_index(margo_instance_id mid, uint32_t index);
  *
  * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
  */
-#define margo_refdecr_pool(mid, args) \
+#define margo_pool_release(mid, args) \
     _Generic((args),                             \
-        ABT_pool: margo_refdecr_pool_by_handle,  \
-        const char*: margo_refdecr_pool_by_name, \
-        char*: margo_refdecr_pool_by_name, \
-        default: margo_refdecr_pool_by_index     \
+        ABT_pool: margo_pool_release_by_handle,  \
+        const char*: margo_pool_release_by_name, \
+        char*: margo_pool_release_by_name, \
+        default: margo_pool_release_by_index     \
     )(mid, args)
 
 /**
@@ -510,8 +511,8 @@ hg_return_t margo_remove_xstream_by_handle(margo_instance_id mid,
  *
  * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
  */
-hg_return_t margo_refincr_xstream_by_handle(margo_instance_id mid,
-                                            ABT_xstream       handle);
+hg_return_t margo_xstream_ref_incr_by_handle(margo_instance_id mid,
+                                             ABT_xstream       handle);
 
 /**
  * @brief Increment the reference count of a xstream managed by Margo.
@@ -522,8 +523,8 @@ hg_return_t margo_refincr_xstream_by_handle(margo_instance_id mid,
  *
  * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
  */
-hg_return_t margo_refincr_xstream_by_name(margo_instance_id mid,
-                                          const char*       name);
+hg_return_t margo_xstream_ref_incr_by_name(margo_instance_id mid,
+                                           const char*       name);
 
 /**
  * @brief Increment the reference count of a xstream managed by Margo.
@@ -534,8 +535,8 @@ hg_return_t margo_refincr_xstream_by_name(margo_instance_id mid,
  *
  * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
  */
-hg_return_t margo_refincr_xstream_by_index(margo_instance_id mid,
-                                           uint32_t          index);
+hg_return_t margo_xstream_ref_incr_by_index(margo_instance_id mid,
+                                            uint32_t          index);
 
 /**
  * @brief Increment the reference count of a margo-managed xstream (generic
@@ -546,12 +547,12 @@ hg_return_t margo_refincr_xstream_by_index(margo_instance_id mid,
  *
  * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
  */
-#define margo_refincr_xstream(mid, args) \
+#define margo_xstream_ref_incr(mid, args) \
     _Generic((args),                             \
-        ABT_xstream: margo_refincr_xstream_by_handle,  \
-        const char*: margo_refincr_xstream_by_name, \
-        char*: margo_refincr_xstream_by_name, \
-        default: margo_refincr_xstream_by_index     \
+        ABT_xstream: margo_xstream_ref_incr_by_handle,  \
+        const char*: margo_xstream_ref_incr_by_name, \
+        char*: margo_xstream_ref_incr_by_name, \
+        default: margo_xstream_ref_incr_by_index     \
     )(mid, args)
 
 /**
@@ -563,7 +564,7 @@ hg_return_t margo_refincr_xstream_by_index(margo_instance_id mid,
  *
  * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
  */
-hg_return_t margo_refdecr_xstream_by_handle(margo_instance_id mid,
+hg_return_t margo_xstream_release_by_handle(margo_instance_id mid,
                                             ABT_xstream       handle);
 
 /**
@@ -575,7 +576,7 @@ hg_return_t margo_refdecr_xstream_by_handle(margo_instance_id mid,
  *
  * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
  */
-hg_return_t margo_refdecr_xstream_by_name(margo_instance_id mid,
+hg_return_t margo_xstream_release_by_name(margo_instance_id mid,
                                           const char*       name);
 
 /**
@@ -587,7 +588,7 @@ hg_return_t margo_refdecr_xstream_by_name(margo_instance_id mid,
  *
  * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
  */
-hg_return_t margo_refdecr_xstream_by_index(margo_instance_id mid,
+hg_return_t margo_xstream_release_by_index(margo_instance_id mid,
                                            uint32_t          index);
 
 /**
@@ -599,12 +600,12 @@ hg_return_t margo_refdecr_xstream_by_index(margo_instance_id mid,
  *
  * @return HG_SUCCESS or other HG error code (HG_INVALID_ARG or HG_NOENTRY).
  */
-#define margo_refdecr_xstream(mid, args) \
+#define margo_xstream_release(mid, args) \
     _Generic((args),                             \
-        ABT_xstream: margo_refdecr_xstream_by_handle,  \
-        const char*: margo_refdecr_xstream_by_name, \
-        char*: margo_refdecr_xstream_by_name, \
-        default: margo_refdecr_xstream_by_index     \
+        ABT_xstream: margo_xstream_release_by_handle,  \
+        const char*: margo_xstream_release_by_name, \
+        char*: margo_xstream_release_by_name, \
+        default: margo_xstream_release_by_index     \
     )(mid, args)
 
 /**

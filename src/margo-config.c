@@ -168,7 +168,8 @@ hg_return_t margo_find_pool_by_index(margo_instance_id       mid,
     return HG_SUCCESS;
 }
 
-hg_return_t margo_refincr_pool_by_handle(margo_instance_id mid, ABT_pool handle)
+hg_return_t margo_pool_ref_incr_by_handle(margo_instance_id mid,
+                                          ABT_pool          handle)
 {
     if (mid == MARGO_INSTANCE_NULL || handle == ABT_POOL_NULL)
         return HG_INVALID_ARG;
@@ -185,7 +186,7 @@ hg_return_t margo_refincr_pool_by_handle(margo_instance_id mid, ABT_pool handle)
     return ret;
 }
 
-hg_return_t margo_refincr_pool_by_name(margo_instance_id mid, const char* name)
+hg_return_t margo_pool_ref_incr_by_name(margo_instance_id mid, const char* name)
 {
     if (mid == MARGO_INSTANCE_NULL || name == NULL) return HG_INVALID_ARG;
     hg_return_t ret = HG_NOENTRY;
@@ -202,7 +203,7 @@ hg_return_t margo_refincr_pool_by_name(margo_instance_id mid, const char* name)
     return ret;
 }
 
-hg_return_t margo_refincr_pool_by_index(margo_instance_id mid, uint32_t index)
+hg_return_t margo_pool_ref_incr_by_index(margo_instance_id mid, uint32_t index)
 {
     if (!mid) return HG_INVALID_ARG;
     __margo_abt_lock(&mid->abt);
@@ -215,7 +216,7 @@ hg_return_t margo_refincr_pool_by_index(margo_instance_id mid, uint32_t index)
     return HG_SUCCESS;
 }
 
-hg_return_t margo_refdecr_pool_by_handle(margo_instance_id mid, ABT_pool handle)
+hg_return_t margo_pool_release_by_handle(margo_instance_id mid, ABT_pool handle)
 {
     if (mid == MARGO_INSTANCE_NULL || handle == ABT_POOL_NULL)
         return HG_INVALID_ARG;
@@ -237,7 +238,7 @@ hg_return_t margo_refdecr_pool_by_handle(margo_instance_id mid, ABT_pool handle)
     return ret;
 }
 
-hg_return_t margo_refdecr_pool_by_name(margo_instance_id mid, const char* name)
+hg_return_t margo_pool_release_by_name(margo_instance_id mid, const char* name)
 {
     if (mid == MARGO_INSTANCE_NULL || name == NULL) return HG_INVALID_ARG;
     hg_return_t ret = HG_NOENTRY;
@@ -259,7 +260,7 @@ hg_return_t margo_refdecr_pool_by_name(margo_instance_id mid, const char* name)
     return ret;
 }
 
-hg_return_t margo_refdecr_pool_by_index(margo_instance_id mid, uint32_t index)
+hg_return_t margo_pool_release_by_index(margo_instance_id mid, uint32_t index)
 {
     if (!mid) return HG_INVALID_ARG;
     __margo_abt_lock(&mid->abt);
@@ -562,8 +563,8 @@ hg_return_t margo_find_xstream_by_index(margo_instance_id          mid,
     return HG_SUCCESS;
 }
 
-hg_return_t margo_refincr_xstream_by_handle(margo_instance_id mid,
-                                            ABT_xstream       handle)
+hg_return_t margo_xstream_ref_incr_by_handle(margo_instance_id mid,
+                                             ABT_xstream       handle)
 {
     if (mid == MARGO_INSTANCE_NULL || handle == ABT_XSTREAM_NULL)
         return HG_INVALID_ARG;
@@ -580,8 +581,8 @@ hg_return_t margo_refincr_xstream_by_handle(margo_instance_id mid,
     return ret;
 }
 
-hg_return_t margo_refincr_xstream_by_name(margo_instance_id mid,
-                                          const char*       name)
+hg_return_t margo_xstream_ref_incr_by_name(margo_instance_id mid,
+                                           const char*       name)
 {
     if (mid == MARGO_INSTANCE_NULL || name == NULL) return HG_INVALID_ARG;
     hg_return_t ret = HG_NOENTRY;
@@ -598,8 +599,8 @@ hg_return_t margo_refincr_xstream_by_name(margo_instance_id mid,
     return ret;
 }
 
-hg_return_t margo_refincr_xstream_by_index(margo_instance_id mid,
-                                           uint32_t          index)
+hg_return_t margo_xstream_ref_incr_by_index(margo_instance_id mid,
+                                            uint32_t          index)
 {
     if (!mid) return HG_INVALID_ARG;
     __margo_abt_lock(&mid->abt);
@@ -612,7 +613,7 @@ hg_return_t margo_refincr_xstream_by_index(margo_instance_id mid,
     return HG_SUCCESS;
 }
 
-hg_return_t margo_refdecr_xstream_by_handle(margo_instance_id mid,
+hg_return_t margo_xstream_release_by_handle(margo_instance_id mid,
                                             ABT_xstream       handle)
 {
     if (mid == MARGO_INSTANCE_NULL || handle == ABT_XSTREAM_NULL)
@@ -635,7 +636,7 @@ hg_return_t margo_refdecr_xstream_by_handle(margo_instance_id mid,
     return ret;
 }
 
-hg_return_t margo_refdecr_xstream_by_name(margo_instance_id mid,
+hg_return_t margo_xstream_release_by_name(margo_instance_id mid,
                                           const char*       name)
 {
     if (mid == MARGO_INSTANCE_NULL || name == NULL) return HG_INVALID_ARG;
@@ -658,7 +659,7 @@ hg_return_t margo_refdecr_xstream_by_name(margo_instance_id mid,
     return ret;
 }
 
-hg_return_t margo_refdecr_xstream_by_index(margo_instance_id mid,
+hg_return_t margo_xstream_release_by_index(margo_instance_id mid,
                                            uint32_t          index)
 {
     if (!mid) return HG_INVALID_ARG;

@@ -233,7 +233,7 @@ static MunitResult remove_pool(const MunitParameter params[], void* data)
     margo_deregister(mid, id1);
 
     // unless we refincr it before :-)
-    ret = margo_refincr_pool(mid, "my_pool_1");
+    ret = margo_pool_ref_incr(mid, "my_pool_1");
     munit_assert_int(ret, ==, HG_SUCCESS);
 
     // failing case: remove my_pool_1 by name
@@ -241,7 +241,7 @@ static MunitResult remove_pool(const MunitParameter params[], void* data)
     munit_assert_int(ret, ==, HG_PERMISSION);
 
     // decref the pool
-    ret = margo_refdecr_pool(mid, "my_pool_1");
+    ret = margo_pool_release(mid, "my_pool_1");
     munit_assert_int(ret, ==, HG_SUCCESS);
 
     // remove my_pool_1 by name
@@ -288,7 +288,7 @@ static MunitResult remove_pool(const MunitParameter params[], void* data)
     munit_assert_int(ret, ==, HG_SUCCESS);
 
     // increment the refcount of my_pool_3 by index
-    ret = margo_refincr_pool(mid, pool_info.index);
+    ret = margo_pool_ref_incr(mid, pool_info.index);
     munit_assert_int(ret, ==, HG_SUCCESS);
 
     // failing case: remove my_pool_3 by index
@@ -296,7 +296,7 @@ static MunitResult remove_pool(const MunitParameter params[], void* data)
     munit_assert_int(ret, ==, HG_PERMISSION);
 
     // increment the refcount of my_pool_3 by index
-    ret = margo_refdecr_pool(mid, pool_info.index);
+    ret = margo_pool_release(mid, pool_info.index);
     munit_assert_int(ret, ==, HG_SUCCESS);
 
     // remove my_pool_3 by index
@@ -531,7 +531,7 @@ static MunitResult remove_xstream(const MunitParameter params[], void* data)
     munit_assert_int(ret, ==, HG_SUCCESS);
 
     // increment refcount for __xstream_2__ by name
-    ret = margo_refincr_xstream(mid, "__xstream_2__");
+    ret = margo_xstream_ref_incr(mid, "__xstream_2__");
     munit_assert_int(ret, ==, HG_SUCCESS);
 
     // failing case: remove __xstream_2__ by name (refcount is not 0)
@@ -539,7 +539,7 @@ static MunitResult remove_xstream(const MunitParameter params[], void* data)
     munit_assert_int(ret, ==, HG_PERMISSION);
 
     // decrement refcount for __xstream_2__
-    ret = margo_refdecr_xstream(mid, "__xstream_2__");
+    ret = margo_xstream_release(mid, "__xstream_2__");
     munit_assert_int(ret, ==, HG_SUCCESS);
 
     // remove __xstream_2__ by name
@@ -559,7 +559,7 @@ static MunitResult remove_xstream(const MunitParameter params[], void* data)
     munit_assert_int(ret, ==, HG_SUCCESS);
 
     // increment the refcount by index
-    ret = margo_refincr_xstream(mid, xstream_info.index);
+    ret = margo_xstream_ref_incr(mid, xstream_info.index);
     munit_assert_int(ret, ==, HG_SUCCESS);
 
     // failing case: remove __xstream_4__ by index
@@ -567,7 +567,7 @@ static MunitResult remove_xstream(const MunitParameter params[], void* data)
     munit_assert_int(ret, ==, HG_PERMISSION);
 
     // decrement the refcount by index
-    ret = margo_refdecr_xstream(mid, xstream_info.index);
+    ret = margo_xstream_release(mid, xstream_info.index);
     munit_assert_int(ret, ==, HG_SUCCESS);
 
     // remove __xstream_4__ by index
@@ -587,7 +587,7 @@ static MunitResult remove_xstream(const MunitParameter params[], void* data)
     munit_assert_int(ret, ==, HG_SUCCESS);
 
     // increment the refcount
-    ret = margo_refincr_xstream(mid, xstream_info.xstream);
+    ret = margo_xstream_ref_incr(mid, xstream_info.xstream);
     munit_assert_int(ret, ==, HG_SUCCESS);
 
     // failing case: remove it by handle
@@ -595,7 +595,7 @@ static MunitResult remove_xstream(const MunitParameter params[], void* data)
     munit_assert_int(ret, ==, HG_PERMISSION);
 
     // decrement the refcount
-    ret = margo_refdecr_xstream(mid, xstream_info.xstream);
+    ret = margo_xstream_release(mid, xstream_info.xstream);
     munit_assert_int(ret, ==, HG_SUCCESS);
 
     // remove it by handle
