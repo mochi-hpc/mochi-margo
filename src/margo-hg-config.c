@@ -268,7 +268,7 @@ bool __margo_hg_init_from_json(const struct json_object*   json,
     return true;
 
 error:
-    __margo_hg_destroy(hg, true);
+    __margo_hg_destroy(hg);
     return false;
 }
 
@@ -424,7 +424,7 @@ finish:
     return json;
 }
 
-void __margo_hg_destroy(margo_hg_t* hg, bool free_class)
+void __margo_hg_destroy(margo_hg_t* hg)
 {
     free((char*)hg->hg_init_info.sm_info_string);
     hg->hg_init_info.sm_info_string = NULL;
@@ -444,19 +444,10 @@ void __margo_hg_destroy(margo_hg_t* hg, bool free_class)
         hg->hg_context = NULL;
     }
 
-    hg_class_t* hg_class     = hg->hg_class;
-    uint8_t     hg_ownership = hg->hg_ownership;
-
-    if (hg->hg_class && (hg->hg_ownership & MARGO_OWNS_HG_CLASS)
-        && free_class) {
+    if (hg->hg_class && (hg->hg_ownership & MARGO_OWNS_HG_CLASS)) {
         HG_Finalize(hg->hg_class);
         hg->hg_class = NULL;
     }
 
     memset(hg, 0, sizeof(*hg));
-
-    if (!free_class) {
-        hg->hg_class     = hg_class;
-        hg->hg_ownership = hg_ownership;
-    }
 }

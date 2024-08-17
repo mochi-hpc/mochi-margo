@@ -51,6 +51,6 @@ bool                __margo_hg_init_from_json(const struct json_object*,
                                               const margo_hg_user_args_t*,
                                               margo_hg_t*);
 struct json_object* __margo_hg_to_json(const margo_hg_t*);
-void                __margo_hg_destroy(margo_hg_t*, bool free_class);
+void                __margo_hg_destroy(margo_hg_t*);
 
 #endif

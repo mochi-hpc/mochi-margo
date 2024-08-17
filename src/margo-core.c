@@ -145,7 +145,7 @@ static void margo_cleanup(margo_instance_id mid)
     /* finalize Mercury before anything else because this
      * could trigger some margo_cb for forward operations that
      * have not completed yet (cancelling them) */
-    __margo_hg_destroy(&(mid->hg), false);
+    __margo_hg_destroy(&(mid->hg));
 
     if (mid->abt_profiling_enabled) {
         MARGO_TRACE(mid, "Dumping ABT profile");
@@ -180,11 +180,8 @@ static void margo_cleanup(margo_instance_id mid)
         mid->registered_rpcs = next_rpc;
     }
 
-    if (mid->refcount == 0) {
-        __margo_hg_destroy(&(mid->hg), true);
-        __margo_abt_destroy(&(mid->abt));
-        free(mid);
-    }
+    __margo_abt_destroy(&(mid->abt));
+    free(mid);
 
     MARGO_TRACE(0, "Completed margo_cleanup");
 }
@@ -212,9 +209,7 @@ hg_return_t margo_instance_release(margo_instance_id mid)
         if (!mid->finalize_flag) {
             margo_finalize(mid);
         } else {
-            __margo_hg_destroy(&(mid->hg), true);
-            __margo_abt_destroy(&(mid->abt));
-            free(mid);
+            margo_cleanup(mid);
         }
     }
     return HG_SUCCESS;
@@ -274,7 +269,7 @@ void margo_finalize(margo_instance_id mid)
 
     ABT_mutex_lock(mid->finalize_mutex);
     mid->finalize_flag = true;
-    do_cleanup         = mid->finalize_refcount == 0;
+    do_cleanup         = mid->finalize_refcount == 0 && mid->refcount == 0;
 
     ABT_mutex_unlock(mid->finalize_mutex);
     ABT_cond_broadcast(mid->finalize_cond);
@@ -307,7 +302,7 @@ void margo_finalize_and_wait(margo_instance_id mid)
         ABT_cond_wait(mid->finalize_cond, mid->finalize_mutex);
 
     mid->finalize_refcount--;
-    do_cleanup = mid->finalize_refcount == 0;
+    do_cleanup = mid->finalize_refcount == 0 && mid->refcount == 0;
 
     ABT_mutex_unlock(mid->finalize_mutex);
 
@@ -330,7 +325,7 @@ void margo_wait_for_finalize(margo_instance_id mid)
         ABT_cond_wait(mid->finalize_cond, mid->finalize_mutex);
 
     mid->finalize_refcount--;
-    do_cleanup = mid->finalize_refcount == 0;
+    do_cleanup = mid->finalize_refcount == 0 && mid->refcount == 0;
 
     ABT_mutex_unlock(mid->finalize_mutex);
 
