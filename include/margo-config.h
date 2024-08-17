@@ -79,6 +79,9 @@ struct margo_pool_info {
  * @brief Find information about a margo-managed pool by
  * searching for the ABT_pool handle.
  *
+ * @warning: this operation should not be called in a hot path as it searches
+ * for the pool in a linear manner.
+ *
  * @param [in] mid Margo instance.
  * @param [in] handle ABT_pool handle.
  * @param [out] info Pointer to margo_pool_info struct to fill.
@@ -92,6 +95,9 @@ hg_return_t margo_find_pool_by_handle(margo_instance_id       mid,
 /**
  * @brief Find information about a margo-managed pool by
  * searching for the name.
+ *
+ * @warning: this operation should not be called in a hot path as it searches
+ * for the pool in a linear manner.
  *
  * @param [in] mid Margo instance.
  * @param [in] name Name of the pool.
@@ -231,6 +237,9 @@ hg_return_t margo_remove_pool_by_handle(margo_instance_id mid, ABT_pool handle);
  * @brief Increment the reference count of a pool managed by Margo.
  * This reference count is used to prevent removal of pools that are in use.
  *
+ * @warning: this operation should not be called in a hot path as it searches
+ * for the pool in a linear manner.
+ *
  * @param [in] mid Margo instance.
  * @param [in] handle ABT_pool handle.
  *
@@ -242,6 +251,9 @@ hg_return_t margo_pool_ref_incr_by_handle(margo_instance_id mid,
 /**
  * @brief Increment the reference count of a pool managed by Margo.
  * This reference count is used to prevent removal of pools that are in use.
+ *
+ * @warning: this operation should not be called in a hot path as it searches
+ * for the pool in a linear manner.
  *
  * @param [in] mid Margo instance.
  * @param [in] name Name of the pool.
@@ -283,6 +295,9 @@ hg_return_t margo_pool_ref_incr_by_index(margo_instance_id mid, uint32_t index);
  * @brief Decrement the reference count of a pool managed by Margo.
  * This reference count is used to prevent removal of pools that are in use.
  *
+ * @warning: this operation should not be called in a hot path as it searches
+ * for the pool in a linear manner.
+ *
  * @param [in] mid Margo instance.
  * @param [in] handle ABT_pool handle.
  *
@@ -294,6 +309,9 @@ hg_return_t margo_pool_release_by_handle(margo_instance_id mid,
 /**
  * @brief Decrement the reference count of a pool managed by Margo.
  * This reference count is used to prevent removal of pools that are in use.
+ *
+ * @warning: this operation should not be called in a hot path as it searches
+ * for the pool in a linear manner.
  *
  * @param [in] mid Margo instance.
  * @param [in] name Name of the pool.
@@ -343,6 +361,9 @@ struct margo_xstream_info {
  * @brief Find information about a margo-managed xstream by
  * searching for the ABT_xstream handle.
  *
+ * @warning: this operation should not be called in a hot path as it searches
+ * for the xstream in a linear manner.
+ *
  * @param [in] mid Margo instance.
  * @param [in] handle ABT_xstream handle.
  * @param [out] info Pointer to margo_xstream_info struct to fill.
@@ -356,6 +377,9 @@ hg_return_t margo_find_xstream_by_handle(margo_instance_id          mid,
 /**
  * @brief Find information about a margo-managed xstream by
  * searching for the name.
+ *
+ * @warning: this operation should not be called in a hot path as it searches
+ * for the xstream in a linear manner.
  *
  * @param [in] mid Margo instance.
  * @param [in] name Name of the ES.
@@ -506,6 +530,9 @@ hg_return_t margo_remove_xstream_by_handle(margo_instance_id mid,
  * @brief Increment the reference count of a xstream managed by Margo.
  * This reference count is used to prevent removal of xstreams that are in use.
  *
+ * @warning: this operation should not be called in a hot path as it searches
+ * for the xstream in a linear manner.
+ *
  * @param [in] mid Margo instance.
  * @param [in] handle ABT_xstream handle.
  *
@@ -517,6 +544,9 @@ hg_return_t margo_xstream_ref_incr_by_handle(margo_instance_id mid,
 /**
  * @brief Increment the reference count of a xstream managed by Margo.
  * This reference count is used to prevent removal of xstreams that are in use.
+ *
+ * @warning: this operation should not be called in a hot path as it searches
+ * for the xstream in a linear manner.
  *
  * @param [in] mid Margo instance.
  * @param [in] name Name of the xstream.
@@ -559,6 +589,9 @@ hg_return_t margo_xstream_ref_incr_by_index(margo_instance_id mid,
  * @brief Decrement the reference count of a xstream managed by Margo.
  * This reference count is used to prevent removal of xstreams that are in use.
  *
+ * @warning: this operation should not be called in a hot path as it searches
+ * for the xstream in a linear manner.
+ *
  * @param [in] mid Margo instance.
  * @param [in] handle ABT_xstream handle.
  *
@@ -570,6 +603,9 @@ hg_return_t margo_xstream_release_by_handle(margo_instance_id mid,
 /**
  * @brief Decrement the reference count of a xstream managed by Margo.
  * This reference count is used to prevent removal of xstreams that are in use.
+ *
+ * @warning: this operation should not be called in a hot path as it searches
+ * for the xstream in a linear manner.
  *
  * @param [in] mid Margo instance.
  * @param [in] name Name of the xstream.
@@ -623,106 +659,6 @@ hg_return_t margo_xstream_release_by_index(margo_instance_id mid,
  */
 hg_return_t margo_transfer_pool_content(ABT_pool origin_pool,
                                         ABT_pool target_pool);
-
-/**
- * @brief Get a pool from the configuration.
- *
- * @param [in] mid Margo instance.
- * @param [in] name Name of the pool.
- * @param [out] pool Argobots pool.
- *
- * @return 0 on success, -1 on failure
- */
-int margo_get_pool_by_name(margo_instance_id mid,
-                           const char*       name,
-                           ABT_pool*         pool)
-    DEPRECATED("Use margo_find_pool_by_name instead");
-
-/**
- * @brief Get a pool from the configuration.
- *
- * @param [in] mid Margo instance.
- * @param [in] index Index of the pool.
- * @param [out] pool Argobots pool.
- *
- * @return 0 on success, -1 on failure.
- */
-int margo_get_pool_by_index(margo_instance_id mid,
-                            unsigned          index,
-                            ABT_pool*         pool)
-    DEPRECATED("Use margo_find_pool_by_index instead");
-
-/**
- * @brief Get the name of a pool at a given index.
- *
- * @param mid Margo instance.
- * @param index Index of the pool.
- *
- * @return The null-terminated name, or NULL if index is invalid.
- */
-const char* margo_get_pool_name(margo_instance_id mid, unsigned index)
-    DEPRECATED("Use margo_find_pool_by_index instead");
-
-/**
- * @brief Get the index of a pool from a given name.
- *
- * @param mid Margo instance.
- * @param name Name of the pool.
- *
- * @return The index of the pool, or -1 if the name is invalid.
- */
-int margo_get_pool_index(margo_instance_id mid, const char* name)
-    DEPRECATED("Use margo_find_pool_by_name instead");
-
-/**
- * @brief Get an xstream from the configuration.
- *
- * @param [in] mid Margo instance.
- * @param [in] name Name of the ES.
- * @param [out] es ES.
- *
- * @return 0 on success, -1 on failure.
- */
-int margo_get_xstream_by_name(margo_instance_id mid,
-                              const char*       name,
-                              ABT_xstream*      es)
-    DEPRECATED("Use margo_find_xstream_by_name instead");
-
-/**
- * @brief Get an xstream from the configuration.
- *
- * @param [in] mid Margo instance.
- * @param [in] name Index of the ES.
- * @param [out] es ES.
- *
- * @return 0 on success, -1 on failure.
- */
-int margo_get_xstream_by_index(margo_instance_id mid,
-                               unsigned          index,
-                               ABT_xstream*      es)
-    DEPRECATED("Use margo_find_xstream_by_index instead");
-
-/**
- * @brief Get the name of a xstream at a given index.
- *
- * @param mid Margo instance.
- * @param index Index of the xstream.
- *
- * @return The null-terminated name, or NULL if index is invalid.
- */
-const char* margo_get_xstream_name(margo_instance_id mid, unsigned index)
-    DEPRECATED("Use margo_find_xstream_by_index instead");
-
-/**
- * @brief Get the index of an xstream from a given name.
- *
- * @param mid Margo instance.
- * @param name Name of the xstream.
- *
- * @return the index of the xstream, or -1 if the name is invalid.
- */
-int margo_get_xstream_index(margo_instance_id mid, const char* name)
-    DEPRECATED("Use margo_find_xstream_by_name instead");
 
 #ifdef __cplusplus
 }
