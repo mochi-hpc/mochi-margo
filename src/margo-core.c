@@ -142,26 +142,23 @@ static void margo_cleanup(margo_instance_id mid)
     MARGO_TRACE(mid, "Destroying handle cache");
     __margo_handle_cache_destroy(mid);
 
-    /* finalize Mercury before anything else because this
-     * could trigger some margo_cb for forward operations that
-     * have not completed yet (cancelling them) */
-    __margo_hg_destroy(&(mid->hg));
-
     if (mid->abt_profiling_enabled) {
         MARGO_TRACE(mid, "Dumping ABT profile");
         margo_dump_abt_profiling(mid, "margo-profile", 1, NULL);
     }
 
-    /* monitoring */
-    /* Note: Monitoring called before we continue to
-     * finalize because we need the margo instance to still
-     * be valid at this point.
-     */
-    __MARGO_MONITOR(mid, FN_END, finalize, monitoring_args);
+    /* finalize Mercury before anything else because this
+     * could trigger some margo_cb for forward operations that
+     * have not completed yet (cancelling them) */
+    MARGO_TRACE(mid, "Destroying Mercury environment");
+    __margo_hg_destroy(&(mid->hg));
 
-    if (mid->monitor && mid->monitor->finalize)
-        mid->monitor->finalize(mid->monitor->uargs);
-    free(mid->monitor);
+    MARGO_TRACE(mid, "Cleaning up RPC data");
+    while (mid->registered_rpcs) {
+        next_rpc = mid->registered_rpcs->next;
+        free(mid->registered_rpcs);
+        mid->registered_rpcs = next_rpc;
+    }
 
     /* shut down pending timers */
     MARGO_TRACE(mid, "Cleaning up pending timers");
@@ -173,13 +170,14 @@ static void margo_cleanup(margo_instance_id mid)
     ABT_mutex_free(&mid->pending_operations_mtx);
     ABT_key_free(&(mid->current_rpc_id_key));
 
-    MARGO_TRACE(mid, "Cleaning up RPC data");
-    while (mid->registered_rpcs) {
-        next_rpc = mid->registered_rpcs->next;
-        free(mid->registered_rpcs);
-        mid->registered_rpcs = next_rpc;
-    }
+    /* monitoring (destroyed before Argobots since it contains mutexes) */
+    __MARGO_MONITOR(mid, FN_END, finalize, monitoring_args);
+    MARGO_TRACE(mid, "Destroying monitoring context");
+    if (mid->monitor && mid->monitor->finalize)
+        mid->monitor->finalize(mid->monitor->uargs);
+    free(mid->monitor);
 
+    MARGO_TRACE(mid, "Destroying Argobots environment");
     __margo_abt_destroy(&(mid->abt));
     free(mid);
 
@@ -266,6 +264,7 @@ void margo_finalize(margo_instance_id mid)
     MARGO_TRACE(mid, "Waiting for progress thread to complete");
     ABT_thread_join(mid->hg_progress_tid);
     ABT_thread_free(&mid->hg_progress_tid);
+    mid->refcount--;
 
     ABT_mutex_lock(mid->finalize_mutex);
     mid->finalize_flag = true;

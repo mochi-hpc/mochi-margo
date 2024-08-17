@@ -154,14 +154,14 @@ static MunitResult ref_incr_and_release(const MunitParameter params[], void* dat
     unsigned refcount = 1234;
     hg_return_t hret = margo_instance_ref_count(ctx->mid, &refcount);
     munit_assert_int(hret, ==, HG_SUCCESS);
-    munit_assert_int(refcount, ==, 0);
+    munit_assert_int(refcount, ==, 1);
 
     hret = margo_instance_ref_incr(ctx->mid);
     munit_assert_int(hret, ==, HG_SUCCESS);
 
     hret = margo_instance_ref_count(ctx->mid, &refcount);
     munit_assert_int(hret, ==, HG_SUCCESS);
-    munit_assert_int(refcount, ==, 1);
+    munit_assert_int(refcount, ==, 2);
 
     bool is_finalized = true;
     hret = margo_instance_is_finalized(ctx->mid, &is_finalized);
