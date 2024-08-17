@@ -236,6 +236,12 @@ static MunitResult remove_pool(const MunitParameter params[], void* data)
     ret = margo_pool_ref_incr(mid, "my_pool_1");
     munit_assert_int(ret, ==, HG_SUCCESS);
 
+    // check the ref count
+    unsigned refcount = 1234;
+    ret = margo_pool_ref_count(mid, "my_pool_1", &refcount);
+    munit_assert_int(ret, ==, HG_SUCCESS);
+    munit_assert_int(refcount, ==, 1);
+
     // failing case: remove my_pool_1 by name
     ret = margo_remove_pool(mid, "my_pool_1");
     munit_assert_int(ret, ==, HG_PERMISSION);
@@ -291,11 +297,16 @@ static MunitResult remove_pool(const MunitParameter params[], void* data)
     ret = margo_pool_ref_incr(mid, pool_info.index);
     munit_assert_int(ret, ==, HG_SUCCESS);
 
+    // check the ref count
+    ret = margo_pool_ref_count(mid, pool_info.index, &refcount);
+    munit_assert_int(ret, ==, HG_SUCCESS);
+    munit_assert_int(refcount, ==, 1);
+
     // failing case: remove my_pool_3 by index
     ret = margo_remove_pool(mid, pool_info.index);
     munit_assert_int(ret, ==, HG_PERMISSION);
 
-    // increment the refcount of my_pool_3 by index
+    // decrement the refcount of my_pool_3 by index
     ret = margo_pool_release(mid, pool_info.index);
     munit_assert_int(ret, ==, HG_SUCCESS);
 
@@ -322,6 +333,18 @@ static MunitResult remove_pool(const MunitParameter params[], void* data)
     // move rpc_0 to another pool (__pool_1__, which is the default handler pool)
     // so we can remove my_pool_0
     margo_rpc_set_pool(mid, id0, handler_pool);
+
+    // increase the refcount
+    ret = margo_pool_ref_incr(mid, pool_info.pool);
+    munit_assert_int(ret, ==, HG_SUCCESS);
+
+    // failing: remove it by handle
+    ret = margo_remove_pool(mid, pool_info.pool);
+    munit_assert_int(ret, ==, HG_PERMISSION);
+
+    // decrease the refcount
+    ret = margo_pool_release(mid, pool_info.pool);
+    munit_assert_int(ret, ==, HG_SUCCESS);
 
     // remove it by handle
     ret = margo_remove_pool(mid, pool_info.pool);
@@ -534,6 +557,12 @@ static MunitResult remove_xstream(const MunitParameter params[], void* data)
     ret = margo_xstream_ref_incr(mid, "__xstream_2__");
     munit_assert_int(ret, ==, HG_SUCCESS);
 
+    // get the refcount
+    unsigned refcount = 1234;
+    ret = margo_xstream_ref_count(mid, "__xstream_2__", &refcount);
+    munit_assert_int(ret, ==, HG_SUCCESS);
+    munit_assert_int(refcount, ==, 1);
+
     // failing case: remove __xstream_2__ by name (refcount is not 0)
     ret = margo_remove_xstream(mid, "__xstream_2__");
     munit_assert_int(ret, ==, HG_PERMISSION);
@@ -562,6 +591,11 @@ static MunitResult remove_xstream(const MunitParameter params[], void* data)
     ret = margo_xstream_ref_incr(mid, xstream_info.index);
     munit_assert_int(ret, ==, HG_SUCCESS);
 
+    // get the refcount by index
+    ret = margo_xstream_ref_count(mid, xstream_info.index, &refcount);
+    munit_assert_int(ret, ==, HG_SUCCESS);
+    munit_assert_int(refcount, ==, 1);
+
     // failing case: remove __xstream_4__ by index
     ret = margo_remove_xstream(mid, xstream_info.index);
     munit_assert_int(ret, ==, HG_PERMISSION);
@@ -589,6 +623,11 @@ static MunitResult remove_xstream(const MunitParameter params[], void* data)
     // increment the refcount
     ret = margo_xstream_ref_incr(mid, xstream_info.xstream);
     munit_assert_int(ret, ==, HG_SUCCESS);
+
+    // get the refcount
+    ret = margo_xstream_ref_count(mid, xstream_info.xstream, &refcount);
+    munit_assert_int(ret, ==, HG_SUCCESS);
+    munit_assert_int(refcount, ==, 1);
 
     // failing case: remove it by handle
     ret = margo_remove_xstream(mid, xstream_info.xstream);

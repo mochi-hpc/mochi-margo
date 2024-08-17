@@ -764,7 +764,7 @@ hg_return_t margo_xstream_ref_count_by_index(margo_instance_id mid,
  */
 #define margo_xstream_ref_count(mid, args, refcount) \
     _Generic((args),                             \
-        ABT_pool: margo_xstream_ref_count_by_handle,  \
+        ABT_xstream: margo_xstream_ref_count_by_handle,  \
         const char*: margo_xstream_ref_count_by_name, \
         char*: margo_xstream_ref_count_by_name, \
         default: margo_xstream_ref_count_by_index     \
