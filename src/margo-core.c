@@ -205,6 +205,8 @@ hg_return_t margo_instance_release(margo_instance_id mid)
     unsigned refcount = --mid->refcount;
     if (refcount == 0) {
         if (!mid->finalize_flag) {
+            ++mid->refcount; // needed because margo_finalize will itself
+                             // decrease it back to 0
             margo_finalize(mid);
         } else {
             margo_cleanup(mid);
