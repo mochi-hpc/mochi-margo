@@ -168,6 +168,168 @@ hg_return_t margo_find_pool_by_index(margo_instance_id       mid,
     return HG_SUCCESS;
 }
 
+hg_return_t margo_pool_ref_incr_by_handle(margo_instance_id mid,
+                                          ABT_pool          handle)
+{
+    if (mid == MARGO_INSTANCE_NULL || handle == ABT_POOL_NULL)
+        return HG_INVALID_ARG;
+    hg_return_t ret = HG_NOENTRY;
+    __margo_abt_lock(&mid->abt);
+    for (uint32_t i = 0; i < mid->abt.pools_len; ++i) {
+        if (mid->abt.pools[i].pool == handle) {
+            mid->abt.pools[i].refcount++;
+            ret = HG_SUCCESS;
+            break;
+        }
+    }
+    __margo_abt_unlock(&mid->abt);
+    return ret;
+}
+
+hg_return_t margo_pool_ref_incr_by_name(margo_instance_id mid, const char* name)
+{
+    if (mid == MARGO_INSTANCE_NULL || name == NULL) return HG_INVALID_ARG;
+    hg_return_t ret = HG_NOENTRY;
+    __margo_abt_lock(&mid->abt);
+    for (uint32_t i = 0; i < mid->abt.pools_len; ++i) {
+        if (mid->abt.pools[i].name == NULL) continue;
+        if (strcmp(mid->abt.pools[i].name, name) == 0) {
+            mid->abt.pools[i].refcount++;
+            ret = HG_SUCCESS;
+            break;
+        }
+    }
+    __margo_abt_unlock(&mid->abt);
+    return ret;
+}
+
+hg_return_t margo_pool_ref_incr_by_index(margo_instance_id mid, uint32_t index)
+{
+    if (!mid) return HG_INVALID_ARG;
+    __margo_abt_lock(&mid->abt);
+    if (index >= mid->abt.pools_len) {
+        __margo_abt_unlock(&mid->abt);
+        return HG_INVALID_ARG;
+    }
+    mid->abt.pools[index].refcount++;
+    __margo_abt_unlock(&mid->abt);
+    return HG_SUCCESS;
+}
+
+hg_return_t margo_pool_ref_count_by_handle(margo_instance_id mid,
+                                           ABT_pool          handle,
+                                           unsigned*         refcount)
+{
+    if (mid == MARGO_INSTANCE_NULL || handle == ABT_POOL_NULL)
+        return HG_INVALID_ARG;
+    hg_return_t ret = HG_NOENTRY;
+    __margo_abt_lock(&mid->abt);
+    for (uint32_t i = 0; i < mid->abt.pools_len; ++i) {
+        if (mid->abt.pools[i].pool == handle) {
+            *refcount = mid->abt.pools[i].refcount;
+            ret       = HG_SUCCESS;
+            break;
+        }
+    }
+    __margo_abt_unlock(&mid->abt);
+    return ret;
+}
+
+hg_return_t margo_pool_ref_count_by_name(margo_instance_id mid,
+                                         const char*       name,
+                                         unsigned*         refcount)
+{
+    if (mid == MARGO_INSTANCE_NULL || name == NULL) return HG_INVALID_ARG;
+    hg_return_t ret = HG_NOENTRY;
+    __margo_abt_lock(&mid->abt);
+    for (uint32_t i = 0; i < mid->abt.pools_len; ++i) {
+        if (mid->abt.pools[i].name == NULL) continue;
+        if (strcmp(mid->abt.pools[i].name, name) == 0) {
+            *refcount = mid->abt.pools[i].refcount;
+            ret       = HG_SUCCESS;
+            break;
+        }
+    }
+    __margo_abt_unlock(&mid->abt);
+    return ret;
+}
+
+hg_return_t margo_pool_ref_count_by_index(margo_instance_id mid,
+                                          uint32_t          index,
+                                          unsigned*         refcount)
+{
+    if (!mid) return HG_INVALID_ARG;
+    __margo_abt_lock(&mid->abt);
+    if (index >= mid->abt.pools_len) {
+        __margo_abt_unlock(&mid->abt);
+        return HG_INVALID_ARG;
+    }
+    *refcount = mid->abt.pools[index].refcount;
+    __margo_abt_unlock(&mid->abt);
+    return HG_SUCCESS;
+}
+
+hg_return_t margo_pool_release_by_handle(margo_instance_id mid, ABT_pool handle)
+{
+    if (mid == MARGO_INSTANCE_NULL || handle == ABT_POOL_NULL)
+        return HG_INVALID_ARG;
+    hg_return_t ret = HG_NOENTRY;
+    __margo_abt_lock(&mid->abt);
+    for (uint32_t i = 0; i < mid->abt.pools_len; ++i) {
+        if (mid->abt.pools[i].pool == handle) {
+            if (mid->abt.pools[i].refcount == 0) {
+                __margo_abt_unlock(&mid->abt);
+                ret = HG_PERMISSION;
+                break;
+            }
+            mid->abt.pools[i].refcount--;
+            ret = HG_SUCCESS;
+            break;
+        }
+    }
+    __margo_abt_unlock(&mid->abt);
+    return ret;
+}
+
+hg_return_t margo_pool_release_by_name(margo_instance_id mid, const char* name)
+{
+    if (mid == MARGO_INSTANCE_NULL || name == NULL) return HG_INVALID_ARG;
+    hg_return_t ret = HG_NOENTRY;
+    __margo_abt_lock(&mid->abt);
+    for (uint32_t i = 0; i < mid->abt.pools_len; ++i) {
+        if (mid->abt.pools[i].name == NULL) continue;
+        if (strcmp(mid->abt.pools[i].name, name) == 0) {
+            if (mid->abt.pools[i].refcount == 0) {
+                __margo_abt_unlock(&mid->abt);
+                ret = HG_PERMISSION;
+                break;
+            }
+            mid->abt.pools[i].refcount--;
+            ret = HG_SUCCESS;
+            break;
+        }
+    }
+    __margo_abt_unlock(&mid->abt);
+    return ret;
+}
+
+hg_return_t margo_pool_release_by_index(margo_instance_id mid, uint32_t index)
+{
+    if (!mid) return HG_INVALID_ARG;
+    __margo_abt_lock(&mid->abt);
+    if (index >= mid->abt.pools_len) {
+        __margo_abt_unlock(&mid->abt);
+        return HG_INVALID_ARG;
+    }
+    if (mid->abt.pools[index].refcount == 0) {
+        __margo_abt_unlock(&mid->abt);
+        return HG_PERMISSION;
+    }
+    mid->abt.pools[index].refcount--;
+    __margo_abt_unlock(&mid->abt);
+    return HG_SUCCESS;
+}
+
 hg_return_t margo_add_pool_from_json(margo_instance_id       mid,
                                      const char*             json_str,
                                      struct margo_pool_info* info)
@@ -279,8 +441,7 @@ hg_return_t margo_remove_pool_by_index(margo_instance_id mid, uint32_t index)
         = {.info = &m_info, .ret = HG_SUCCESS};
     __MARGO_MONITOR(mid, FN_START, remove_pool, monitoring_args);
 
-    bool b = __margo_abt_remove_pool(&mid->abt, index);
-    if (!b) ret = HG_OTHER_ERROR;
+    ret = __margo_abt_remove_pool(&mid->abt, index);
 
     /* monitoring */
     m_info.name         = NULL;
@@ -329,8 +490,7 @@ hg_return_t margo_remove_pool_by_name(margo_instance_id mid, const char* name)
         = {.info = &m_info, .ret = HG_SUCCESS};
     __MARGO_MONITOR(mid, FN_START, remove_pool, monitoring_args);
 
-    bool b = __margo_abt_remove_pool(&mid->abt, index);
-    if (!b) ret = HG_OTHER_ERROR;
+    ret = __margo_abt_remove_pool(&mid->abt, index);
 
     /* monitoring */
     m_info.name         = NULL;
@@ -378,8 +538,7 @@ hg_return_t margo_remove_pool_by_handle(margo_instance_id mid, ABT_pool handle)
         = {.info = &m_info, .ret = HG_SUCCESS};
     __MARGO_MONITOR(mid, FN_START, remove_pool, monitoring_args);
 
-    bool b = __margo_abt_remove_pool(&mid->abt, index);
-    if (!b) ret = HG_OTHER_ERROR;
+    ret = __margo_abt_remove_pool(&mid->abt, index);
 
     /* monitoring */
     m_info.name         = NULL;
@@ -431,6 +590,7 @@ hg_return_t margo_find_xstream_by_name(margo_instance_id          mid,
                 info->index   = i;
             }
             ret = HG_SUCCESS;
+            break;
         }
     }
     __margo_abt_unlock(&mid->abt);
@@ -452,6 +612,173 @@ hg_return_t margo_find_xstream_by_index(margo_instance_id          mid,
         info->xstream = mid->abt.xstreams[index].xstream;
         info->index   = index;
     }
+    __margo_abt_unlock(&mid->abt);
+    return HG_SUCCESS;
+}
+
+hg_return_t margo_xstream_ref_incr_by_handle(margo_instance_id mid,
+                                             ABT_xstream       handle)
+{
+    if (mid == MARGO_INSTANCE_NULL || handle == ABT_XSTREAM_NULL)
+        return HG_INVALID_ARG;
+    hg_return_t ret = HG_NOENTRY;
+    __margo_abt_lock(&mid->abt);
+    for (uint32_t i = 0; i < mid->abt.xstreams_len; ++i) {
+        if (mid->abt.xstreams[i].xstream == handle) {
+            mid->abt.xstreams[i].refcount++;
+            ret = HG_SUCCESS;
+            break;
+        }
+    }
+    __margo_abt_unlock(&mid->abt);
+    return ret;
+}
+
+hg_return_t margo_xstream_ref_incr_by_name(margo_instance_id mid,
+                                           const char*       name)
+{
+    if (mid == MARGO_INSTANCE_NULL || name == NULL) return HG_INVALID_ARG;
+    hg_return_t ret = HG_NOENTRY;
+    __margo_abt_lock(&mid->abt);
+    for (uint32_t i = 0; i < mid->abt.xstreams_len; ++i) {
+        if (mid->abt.xstreams[i].name == NULL) continue;
+        if (strcmp(mid->abt.xstreams[i].name, name) == 0) {
+            mid->abt.xstreams[i].refcount++;
+            ret = HG_SUCCESS;
+            break;
+        }
+    }
+    __margo_abt_unlock(&mid->abt);
+    return ret;
+}
+
+hg_return_t margo_xstream_ref_incr_by_index(margo_instance_id mid,
+                                            uint32_t          index)
+{
+    if (!mid) return HG_INVALID_ARG;
+    __margo_abt_lock(&mid->abt);
+    if (index >= mid->abt.xstreams_len) {
+        __margo_abt_unlock(&mid->abt);
+        return HG_INVALID_ARG;
+    }
+    mid->abt.xstreams[index].refcount++;
+    __margo_abt_unlock(&mid->abt);
+    return HG_SUCCESS;
+}
+
+hg_return_t margo_xstream_ref_count_by_handle(margo_instance_id mid,
+                                              ABT_xstream       handle,
+                                              unsigned*         refcount)
+{
+    if (mid == MARGO_INSTANCE_NULL || handle == ABT_XSTREAM_NULL)
+        return HG_INVALID_ARG;
+    hg_return_t ret = HG_NOENTRY;
+    __margo_abt_lock(&mid->abt);
+    for (uint32_t i = 0; i < mid->abt.xstreams_len; ++i) {
+        if (mid->abt.xstreams[i].xstream == handle) {
+            *refcount = mid->abt.xstreams[i].refcount;
+            ret       = HG_SUCCESS;
+            break;
+        }
+    }
+    __margo_abt_unlock(&mid->abt);
+    return ret;
+}
+
+hg_return_t margo_xstream_ref_count_by_name(margo_instance_id mid,
+                                            const char*       name,
+                                            unsigned*         refcount)
+{
+    if (mid == MARGO_INSTANCE_NULL || name == NULL) return HG_INVALID_ARG;
+    hg_return_t ret = HG_NOENTRY;
+    __margo_abt_lock(&mid->abt);
+    for (uint32_t i = 0; i < mid->abt.xstreams_len; ++i) {
+        if (mid->abt.xstreams[i].name == NULL) continue;
+        if (strcmp(mid->abt.xstreams[i].name, name) == 0) {
+            *refcount = mid->abt.xstreams[i].refcount;
+            ret       = HG_SUCCESS;
+            break;
+        }
+    }
+    __margo_abt_unlock(&mid->abt);
+    return ret;
+}
+
+hg_return_t margo_xstream_ref_count_by_index(margo_instance_id mid,
+                                             uint32_t          index,
+                                             unsigned*         refcount)
+{
+    if (!mid) return HG_INVALID_ARG;
+    __margo_abt_lock(&mid->abt);
+    if (index >= mid->abt.xstreams_len) {
+        __margo_abt_unlock(&mid->abt);
+        return HG_INVALID_ARG;
+    }
+    *refcount = mid->abt.xstreams[index].refcount;
+    __margo_abt_unlock(&mid->abt);
+    return HG_SUCCESS;
+}
+
+hg_return_t margo_xstream_release_by_handle(margo_instance_id mid,
+                                            ABT_xstream       handle)
+{
+    if (mid == MARGO_INSTANCE_NULL || handle == ABT_XSTREAM_NULL)
+        return HG_INVALID_ARG;
+    hg_return_t ret = HG_NOENTRY;
+    __margo_abt_lock(&mid->abt);
+    for (uint32_t i = 0; i < mid->abt.xstreams_len; ++i) {
+        if (mid->abt.xstreams[i].xstream == handle) {
+            if (mid->abt.xstreams[i].refcount == 0) {
+                __margo_abt_unlock(&mid->abt);
+                ret = HG_PERMISSION;
+                break;
+            }
+            mid->abt.xstreams[i].refcount--;
+            ret = HG_SUCCESS;
+            break;
+        }
+    }
+    __margo_abt_unlock(&mid->abt);
+    return ret;
+}
+
+hg_return_t margo_xstream_release_by_name(margo_instance_id mid,
+                                          const char*       name)
+{
+    if (mid == MARGO_INSTANCE_NULL || name == NULL) return HG_INVALID_ARG;
+    hg_return_t ret = HG_NOENTRY;
+    __margo_abt_lock(&mid->abt);
+    for (uint32_t i = 0; i < mid->abt.xstreams_len; ++i) {
+        if (mid->abt.xstreams[i].name == NULL) continue;
+        if (strcmp(mid->abt.xstreams[i].name, name) == 0) {
+            if (mid->abt.xstreams[i].refcount == 0) {
+                __margo_abt_unlock(&mid->abt);
+                ret = HG_PERMISSION;
+                break;
+            }
+            mid->abt.xstreams[i].refcount--;
+            ret = HG_SUCCESS;
+            break;
+        }
+    }
+    __margo_abt_unlock(&mid->abt);
+    return ret;
+}
+
+hg_return_t margo_xstream_release_by_index(margo_instance_id mid,
+                                           uint32_t          index)
+{
+    if (!mid) return HG_INVALID_ARG;
+    __margo_abt_lock(&mid->abt);
+    if (index >= mid->abt.xstreams_len) {
+        __margo_abt_unlock(&mid->abt);
+        return HG_INVALID_ARG;
+    }
+    if (mid->abt.xstreams[index].refcount == 0) {
+        __margo_abt_unlock(&mid->abt);
+        return HG_PERMISSION;
+    }
+    mid->abt.xstreams[index].refcount--;
     __margo_abt_unlock(&mid->abt);
     return HG_SUCCESS;
 }
@@ -559,16 +886,16 @@ hg_return_t margo_remove_xstream_by_index(margo_instance_id mid, uint32_t index)
         = {.info = &m_info, .ret = HG_SUCCESS};
     __MARGO_MONITOR(mid, FN_START, remove_xstream, monitoring_args);
 
-    bool ret = __margo_abt_remove_xstream(&mid->abt, index);
+    hg_return_t ret = __margo_abt_remove_xstream(&mid->abt, index);
 
     /* monitoring */
     m_info.name         = NULL;
     m_info.xstream      = ABT_XSTREAM_NULL;
-    monitoring_args.ret = ret ? HG_SUCCESS : HG_OTHER_ERROR;
+    monitoring_args.ret = ret;
     __MARGO_MONITOR(mid, FN_END, remove_xstream, monitoring_args);
 
     __margo_abt_unlock(&mid->abt);
-    return ret ? HG_SUCCESS : HG_OTHER_ERROR;
+    return ret;
 }
 
 hg_return_t margo_remove_xstream_by_name(margo_instance_id mid,
@@ -592,16 +919,16 @@ hg_return_t margo_remove_xstream_by_name(margo_instance_id mid,
         = {.info = &m_info, .ret = HG_SUCCESS};
     __MARGO_MONITOR(mid, FN_START, remove_xstream, monitoring_args);
 
-    bool ret = __margo_abt_remove_xstream(&mid->abt, index);
+    hg_return_t ret = __margo_abt_remove_xstream(&mid->abt, index);
 
     /* monitoring */
     m_info.name         = NULL;
     m_info.xstream      = ABT_XSTREAM_NULL;
-    monitoring_args.ret = ret ? HG_SUCCESS : HG_OTHER_ERROR;
+    monitoring_args.ret = ret;
     __MARGO_MONITOR(mid, FN_END, remove_xstream, monitoring_args);
 
     __margo_abt_unlock(&mid->abt);
-    return ret ? HG_SUCCESS : HG_OTHER_ERROR;
+    return ret;
 }
 
 hg_return_t margo_remove_xstream_by_handle(margo_instance_id mid,
@@ -625,17 +952,17 @@ hg_return_t margo_remove_xstream_by_handle(margo_instance_id mid,
         = {.info = &m_info, .ret = HG_SUCCESS};
     __MARGO_MONITOR(mid, FN_START, remove_xstream, monitoring_args);
 
-    bool ret = __margo_abt_remove_xstream(&mid->abt, index);
+    hg_return_t ret = __margo_abt_remove_xstream(&mid->abt, index);
 
     __margo_abt_unlock(&mid->abt);
 
     /* monitoring */
     m_info.name         = NULL;
     m_info.xstream      = ABT_XSTREAM_NULL;
-    monitoring_args.ret = ret ? HG_SUCCESS : HG_OTHER_ERROR;
+    monitoring_args.ret = ret;
     __MARGO_MONITOR(mid, FN_END, remove_xstream, monitoring_args);
 
-    return ret ? HG_SUCCESS : HG_OTHER_ERROR;
+    return ret;
 }
 
 hg_return_t margo_transfer_pool_content(ABT_pool origin_pool,
@@ -661,83 +988,3 @@ hg_return_t margo_transfer_pool_content(ABT_pool origin_pool,
 #endif
     return HG_SUCCESS;
 }
-
-/* DEPRECATED FUNCTIONS */
-
-// LCOV_EXCL_START
-int margo_get_pool_by_name(margo_instance_id mid,
-                           const char*       name,
-                           ABT_pool*         pool)
-{
-    struct margo_pool_info info;
-    hg_return_t            ret = margo_find_pool_by_name(mid, name, &info);
-    if (ret != HG_SUCCESS) return -1;
-    if (pool) *pool = info.pool;
-    return 0;
-}
-
-int margo_get_pool_by_index(margo_instance_id mid,
-                            unsigned          index,
-                            ABT_pool*         pool)
-{
-    struct margo_pool_info info;
-    hg_return_t            ret = margo_find_pool_by_index(mid, index, &info);
-    if (ret != HG_SUCCESS) return -1;
-    if (pool) *pool = info.pool;
-    return 0;
-}
-
-const char* margo_get_pool_name(margo_instance_id mid, unsigned index)
-{
-    struct margo_pool_info info;
-    hg_return_t            ret = margo_find_pool_by_index(mid, index, &info);
-    if (ret != HG_SUCCESS) return NULL;
-    return info.name;
-}
-
-int margo_get_pool_index(margo_instance_id mid, const char* name)
-{
-    struct margo_pool_info info;
-    hg_return_t            ret = margo_find_pool_by_name(mid, name, &info);
-    if (ret != HG_SUCCESS) return -1;
-    return info.index;
-}
-
-int margo_get_xstream_by_name(margo_instance_id mid,
-                              const char*       name,
-                              ABT_xstream*      es)
-{
-    struct margo_xstream_info info;
-    hg_return_t ret = margo_find_xstream_by_name(mid, name, &info);
-    if (ret != HG_SUCCESS) return -1;
-    if (es) *es = info.xstream;
-    return 0;
-}
-
-int margo_get_xstream_by_index(margo_instance_id mid,
-                               unsigned          index,
-                               ABT_xstream*      es)
-{
-    struct margo_xstream_info info;
-    hg_return_t ret = margo_find_xstream_by_index(mid, index, &info);
-    if (ret != HG_SUCCESS) return -1;
-    if (es) *es = info.xstream;
-    return 0;
-}
-
-const char* margo_get_xstream_name(margo_instance_id mid, unsigned index)
-{
-    struct margo_xstream_info info;
-    hg_return_t ret = margo_find_xstream_by_index(mid, index, &info);
-    if (ret != HG_SUCCESS) return NULL;
-    return info.name;
-}
-
-int margo_get_xstream_index(margo_instance_id mid, const char* name)
-{
-    struct margo_xstream_info info;
-    hg_return_t ret = margo_find_xstream_by_name(mid, name, &info);
-    if (ret != HG_SUCCESS) return -1;
-    return info.index;
-}
-// LCOV_EXCL_END

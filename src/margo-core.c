@@ -142,26 +142,23 @@ static void margo_cleanup(margo_instance_id mid)
     MARGO_TRACE(mid, "Destroying handle cache");
     __margo_handle_cache_destroy(mid);
 
-    /* finalize Mercury before anything else because this
-     * could trigger some margo_cb for forward operations that
-     * have not completed yet (cancelling them) */
-    __margo_hg_destroy(&(mid->hg));
-
     if (mid->abt_profiling_enabled) {
         MARGO_TRACE(mid, "Dumping ABT profile");
         margo_dump_abt_profiling(mid, "margo-profile", 1, NULL);
     }
 
-    /* monitoring */
-    /* Note: Monitoring called before we continue to
-     * finalize because we need the margo instance to still
-     * be valid at this point.
-     */
-    __MARGO_MONITOR(mid, FN_END, finalize, monitoring_args);
+    /* finalize Mercury before anything else because this
+     * could trigger some margo_cb for forward operations that
+     * have not completed yet (cancelling them) */
+    MARGO_TRACE(mid, "Destroying Mercury environment");
+    __margo_hg_destroy(&(mid->hg));
 
-    if (mid->monitor && mid->monitor->finalize)
-        mid->monitor->finalize(mid->monitor->uargs);
-    free(mid->monitor);
+    MARGO_TRACE(mid, "Cleaning up RPC data");
+    while (mid->registered_rpcs) {
+        next_rpc = mid->registered_rpcs->next;
+        free(mid->registered_rpcs);
+        mid->registered_rpcs = next_rpc;
+    }
 
     /* shut down pending timers */
     MARGO_TRACE(mid, "Cleaning up pending timers");
@@ -173,16 +170,16 @@ static void margo_cleanup(margo_instance_id mid)
     ABT_mutex_free(&mid->pending_operations_mtx);
     ABT_key_free(&(mid->current_rpc_id_key));
 
-    MARGO_TRACE(mid, "Cleaning up RPC data");
-    while (mid->registered_rpcs) {
-        next_rpc = mid->registered_rpcs->next;
-        free(mid->registered_rpcs);
-        mid->registered_rpcs = next_rpc;
-    }
+    /* monitoring (destroyed before Argobots since it contains mutexes) */
+    __MARGO_MONITOR(mid, FN_END, finalize, monitoring_args);
+    MARGO_TRACE(mid, "Destroying monitoring context");
+    if (mid->monitor && mid->monitor->finalize)
+        mid->monitor->finalize(mid->monitor->uargs);
+    free(mid->monitor);
 
+    MARGO_TRACE(mid, "Destroying Argobots environment");
     __margo_abt_destroy(&(mid->abt));
-
-    if (mid->refcount == 0) free(mid);
+    free(mid);
 
     MARGO_TRACE(0, "Completed margo_cleanup");
 }
@@ -205,12 +202,14 @@ hg_return_t margo_instance_release(margo_instance_id mid)
 {
     if (!mid) return HG_INVALID_ARG;
     if (!mid->refcount) return HG_OTHER_ERROR;
-    unsigned refcount = mid->refcount--;
-    if (refcount == 1) {
+    unsigned refcount = --mid->refcount;
+    if (refcount == 0) {
         if (!mid->finalize_flag) {
+            ++mid->refcount; // needed because margo_finalize will itself
+                             // decrease it back to 0
             margo_finalize(mid);
         } else {
-            free(mid);
+            margo_cleanup(mid);
         }
     }
     return HG_SUCCESS;
@@ -267,10 +266,11 @@ void margo_finalize(margo_instance_id mid)
     MARGO_TRACE(mid, "Waiting for progress thread to complete");
     ABT_thread_join(mid->hg_progress_tid);
     ABT_thread_free(&mid->hg_progress_tid);
+    mid->refcount--;
 
     ABT_mutex_lock(mid->finalize_mutex);
     mid->finalize_flag = true;
-    do_cleanup         = mid->finalize_refcount == 0;
+    do_cleanup         = mid->finalize_refcount == 0 && mid->refcount == 0;
 
     ABT_mutex_unlock(mid->finalize_mutex);
     ABT_cond_broadcast(mid->finalize_cond);
@@ -303,7 +303,7 @@ void margo_finalize_and_wait(margo_instance_id mid)
         ABT_cond_wait(mid->finalize_cond, mid->finalize_mutex);
 
     mid->finalize_refcount--;
-    do_cleanup = mid->finalize_refcount == 0;
+    do_cleanup = mid->finalize_refcount == 0 && mid->refcount == 0;
 
     ABT_mutex_unlock(mid->finalize_mutex);
 
@@ -326,7 +326,7 @@ void margo_wait_for_finalize(margo_instance_id mid)
         ABT_cond_wait(mid->finalize_cond, mid->finalize_mutex);
 
     mid->finalize_refcount--;
-    do_cleanup = mid->finalize_refcount == 0;
+    do_cleanup = mid->finalize_refcount == 0 && mid->refcount == 0;
 
     ABT_mutex_unlock(mid->finalize_mutex);
 
@@ -587,7 +587,7 @@ hg_return_t margo_deregister(margo_instance_id mid, hg_id_t rpc_id)
         /* decrement the numner of RPC id used by the pool */
         __margo_abt_lock(&mid->abt);
         int32_t index = __margo_abt_find_pool_by_handle(&mid->abt, data->pool);
-        if (index >= 0) mid->abt.pools[index].num_rpc_ids -= 1;
+        if (index >= 0) mid->abt.pools[index].refcount--;
         __margo_abt_unlock(&mid->abt);
     }
 
@@ -2161,7 +2161,7 @@ static hg_id_t margo_register_internal(margo_instance_id mid,
     /* increment the number of RPC ids using the pool */
     struct margo_pool_info pool_info;
     if (margo_find_pool_by_handle(mid, pool, &pool_info) == HG_SUCCESS) {
-        mid->abt.pools[pool_info.index].num_rpc_ids += 1;
+        mid->abt.pools[pool_info.index].refcount++;
     }
 
 finish:
@@ -2337,10 +2337,9 @@ hg_return_t margo_rpc_set_pool(margo_instance_id mid, hg_id_t id, ABT_pool pool)
     int old_pool_entry_idx
         = __margo_abt_find_pool_by_handle(&mid->abt, data->pool);
     int new_pool_entry_idx = __margo_abt_find_pool_by_handle(&mid->abt, pool);
-    if (old_pool_entry_idx >= 0)
-        mid->abt.pools[old_pool_entry_idx].num_rpc_ids -= 1;
+    if (old_pool_entry_idx >= 0) mid->abt.pools[old_pool_entry_idx].refcount--;
     if (new_pool_entry_idx >= 0)
-        mid->abt.pools[new_pool_entry_idx].num_rpc_ids += 1;
+        mid->abt.pools[new_pool_entry_idx].refcount++;
     else
         margo_warning(mid, "Associating RPC with a pool not know to Margo");
     __margo_abt_unlock(&mid->abt);

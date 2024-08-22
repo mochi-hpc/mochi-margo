@@ -427,10 +427,14 @@ finish:
 void __margo_hg_destroy(margo_hg_t* hg)
 {
     free((char*)hg->hg_init_info.sm_info_string);
+    hg->hg_init_info.sm_info_string = NULL;
     free((char*)hg->hg_init_info.na_init_info.auth_key);
+    hg->hg_init_info.na_init_info.auth_key = NULL;
     free((char*)hg->hg_init_info.na_init_info.ip_subnet);
+    hg->hg_init_info.na_init_info.ip_subnet = NULL;
 
     free(hg->self_addr_str);
+    hg->self_addr_str = NULL;
 
     if (hg->hg_class && hg->self_addr != HG_ADDR_NULL)
         HG_Addr_free(hg->hg_class, hg->self_addr);
@@ -444,5 +448,6 @@ void __margo_hg_destroy(margo_hg_t* hg)
         HG_Finalize(hg->hg_class);
         hg->hg_class = NULL;
     }
+
     memset(hg, 0, sizeof(*hg));
 }
