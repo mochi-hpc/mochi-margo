@@ -114,6 +114,20 @@ margo_instance_id margo_init_pool(ABT_pool      progress_pool,
 }
 // LCOV_EXCL_END
 
+static void margo_call_finalization_callbacks(margo_instance_id mid)
+{
+    /* call finalize callbacks */
+    MARGO_TRACE(mid, "Calling finalize callbacks");
+    struct margo_finalize_cb* fcb = mid->finalize_cb;
+    while (fcb) {
+        mid->finalize_cb = fcb->next;
+        (fcb->callback)(fcb->uargs);
+        struct margo_finalize_cb* tmp = fcb;
+        fcb                           = mid->finalize_cb;
+        free(tmp);
+    }
+}
+
 static void margo_cleanup(margo_instance_id mid)
 {
     MARGO_TRACE(mid, "Entering margo_cleanup");
@@ -125,17 +139,6 @@ static void margo_cleanup(margo_instance_id mid)
 
     margo_deregister(mid, mid->shutdown_rpc_id);
     margo_deregister(mid, mid->identity_rpc_id);
-
-    /* call finalize callbacks */
-    MARGO_TRACE(mid, "Calling finalize callbacks");
-    struct margo_finalize_cb* fcb = mid->finalize_cb;
-    while (fcb) {
-        mid->finalize_cb = fcb->next;
-        (fcb->callback)(fcb->uargs);
-        struct margo_finalize_cb* tmp = fcb;
-        fcb                           = mid->finalize_cb;
-        free(tmp);
-    }
 
     /* Start with the handle cache, to clean up any Mercury-related
      * data */
@@ -270,7 +273,8 @@ void margo_finalize(margo_instance_id mid)
 
     ABT_mutex_lock(mid->finalize_mutex);
     mid->finalize_flag = true;
-    do_cleanup         = mid->finalize_refcount == 0 && mid->refcount == 0;
+    margo_call_finalization_callbacks(mid);
+    do_cleanup = mid->finalize_refcount == 0 && mid->refcount == 0;
 
     ABT_mutex_unlock(mid->finalize_mutex);
     ABT_cond_broadcast(mid->finalize_cond);
