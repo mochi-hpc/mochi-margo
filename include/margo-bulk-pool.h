@@ -8,15 +8,15 @@
 #ifndef __MARGO_BULK_POOL
 #define __MARGO_BULK_POOL
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <mercury.h>
 #include <mercury_types.h>
 #include <mercury_bulk.h>
 #include <mercury_macros.h>
 #include <abt.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* A collection of fixed-size, fixed-permission reusable bulk buffers */
 struct margo_bulk_pool;

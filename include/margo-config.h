@@ -8,12 +8,12 @@
 #ifndef __MARGO_CONFIG
 #define __MARGO_CONFIG
 
+#include <mercury.h>
+#include <abt.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <mercury.h>
-#include <abt.h>
 
 #define DEPRECATED(msg) __attribute__((deprecated(msg)))
 

@@ -9,11 +9,11 @@
 #ifndef __MARGO_BULK_UTIL
 #define __MARGO_BULK_UTIL
 
+#include <margo.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <margo.h>
 
 /**
  * Perform a bulk transfer by submitting multiple margo_bulk_transfer

@@ -8,10 +8,6 @@
 #ifndef __MARGO
 #define __MARGO
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <stdbool.h>
 #include <mercury.h>
 #include <mercury_types.h>
@@ -22,6 +18,10 @@ extern "C" {
 #include <margo-logging.h>
 #include <margo-monitoring.h>
 #include <margo-config.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define DEPRECATED(msg) __attribute__((deprecated(msg)))
 
@@ -65,7 +65,8 @@ typedef void (*margo_finalize_callback_t)(void*);
 /**
  * @brief Type of margo_request.
  */
-typedef enum {
+typedef enum
+{
     MARGO_RESPONSE_REQUEST = 2,
     MARGO_FORWARD_REQUEST  = 4,
     MARGO_BULK_REQUEST     = 6,
