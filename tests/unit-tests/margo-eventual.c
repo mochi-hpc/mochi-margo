@@ -144,7 +144,10 @@ static MunitResult margo_eventual_iteration(const MunitParameter params[],
         MARGO_EVENTUAL_SET(q_e->ev);
     }
 
-    for (i = 0; i < N_ULTS; i++) { ABT_thread_join(tid_array[i]); }
+    for (i = 0; i < N_ULTS; i++) {
+        ABT_thread_join(tid_array[i]);
+        ABT_thread_free(&tid_array[i]);
+    }
 
     ABT_mutex_free(&ev_queue_mutex);
     ABT_cond_free(&ev_queue_cond);
@@ -169,9 +172,7 @@ static MunitResult margo_eventual(const MunitParameter params[], void* data)
     munit_assert_not_null(ctx->mid);
     margo_get_handler_pool(ctx->mid, &rpc_pool);
 
-    for (i = 0; i < N_ULTS; i++) {
-        MARGO_EVENTUAL_CREATE(&iter_array[i].ev);
-    }
+    for (i = 0; i < N_ULTS; i++) { MARGO_EVENTUAL_CREATE(&iter_array[i].ev); }
 
     for (i = 0; i < N_ULTS; i++) {
         ABT_thread_create(rpc_pool, waiter_fn, &iter_array[i].ev,
@@ -187,7 +188,9 @@ static MunitResult margo_eventual(const MunitParameter params[], void* data)
 
     for (i = 0; i < N_ULTS; i++) {
         ABT_thread_join(iter_array[i].waiter_tid);
+        ABT_thread_free(&iter_array[i].waiter_tid);
         ABT_thread_join(iter_array[i].setter_tid);
+        ABT_thread_free(&iter_array[i].setter_tid);
     }
 
     free(iter_array);
@@ -196,21 +199,25 @@ static MunitResult margo_eventual(const MunitParameter params[], void* data)
     return MUNIT_OK;
 }
 
-static char* json_params[] = {"{\"use_progress_thread\":true}", /* no dedicated rpc pool */
-                              "{\"use_progress_thread\":true,\"rpc_thread_count\":2}", /* 2 ESes for RPCs */
-                              "{\"use_progress_thread\":true,\"rpc_thread_count\":4}", /* 4 ESes for RPCs */
-                              "{\"use_progress_thread\":true,\"rpc_thread_count\":8}", /* 8 ESes for RPCs */
-                              NULL};
+static char* json_params[]
+    = {"{\"use_progress_thread\":true}", /* no dedicated rpc pool */
+       "{\"use_progress_thread\":true,\"rpc_thread_count\":2}", /* 2 ESes for
+                                                                   RPCs */
+       "{\"use_progress_thread\":true,\"rpc_thread_count\":4}", /* 4 ESes for
+                                                                   RPCs */
+       "{\"use_progress_thread\":true,\"rpc_thread_count\":8}", /* 8 ESes for
+                                                                   RPCs */
+       NULL};
 
 static MunitParameterEnum margo_eventual_params[]
     = {{"json", json_params}, {NULL, NULL}};
 
-static MunitTest tests[]
-    = {{"/eventual_per_ult", margo_eventual, test_context_setup,
-        test_context_tear_down, MUNIT_TEST_OPTION_NONE, margo_eventual_params},
-       {"/eventual_per_fn_iteration", margo_eventual_iteration, test_context_setup,
-        test_context_tear_down, MUNIT_TEST_OPTION_NONE, margo_eventual_params},
-       {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
+static MunitTest tests[] = {
+    {"/eventual_per_ult", margo_eventual, test_context_setup,
+     test_context_tear_down, MUNIT_TEST_OPTION_NONE, margo_eventual_params},
+    {"/eventual_per_fn_iteration", margo_eventual_iteration, test_context_setup,
+     test_context_tear_down, MUNIT_TEST_OPTION_NONE, margo_eventual_params},
+    {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
 
 static const MunitSuite test_suite
     = {"/margo", tests, NULL, 1, MUNIT_SUITE_OPTION_NONE};
