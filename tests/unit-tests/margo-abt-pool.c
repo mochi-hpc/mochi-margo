@@ -110,7 +110,7 @@ static MunitResult rpc_pool_kind(const MunitParameter params[], void* data)
     count = count_occurrence(runtime_config, "my_pool");
     munit_assert_int_goto(count, ==, 1, error);
 
-    /* just one pool with the prio_wait kind */
+    /* just one pool with the fifo_wait kind */
     count = count_occurrence(runtime_config, pool_kind);
     munit_assert_int_goto(count, ==, 1, error);
 
@@ -139,7 +139,7 @@ error:
 }
 
 static char* pool_params[] = {
-    "prio_wait",
+    "fifo_wait",
     "earliest_first",
     NULL
 };
