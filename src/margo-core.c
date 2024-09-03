@@ -395,11 +395,6 @@ int margo_provider_top_prefinalize_callback(margo_instance_id          mid,
         fcb  = fcb->next;
     }
     if (fcb == NULL) return 0;
-    if (prev == NULL) {
-        mid->prefinalize_cb = fcb->next;
-    } else {
-        prev->next = fcb->next;
-    }
     if (cb) *cb = fcb->callback;
     if (uargs) *uargs = fcb->uargs;
     return 1;
@@ -492,11 +487,6 @@ int margo_provider_top_finalize_callback(margo_instance_id          mid,
         fcb  = fcb->next;
     }
     if (fcb == NULL) return 0;
-    if (prev == NULL) {
-        mid->finalize_cb = fcb->next;
-    } else {
-        prev->next = fcb->next;
-    }
     if (cb) *cb = fcb->callback;
     if (uargs) *uargs = fcb->uargs;
     return 1;
