@@ -32,7 +32,6 @@
 
 typedef struct unit_t {
     ABT_thread     thread;
-    ABT_task       task;
     struct unit_t* p_prev;
     struct unit_t* p_next;
     int            sched_counter;
@@ -110,12 +109,6 @@ static ABT_thread pool_unit_get_thread(ABT_unit unit)
     return p_unit->thread;
 }
 
-static ABT_task pool_unit_get_task(ABT_unit unit)
-{
-    unit_t* p_unit = (unit_t*)unit;
-    return p_unit->task;
-}
-
 static ABT_bool pool_unit_is_in_pool(ABT_unit unit)
 {
     unit_t* p_unit = (unit_t*)unit;
@@ -126,19 +119,6 @@ static ABT_unit pool_unit_create_from_thread(ABT_thread thread)
 {
     unit_t* p_unit        = (unit_t*)malloc(sizeof(unit_t));
     p_unit->thread        = thread;
-    p_unit->task          = ABT_TASK_NULL;
-    p_unit->p_next        = NULL;
-    p_unit->p_prev        = NULL;
-    p_unit->sched_counter = 0;
-    p_unit->is_in_pool    = ABT_FALSE;
-    return (ABT_unit)p_unit;
-}
-
-static ABT_unit pool_unit_create_from_task(ABT_task task)
-{
-    unit_t* p_unit        = (unit_t*)malloc(sizeof(unit_t));
-    p_unit->thread        = ABT_THREAD_NULL;
-    p_unit->task          = task;
     p_unit->p_next        = NULL;
     p_unit->p_prev        = NULL;
     p_unit->sched_counter = 0;
@@ -336,10 +316,8 @@ void margo_create_prio_pool_def(ABT_pool_def* p_def)
     p_def->access               = ABT_POOL_ACCESS_MPMC;
     p_def->u_get_type           = pool_unit_get_type;
     p_def->u_get_thread         = pool_unit_get_thread;
-    p_def->u_get_task           = pool_unit_get_task;
     p_def->u_is_in_pool         = pool_unit_is_in_pool;
     p_def->u_create_from_thread = pool_unit_create_from_thread;
-    p_def->u_create_from_task   = pool_unit_create_from_task;
     p_def->u_free               = pool_unit_free;
     p_def->p_init               = pool_init;
     p_def->p_get_size           = pool_get_size;
