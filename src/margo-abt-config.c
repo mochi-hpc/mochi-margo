@@ -32,7 +32,7 @@ bool __margo_abt_pool_validate_json(const json_object_t* jpool,
                                  "mpsc", "spmc", "mpmc");
     }
 
-    /* default: "fifo_wait" */
+    /* default: "prio_wait" */
     ASSERT_CONFIG_HAS_OPTIONAL(jpool, "kind", string, "pool");
     json_object_t* jkind = json_object_object_get(jpool, "kind");
     if (jkind) {
@@ -81,7 +81,7 @@ bool __margo_abt_pool_init_from_json(const json_object_t* jpool,
                                  : generate_unused_pool_name(abt);
 
     pool->kind
-        = strdup(json_object_object_get_string_or(jpool, "kind", "fifo_wait"));
+        = strdup(json_object_object_get_string_or(jpool, "kind", "prio_wait"));
     if (strcmp(pool->kind, "fifo_wait") == 0)
         kind = ABT_POOL_FIFO_WAIT;
     else if (strcmp(pool->kind, "fifo") == 0)
