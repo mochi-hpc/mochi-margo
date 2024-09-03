@@ -117,7 +117,7 @@ static ABT_bool pool_unit_is_in_pool(ABT_unit unit)
 
 static ABT_unit pool_unit_create_from_thread(ABT_thread thread)
 {
-    unit_t* p_unit        = (unit_t*)malloc(sizeof(unit_t));
+    unit_t* p_unit        = (unit_t*)calloc(1, sizeof(unit_t));
     p_unit->thread        = thread;
     p_unit->p_next        = NULL;
     p_unit->p_prev        = NULL;
@@ -135,7 +135,7 @@ static void pool_unit_free(ABT_unit* p_unit)
 static int pool_init(ABT_pool pool, ABT_pool_config config)
 {
     (void)config;
-    pool_t* p_pool                 = (pool_t*)malloc(sizeof(pool_t));
+    pool_t* p_pool                 = (pool_t*)calloc(1, sizeof(pool_t));
     p_pool->high_prio_queue.p_tail = NULL;
     p_pool->high_prio_queue.p_head = NULL;
     p_pool->low_prio_queue.p_tail  = NULL;
