@@ -137,19 +137,35 @@ hg_return_t margo_auto_bulk_info(margo_auto_bulk_t autobulk,
  * @brief Pull the content of the remote buffer info the local buffer.
  *
  * @param autobulk margo_auto_bulk_t instance.
+ * @param offset Offset from which to pull.
+ * @param size Size to pull.
  *
  * @return HG_SUCCESS or other error codes.
  */
-hg_return_t margo_auto_bulk_pull(margo_auto_bulk_t autobulk);
+hg_return_t
+margo_auto_bulk_pull(margo_auto_bulk_t autobulk, size_t offset, size_t size);
 
 /**
  * @brief Push the content of the local buffer info the remote buffer.
  *
  * @param autobulk margo_auto_bulk_t instance.
+ * @param offset Offset from which to push.
+ * @param size Size to push.
  *
  * @return HG_SUCCESS or other error codes.
  */
-hg_return_t margo_auto_bulk_push(margo_auto_bulk_t autobulk);
+hg_return_t
+margo_auto_bulk_push(margo_auto_bulk_t autobulk, size_t offset, size_t size);
+
+/**
+ * @brief Free an autobulk object. This may cause a PUSH operation if the
+ * margo_auto_bulk_t has been created with the MARGO_PUSH_ON_DESTROY flag.
+ *
+ * @param autobulk margo_auto_bulk_t instance to free
+ *
+ * @return HG_SUCCESS or other error codes.
+ */
+hg_return_t margo_auto_bulk_free(margo_auto_bulk_t autobulk);
 
 #ifdef __cplusplus
 }
