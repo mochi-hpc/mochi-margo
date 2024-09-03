@@ -93,22 +93,6 @@ typedef struct pool_t {
     pthread_cond_t  cond;
 } pool_t;
 
-static ABT_unit_type pool_unit_get_type(ABT_unit unit)
-{
-    unit_t* p_unit = (unit_t*)unit;
-    if (p_unit->thread != ABT_THREAD_NULL) {
-        return ABT_UNIT_TYPE_THREAD;
-    } else {
-        return ABT_UNIT_TYPE_TASK;
-    }
-}
-
-static ABT_thread pool_unit_get_thread(ABT_unit unit)
-{
-    unit_t* p_unit = (unit_t*)unit;
-    return p_unit->thread;
-}
-
 static ABT_bool pool_unit_is_in_pool(ABT_unit unit)
 {
     unit_t* p_unit = (unit_t*)unit;
@@ -314,8 +298,6 @@ static int pool_free(ABT_pool pool)
 void margo_create_prio_pool_def(ABT_pool_def* p_def)
 {
     p_def->access               = ABT_POOL_ACCESS_MPMC;
-    p_def->u_get_type           = pool_unit_get_type;
-    p_def->u_get_thread         = pool_unit_get_thread;
     p_def->u_is_in_pool         = pool_unit_is_in_pool;
     p_def->u_create_from_thread = pool_unit_create_from_thread;
     p_def->u_free               = pool_unit_free;
