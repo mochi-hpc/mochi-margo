@@ -35,7 +35,6 @@ typedef struct unit_t {
     struct unit_t* p_prev;
     struct unit_t* p_next;
     int            sched_counter;
-    ABT_bool       is_in_pool;
 } unit_t;
 
 typedef struct queue_t {
@@ -59,7 +58,6 @@ static inline void queue_push(queue_t* p_queue, unit_t* p_unit)
         p_unit->p_next  = p_head;
         p_queue->p_tail = p_unit;
     }
-    p_unit->is_in_pool = ABT_TRUE;
 }
 
 static inline unit_t* queue_pop(queue_t* p_queue)
@@ -77,9 +75,8 @@ static inline unit_t* queue_pop(queue_t* p_queue)
             p_unit->p_next->p_prev = p_unit->p_prev;
             p_queue->p_head        = p_unit->p_next;
         }
-        p_unit->p_next     = NULL;
-        p_unit->p_prev     = NULL;
-        p_unit->is_in_pool = ABT_FALSE;
+        p_unit->p_next = NULL;
+        p_unit->p_prev = NULL;
         return p_unit;
     }
 }
@@ -93,12 +90,6 @@ typedef struct pool_t {
     pthread_cond_t  cond;
 } pool_t;
 
-static ABT_bool pool_unit_is_in_pool(ABT_unit unit)
-{
-    unit_t* p_unit = (unit_t*)unit;
-    return p_unit->is_in_pool;
-}
-
 static ABT_unit pool_unit_create_from_thread(ABT_thread thread)
 {
     unit_t* p_unit        = (unit_t*)calloc(1, sizeof(unit_t));
@@ -106,7 +97,6 @@ static ABT_unit pool_unit_create_from_thread(ABT_thread thread)
     p_unit->p_next        = NULL;
     p_unit->p_prev        = NULL;
     p_unit->sched_counter = 0;
-    p_unit->is_in_pool    = ABT_FALSE;
     return (ABT_unit)p_unit;
 }
 
@@ -253,37 +243,6 @@ static ABT_unit pool_pop_timedwait(ABT_pool pool, double abstime_secs)
     return p_unit ? (ABT_unit)p_unit : ABT_UNIT_NULL;
 }
 
-static int pool_remove(ABT_pool pool, ABT_unit unit)
-{
-    pool_t* p_pool;
-    ABT_pool_get_data(pool, (void**)&p_pool);
-    unit_t* p_unit = (unit_t*)unit;
-
-    pthread_mutex_lock(&p_pool->mutex);
-    if (p_unit->p_prev) {
-        p_unit->p_prev->p_next = p_unit->p_next;
-    } else {
-        if (p_pool->high_prio_queue.p_head == p_unit) {
-            p_pool->high_prio_queue.p_head = p_unit->p_next;
-        } else if (p_pool->low_prio_queue.p_head == p_unit) {
-            p_pool->low_prio_queue.p_head = p_unit->p_next;
-        }
-    }
-    if (p_unit->p_next) {
-        p_unit->p_next->p_prev = p_unit->p_prev;
-    } else {
-        if (p_pool->high_prio_queue.p_tail == p_unit) {
-            p_pool->high_prio_queue.p_tail = p_unit->p_prev;
-        } else if (p_pool->low_prio_queue.p_tail == p_unit) {
-            p_pool->low_prio_queue.p_tail = p_unit->p_prev;
-        }
-    }
-    p_pool->num--;
-    pthread_mutex_unlock(&p_pool->mutex);
-
-    return ABT_SUCCESS;
-}
-
 static int pool_free(ABT_pool pool)
 {
     pool_t* p_pool;
@@ -298,7 +257,6 @@ static int pool_free(ABT_pool pool)
 void margo_create_prio_pool_def(ABT_pool_def* p_def)
 {
     p_def->access               = ABT_POOL_ACCESS_MPMC;
-    p_def->u_is_in_pool         = pool_unit_is_in_pool;
     p_def->u_create_from_thread = pool_unit_create_from_thread;
     p_def->u_free               = pool_unit_free;
     p_def->p_init               = pool_init;
@@ -306,7 +264,6 @@ void margo_create_prio_pool_def(ABT_pool_def* p_def)
     p_def->p_push               = pool_push;
     p_def->p_pop                = pool_pop;
     p_def->p_pop_timedwait      = pool_pop_timedwait;
-    p_def->p_remove             = pool_remove;
     p_def->p_free               = pool_free;
     p_def->p_print_all          = NULL; /* Optional. */
 }
