@@ -14,6 +14,7 @@ extern "C" {
 #include <abt.h>
 
 void margo_create_prio_pool_def(ABT_pool_def* p_def);
+#define MARGO_PRIO_POOL_CONFIG_KEY_EFD 0
 
 #ifdef __cplusplus
 }

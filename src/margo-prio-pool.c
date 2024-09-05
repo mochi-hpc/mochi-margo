@@ -88,6 +88,7 @@ typedef struct pool_t {
     int             cnt;
     pthread_mutex_t mutex;
     pthread_cond_t  cond;
+    int             efd;
 } pool_t;
 
 static ABT_unit pool_unit_create_from_thread(ABT_thread thread)
@@ -108,7 +109,6 @@ static void pool_unit_free(ABT_unit* p_unit)
 
 static int pool_init(ABT_pool pool, ABT_pool_config config)
 {
-    (void)config;
     pool_t* p_pool                 = (pool_t*)calloc(1, sizeof(pool_t));
     p_pool->high_prio_queue.p_tail = NULL;
     p_pool->high_prio_queue.p_head = NULL;
@@ -116,8 +116,16 @@ static int pool_init(ABT_pool pool, ABT_pool_config config)
     p_pool->low_prio_queue.p_head  = NULL;
     p_pool->num                    = 0;
     p_pool->cnt                    = 0;
+    p_pool->efd                    = -1;
     pthread_mutex_init(&p_pool->mutex, NULL);
     pthread_cond_init(&p_pool->cond, NULL);
+    /* NOTE: we don't check return code here because efd will still be -1 if
+     * it fails.
+     */
+    ABT_pool_config_get(config, MARGO_PRIO_POOL_CONFIG_KEY_EFD, NULL,
+                        &p_pool->efd);
+    // fprintf(stderr, "DBG: prio_pool got efd %d\n", p_pool->efd);
+
     ABT_pool_set_data(pool, (void*)p_pool);
     return ABT_SUCCESS;
 }

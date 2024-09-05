@@ -3,6 +3,8 @@
  *
  * See COPYRIGHT in top-level directory.
  */
+#include <errno.h>
+#include <sys/eventfd.h>
 #include "margo-abt-config.h"
 
 static inline char* generate_unused_pool_name(const margo_abt_t* abt);
@@ -106,6 +108,7 @@ bool __margo_abt_pool_init_from_json(const json_object_t* jpool,
             access = ABT_POOL_ACCESS_SPMC;
     }
 
+    pool->efd = -1;
     int ret;
     if (kind != (ABT_pool_kind)(-1)) {
         if (!pool->access) pool->access = strdup("mpmc");
@@ -116,13 +119,39 @@ bool __margo_abt_pool_init_from_json(const json_object_t* jpool,
         }
     } else if (strcmp(pool->kind, "prio_wait") == 0) {
         if (!pool->access) pool->access = strdup("mpmc");
-        ABT_pool_def prio_pool_def;
+        ABT_pool_def    prio_pool_def;
+        ABT_pool_config prio_pool_config;
         margo_create_prio_pool_def(&prio_pool_def);
-        ret = ABT_pool_create(&prio_pool_def, ABT_POOL_CONFIG_NULL,
-                              &pool->pool);
+
+        /*****************************************************/
+        /* TODO: prototyping.
+         * Also note that really this should only be done if event mode is
+         * activated and even then probably only for the progress pool. May have
+         * to rearrange code a little to make sure we can determine those
+         * things before initializing pool.
+         */
+        pool->efd = eventfd(0, EFD_NONBLOCK);
+        if (pool->efd < 0) {
+            margo_error(mid, "eventfd failed with error code %d", errno);
+        }
+        ret = ABT_pool_config_create(&prio_pool_config);
+        if (ret != ABT_SUCCESS) {
+            margo_error(mid, "ABT_pool_config_create failed with error code %d",
+                        ret);
+        }
+        ret = ABT_pool_config_set(prio_pool_config,
+                                  MARGO_PRIO_POOL_CONFIG_KEY_EFD,
+                                  ABT_POOL_CONFIG_INT, &pool->efd);
+        if (ret != ABT_SUCCESS) {
+            margo_error(mid, "ABT_pool_config_set failed with error code %d",
+                        ret);
+        }
+        /*****************************************************/
+        ret = ABT_pool_create(&prio_pool_def, prio_pool_config, &pool->pool);
         if (ret != ABT_SUCCESS) {
             margo_error(mid, "ABT_pool_create failed with error code %d", ret);
         }
+        ABT_pool_config_free(&prio_pool_config);
     } else if (strcmp(pool->kind, "earliest_first") == 0) {
         if (!pool->access) pool->access = strdup("mpmc");
         ABT_pool_def efirst_pool_def;

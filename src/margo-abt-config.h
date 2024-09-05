@@ -62,6 +62,8 @@ typedef struct margo_abt_pool {
     bool margo_free_flag; /* flag if Margo is responsible for freeing */
     bool used_by_primary; /* flag indicating the this pool is used by the
                              primary ES */
+    int efd; /* event fd for notification of transition from idle to busy; -1 if
+               not supported or not enabled */
 } margo_abt_pool_t;
 
 bool __margo_abt_pool_validate_json(const json_object_t* config,
@@ -109,9 +111,9 @@ void __margo_abt_sched_destroy(margo_abt_sched_t* sched);
  * margo is responsible for explicitly free'ing the ES or not.
  */
 typedef struct margo_abt_xstream {
-    char*       name;
-    ABT_xstream xstream;
-    _Atomic(uint32_t) refcount; /* Number of external use this xstream */
+    char*                  name;
+    ABT_xstream            xstream;
+    _Atomic(uint32_t)      refcount; /* Number of external use this xstream */
     struct margo_abt_sched sched;
     bool margo_free_flag; /* flag if Margo is responsible for freeing */
 } margo_abt_xstream_t;
