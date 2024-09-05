@@ -172,7 +172,10 @@ static void pool_push(ABT_pool pool, ABT_unit unit)
         queue_push(&p_pool->high_prio_queue, p_unit);
     }
     p_pool->num++;
-    pthread_cond_signal(&p_pool->cond);
+    /* only signal on the transition from empty to non-empty; in other cases
+     * there will be no one waiting on the condition.
+     */
+    if (p_pool->num == 1) pthread_cond_signal(&p_pool->cond);
     pthread_mutex_unlock(&p_pool->mutex);
 }
 
