@@ -11,6 +11,7 @@
 #include <time.h>
 #include <math.h>
 #include <json-c/json.h>
+#include <sys/epoll.h>
 
 #include "margo.h"
 #include "margo-abt-macros.h"
@@ -2060,6 +2061,21 @@ void __margo_hg_event_progress_fn(void* foo)
     size_t                 size;
     unsigned int           hg_progress_timeout;
     unsigned int           pending;
+    int                    epfd;
+    struct epoll_event     epev = {0};
+
+    /* set up an epoll file descriptor that will be used to multiplex
+     * events. It may need to watch Mercury, the Argobots pool used to
+     * execute this function, timers, and internal shutdown events.
+     */
+    /* TODO: error handling */
+    epfd = epoll_create(1);
+    assert(epfd > -1);
+    epev.events  = EPOLLIN;
+    epev.data.fd = mid->abt.pools[mid->progress_pool_idx].efd;
+    fprintf(stderr, "DBG: progress pool efd: %d\n", epev.data.fd);
+    /* TODO: could use ptr, u32, or u64 in data */
+    epoll_ctl(epfd, EPOLL_CTL_ADD, epev.data.fd, &epev);
 
     /* TODO: for now this is just a stripped down version of the normal loop
      * to use as a starting point.
@@ -2140,6 +2156,8 @@ void __margo_hg_event_progress_fn(void* foo)
             assert(0);
         }
     }
+
+    close(epfd);
 
     return;
 }
