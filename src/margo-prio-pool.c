@@ -138,7 +138,7 @@ static int pool_init(ABT_pool pool, ABT_pool_config config)
     /* TODO: error handling */
     if (p_pool->efd > -1) {
         p_pool->epfd = epoll_create(1);
-        epev.events  = EPOLLIN;
+        epev.events  = EPOLLIN | EPOLLET;
         epev.data.fd = p_pool->efd;
         epoll_ctl(p_pool->epfd, EPOLL_CTL_ADD, p_pool->efd, &epev);
     }
@@ -203,7 +203,8 @@ static void pool_push(ABT_pool pool, ABT_unit unit)
 
 static ABT_unit pool_pop(ABT_pool pool)
 {
-    pool_t* p_pool;
+    pool_t*  p_pool;
+    uint64_t tmp_val;
     ABT_pool_get_data(pool, (void**)&p_pool);
 
     /* Sometimes it should pop from low_prio_queue to avoid a deadlock. */
@@ -235,6 +236,10 @@ static ABT_unit pool_pop(ABT_pool pool)
         }
     } while (0);
     if (p_unit) p_pool->num--;
+    if (p_pool->num == 0) {
+        /* clear eventfd state when we transition to empty */
+        eventfd_read(p_pool->efd, &tmp_val);
+    }
     pthread_mutex_unlock(&p_pool->mutex);
     return p_unit ? (ABT_unit)p_unit : ABT_UNIT_NULL;
 }
@@ -248,7 +253,8 @@ static inline void convert_double_sec_to_timespec(struct timespec* ts_out,
 
 static ABT_unit pool_pop_timedwait(ABT_pool pool, double abstime_secs)
 {
-    pool_t* p_pool;
+    pool_t*  p_pool;
+    uint64_t tmp_val;
     ABT_pool_get_data(pool, (void**)&p_pool);
     /* Sometimes it should pop from low_prio_queue to avoid a deadlock. */
     pthread_mutex_lock(&p_pool->mutex);
@@ -258,7 +264,6 @@ static ABT_unit pool_pop_timedwait(ABT_pool pool, double abstime_secs)
             struct epoll_event event;
             int                timeout_ms;
             int                ret;
-            uint64_t           tmp_val;
             /* if the pool is configured to signal an event file descriptor
              * when it transitions to non-idle, then go ahead and reuse it for
              * internal signalling as well.
@@ -277,12 +282,10 @@ static ABT_unit pool_pop_timedwait(ABT_pool pool, double abstime_secs)
             //         was "
             //        "%f)\n",
             //        timeout_ms, abstime_secs);
-            /* clear eventfd state */
-            eventfd_read(p_pool->efd, &tmp_val);
             /* TODO: error handling */
             /* NOTE: we have to drop mutex while blocking in epoll to avoid
-             * deadlock. As long as we hold it while we clear the eventfd
-             * state above this should be fine.
+             * deadlock.  Note that we only set and clear events with the
+             * lock held.
              */
             pthread_mutex_unlock(&p_pool->mutex);
             ret = epoll_wait(p_pool->epfd, &event, 1, timeout_ms);
@@ -309,6 +312,10 @@ static ABT_unit pool_pop_timedwait(ABT_pool pool, double abstime_secs)
         }
     } while (0);
     if (p_unit) p_pool->num--;
+    if (p_pool->num == 0) {
+        /* clear eventfd state when we transition to empty */
+        eventfd_read(p_pool->efd, &tmp_val);
+    }
     pthread_mutex_unlock(&p_pool->mutex);
     return p_unit ? (ABT_unit)p_unit : ABT_UNIT_NULL;
 }
