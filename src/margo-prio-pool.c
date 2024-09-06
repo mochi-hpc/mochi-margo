@@ -277,14 +277,18 @@ static ABT_unit pool_pop_timedwait(ABT_pool pool, double abstime_secs)
             //         was "
             //        "%f)\n",
             //        timeout_ms, abstime_secs);
+            /* clear eventfd state */
+            eventfd_read(p_pool->efd, &tmp_val);
             /* TODO: error handling */
+            /* NOTE: we have to drop mutex while blocking in epoll to avoid
+             * deadlock. As long as we hold it while we clear the eventfd
+             * state above this should be fine.
+             */
+            pthread_mutex_unlock(&p_pool->mutex);
             ret = epoll_wait(p_pool->epfd, &event, 1, timeout_ms);
+            pthread_mutex_lock(&p_pool->mutex);
             // fprintf(stderr, "DBG: epoll_wait returned %d, num %d\n", ret,
             //        p_pool->num);
-            if (p_pool->num) {
-                /* we were awakend on transition; reset eventfd */
-                eventfd_read(p_pool->efd, &tmp_val);
-            }
         } else {
             struct timespec ts;
             convert_double_sec_to_timespec(&ts, abstime_secs);
