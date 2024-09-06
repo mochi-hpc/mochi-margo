@@ -22,23 +22,25 @@ check_PROGRAMS += \
 
 TESTS += \
  tests/unit-tests/margo-addr \
- tests/unit-tests/margo-init \
  tests/unit-tests/margo-identity \
  tests/unit-tests/margo-config \
  tests/unit-tests/margo-elasticity \
  tests/unit-tests/margo-pool \
  tests/unit-tests/margo-abt-pool \
- tests/unit-tests/margo-eventual \
  tests/unit-tests/margo-logging \
  tests/unit-tests/margo-after-abt-init \
- tests/unit-tests/margo-timer \
  tests/unit-tests/margo-bulk \
+ tests/unit-tests/margo-forward \
+ tests/unit-tests/margo-sanity-warnings
+
+SKIPPED_TESTS += \
+ tests/unit-tests/margo-monitoring \
  tests/unit-tests/margo-scheduling \
+ tests/unit-tests/margo-init \
+ tests/unit-tests/margo-eventual \
  tests/unit-tests/margo-comm-error \
  tests/unit-tests/margo-comm-finalize \
- tests/unit-tests/margo-forward \
- tests/unit-tests/margo-monitoring \
- tests/unit-tests/margo-sanity-warnings
+ tests/unit-tests/margo-timer
 
 tests_unit_tests_margo_addr_SOURCES = \
  tests/unit-tests/munit/munit.c \

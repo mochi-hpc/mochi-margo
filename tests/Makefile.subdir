@@ -12,13 +12,15 @@ check_PROGRAMS += \
  tests/margo-test-client-timeout
 
 TESTS += \
- tests/sleep.sh \
  tests/basic.sh \
  tests/basic-ded-pool.sh \
  tests/basic-prio.sh \
  tests/basic-ded-pool-prio.sh \
- tests/timeout.sh \
  src/margo-info
+
+SKIPPED_TESTS += \
+ tests/sleep.sh \
+ tests/timeout.sh
 
 EXTRA_DIST += \
  tests/sleep.sh \

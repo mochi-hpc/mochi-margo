@@ -2049,6 +2049,101 @@ void __margo_hg_progress_fn(void* foo)
     return;
 }
 
+/* dedicated thread function to drive Mercury progress (event-driven
+ * variant)
+ */
+void __margo_hg_event_progress_fn(void* foo)
+{
+    int                    ret;
+    unsigned int           actual_count;
+    struct margo_instance* mid = (struct margo_instance*)foo;
+    size_t                 size;
+    unsigned int           hg_progress_timeout;
+    unsigned int           pending;
+
+    /* TODO: for now this is just a stripped down version of the normal loop
+     * to use as a starting point.
+     */
+
+    /* TODO: disabling timers in this loop for now; will add back in with
+     * timerfd variant.
+     */
+
+    /* TODO: disabling monitoring for now to just focus on core logic.  Will
+     * add back in */
+
+    /* TODO: we could use a 4th event fd to receive timely shutdown
+     * notification as well.  For now just using limited duration timeouts
+     * on epoll.
+     */
+    while (!mid->hg_progress_shutdown_flag) {
+        do {
+            /* save value of instance diag variable, in case it is modified
+             * while we are in loop
+             */
+            ret = HG_Trigger(mid->hg.hg_context, 0, 1, &actual_count);
+        } while ((ret == HG_SUCCESS) && actual_count
+                 && !mid->hg_progress_shutdown_flag);
+        /* once we have processed callbacks, give the ES an opportunity to
+         * run other ULTs if it needs to.
+         */
+        ABT_thread_yield();
+
+        /* Check to see if there are any runnable ULTs in the pool now.  If
+         * so, then we yield here to allow them a chance to execute.
+         * We check here because new ULTs may now be elegible as a result of
+         * being spawned by the trigger, but existing ones also may have been
+         * activated by an external event.
+         *
+         * NOTE: the output size value does not count the calling ULT itself,
+         * because it is not technically in the pool as a runnable thread at
+         * the moment.
+         */
+        ABT_pool progress_pool = MARGO_PROGRESS_POOL(mid);
+        ABT_pool_get_size(progress_pool, &size);
+        if (size) ABT_thread_yield();
+
+        /* Are there any other threads in this pool that *might* need to
+         * execute at some point in the future?  If so, then it's not
+         * necessarily safe for Mercury to sleep here in progress.  It
+         * doesn't matter whether they are runnable now or not, because an
+         * external event could resume them.
+         *
+         * NOTE: we use ABT_pool_get_total_size() rather than
+         * ABT_pool_get_size() in order to include suspended ULTs in our
+         * count.  Note that this function *does* count the caller, so it
+         * will always be at least one, unlike ABT_pool_get_size().
+         */
+        ABT_pool_get_total_size(progress_pool, &size);
+
+        /* Are there any RPCs in flight, regardless of what pool they were
+         * issued to?  If so, then we also cannot block in Mercury, because
+         * they may issue self forward() calls that cannot complete until we
+         * get through this progress/trigger cycle
+         */
+        ABT_mutex_lock(mid->pending_operations_mtx);
+        pending = mid->pending_operations;
+        ABT_mutex_unlock(mid->pending_operations_mtx);
+
+        if (pending || size > 1) {
+            hg_progress_timeout = 0;
+        } else {
+            hg_progress_timeout = mid->hg_progress_timeout_ub;
+        }
+
+        ret = HG_Progress(mid->hg.hg_context, hg_progress_timeout);
+        if (ret != HG_SUCCESS && ret != HG_TIMEOUT) {
+            /* TODO: error handling */
+            MARGO_CRITICAL(mid,
+                           "unexpected return code (%d: %s) from HG_Progress()",
+                           ret, HG_Error_to_string(ret));
+            assert(0);
+        }
+    }
+
+    return;
+}
+
 int margo_set_progress_timeout_ub_msec(margo_instance_id mid, unsigned timeout)
 {
     if (!mid) return -1;

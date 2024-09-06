@@ -8,5 +8,6 @@
 
 // progress function defined in margo-core.c
 void __margo_hg_progress_fn(void* foo);
+void __margo_hg_event_progress_fn(void* foo);
 
 #endif
