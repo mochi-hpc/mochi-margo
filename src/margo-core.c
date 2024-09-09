@@ -2117,6 +2117,16 @@ void __margo_hg_event_progress_fn(void* foo)
      */
     while (!mid->hg_progress_shutdown_flag) {
 
+        /* TODO: think about this organization.  If we enter this loop when
+         * both mercury and the pool have work to do (before we poll),
+         * Mercury will always get priority.  Is that what we want, or do we
+         * want an explicit pool check to let the pool run other ULTs first?
+         * As it stands if the pool is ready when we start this block then there
+         * must be an epoll_wait() fn call to find it.
+         *
+         * It may depend on which pool we are using; the prio_pool may be
+         * less impacted because it de-prioritizes long-running ULTs
+         */
         if (!HG_Event_ready(mid->hg.hg_context)) {
             /* TODO: use mid->hg_progress_timeout_ub? if so check type/units */
             /* right now for debugging at least use infinite timeout to make
