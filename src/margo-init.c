@@ -367,9 +367,8 @@ margo_instance_id margo_init_ext(const char*                   address,
         = MARGO_REGISTER(mid, "__identity__", void, hg_string_t, NULL);
 
     MARGO_TRACE(0, "Starting progress loop");
-    ret = ABT_thread_create(MARGO_PROGRESS_POOL(mid),
-                            __margo_hg_event_progress_fn, mid,
-                            ABT_THREAD_ATTR_NULL, &mid->hg_progress_tid);
+    ret = ABT_thread_create(MARGO_PROGRESS_POOL(mid), __margo_hg_progress_fn,
+                            mid, ABT_THREAD_ATTR_NULL, &mid->hg_progress_tid);
     if (ret != ABT_SUCCESS) goto error;
 
     mid->refcount = 1;
