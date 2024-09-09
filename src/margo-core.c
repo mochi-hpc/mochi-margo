@@ -2117,18 +2117,12 @@ void __margo_hg_event_progress_fn(void* foo)
      */
     while (!mid->hg_progress_shutdown_flag) {
 
-        /* TODO: reorganize this loop; expected triggers first and lest
-         * dependency on counts.  For now mimic'ing HG test program examples
-         * to minimize chance of bugs
-         */
-        ABT_thread_yield();
         if (!HG_Event_ready(mid->hg.hg_context)) {
             /* TODO: use mid->hg_progress_timeout_ub? if so check type/units */
             /* right now for debugging at least use infinite timeout to make
              * sure we can rely on notifications
              */
             // fprintf(stderr, "DBG: calling epoll_wait()\n");
-            ABT_thread_yield();
             ret = epoll_wait(epfd, epevs, 1, -1);
             /* TODO: error handling */
             assert(ret > -1);
@@ -2138,6 +2132,7 @@ void __margo_hg_event_progress_fn(void* foo)
                     /* the progress pool has something new; yield to let it
                      * run
                      */
+                    ABT_thread_yield();
                 } else if (epevs[i].data.u32 == 1) {
                     // fprintf(stderr, "DBG: mercury needs attention.\n");
                 } else if (epevs[i].data.u32 == 2) {
@@ -2163,8 +2158,9 @@ void __margo_hg_event_progress_fn(void* foo)
         ret = HG_Event_trigger(mid->hg.hg_context, progress_count,
                                &trigger_count);
         if (ret == HG_SUCCESS && trigger_count) {
-            /* once we have processed callbacks, give the ES an opportunity to
-             * run other ULTs if it needs to.
+            /* If events were triggere, then give the ES an opportunity to
+             * run other ULTs if it needs to (the events may have produced
+             * new ULTs).
              */
             // fprintf(stderr, "DBG: triggered something.\n");
             ABT_thread_yield();
