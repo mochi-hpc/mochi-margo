@@ -2123,23 +2123,19 @@ void __margo_hg_event_progress_fn(void* foo)
              * sure we can rely on notifications
              */
             // fprintf(stderr, "DBG: calling epoll_wait()\n");
-            ret = epoll_wait(epfd, epevs, 1, -1);
+            ret = epoll_wait(epfd, epevs, 4, -1);
             /* TODO: error handling */
             assert(ret > -1);
             for (i = 0; i < ret; i++) {
-                if (epevs[i].data.u32 == 0) {
-                    // fprintf(stderr, "DBG: pool needs attention.\n");
-                    /* the progress pool has something new; yield to let it
-                     * run
-                     */
+                switch (epevs[i].data.u32) {
+                case 0: /* pool needs attention */
                     ABT_thread_yield();
-                    continue;
-                } else if (epevs[i].data.u32 == 1) {
-                    // fprintf(stderr, "DBG: mercury needs attention.\n");
-                } else if (epevs[i].data.u32 == 2) {
-                    // fprintf(stderr, "DBG: finalize_flag set.\n");
-                } else {
+                case 1: /* mercury needs attention */
+                case 2: /* finalize flag needs attention */
+                    break;
+                default: /* nonsensical event */
                     assert(0);
+                    break;
                 }
             }
         }
