@@ -2133,6 +2133,7 @@ void __margo_hg_event_progress_fn(void* foo)
                      * run
                      */
                     ABT_thread_yield();
+                    continue;
                 } else if (epevs[i].data.u32 == 1) {
                     // fprintf(stderr, "DBG: mercury needs attention.\n");
                 } else if (epevs[i].data.u32 == 2) {
