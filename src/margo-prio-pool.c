@@ -138,7 +138,7 @@ static int pool_init(ABT_pool pool, ABT_pool_config config)
     /* TODO: error handling */
     if (p_pool->efd > -1) {
         p_pool->epfd = epoll_create(1);
-        epev.events  = EPOLLIN | EPOLLET;
+        epev.events  = EPOLLIN;
         epev.data.fd = p_pool->efd;
         epoll_ctl(p_pool->epfd, EPOLL_CTL_ADD, p_pool->efd, &epev);
     }

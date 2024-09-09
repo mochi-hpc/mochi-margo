@@ -2075,7 +2075,7 @@ void __margo_hg_event_progress_fn(void* foo)
     assert(epfd > -1);
 
     /* watch progress pool */
-    epevs[0].events   = EPOLLIN | EPOLLET;
+    epevs[0].events   = EPOLLIN;
     epevs[0].data.u32 = 0;
     // fprintf(stderr, "DBG: progress pool efd: %d\n",
     //         mid->abt.pools[mid->progress_pool_idx].efd);
