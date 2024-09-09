@@ -11,6 +11,7 @@
 #include <time.h>
 #include <math.h>
 #include <json-c/json.h>
+#include <sys/eventfd.h>
 #include <sys/epoll.h>
 
 #include "margo.h"
@@ -169,6 +170,7 @@ static void margo_cleanup(margo_instance_id mid)
     __margo_timer_list_free(mid);
 
     MARGO_TRACE(mid, "Destroying mutex and condition variables");
+    close(mid->finalize_fd);
     ABT_mutex_free(&mid->finalize_mutex);
     ABT_cond_free(&mid->finalize_cond);
     ABT_mutex_free(&mid->pending_operations_mtx);
@@ -265,6 +267,7 @@ void margo_finalize(margo_instance_id mid)
 
     /* tell progress thread to wrap things up */
     mid->hg_progress_shutdown_flag = 1;
+    eventfd_write(mid->finalize_fd, 1);
 
     /* wait for it to shutdown cleanly */
     MARGO_TRACE(mid, "Waiting for progress thread to complete");
@@ -2090,6 +2093,13 @@ void __margo_hg_event_progress_fn(void* foo)
     epoll_ctl(epfd, EPOLL_CTL_ADD, HG_Event_get_wait_fd(mid->hg.hg_context),
               &epevs[1]);
 
+    /* watch for finalization */
+    epevs[2].events   = EPOLLIN;
+    epevs[2].data.u32 = 2;
+    // fprintf(stderr, "DBG: finalize_flag fd: %d\n",
+    //         mid->finalize_fd);
+    epoll_ctl(epfd, EPOLL_CTL_ADD, mid->finalize_fd, &epevs[2]);
+
     /* TODO: for now this is just a stripped down version of the normal loop
      * to use as a starting point.
      */
@@ -2113,10 +2123,13 @@ void __margo_hg_event_progress_fn(void* foo)
          */
         ABT_thread_yield();
         if (!HG_Event_ready(mid->hg.hg_context)) {
-            /* TODO: use mid->hg_progress_timeout_ub; check type/units */
+            /* TODO: use mid->hg_progress_timeout_ub? if so check type/units */
+            /* right now for debugging at least use infinite timeout to make
+             * sure we can rely on notifications
+             */
             // fprintf(stderr, "DBG: calling epoll_wait()\n");
             ABT_thread_yield();
-            ret = epoll_wait(epfd, epevs, 1, 1000);
+            ret = epoll_wait(epfd, epevs, 1, -1);
             /* TODO: error handling */
             assert(ret > -1);
             for (i = 0; i < ret; i++) {
@@ -2127,6 +2140,8 @@ void __margo_hg_event_progress_fn(void* foo)
                      */
                 } else if (epevs[i].data.u32 == 1) {
                     // fprintf(stderr, "DBG: mercury needs attention.\n");
+                } else if (epevs[i].data.u32 == 2) {
+                    // fprintf(stderr, "DBG: finalize_flag set.\n");
                 } else {
                     assert(0);
                 }

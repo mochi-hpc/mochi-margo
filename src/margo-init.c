@@ -5,6 +5,7 @@
  */
 #include <stdbool.h>
 #include <ctype.h>
+#include <sys/eventfd.h>
 #include <mercury_proc_string.h>
 #include <margo.h>
 #include <margo-logging.h>
@@ -36,6 +37,9 @@ static bool sanity_check_abt_configuration(margo_abt_t* abt,
 // Shutdown logic for a margo instance
 static void remote_shutdown_ult(hg_handle_t handle);
 static DECLARE_MARGO_RPC_HANDLER(remote_shutdown_ult)
+
+/* function pointer for progress function to use; determined at runtime */
+void (*margo_progress_fn_ptr)(void*);
 
 int margo_set_environment(const char* optional_json_config)
 {
@@ -306,6 +310,7 @@ margo_instance_id margo_init_ext(const char*                   address,
 
     mid->finalize_flag     = false;
     mid->finalize_refcount = 0;
+    mid->finalize_fd       = eventfd(0, EFD_NONBLOCK);
     ABT_mutex_create(&mid->finalize_mutex);
     ABT_cond_create(&mid->finalize_cond);
     mid->finalize_cb    = NULL;
@@ -367,9 +372,20 @@ margo_instance_id margo_init_ext(const char*                   address,
         = MARGO_REGISTER(mid, "__identity__", void, hg_string_t, NULL);
 
     MARGO_TRACE(0, "Starting progress loop");
-    ret = ABT_thread_create(MARGO_PROGRESS_POOL(mid),
-                            __margo_hg_event_progress_fn, mid,
-                            ABT_THREAD_ATTR_NULL, &mid->hg_progress_tid);
+    /* We can use the event-based progress loop if a) the Mercury context
+     * supports event fds and b) the progress pool supports event fds.
+     * Otherwise we need to stick to the traditional progress loop method.
+     */
+    if (mid->abt.pools[mid->progress_pool_idx].efd > -1
+        && HG_Event_get_wait_fd(mid->hg.hg_context) > -1) {
+        MARGO_TRACE(0, "Using event-driven progress loop");
+        margo_progress_fn_ptr = __margo_hg_event_progress_fn;
+    } else {
+        MARGO_TRACE(0, "Using standard progress loop");
+        margo_progress_fn_ptr = __margo_hg_progress_fn;
+    }
+    ret = ABT_thread_create(MARGO_PROGRESS_POOL(mid), margo_progress_fn_ptr,
+                            mid, ABT_THREAD_ATTR_NULL, &mid->hg_progress_tid);
     if (ret != ABT_SUCCESS) goto error;
 
     mid->refcount = 1;
