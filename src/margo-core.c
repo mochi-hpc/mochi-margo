@@ -2069,6 +2069,8 @@ void __margo_hg_event_progress_fn(void* foo)
     struct epoll_event epevs[4] = {0};
     int                i;
     int                mercury_attention_flag = 0;
+    size_t             size;
+    ABT_pool           progress_pool = MARGO_PROGRESS_POOL(mid);
 
     /* set up an epoll file descriptor that will be used to multiplex
      * events. It may need to watch Mercury, the Argobots pool used to
@@ -2119,11 +2121,13 @@ void __margo_hg_event_progress_fn(void* foo)
     while (!mid->hg_progress_shutdown_flag) {
         mercury_attention_flag = 0;
 
-        /* give other threads in this pool (if present) the opportunity to
-         * run first.  Assuming this call is relatively low cost if there is
-         * nothing else in the pool.
+        /* Give other threads in this pool (if present) the opportunity to
+         * run first. Note that yield() should presumably have no effect if
+         * there are no other work units to run, but empirically it is
+         * faster to check the size before calling it.
          */
-        ABT_thread_yield();
+        ABT_pool_get_size(progress_pool, &size);
+        if (size) ABT_thread_yield();
 
         if (!HG_Event_ready(mid->hg.hg_context)) {
             /* TODO: use mid->hg_progress_timeout_ub? if so check type/units */
@@ -2182,9 +2186,6 @@ void __margo_hg_event_progress_fn(void* foo)
                 ret, HG_Error_to_string(ret));
             assert(0);
         }
-        /* note that on the next loop iteration we will be yielding to give
-         * triggered activity a chance to execute
-         */
     }
 
     close(epfd);
