@@ -2103,10 +2103,6 @@ void __margo_hg_event_progress_fn(void* foo)
     //         mid->finalize_fd);
     epoll_ctl(epfd, EPOLL_CTL_ADD, mid->finalize_fd, &epevs[2]);
 
-    /* TODO: for now this is just a stripped down version of the normal loop
-     * to use as a starting point.
-     */
-
     /* TODO: disabling timers in this loop for now; will add back in with
      * timerfd variant.
      */
@@ -2114,10 +2110,6 @@ void __margo_hg_event_progress_fn(void* foo)
     /* TODO: disabling monitoring for now to just focus on core logic.  Will
      * add back in */
 
-    /* TODO: we could use a 4th event fd to receive timely shutdown
-     * notification as well.  For now just using limited duration timeouts
-     * on epoll.
-     */
     while (!mid->hg_progress_shutdown_flag) {
         mercury_attention_flag = 0;
 
@@ -2167,7 +2159,6 @@ void __margo_hg_event_progress_fn(void* foo)
         // fprintf(stderr, "DBG: calling HG_Event_progress()\n");
         ret = HG_Event_progress(mid->hg.hg_context, &progress_count);
         if (ret != HG_SUCCESS) {
-            /* TODO: error handling */
             MARGO_CRITICAL(
                 mid, "unexpected return code (%d: %s) from HG_Event_progress()",
                 ret, HG_Error_to_string(ret));
@@ -2180,7 +2171,6 @@ void __margo_hg_event_progress_fn(void* foo)
         ret = HG_Event_trigger(mid->hg.hg_context, progress_count,
                                &trigger_count);
         if (ret != HG_SUCCESS) {
-            /* TODO: error handling */
             MARGO_CRITICAL(
                 mid, "unexpected return code (%d: %s) from HG_Event_trigger()",
                 ret, HG_Error_to_string(ret));
