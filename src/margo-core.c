@@ -2068,6 +2068,7 @@ void __margo_hg_event_progress_fn(void* foo)
     int                epfd;
     struct epoll_event epevs[4] = {0};
     int                i;
+    int                mercury_attention_flag = 0;
 
     /* set up an epoll file descriptor that will be used to multiplex
      * events. It may need to watch Mercury, the Argobots pool used to
@@ -2116,17 +2117,14 @@ void __margo_hg_event_progress_fn(void* foo)
      * on epoll.
      */
     while (!mid->hg_progress_shutdown_flag) {
+        mercury_attention_flag = 0;
 
-        /* TODO: think about this organization.  If we enter this loop when
-         * both mercury and the pool have work to do (before we poll),
-         * Mercury will always get priority.  Is that what we want, or do we
-         * want an explicit pool check to let the pool run other ULTs first?
-         * As it stands if the pool is ready when we start this block then there
-         * must be an epoll_wait() fn call to find it.
-         *
-         * It may depend on which pool we are using; the prio_pool may be
-         * less impacted because it de-prioritizes long-running ULTs
+        /* give other threads in this pool (if present) the opportunity to
+         * run first.  Assuming this call is relatively low cost if there is
+         * nothing else in the pool.
          */
+        ABT_thread_yield();
+
         if (!HG_Event_ready(mid->hg.hg_context)) {
             /* TODO: use mid->hg_progress_timeout_ub? if so check type/units */
             /* right now for debugging at least use infinite timeout to make
@@ -2134,13 +2132,21 @@ void __margo_hg_event_progress_fn(void* foo)
              */
             // fprintf(stderr, "DBG: calling epoll_wait()\n");
             ret = epoll_wait(epfd, epevs, 4, -1);
+            if (ret == 0) {
+                /* didn't detect anything that needs attention; continue
+                 * loop
+                 */
+                continue;
+            }
             /* TODO: error handling */
             assert(ret > -1);
             for (i = 0; i < ret; i++) {
                 switch (epevs[i].data.u32) {
                 case 0: /* pool needs attention */
-                    ABT_thread_yield();
+                    break;
                 case 1: /* mercury needs attention */
+                    mercury_attention_flag = 1;
+                    break;
                 case 2: /* finalize flag needs attention */
                     break;
                 default: /* nonsensical event */
@@ -2148,30 +2154,37 @@ void __margo_hg_event_progress_fn(void* foo)
                     break;
                 }
             }
+        } else {
+            mercury_attention_flag = 1;
         }
+
+        if (!mercury_attention_flag) continue;
 
         // fprintf(stderr, "DBG: calling HG_Event_progress()\n");
         ret = HG_Event_progress(mid->hg.hg_context, &progress_count);
-        if (ret != HG_SUCCESS && ret != HG_TIMEOUT) {
+        if (ret != HG_SUCCESS) {
             /* TODO: error handling */
             MARGO_CRITICAL(
                 mid, "unexpected return code (%d: %s) from HG_Event_progress()",
                 ret, HG_Error_to_string(ret));
             assert(0);
         }
+
         if (!progress_count) continue;
 
         // fprintf(stderr, "DBG: calling HG_Event_trigger()\n");
         ret = HG_Event_trigger(mid->hg.hg_context, progress_count,
                                &trigger_count);
-        if (ret == HG_SUCCESS && trigger_count) {
-            /* If events were triggere, then give the ES an opportunity to
-             * run other ULTs if it needs to (the events may have produced
-             * new ULTs).
-             */
-            // fprintf(stderr, "DBG: triggered something.\n");
-            ABT_thread_yield();
+        if (ret != HG_SUCCESS) {
+            /* TODO: error handling */
+            MARGO_CRITICAL(
+                mid, "unexpected return code (%d: %s) from HG_Event_trigger()",
+                ret, HG_Error_to_string(ret));
+            assert(0);
         }
+        /* note that on the next loop iteration we will be yielding to give
+         * triggered activity a chance to execute
+         */
     }
 
     close(epfd);
