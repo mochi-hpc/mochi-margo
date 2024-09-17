@@ -350,7 +350,7 @@ static MunitTest test_suite_tests[] = {
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {(char*)"/margo_timer/cancel-before-ult-submitted", test_margo_timer_cancel_before_ult_submitted,
      test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
-    {(char*)"/margo_timer/cancel-before-ult-started", test_margo_timer_cancel_after_ult_started,
+    {(char*)"/margo_timer/cancel-before-ult-started", test_margo_timer_cancel_before_ult_started,
      test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {(char*)"/margo_timer/cancel-after-ult-started", test_margo_timer_cancel_after_ult_started,
      test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
