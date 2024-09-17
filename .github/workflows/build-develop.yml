@@ -1,0 +1,16 @@
+name: Build the develop version using Spack
+
+on:
+  workflow_dispatch: {}
+  schedule:
+  - cron: "0 0 * * *"
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    name: Build the main version of the package
+    steps:
+    - uses: actions/checkout@v4
+    - uses: mochi-hpc/mochi-test-build-action@v1
+      with:
+        package-version: "@develop"
