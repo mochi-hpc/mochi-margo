@@ -53,6 +53,10 @@ char* margo_get_config_opt(margo_instance_id mid, int options)
     json_object_object_add_ex(
         root, "progress_timeout_ub_msec",
         json_object_new_uint64(mid->hg_progress_timeout_ub), flags);
+    // progress_spindown_msec
+    json_object_object_add_ex(
+        root, "progress_spindown_msec",
+        json_object_new_uint64(mid->hg_progress_spindown_msec), flags);
     // handle_cache_size
     json_object_object_add_ex(root, "handle_cache_size",
                               json_object_new_uint64(mid->handle_cache_size),
