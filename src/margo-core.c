@@ -1956,6 +1956,8 @@ void __margo_hg_progress_fn(void* foo)
     unsigned int           hg_progress_timeout;
     double                 next_timer_exp;
     unsigned int           pending;
+    int                    spin_flag;
+    double                 spin_start_ts;
 
     while (!mid->hg_progress_shutdown_flag) {
         do {
@@ -1972,34 +1974,69 @@ void __margo_hg_progress_fn(void* foo)
          */
         ABT_thread_yield();
 
-        /* Determine if it is reasonably safe to briefly block on Mercury
-         * progress.  We check two conditions: are there any RPCs currently
-         * being processed (i.e. pending_operations) or are there any other
-         * threads assicated with the current pool that might become
-         * runnable while this thread is blocked.  If either condition is
-         * met, then we use a zero timeout to Mercury to avoid blocking this
-         * ULT for too long.
-         *
-         * Note that there is no easy way to determine if this ES is expected to
-         * also execute work in other pools, so we may still introduce
-         * hg_progress_timeout_ub of latency in that configuration scenario.
-         * Latency-sensitive use cases should avoid running the Margo
-         * progress function in pools that share execution streams with
-         * other pools.
-         */
-        ABT_mutex_lock(mid->pending_operations_mtx);
-        pending = mid->pending_operations;
-        ABT_mutex_unlock(mid->pending_operations_mtx);
+        if (spin_start_ts) {
+            /* We used a zero progress timeout (busy spinning) on the last
+             * iteration.  See if spindown time has elapsed yet.
+             */
+            if ((spin_start_ts - ABT_get_wtime())
+                < (double)mid->hg_progress_spindown_ms) {
+                /* We are still in the spindown window; continue spinning
+                 * regardless of current conditions.
+                 */
+                spin_flag = 1;
+            } else {
+                /* This spindown window has elapsed; clear flag and timestep
+                 * so that we can make a new policy decision.
+                 */
+                spin_flag     = 0;
+                spin_start_ts = 0;
+            }
+        }
 
-        /*
-         * Note that we intentionally use get_total_size() rather than
-         * get_size() to make sure that we count suspended ULTs, not just
-         * currently runnable ULTs.  The resulting count includes this ULT
-         * so we look for a count > 1 instead of a count > 0.
-         */
-        ABT_pool_get_total_size(MARGO_PROGRESS_POOL(mid), &size);
+        if (!spin_flag) {
+            /* Determine if it is reasonably safe to briefly block on
+             * Mercury progress or if we should enter spin mode.  We check
+             * two conditions: are there any RPCs currently being processed
+             * (i.e. pending_operations) or are there any other threads
+             * assicated with the current pool that might become runnable
+             * while this thread is blocked?  If either condition is met,
+             * then we use a zero timeout to Mercury to avoid blocking this
+             * ULT for too long.
+             *
+             * Note that there is no easy way to determine if this ES is
+             * expected to also execute work in other pools, so we may
+             * still introduce hg_progress_timeout_ub of latency in that
+             * configuration scenario.  Latency-sensitive use cases
+             * should avoid running the Margo progress function in pools
+             * that share execution streams with other pools.
+             */
+            ABT_mutex_lock(mid->pending_operations_mtx);
+            pending = mid->pending_operations;
+            ABT_mutex_unlock(mid->pending_operations_mtx);
 
-        if (pending || size > 1) {
+            /*
+             * Note that we intentionally use get_total_size() rather
+             * than get_size() to make sure that we count suspended
+             * ULTs, not just currently runnable ULTs.  The resulting
+             * count includes this ULT so we look for a count > 1
+             * instead of a count > 0.
+             */
+            ABT_pool_get_total_size(MARGO_PROGRESS_POOL(mid), &size);
+
+            if (pending || size > 1) {
+                /* entering spin mode; record timestamp so that we can
+                 * track how long we have been in this mode
+                 */
+                spin_flag     = 1;
+                spin_start_ts = ABT_get_wtime();
+            } else {
+                /* Block on Mercury progress to release CPU */
+                spin_flag     = 0;
+                spin_start_ts = 0;
+            }
+        }
+
+        if (spin_flag) {
             hg_progress_timeout = 0;
         } else {
             hg_progress_timeout = mid->hg_progress_timeout_ub;

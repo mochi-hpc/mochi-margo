@@ -300,6 +300,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     mid->hg_progress_tid           = ABT_THREAD_NULL;
     mid->hg_progress_shutdown_flag = 0;
     mid->hg_progress_timeout_ub    = progress_timeout_ub;
+    mid->hg_progress_spindown_ms   = 1; /* TODO: temporarily hard coded */
 
     mid->num_registered_rpcs = 0;
     mid->registered_rpcs     = NULL;
