@@ -376,7 +376,7 @@ margo_instance_id margo_init_ext(const char*                   address,
      * supports event fds and b) the progress pool supports event fds.
      * Otherwise we need to stick to the traditional progress loop method.
      */
-    if (mid->abt.pools[mid->progress_pool_idx].efd > -1
+    if (mid->abt.pools[mid->progress_pool_idx].efd.efd > -1
         && HG_Event_get_wait_fd(mid->hg.hg_context) > -1) {
         MARGO_TRACE(0, "Using event-driven progress loop");
         margo_progress_fn_ptr = __margo_hg_event_progress_fn;

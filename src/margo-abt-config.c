@@ -108,7 +108,6 @@ bool __margo_abt_pool_init_from_json(const json_object_t* jpool,
             access = ABT_POOL_ACCESS_SPMC;
     }
 
-    pool->efd = -1;
     int ret;
     if (kind != (ABT_pool_kind)(-1)) {
         if (!pool->access) pool->access = strdup("mpmc");
@@ -130,8 +129,9 @@ bool __margo_abt_pool_init_from_json(const json_object_t* jpool,
          * to rearrange code a little to make sure we can determine those
          * things before initializing pool.
          */
-        pool->efd = eventfd(0, EFD_NONBLOCK);
-        if (pool->efd < 0) {
+        pool->efd.efd       = eventfd(0, EFD_NONBLOCK);
+        pool->efd.efd_count = 0;
+        if (pool->efd.efd < 0) {
             margo_error(mid, "eventfd failed with error code %d", errno);
         }
         ret = ABT_pool_config_create(&prio_pool_config);
@@ -139,9 +139,11 @@ bool __margo_abt_pool_init_from_json(const json_object_t* jpool,
             margo_error(mid, "ABT_pool_config_create failed with error code %d",
                         ret);
         }
-        ret = ABT_pool_config_set(prio_pool_config,
-                                  MARGO_PRIO_POOL_CONFIG_KEY_EFD,
-                                  ABT_POOL_CONFIG_INT, &pool->efd);
+        // fprintf(stderr, "DBG: config_set with %p\n", &pool->efd);
+        void* foo = &pool->efd;
+        ret       = ABT_pool_config_set(prio_pool_config,
+                                        MARGO_PRIO_POOL_CONFIG_KEY_EFD,
+                                        ABT_POOL_CONFIG_PTR, &foo);
         if (ret != ABT_SUCCESS) {
             margo_error(mid, "ABT_pool_config_set failed with error code %d",
                         ret);

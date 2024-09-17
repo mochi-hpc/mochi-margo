@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
+#include <assert.h>
 
 #include "margo-prio-pool.h"
 
@@ -85,14 +86,13 @@ static inline unit_t* queue_pop(queue_t* p_queue)
 }
 
 typedef struct pool_t {
-    queue_t         high_prio_queue;
-    queue_t         low_prio_queue;
-    int             num;
-    int             cnt;
-    pthread_mutex_t mutex;
-    pthread_cond_t  cond;
-    int             efd;
-    int             epfd;
+    queue_t                     high_prio_queue;
+    queue_t                     low_prio_queue;
+    int                         num;
+    int                         cnt;
+    pthread_mutex_t             mutex;
+    pthread_cond_t              cond;
+    struct margo_prio_pool_efd* efd;
 } pool_t;
 
 static ABT_unit pool_unit_create_from_thread(ABT_thread thread)
@@ -113,35 +113,21 @@ static void pool_unit_free(ABT_unit* p_unit)
 
 static int pool_init(ABT_pool pool, ABT_pool_config config)
 {
-    struct epoll_event epev        = {0};
-    pool_t*            p_pool      = (pool_t*)calloc(1, sizeof(pool_t));
+    pool_t* p_pool                 = (pool_t*)calloc(1, sizeof(pool_t));
     p_pool->high_prio_queue.p_tail = NULL;
     p_pool->high_prio_queue.p_head = NULL;
     p_pool->low_prio_queue.p_tail  = NULL;
     p_pool->low_prio_queue.p_head  = NULL;
     p_pool->num                    = 0;
     p_pool->cnt                    = 0;
-    p_pool->efd                    = -1;
-    p_pool->epfd                   = -1;
+    p_pool->efd                    = NULL;
     pthread_mutex_init(&p_pool->mutex, NULL);
     pthread_cond_init(&p_pool->cond, NULL);
-    /* NOTE: we don't check return code here because efd will still be -1 if
-     * it fails.
-     */
-    ABT_pool_config_get(config, MARGO_PRIO_POOL_CONFIG_KEY_EFD, NULL,
-                        &p_pool->efd);
-    // fprintf(stderr, "DBG: prio_pool got efd %d\n", p_pool->efd);
-
-    /* if we have been asked to trigger an eventfd, then configure an epoll
-     * set so that the pool can also monitor it.
-     */
-    /* TODO: error handling */
-    if (p_pool->efd > -1) {
-        p_pool->epfd = epoll_create(1);
-        epev.events  = EPOLLIN;
-        epev.data.fd = p_pool->efd;
-        epoll_ctl(p_pool->epfd, EPOLL_CTL_ADD, p_pool->efd, &epev);
-    }
+    int ret = ABT_pool_config_get(config, MARGO_PRIO_POOL_CONFIG_KEY_EFD, NULL,
+                                  &p_pool->efd);
+    assert(ret == 0);
+    // fprintf(stderr, "DBG: prio_pool got efd %p\n", p_pool->efd);
+    assert(p_pool->efd);
 
     ABT_pool_set_data(pool, (void*)p_pool);
     return ABT_SUCCESS;
@@ -192,11 +178,13 @@ static void pool_push(ABT_pool pool, ABT_unit unit)
     /* only signal on the transition from empty to non-empty; in other cases
      * there will be no one waiting on the condition.
      */
-    if (p_pool->num == 1) {
-        if (p_pool->epfd)
-            eventfd_write(p_pool->efd, 1);
-        else
-            pthread_cond_signal(&p_pool->cond);
+    // fprintf(stderr, "DBG: pool signaling\n");
+    pthread_cond_signal(&p_pool->cond);
+    if (!p_pool->efd->efd_count
+        && sched_counter < SCHED_COUNTER_PRIORITY_LIMIT) {
+        // fprintf(stderr, "DBG: pool also eventfd'ing\n");
+        eventfd_write(p_pool->efd->efd, 1);
+        p_pool->efd->efd_count++;
     }
     pthread_mutex_unlock(&p_pool->mutex);
 }
@@ -236,10 +224,6 @@ static ABT_unit pool_pop(ABT_pool pool)
         }
     } while (0);
     if (p_unit) p_pool->num--;
-    if (p_pool->num == 0) {
-        /* clear eventfd state when we transition to empty */
-        eventfd_read(p_pool->efd, &tmp_val);
-    }
     pthread_mutex_unlock(&p_pool->mutex);
     return p_unit ? (ABT_unit)p_unit : ABT_UNIT_NULL;
 }
@@ -260,43 +244,9 @@ static ABT_unit pool_pop_timedwait(ABT_pool pool, double abstime_secs)
     pthread_mutex_lock(&p_pool->mutex);
     unit_t* p_unit = NULL;
     if (p_pool->num == 0) {
-        if (p_pool->efd > -1) {
-            struct epoll_event event;
-            int                timeout_ms;
-            int                ret;
-            /* if the pool is configured to signal an event file descriptor
-             * when it transitions to non-idle, then go ahead and reuse it for
-             * internal signalling as well.
-             */
-            if (!abstime_secs) {
-                timeout_ms = 0;
-            } else {
-                /* TODO: if we used the new pop_wait() interface we could
-                 * avoid two time calls per iteration.
-                 */
-                timeout_ms = (int)((ABT_get_wtime() - abstime_secs) * 1000.0);
-                if (timeout_ms < 0) timeout_ms = 100;
-            }
-            // fprintf(stderr,
-            //         "DBG: calling epoll_wait with timeout %d (abstime_secs
-            //         was "
-            //        "%f)\n",
-            //        timeout_ms, abstime_secs);
-            /* TODO: error handling */
-            /* NOTE: we have to drop mutex while blocking in epoll to avoid
-             * deadlock.  Note that we only set and clear events with the
-             * lock held.
-             */
-            pthread_mutex_unlock(&p_pool->mutex);
-            ret = epoll_wait(p_pool->epfd, &event, 1, timeout_ms);
-            pthread_mutex_lock(&p_pool->mutex);
-            // fprintf(stderr, "DBG: epoll_wait returned %d, num %d\n", ret,
-            //        p_pool->num);
-        } else {
-            struct timespec ts;
-            convert_double_sec_to_timespec(&ts, abstime_secs);
-            pthread_cond_timedwait(&p_pool->cond, &p_pool->mutex, &ts);
-        }
+        struct timespec ts;
+        convert_double_sec_to_timespec(&ts, abstime_secs);
+        pthread_cond_timedwait(&p_pool->cond, &p_pool->mutex, &ts);
     }
     do {
         if ((p_pool->cnt++ & 0xFF) != 0) {
@@ -312,10 +262,6 @@ static ABT_unit pool_pop_timedwait(ABT_pool pool, double abstime_secs)
         }
     } while (0);
     if (p_unit) p_pool->num--;
-    if (p_pool->num == 0) {
-        /* clear eventfd state when we transition to empty */
-        eventfd_read(p_pool->efd, &tmp_val);
-    }
     pthread_mutex_unlock(&p_pool->mutex);
     return p_unit ? (ABT_unit)p_unit : ABT_UNIT_NULL;
 }
@@ -326,7 +272,6 @@ static int pool_free(ABT_pool pool)
     ABT_pool_get_data(pool, (void**)&p_pool);
     pthread_mutex_destroy(&p_pool->mutex);
     pthread_cond_destroy(&p_pool->cond);
-    if (p_pool->epfd > -1) close(p_pool->epfd);
     free(p_pool);
 
     return ABT_SUCCESS;

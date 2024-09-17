@@ -62,8 +62,7 @@ typedef struct margo_abt_pool {
     bool margo_free_flag; /* flag if Margo is responsible for freeing */
     bool used_by_primary; /* flag indicating the this pool is used by the
                              primary ES */
-    int efd; /* event fd for notification of transition from idle to busy; -1 if
-               not supported or not enabled */
+    struct margo_prio_pool_efd efd;
 } margo_abt_pool_t;
 
 bool __margo_abt_pool_validate_json(const json_object_t* config,

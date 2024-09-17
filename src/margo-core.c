@@ -2084,9 +2084,9 @@ void __margo_hg_event_progress_fn(void* foo)
     epevs[0].events   = EPOLLIN;
     epevs[0].data.u32 = 0;
     // fprintf(stderr, "DBG: progress pool efd: %d\n",
-    //         mid->abt.pools[mid->progress_pool_idx].efd);
-    epoll_ctl(epfd, EPOLL_CTL_ADD, mid->abt.pools[mid->progress_pool_idx].efd,
-              &epevs[0]);
+    //          mid->abt.pools[mid->progress_pool_idx].efd.efd);
+    epoll_ctl(epfd, EPOLL_CTL_ADD,
+              mid->abt.pools[mid->progress_pool_idx].efd.efd, &epevs[0]);
 
     /* watch Mercury */
     epevs[1].events   = EPOLLIN;
@@ -2127,6 +2127,7 @@ void __margo_hg_event_progress_fn(void* foo)
              * sure we can rely on notifications
              */
             // fprintf(stderr, "DBG: calling epoll_wait()\n");
+            // fprintf(stderr, "DBG: progress waiting.\n");
             ret = epoll_wait(epfd, epevs, 4, -1);
             if (ret == 0) {
                 /* didn't detect anything that needs attention; continue
@@ -2139,6 +2140,14 @@ void __margo_hg_event_progress_fn(void* foo)
             for (i = 0; i < ret; i++) {
                 switch (epevs[i].data.u32) {
                 case 0: /* pool needs attention */
+                    if (ret == 1) {
+                        uint64_t tmp_val;
+                        eventfd_read(
+                            mid->abt.pools[mid->progress_pool_idx].efd.efd,
+                            &tmp_val);
+                        mid->abt.pools[mid->progress_pool_idx].efd.efd_count
+                            = 0;
+                    }
                     break;
                 case 1: /* mercury needs attention */
                     mercury_attention_flag = 1;
