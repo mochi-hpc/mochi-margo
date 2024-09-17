@@ -71,7 +71,7 @@ struct margo_instance {
     ABT_thread       hg_progress_tid;
     _Atomic int      hg_progress_shutdown_flag;
     _Atomic unsigned hg_progress_timeout_ub;
-    _Atomic unsigned hg_progress_spindown_ms;
+    _Atomic unsigned hg_progress_spindown_msec;
 
     uint16_t num_registered_rpcs; /* number of registered rpc's by all providers
                                      on this instance */

@@ -279,6 +279,8 @@ margo_instance_id margo_init_ext(const char*                   address,
         goto error;
     }
 
+    mid->hg_progress_spindown_msec
+        = json_object_object_get_int_or(config, "progress_spindown_msec", 10);
     int progress_timeout_ub = json_object_object_get_int_or(
         config, "progress_timeout_ub_msec", 100);
     int handle_cache_size
@@ -300,7 +302,6 @@ margo_instance_id margo_init_ext(const char*                   address,
     mid->hg_progress_tid           = ABT_THREAD_NULL;
     mid->hg_progress_shutdown_flag = 0;
     mid->hg_progress_timeout_ub    = progress_timeout_ub;
-    mid->hg_progress_spindown_ms   = 1; /* TODO: temporarily hard coded */
 
     mid->num_registered_rpcs = 0;
     mid->registered_rpcs     = NULL;
@@ -413,6 +414,7 @@ static bool __margo_validate_json(struct json_object*           _margo,
     /* Fields:
        - [required] mercury: object
        - [optional] argobots: object
+       - [optional] progress_spindown_msec: integer >= 0 (default 10)
        - [optional] progress_timeout_ub_msec: integer >= 0 (default 100)
        - [optional] handle_cache_size: integer >= 0 (default 32)
        - [optional] use_progress_thread: bool (default false)
@@ -434,6 +436,13 @@ static bool __margo_validate_json(struct json_object*           _margo,
     // check "argobots" configuration field
     struct json_object* _argobots = json_object_object_get(_margo, "argobots");
     if (!__margo_abt_validate_json(_argobots)) { return false; }
+
+    // check "progress_spindown_msec" field
+    ASSERT_CONFIG_HAS_OPTIONAL(_margo, "progress_spindown_msec", int, "margo");
+    if (CONFIG_HAS(_margo, "progress_spindown_msec", ignore)) {
+        CONFIG_INTEGER_MUST_BE_POSITIVE(_margo, "progress_spindown_msec",
+                                        "progress_spindown_msec");
+    }
 
     // check "progress_timeout_ub_msec" field
     ASSERT_CONFIG_HAS_OPTIONAL(_margo, "progress_timeout_ub_msec", int,

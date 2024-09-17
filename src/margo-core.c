@@ -1979,7 +1979,7 @@ void __margo_hg_progress_fn(void* foo)
              * iteration.  See if spindown time has elapsed yet.
              */
             if ((spin_start_ts - ABT_get_wtime())
-                < (double)mid->hg_progress_spindown_ms) {
+                < (double)mid->hg_progress_spindown_msec) {
                 /* We are still in the spindown window; continue spinning
                  * regardless of current conditions.
                  */
