@@ -1956,8 +1956,8 @@ void __margo_hg_progress_fn(void* foo)
     unsigned int           hg_progress_timeout;
     double                 next_timer_exp;
     unsigned int           pending;
-    int                    spin_flag;
-    double                 spin_start_ts;
+    int                    spin_flag = 0;
+    double                 spin_start_ts = 0;
 
     while (!mid->hg_progress_shutdown_flag) {
         do {
@@ -1974,11 +1974,11 @@ void __margo_hg_progress_fn(void* foo)
          */
         ABT_thread_yield();
 
-        if (spin_start_ts) {
+        if (spin_flag) {
             /* We used a zero progress timeout (busy spinning) on the last
              * iteration.  See if spindown time has elapsed yet.
              */
-            if ((spin_start_ts - ABT_get_wtime())
+            if (((ABT_get_wtime() - spin_start_ts)*1000)
                 < (double)mid->hg_progress_spindown_msec) {
                 /* We are still in the spindown window; continue spinning
                  * regardless of current conditions.
@@ -1993,7 +1993,7 @@ void __margo_hg_progress_fn(void* foo)
             }
         }
 
-        if (!spin_flag) {
+        if (mid->hg_progress_spindown_msec && !spin_flag) {
             /* Determine if it is reasonably safe to briefly block on
              * Mercury progress or if we should enter spin mode.  We check
              * two conditions: are there any RPCs currently being processed
