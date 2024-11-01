@@ -107,6 +107,14 @@ static void* test_context_setup(const MunitParameter params[], void* user_data)
     }
     munit_assert_not_null(ctx->mid);
 
+    const char* progress_when_needed = munit_parameters_get(params, "progress_when_needed");
+    if(progress_when_needed && strcmp(progress_when_needed, "true") == 0)
+        munit_assert_int(
+            margo_set_progress_when_needed(ctx->mid, true), ==, 0);
+    else
+        munit_assert_int(
+            margo_set_progress_when_needed(ctx->mid, false), ==, 0);
+
     return ctx;
 }
 
@@ -666,8 +674,15 @@ error:
 
 static char* protocol_params[] = {"na+sm", NULL};
 static char* progress_pool_params[] = {"fifo_wait", "prio_wait", "earliest_first", NULL};
+static char* progress_when_needed_params[] = {"true", "false", NULL};
 
 static MunitParameterEnum test_params[]
+    = {{"protocol", protocol_params},
+       {"progress_pool", progress_pool_params},
+       {"progress_when_needed", progress_when_needed_params},
+       {NULL, NULL}};
+
+static MunitParameterEnum test_params2[]
     = {{"protocol", protocol_params},
        {"progress_pool", progress_pool_params},
        {NULL, NULL}};
@@ -678,7 +693,7 @@ static MunitTest test_suite_tests[] = {
     {(char*)"/forward_with_args", test_forward_with_args, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {(char*)"/forward_with_shim", test_forward_with_shim, test_context_setup,
-     test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
+     test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params2},
     {(char*)"/forward_to_null", test_forward_to_null, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {(char*)"/self_forward_to_null", test_self_forward_to_null, test_context_setup,

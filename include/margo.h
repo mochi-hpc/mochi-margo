@@ -1889,6 +1889,20 @@ int margo_get_progress_timeout_ub_msec(margo_instance_id mid,
                                        unsigned*         timeout);
 
 /**
+ * @brief Set the progress mode. By default, the progress ULT will run
+ * whenever it is scheduled, even if there aren't any on-going operations.
+ * For clients, it may be useful to prevent it from being scheduled if
+ * there is no reason for making progress (i.e. there is no on-going RPC).
+ * Setting when_needed to true does just that.
+ *
+ * @param mid Margo instance.
+ * @param when_needed Progress only when needed.
+ *
+ * @return 0 in case of success, -1 otherwise.
+ */
+int margo_set_progress_when_needed(margo_instance_id mid, bool when_needed);
+
+/**
  * @brief Sets configurable parameters/hints.
  *
  * @param [in] mid Margo instance.
