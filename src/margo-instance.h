@@ -73,6 +73,14 @@ struct margo_instance {
     _Atomic unsigned hg_progress_timeout_ub;
     _Atomic unsigned hg_progress_spindown_msec;
 
+    /* "when_needed" progress logic */
+    struct {
+        bool             flag;
+        uint64_t         pending;
+        ABT_mutex_memory mutex;
+        ABT_cond_memory  cond;
+    } progress_when_needed;
+
     uint16_t num_registered_rpcs; /* number of registered rpc's by all providers
                                      on this instance */
     /* list of rpcs registered on this instance for debugging and profiling
@@ -131,7 +139,8 @@ struct margo_instance {
 
 #define MARGO_RPC_POOL(mid) (mid)->abt.pools[mid->rpc_pool_idx].pool
 
-typedef enum margo_request_kind {
+typedef enum margo_request_kind
+{
     MARGO_REQ_EVENTUAL,
     MARGO_REQ_CALLBACK
 } margo_request_kind;
@@ -159,10 +168,10 @@ struct margo_request_struct {
 struct margo_rpc_data {
     margo_instance_id mid;
     _Atomic(ABT_pool) pool;
-    char*             rpc_name;
-    hg_proc_cb_t      in_proc_cb;  /* user-provided input proc */
-    hg_proc_cb_t      out_proc_cb; /* user-provided output proc */
-    void*             user_data;
+    char*        rpc_name;
+    hg_proc_cb_t in_proc_cb;  /* user-provided input proc */
+    hg_proc_cb_t out_proc_cb; /* user-provided output proc */
+    void*        user_data;
     void (*user_free_callback)(void*);
 };
 
@@ -195,6 +204,50 @@ typedef struct {
     ABT_cond  cond;
     char      is_asleep;
 } margo_thread_sleep_cb_dat;
+
+#define PROGRESS_NEEDED_INCR(__mid__)                                \
+    do {                                                             \
+        bool notify = false;                                         \
+        if ((__mid__)->progress_when_needed.flag) {                  \
+            ABT_mutex_lock(ABT_MUTEX_MEMORY_GET_HANDLE(              \
+                &(__mid__)->progress_when_needed.mutex));            \
+            notify = ++(__mid__)->progress_when_needed.pending == 1; \
+            ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(            \
+                &(__mid__)->progress_when_needed.mutex));            \
+        }                                                            \
+        if (notify) {                                                \
+            ABT_cond_signal(ABT_COND_MEMORY_GET_HANDLE(              \
+                &(__mid__)->progress_when_needed.cond));             \
+        }                                                            \
+    } while (0)
+
+#define PROGRESS_NEEDED_DECR(__mid__)                     \
+    do {                                                  \
+        if ((__mid__)->progress_when_needed.flag) {       \
+            ABT_mutex_lock(ABT_MUTEX_MEMORY_GET_HANDLE(   \
+                &(__mid__)->progress_when_needed.mutex)); \
+            --(__mid__)->progress_when_needed.pending;    \
+            ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE( \
+                &(__mid__)->progress_when_needed.mutex)); \
+        }                                                 \
+    } while (0)
+
+#define WAIT_FOR_PROGRESS_TO_BE_NEEDED(__mid__)                             \
+    do {                                                                    \
+        if ((__mid__)->progress_when_needed.flag) {                         \
+            ABT_mutex_lock(ABT_MUTEX_MEMORY_GET_HANDLE(                     \
+                &(__mid__)->progress_when_needed.mutex));                   \
+            while (!(__mid__)->progress_when_needed.pending) {              \
+                ABT_cond_wait(ABT_COND_MEMORY_GET_HANDLE(                   \
+                                  &(__mid__)->progress_when_needed.cond),   \
+                              ABT_MUTEX_MEMORY_GET_HANDLE(                  \
+                                  &(__mid__)->progress_when_needed.mutex)); \
+                if (!(__mid__)->progress_when_needed.flag) break;           \
+            }                                                               \
+            ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(                   \
+                &(__mid__)->progress_when_needed.mutex));                   \
+        }                                                                   \
+    } while (0)
 
 #define MARGO_TRACE    margo_trace
 #define MARGO_DEBUG    margo_debug

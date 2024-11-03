@@ -264,11 +264,13 @@ void margo_finalize(margo_instance_id mid)
 
     /* tell progress thread to wrap things up */
     mid->hg_progress_shutdown_flag = 1;
+    PROGRESS_NEEDED_INCR(mid);
 
     /* wait for it to shutdown cleanly */
     MARGO_TRACE(mid, "Waiting for progress thread to complete");
     ABT_thread_join(mid->hg_progress_tid);
     ABT_thread_free(&mid->hg_progress_tid);
+    PROGRESS_NEEDED_DECR(mid);
     mid->refcount--;
 
     ABT_mutex_lock(mid->finalize_mutex);
@@ -701,11 +703,13 @@ margo_addr_lookup(margo_instance_id mid, const char* name, hg_addr_t* addr)
 
     hret = HG_Addr_lookup(mid->hg_context, margo_addr_lookup_cb,
                           (void*)eventual, name, HG_OP_ID_IGNORE);
+    PROGRESS_NEEDED_INCR(mid);
     if (hret == HG_SUCCESS) {
         ABT_eventual_wait(eventual, (void**)&evt);
         *addr = evt->addr;
         hret  = evt->hret;
     }
+    PROGRESS_NEEDED_DECR(mid);
 
     ABT_eventual_free(&eventual);
 #endif
@@ -901,6 +905,8 @@ static hg_return_t margo_cb(const struct hg_cb_info* info)
     // a callback-based request is heap-allocated but is not
     // handed to the user, hence it has to be freed here.
     if (req->kind == MARGO_REQ_CALLBACK) free(req);
+
+    PROGRESS_NEEDED_DECR(mid);
 
     return HG_SUCCESS;
 }
@@ -1115,6 +1121,7 @@ static hg_return_t margo_provider_iforward_internal(
         req->timer = NULL;
         // LCOV_EXCL_END
     }
+    PROGRESS_NEEDED_INCR(mid);
 
 finish:
 
@@ -1318,6 +1325,8 @@ margo_irespond_internal(hg_handle_t   handle,
            .header    = {.hg_ret = HG_SUCCESS}};
 
     hret = HG_Respond(handle, margo_cb, (void*)req, (void*)&respond_args);
+
+    if (hret == HG_SUCCESS) { PROGRESS_NEEDED_INCR(mid); }
 
 finish:
 
@@ -1677,6 +1686,7 @@ static hg_return_t margo_bulk_itransfer_internal(
     hret = HG_Bulk_transfer(mid->hg.hg_context, margo_cb, (void*)req, op,
                             origin_addr, origin_handle, origin_offset,
                             local_handle, local_offset, size, HG_OP_ID_IGNORE);
+    if (hret == HG_SUCCESS) { PROGRESS_NEEDED_INCR(mid); }
 
 finish:
 
@@ -1816,6 +1826,8 @@ void margo_thread_sleep(margo_instance_id mid, double timeout_ms)
                                  ABT_POOL_NULL, &sleep_timer);
     margo_timer_start(sleep_timer, timeout_ms);
 
+    PROGRESS_NEEDED_INCR(mid);
+
     /* yield thread for specified timeout */
     ABT_mutex_lock(sleep_cb_dat.mutex);
     while (sleep_cb_dat.is_asleep)
@@ -1827,6 +1839,8 @@ void margo_thread_sleep(margo_instance_id mid, double timeout_ms)
     ABT_cond_free(&sleep_cb_dat.cond);
 
     margo_timer_destroy(sleep_timer);
+
+    PROGRESS_NEEDED_DECR(mid);
 
     /* monitoring */
     __MARGO_MONITOR(mid, FN_END, sleep, monitoring_args);
@@ -1956,14 +1970,15 @@ void __margo_hg_progress_fn(void* foo)
     unsigned int           hg_progress_timeout;
     double                 next_timer_exp;
     unsigned int           pending;
-    int                    spin_flag = 0;
+    int                    spin_flag     = 0;
     double                 spin_start_ts = 0;
 
     while (!mid->hg_progress_shutdown_flag) {
+
+        /* Wait for progress to actually be needed */
+        WAIT_FOR_PROGRESS_TO_BE_NEEDED(mid);
+
         do {
-            /* save value of instance diag variable, in case it is modified
-             * while we are in loop
-             */
             ret = margo_internal_trigger(mid, 0, 1, &actual_count);
         } while ((ret == HG_SUCCESS) && actual_count
                  && !mid->hg_progress_shutdown_flag);
@@ -1978,7 +1993,7 @@ void __margo_hg_progress_fn(void* foo)
             /* We used a zero progress timeout (busy spinning) on the last
              * iteration.  See if spindown time has elapsed yet.
              */
-            if (((ABT_get_wtime() - spin_start_ts)*1000)
+            if (((ABT_get_wtime() - spin_start_ts) * 1000)
                 < (double)mid->hg_progress_spindown_msec) {
                 /* We are still in the spindown window; continue spinning
                  * regardless of current conditions.
@@ -2415,4 +2430,15 @@ hg_return_t _handler_for_NULL(hg_handle_t handle)
     __margo_respond_with_error(handle, HG_NOENTRY);
     margo_destroy(handle);
     return HG_SUCCESS;
+}
+
+int margo_set_progress_when_needed(margo_instance_id mid, bool when_needed)
+{
+    if (mid == MARGO_INSTANCE_NULL) return -1;
+    mid->progress_when_needed.flag = when_needed;
+    if (!when_needed) {
+        ABT_cond_signal(
+            ABT_COND_MEMORY_GET_HANDLE(&mid->progress_when_needed.cond));
+    }
+    return 0;
 }
