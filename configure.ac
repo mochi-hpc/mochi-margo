@@ -204,11 +204,12 @@ AC_ARG_WITH([mochi-plumber],
 [with_mochi_plumber=no])
 
 AS_IF([test "x$with_mochi_plumber" != xno],
-    [PKG_CHECK_MODULES([PLUMBER],[mochi-plumber],[],
+    [PKG_CHECK_MODULES([MOCHI_PLUMBER],[mochi-plumber],[],
         [AC_MSG_ERROR([Could not find working mochi-plumber installation!])])
-    LIBS="$PLUMBER_LIBS $LIBS"
-    CPPFLAGS="$PLUMBER_CFLAGS $CPPFLAGS"
-    CFLAGS="$PLUMBER_CFLAGS $CFLAGS"])
+    AC_DEFINE(HAVE_MOCHI_MOCHI_PLUMBER, 1, [mochi-plumber support enabled])
+    LIBS="$MOCHI_PLUMBER_LIBS $LIBS"
+    CPPFLAGS="$MOCHI_PLUMBER_CFLAGS $CPPFLAGS"
+    CFLAGS="$MOCHI_PLUMBER_CFLAGS $CFLAGS"])
 
 AC_CONFIG_LINKS([tests/unit-tests/test-configs.json:tests/unit-tests/test-configs.json])
 

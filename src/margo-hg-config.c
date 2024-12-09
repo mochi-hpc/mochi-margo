@@ -3,6 +3,9 @@
  *
  * See COPYRIGHT in top-level directory.
  */
+#ifdef HAVE_MOCHI_PLUMBER
+    #include <mochi-plumber.h>
+#endif
 #include "margo-hg-config.h"
 
 bool __margo_hg_validate_json(const struct json_object*   json,
@@ -216,8 +219,24 @@ bool __margo_hg_init_from_json(const struct json_object*   json,
         }
         hg->hg_class = user->hg_class;
     } else {
+        char* resolved_addr = NULL;
+#ifdef HAVE_MOCHI_PLUMBER
+        /* mochi-plumber is enabled.  Make a best effort to use it to
+         * resolve the input address into a more specific NIC assignment.
+         * Pass address through unmodified if it does not produce a result.
+         */
+        /* TODO: make bucket and nic selection policies configurable.
+         * "package" and "roundrobin" are likely good defaults on current
+         * generation Slingshot systems as of December 2024.
+         */
+        mochi_plumber_resolve_nic(user->protocol, "package", "roundrobin",
+                                  &resolved_addr);
+
+#endif
+        if (!resolved_addr) resolved_addr = (char*)user->protocol;
         hg->hg_class
-            = HG_Init_opt(user->protocol, user->listening, &(hg->hg_init_info));
+            = HG_Init_opt(resolved_addr, user->listening, &(hg->hg_init_info));
+        if (resolved_addr != user->protocol) free(resolved_addr);
         if (!hg->hg_class) {
             margo_error(0, "Could not initialize hg_class with protocol %s",
                         user->protocol);
