@@ -233,7 +233,13 @@ bool __margo_hg_init_from_json(const struct json_object*   json,
                                   &resolved_addr);
 
 #endif
-        if (!resolved_addr) resolved_addr = (char*)user->protocol;
+        if (!resolved_addr)
+            resolved_addr = (char*)user->protocol;
+        else
+            margo_info(
+                0,
+                "mochi-plumber resolved %s to %s for Mercury initialization.\n",
+                user->protocol, resolved_addr);
         hg->hg_class
             = HG_Init_opt(resolved_addr, user->listening, &(hg->hg_init_info));
         if (resolved_addr != user->protocol) free(resolved_addr);
