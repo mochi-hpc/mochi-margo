@@ -197,6 +197,19 @@ if test "$enable_coverage" = "yes" ; then
     LDFLAGS="--coverage -lgcov"
 fi
 
+AC_ARG_WITH([mochi-plumber],
+[AS_HELP_STRING([--with-mochi-plumber],
+  [enable support for mochi-plumber])],
+[],
+[with_mochi_plumber=no])
+
+AS_IF([test "x$with_mochi_plumber" != xno],
+    [PKG_CHECK_MODULES([PLUMBER],[mochi-plumber],[],
+        [AC_MSG_ERROR([Could not find working mochi-plumber installation!])])
+    LIBS="$PLUMBER_LIBS $LIBS"
+    CPPFLAGS="$PLUMBER_CFLAGS $CPPFLAGS"
+    CFLAGS="$PLUMBER_CFLAGS $CFLAGS"])
+
 AC_CONFIG_LINKS([tests/unit-tests/test-configs.json:tests/unit-tests/test-configs.json])
 
 AC_CONFIG_FILES([Makefile maint/margo.pc maint/margo-hg-shim.pc include/margo-version.h])
