@@ -3,6 +3,8 @@
  *
  * See COPYRIGHT in top-level directory.
  */
+
+#include "margo-config-private.h"
 #ifdef HAVE_MOCHI_PLUMBER
     #include <mochi-plumber.h>
 #endif
@@ -238,7 +240,7 @@ bool __margo_hg_init_from_json(const struct json_object*   json,
         else
             margo_info(
                 0,
-                "mochi-plumber resolved %s to %s for Mercury initialization.\n",
+                "mochi-plumber resolved %s to %s for Mercury initialization.",
                 user->protocol, resolved_addr);
         hg->hg_class
             = HG_Init_opt(resolved_addr, user->listening, &(hg->hg_init_info));
