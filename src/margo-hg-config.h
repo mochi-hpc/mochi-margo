@@ -49,6 +49,8 @@ bool                __margo_hg_validate_json(const struct json_object*,
                                              const margo_hg_user_args_t*);
 bool                __margo_hg_init_from_json(const struct json_object*,
                                               const margo_hg_user_args_t*,
+                                              const char* plumber_bucket_policy,
+                                              const char* plumber_nic_policy,
                                               margo_hg_t*);
 struct json_object* __margo_hg_to_json(const margo_hg_t*);
 void                __margo_hg_destroy(margo_hg_t*);

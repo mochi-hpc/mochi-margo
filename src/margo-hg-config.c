@@ -108,7 +108,9 @@ bool __margo_hg_validate_json(const struct json_object*   json,
 
 bool __margo_hg_init_from_json(const struct json_object*   json,
                                const margo_hg_user_args_t* user,
-                               margo_hg_t*                 hg)
+                               const char* plumber_bucket_policy,
+                               const char* plumber_nic_policy,
+                               margo_hg_t* hg)
 {
     if (user->hg_init_info && !user->hg_class) {
         // initialize hg_init_info from user-provided hg_init_info
@@ -227,12 +229,8 @@ bool __margo_hg_init_from_json(const struct json_object*   json,
          * resolve the input address into a more specific NIC assignment.
          * Pass address through unmodified if it does not produce a result.
          */
-        /* TODO: make bucket and nic selection policies configurable.
-         * "package" and "roundrobin" are likely good defaults on current
-         * generation Slingshot systems as of December 2024.
-         */
-        mochi_plumber_resolve_nic(user->protocol, "package", "roundrobin",
-                                  &resolved_addr);
+        mochi_plumber_resolve_nic(user->protocol, plumber_bucket_policy,
+                                  plumber_nic_policy, &resolved_addr);
 
 #endif
         if (!resolved_addr)
