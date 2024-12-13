@@ -11,6 +11,7 @@ jobs:
     name: Build the latest version of the package
     steps:
     - uses: actions/checkout@v4
-    - uses: mochi-hpc/mochi-test-build-action@v1
+    - uses: mochi-hpc/mochi-test-build-action@v2
       with:
         build-cache-token: ${{ secrets.GITHUB_TOKEN }}
+        push-only-dependencies: false
