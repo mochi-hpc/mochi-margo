@@ -64,15 +64,12 @@ jobs:
         cat tests/*.log
         cat tests/unit-tests/*.log
 
-    # Note: to be able to push the specs to the build cache,
-    # The repository should have Write access here:
-    # https://github.com/orgs/mochi-hpc/packages/container/mochi-spack-buildcache/settings
-    - name: Push packages to buildcache and update index
-      if: ${{ !cancelled() }}
-      run: |
-        export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
-        spack -e tests mirror set --push \
-          --oci-username ${{ github.actor }} \
-          --oci-password-variable GITHUB_TOKEN mochi-buildcache
-        spack -e tests buildcache push --base-image ubuntu:22.04 \
-          --unsigned --update-index mochi-buildcache
+#    - name: Push packages to buildcache and update index
+#      if: ${{ !cancelled() }}
+#      run: |
+#        export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+#        spack -e tests mirror set --push \
+#          --oci-username ${{ github.actor }} \
+#          --oci-password-variable GITHUB_TOKEN mochi-buildcache
+#        spack -e tests buildcache push --base-image ubuntu:22.04 \
+#          --unsigned --update-index mochi-buildcache
