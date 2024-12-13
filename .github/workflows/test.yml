@@ -28,7 +28,7 @@ jobs:
     - name: Set install root for Spack
       run: |
         spack -e tests config add config:install_tree:root:/opt/spack
-        spack -e tests config add view:/opt/spack
+        spack -e tests config add view:/opt/view
 
     - name: Add mochi-spack-packages
       run: |
