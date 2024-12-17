@@ -24,6 +24,7 @@ static bool __margo_validate_json(struct json_object*           _config,
                                   const char*                   address,
                                   int                           mode,
                                   const struct margo_init_info* uargs);
+bool        __margo_plumber_validate_json(const json_object_t* p);
 
 // Sets environment variables for Argobots
 static void set_argobots_environment_variables(struct json_object* config);
@@ -71,7 +72,9 @@ margo_instance_id margo_init_ext(const char*                   address,
     struct json_object* config = NULL;
     int                 ret;
     hg_return_t         hret;
-    margo_instance_id   mid = MARGO_INSTANCE_NULL;
+    margo_instance_id   mid                   = MARGO_INSTANCE_NULL;
+    char*               plumber_bucket_policy = NULL;
+    char*               plumber_nic_policy    = NULL;
 
     struct margo_hg hg
         = {HG_INIT_INFO_INITIALIZER, NULL, NULL, HG_ADDR_NULL, NULL, 0};
@@ -104,6 +107,20 @@ margo_instance_id margo_init_ext(const char*                   address,
     margo_trace(0, "Validating JSON configuration");
     if (!__margo_validate_json(config, address, mode, &args)) goto error;
 
+#ifdef HAVE_MOCHI_PLUMBER
+    struct json_object* plumber_config
+        = json_object_object_get(config, "plumber");
+    if (plumber_config) {
+        plumber_bucket_policy = strdup(json_object_object_get_string_or(
+            plumber_config, "bucket_policy", "package"));
+        plumber_nic_policy    = strdup(json_object_object_get_string_or(
+            plumber_config, "nic_policy", "roundrobin"));
+    } else {
+        plumber_bucket_policy = strdup("package");
+        plumber_nic_policy    = strdup("roundrobin");
+    }
+#endif
+
     margo_trace(0, "Initializing Mercury");
     struct json_object* hg_config = json_object_object_get(config, "mercury");
     struct margo_hg_user_args hg_user_args = {.hg_class     = args.hg_class,
@@ -111,7 +128,10 @@ margo_instance_id margo_init_ext(const char*                   address,
                                               .hg_init_info = args.hg_init_info,
                                               .listening    = mode,
                                               .protocol     = address};
-    if (!__margo_hg_init_from_json(hg_config, &hg_user_args, &hg)) goto error;
+    if (!__margo_hg_init_from_json(hg_config, &hg_user_args,
+                                   plumber_bucket_policy, plumber_nic_policy,
+                                   &hg))
+        goto error;
 
     margo_trace(0, "Initializing Argobots");
     struct json_object* abt_config = json_object_object_get(config, "argobots");
@@ -303,6 +323,9 @@ margo_instance_id margo_init_ext(const char*                   address,
     mid->hg_progress_shutdown_flag = 0;
     mid->hg_progress_timeout_ub    = progress_timeout_ub;
 
+    mid->plumber_nic_policy    = plumber_nic_policy;
+    mid->plumber_bucket_policy = plumber_bucket_policy;
+
     mid->num_registered_rpcs = 0;
     mid->registered_rpcs     = NULL;
 
@@ -387,6 +410,8 @@ error:
         ABT_cond_free(&mid->finalize_cond);
         ABT_mutex_free(&mid->pending_operations_mtx);
         if (mid->current_rpc_id_key) ABT_key_free(&(mid->current_rpc_id_key));
+        if (mid->plumber_bucket_policy) free(mid->plumber_bucket_policy);
+        if (mid->plumber_nic_policy) free(mid->plumber_nic_policy);
         free(mid);
     }
     __margo_hg_destroy(&hg);
@@ -422,6 +447,9 @@ static bool __margo_validate_json(struct json_object*           _margo,
        - [optional] progress_pool: integer or string
        - [optional] rpc_pool: integer or string
        - [optional] monitoring: object
+       - [optional] plumber: object
+       -            [optional]: bucket_policy: string
+       -            [optional]: nic_policy: string
     */
 
     // check "mercury" configuration field
@@ -436,6 +464,10 @@ static bool __margo_validate_json(struct json_object*           _margo,
     // check "argobots" configuration field
     struct json_object* _argobots = json_object_object_get(_margo, "argobots");
     if (!__margo_abt_validate_json(_argobots)) { return false; }
+
+    // check "plumber" configuration field
+    struct json_object* _plumber = json_object_object_get(_margo, "plumber");
+    if (!__margo_plumber_validate_json(_plumber)) { return false; }
 
     // check "progress_spindown_msec" field
     ASSERT_CONFIG_HAS_OPTIONAL(_margo, "progress_spindown_msec", int, "margo");
@@ -761,3 +793,42 @@ static void remote_shutdown_ult(hg_handle_t handle)
     if (mid->enable_remote_shutdown) { margo_finalize(mid); }
 }
 static DEFINE_MARGO_RPC_HANDLER(remote_shutdown_ult)
+
+bool __margo_plumber_validate_json(const json_object_t* p)
+{
+    json_object_t* policy;
+
+    if (!p) { return true; }
+
+#ifndef HAVE_MOCHI_PLUMBER
+    margo_error(
+        0,
+        "\"plumber\" field is present but mochi-plumber support is disabled");
+    return (false);
+#endif
+
+    if (!json_object_is_type(p, json_type_object)) {
+        margo_error(0,
+                    "\"plumber\" field in configuration "
+                    "should be an object");
+        return (false);
+    }
+
+    /* if policy settings are present, they must be strings */
+    policy = json_object_object_get(p, "bucket_policy");
+    if (policy && !json_object_is_type(policy, json_type_string)) {
+        margo_error(0,
+                    "\"bucket_policy\" field in plumber configuration "
+                    "should be a string");
+        return (false);
+    }
+    policy = json_object_object_get(p, "nic_policy");
+    if (policy && !json_object_is_type(policy, json_type_string)) {
+        margo_error(0,
+                    "\"nic_policy\" field in plumber configuration "
+                    "should be a string");
+        return (false);
+    }
+
+    return true;
+}
