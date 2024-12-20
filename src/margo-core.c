@@ -2234,6 +2234,8 @@ void __margo_internal_decr_pending(margo_instance_id mid)
 hg_return_t margo_set_current_rpc_id(margo_instance_id mid, hg_id_t parent_id)
 {
     if (mid == MARGO_INSTANCE_NULL) return HG_INVALID_ARG;
+    if (!mid->rpc_tracing_enabled) return HG_SUCCESS;
+
     // rely on the fact that sizeof(void*) == sizeof(hg_id_t)
     if (parent_id == 0) parent_id = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
     int ret = ABT_key_set(mid->current_rpc_id_key, (void*)parent_id);
@@ -2244,6 +2246,11 @@ hg_return_t margo_set_current_rpc_id(margo_instance_id mid, hg_id_t parent_id)
 hg_return_t margo_get_current_rpc_id(margo_instance_id mid, hg_id_t* parent_id)
 {
     if (mid == MARGO_INSTANCE_NULL) return HG_INVALID_ARG;
+    if (!mid->rpc_tracing_enabled) {
+        *parent_id = 0;
+        return HG_SUCCESS;
+    }
+
     int ret = ABT_key_get(mid->current_rpc_id_key, (void**)parent_id);
     if (ret != ABT_SUCCESS || *parent_id == 0) {
         *parent_id = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);

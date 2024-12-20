@@ -65,6 +65,10 @@ char* margo_get_config_opt(margo_instance_id mid, int options)
     json_object_object_add_ex(
         root, "enable_abt_profiling",
         json_object_new_boolean(mid->abt_profiling_enabled), flags);
+    // rpc tracing
+    json_object_object_add_ex(root, "enable_rpc_tracing",
+                              json_object_new_boolean(mid->rpc_tracing_enabled),
+                              flags);
 
     // progress_pool and rpc_pool
     if (options & MARGO_CONFIG_USE_NAMES) {

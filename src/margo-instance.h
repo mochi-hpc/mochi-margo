@@ -133,14 +133,14 @@ struct margo_instance {
 
     /* optional diagnostics data tracking */
     int abt_profiling_enabled;
+    int rpc_tracing_enabled;
 };
 
 #define MARGO_PROGRESS_POOL(mid) (mid)->abt.pools[mid->progress_pool_idx].pool
 
 #define MARGO_RPC_POOL(mid) (mid)->abt.pools[mid->rpc_pool_idx].pool
 
-typedef enum margo_request_kind
-{
+typedef enum margo_request_kind {
     MARGO_REQ_EVENTUAL,
     MARGO_REQ_CALLBACK
 } margo_request_kind;
@@ -168,10 +168,10 @@ struct margo_request_struct {
 struct margo_rpc_data {
     margo_instance_id mid;
     _Atomic(ABT_pool) pool;
-    char*        rpc_name;
-    hg_proc_cb_t in_proc_cb;  /* user-provided input proc */
-    hg_proc_cb_t out_proc_cb; /* user-provided output proc */
-    void*        user_data;
+    char*             rpc_name;
+    hg_proc_cb_t      in_proc_cb;  /* user-provided input proc */
+    hg_proc_cb_t      out_proc_cb; /* user-provided output proc */
+    void*             user_data;
     void (*user_free_callback)(void*);
 };
 
