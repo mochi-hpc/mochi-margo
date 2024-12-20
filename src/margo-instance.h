@@ -134,6 +134,10 @@ struct margo_instance {
     /* optional diagnostics data tracking */
     int abt_profiling_enabled;
     int rpc_tracing_enabled;
+
+    /* margo plumber policies, if enabled */
+    char* plumber_bucket_policy;
+    char* plumber_nic_policy;
 };
 
 #define MARGO_PROGRESS_POOL(mid) (mid)->abt.pools[mid->progress_pool_idx].pool
