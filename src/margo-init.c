@@ -287,10 +287,13 @@ margo_instance_id margo_init_ext(const char*                   address,
         = json_object_object_get_int_or(config, "handle_cache_size", 32);
     int abt_profiling_enabled
         = json_object_object_get_bool_or(config, "enable_abt_profiling", false);
+    int rpc_tracing_enabled
+        = json_object_object_get_bool_or(config, "enable_rpc_tracing", false);
 
     mid->refcount = 0;
 
     mid->abt_profiling_enabled = abt_profiling_enabled;
+    mid->rpc_tracing_enabled   = rpc_tracing_enabled;
 
     mid->hg      = hg;
     mid->abt     = abt;
@@ -356,6 +359,9 @@ margo_instance_id margo_init_ext(const char*                   address,
                 mid, mid->monitor->uargs, monitoring_config);
 
         json_object_put(monitoring_config);
+
+        /* enable rpc tracing automatically if monitoring is enabled */
+        mid->rpc_tracing_enabled = 1;
     }
 
     /* start abt profiling if enabled */
