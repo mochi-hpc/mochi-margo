@@ -26,12 +26,13 @@
     if(ret != ABT_SUCCESS) return ret;                            \
     ret = ABT_thread_attr_get_stack(attr, &stackaddr, &stacksize);\
     if(ret != ABT_SUCCESS) return ret;                            \
+    ABT_thread_attr_free(&attr);                                  \
     if(!stackaddr || !stacksize) return ABT_ERR_KEY;              \
     char* stackend = (char*)stackaddr + stacksize
 
 static inline int margo_lineage_set(hg_id_t current_rpc_id) {
     __MARGO_LINEAGE_COMMON;
-    memcpy(stackend - 8 - sizeof(current_rpc_id), magic, 8);
+    memcpy(stackend - 8 - sizeof(hg_id_t), magic, 8);
     memcpy(stackend - 8, &current_rpc_id, sizeof(current_rpc_id));
     return ABT_SUCCESS;
 }
@@ -44,7 +45,7 @@ static inline int margo_lineage_erase() {
 
 static inline int margo_lineage_get(hg_id_t* current_rpc_id) {
     __MARGO_LINEAGE_COMMON;
-    if(memcmp(stackend - 8 - sizeof(current_rpc_id), magic, 8) != 0)
+    if(memcmp(stackend - 8 - sizeof(hg_id_t), magic, 8) != 0)
         return ABT_ERR_KEY;
     memcpy(current_rpc_id, stackend - 8, sizeof(*current_rpc_id));
     return ABT_SUCCESS;
