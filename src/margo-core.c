@@ -24,6 +24,7 @@
 #include "margo-timer-private.h"
 #include "margo-serialization.h"
 #include "margo-id.h"
+#include "margo-rpc-lineage.h"
 #include "utlist.h"
 #include "uthash.h"
 #include "abtx_prof.h"
@@ -171,7 +172,6 @@ static void margo_cleanup(margo_instance_id mid)
     ABT_mutex_free(&mid->finalize_mutex);
     ABT_cond_free(&mid->finalize_cond);
     ABT_mutex_free(&mid->pending_operations_mtx);
-    ABT_key_free(&(mid->current_rpc_id_key));
 
     /* monitoring (destroyed before Argobots since it contains mutexes) */
     __MARGO_MONITOR(mid, FN_END, finalize, monitoring_args);
@@ -2234,9 +2234,8 @@ void __margo_internal_decr_pending(margo_instance_id mid)
 hg_return_t margo_set_current_rpc_id(margo_instance_id mid, hg_id_t parent_id)
 {
     if (mid == MARGO_INSTANCE_NULL) return HG_INVALID_ARG;
-    // rely on the fact that sizeof(void*) == sizeof(hg_id_t)
     if (parent_id == 0) parent_id = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
-    int ret = ABT_key_set(mid->current_rpc_id_key, (void*)parent_id);
+    int ret = margo_lineage_set(parent_id);
     if (ret != ABT_SUCCESS) return HG_OTHER_ERROR;
     return HG_SUCCESS;
 }
@@ -2244,7 +2243,7 @@ hg_return_t margo_set_current_rpc_id(margo_instance_id mid, hg_id_t parent_id)
 hg_return_t margo_get_current_rpc_id(margo_instance_id mid, hg_id_t* parent_id)
 {
     if (mid == MARGO_INSTANCE_NULL) return HG_INVALID_ARG;
-    int ret = ABT_key_get(mid->current_rpc_id_key, (void**)parent_id);
+    int ret = margo_lineage_get(parent_id);
     if (ret != ABT_SUCCESS || *parent_id == 0) {
         *parent_id = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
         return HG_OTHER_ERROR;
@@ -2298,6 +2297,8 @@ void __margo_internal_post_wrapper_hooks(
 
     __margo_internal_decr_pending(mid);
     if (__margo_internal_finalize_requested(mid)) { margo_finalize(mid); }
+
+    margo_lineage_erase();
 }
 
 static void margo_handle_data_free(void* args)
