@@ -128,9 +128,6 @@ struct margo_instance {
     _Atomic uint64_t num_progress_calls;
     _Atomic uint64_t num_trigger_calls;
 
-    /* callpath tracking */
-    ABT_key current_rpc_id_key;
-
     /* optional diagnostics data tracking */
     int abt_profiling_enabled;
 
