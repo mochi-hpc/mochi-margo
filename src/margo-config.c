@@ -23,6 +23,7 @@ char* margo_get_config_opt(margo_instance_id mid, int options)
         json_to_string_flags |= JSON_C_TO_STRING_PRETTY;
     }
     struct json_object* root = json_object_new_object();
+
     // margo version
     json_object_object_add_ex(root, "version",
                               json_object_new_string(PACKAGE_VERSION), flags);
@@ -49,6 +50,20 @@ char* margo_get_config_opt(margo_instance_id mid, int options)
         }
         json_object_object_add_ex(root, "monitoring", monitoring, flags);
     }
+
+#ifdef HAVE_MOCHI_PLUMBER
+    // plumber policy
+    struct json_object* _plumber = NULL;
+    _plumber                     = json_object_new_object();
+    json_object_object_add_ex(
+        _plumber, "bucket_policy",
+        json_object_new_string(mid->plumber_bucket_policy), flags);
+    json_object_object_add_ex(_plumber, "nic_policy",
+                              json_object_new_string(mid->plumber_nic_policy),
+                              flags);
+    json_object_object_add_ex(root, "plumber", _plumber, flags);
+#endif
+
     // progress_timeout_ub_msec
     json_object_object_add_ex(
         root, "progress_timeout_ub_msec",

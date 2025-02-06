@@ -3,6 +3,11 @@
  *
  * See COPYRIGHT in top-level directory.
  */
+
+#include "margo-config-private.h"
+#ifdef HAVE_MOCHI_PLUMBER
+    #include <mochi-plumber.h>
+#endif
 #include "margo-hg-config.h"
 
 bool __margo_hg_validate_json(const struct json_object*   json,
@@ -103,7 +108,9 @@ bool __margo_hg_validate_json(const struct json_object*   json,
 
 bool __margo_hg_init_from_json(const struct json_object*   json,
                                const margo_hg_user_args_t* user,
-                               margo_hg_t*                 hg)
+                               const char* plumber_bucket_policy,
+                               const char* plumber_nic_policy,
+                               margo_hg_t* hg)
 {
     if (user->hg_init_info && !user->hg_class) {
         // initialize hg_init_info from user-provided hg_init_info
@@ -216,8 +223,26 @@ bool __margo_hg_init_from_json(const struct json_object*   json,
         }
         hg->hg_class = user->hg_class;
     } else {
+        char* resolved_addr = NULL;
+#ifdef HAVE_MOCHI_PLUMBER
+        /* mochi-plumber is enabled.  Make a best effort to use it to
+         * resolve the input address into a more specific NIC assignment.
+         * Pass address through unmodified if it does not produce a result.
+         */
+        mochi_plumber_resolve_nic(user->protocol, plumber_bucket_policy,
+                                  plumber_nic_policy, &resolved_addr);
+
+#endif
+        if (!resolved_addr)
+            resolved_addr = (char*)user->protocol;
+        else
+            margo_debug(
+                0,
+                "mochi-plumber resolved %s to %s for Mercury initialization.",
+                user->protocol, resolved_addr);
         hg->hg_class
-            = HG_Init_opt(user->protocol, user->listening, &(hg->hg_init_info));
+            = HG_Init_opt(resolved_addr, user->listening, &(hg->hg_init_info));
+        if (resolved_addr != user->protocol) free(resolved_addr);
         if (!hg->hg_class) {
             margo_error(0, "Could not initialize hg_class with protocol %s",
                         user->protocol);

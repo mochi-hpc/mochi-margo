@@ -180,6 +180,9 @@ static void margo_cleanup(margo_instance_id mid)
         mid->monitor->finalize(mid->monitor->uargs);
     free(mid->monitor);
 
+    free(mid->plumber_bucket_policy);
+    free(mid->plumber_nic_policy);
+
     MARGO_TRACE(mid, "Destroying Argobots environment");
     __margo_abt_destroy(&(mid->abt));
     free(mid);
