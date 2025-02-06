@@ -330,10 +330,6 @@ margo_instance_id margo_init_ext(const char*                   address,
     hret                   = __margo_handle_cache_init(mid, handle_cache_size);
     if (hret != HG_SUCCESS) goto error;
 
-    // create current_rpc_id_key ABT_key
-    ret = ABT_key_create(NULL, &(mid->current_rpc_id_key));
-    if (ret != ABT_SUCCESS) goto error;
-
     // set logger
     margo_set_logger(mid, args.logger);
 
@@ -386,7 +382,6 @@ error:
         ABT_mutex_free(&mid->finalize_mutex);
         ABT_cond_free(&mid->finalize_cond);
         ABT_mutex_free(&mid->pending_operations_mtx);
-        if (mid->current_rpc_id_key) ABT_key_free(&(mid->current_rpc_id_key));
         free(mid);
     }
     __margo_hg_destroy(&hg);
