@@ -410,8 +410,8 @@ error:
         ABT_cond_free(&mid->finalize_cond);
         ABT_mutex_free(&mid->pending_operations_mtx);
         if (mid->current_rpc_id_key) ABT_key_free(&(mid->current_rpc_id_key));
-        if (mid->plumber_bucket_policy) free(mid->plumber_bucket_policy);
-        if (mid->plumber_nic_policy) free(mid->plumber_nic_policy);
+        free(mid->plumber_bucket_policy);
+        free(mid->plumber_nic_policy);
         free(mid);
     }
     __margo_hg_destroy(&hg);

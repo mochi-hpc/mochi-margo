@@ -22,8 +22,7 @@ char* margo_get_config_opt(margo_instance_id mid, int options)
     if (options & MARGO_CONFIG_PRETTY_JSON) {
         json_to_string_flags |= JSON_C_TO_STRING_PRETTY;
     }
-    struct json_object* root     = json_object_new_object();
-    struct json_object* _plumber = NULL;
+    struct json_object* root = json_object_new_object();
 
     // margo version
     json_object_object_add_ex(root, "version",
@@ -54,7 +53,8 @@ char* margo_get_config_opt(margo_instance_id mid, int options)
 
 #ifdef HAVE_MOCHI_PLUMBER
     // plumber policy
-    _plumber = json_object_new_object();
+    struct json_object* _plumber = NULL;
+    _plumber                     = json_object_new_object();
     json_object_object_add_ex(
         _plumber, "bucket_policy",
         json_object_new_string(mid->plumber_bucket_policy), flags);
