@@ -11,7 +11,7 @@ jobs:
     name: Build the main version of the package
     steps:
     - uses: actions/checkout@v4
-    - uses: mochi-hpc/mochi-test-build-action@v2
+    - uses: mochi-hpc/mochi-test-build-action@v3
       with:
         package-version: "@main"
         build-cache-token: ${{ secrets.GITHUB_TOKEN }}
