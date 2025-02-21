@@ -18,7 +18,8 @@ check_PROGRAMS += \
  tests/unit-tests/margo-comm-finalize \
  tests/unit-tests/margo-forward \
  tests/unit-tests/margo-monitoring \
- tests/unit-tests/margo-sanity-warnings
+ tests/unit-tests/margo-sanity-warnings \
+ tests/unit-tests/margo-migrate-progress
 
 TESTS += \
  tests/unit-tests/margo-addr \
@@ -38,7 +39,8 @@ TESTS += \
  tests/unit-tests/margo-comm-finalize \
  tests/unit-tests/margo-forward \
  tests/unit-tests/margo-monitoring \
- tests/unit-tests/margo-sanity-warnings
+ tests/unit-tests/margo-sanity-warnings \
+ tests/unit-tests/margo-migrate-progress
 
 tests_unit_tests_margo_addr_SOURCES = \
  tests/unit-tests/munit/munit.c \
@@ -125,6 +127,11 @@ tests_unit_tests_margo_monitoring_SOURCES = \
 tests_unit_tests_margo_sanity_warnings_SOURCES = \
  tests/unit-tests/munit/munit.c \
  tests/unit-tests/margo-sanity-warnings.c
+
+tests_unit_tests_margo_migrate_progress_SOURCES = \
+ tests/unit-tests/munit/munit.c \
+ tests/unit-tests/margo-migrate-progress.c \
+ tests/unit-tests/helper-server.c
 
 noinst_HEADERS += tests/unit-tests/munit/munit.h \
                   tests/unit-tests/helper-server.h

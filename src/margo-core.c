@@ -2445,3 +2445,13 @@ int margo_set_progress_when_needed(margo_instance_id mid, bool when_needed)
     }
     return 0;
 }
+
+int margo_migrate_progress_loop(margo_instance_id mid, unsigned pool_idx)
+{
+    if (mid == MARGO_INSTANCE_NULL) return ABT_ERR_INV_ARG;
+    if (pool_idx >= mid->abt.pools_len) return ABT_ERR_INV_ARG;
+    if (pool_idx == mid->progress_pool_idx) return 0;
+    mid->progress_pool_idx = pool_idx;
+    ABT_pool target_pool = mid->abt.pools[pool_idx].pool;
+    return ABT_thread_migrate_to_pool(mid->hg_progress_tid, target_pool);
+}
