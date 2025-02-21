@@ -1903,6 +1903,16 @@ int margo_get_progress_timeout_ub_msec(margo_instance_id mid,
 int margo_set_progress_when_needed(margo_instance_id mid, bool when_needed);
 
 /**
+ * @brief Migrate the margo instance's progress ULT to the specified pool.
+ *
+ * @param mid Margo instance.
+ * @param pool_idx index of the pool.
+ *
+ * @return 0 in case of success, an ABT error otherwise.
+ */
+int margo_migrate_progress_loop(margo_instance_id mid, unsigned pool_idx);
+
+/**
  * @brief Sets configurable parameters/hints.
  *
  * @param [in] mid Margo instance.
