@@ -883,10 +883,10 @@ static hg_return_t margo_cb(const struct hg_cb_info* info)
     }
 
     if (req->kind == MARGO_REQ_CALLBACK) {
-        if (req->u.callback.cb) req->u.callback.cb(req->u.callback.uargs, hret);
+        if (req->callback.cb) req->callback.cb(req->callback.uargs, hret);
     } else {
-        req->u.eventual.hret = hret;
-        MARGO_EVENTUAL_SET(req->u.eventual.ev);
+        req->eventual.hret = hret;
+        MARGO_EVENTUAL_SET(req->eventual.ev);
     }
 
     /* monitoring */
@@ -926,10 +926,10 @@ static hg_return_t margo_wait_internal(margo_request req)
         = {.request = req, .ret = HG_SUCCESS};
     __MARGO_MONITOR(req->mid, FN_START, wait, monitoring_args);
 
-    MARGO_EVENTUAL_WAIT(req->u.eventual.ev);
-    MARGO_EVENTUAL_FREE(&(req->u.eventual.ev));
-    if (req->u.eventual.hret != HG_SUCCESS) {
-        hret = req->u.eventual.hret;
+    MARGO_EVENTUAL_WAIT(req->eventual.ev);
+    MARGO_EVENTUAL_FREE(&(req->eventual.ev));
+    if (req->eventual.hret != HG_SUCCESS) {
+        hret = req->eventual.hret;
         goto finish;
     }
     if (req->type == MARGO_FORWARD_REQUEST)
@@ -944,11 +944,17 @@ finish:
     return hret;
 }
 
-static void margo_forward_timeout_cb(void* arg)
+static void margo_timeout_cb(void* arg)
 {
     margo_request req = (margo_request)arg;
-    /* cancel the Mercury op if the forward timed out */
-    HG_Cancel(req->handle);
+    if(req->type == MARGO_FORWARD_REQUEST) {
+        /* cancel the Mercury op if the forward timed out */
+        HG_Cancel(req->handle);
+    }
+    if(req->type == MARGO_BULK_REQUEST) {
+        /* cancel the Mercury op if the bulk transfer timed out */
+        HG_Bulk_cancel(req->bulk_op);
+    }
 }
 
 static hg_return_t margo_provider_iforward_internal(
@@ -960,7 +966,6 @@ static hg_return_t margo_provider_iforward_internal(
 {
     hg_return_t               hret = HG_TIMEOUT;
     int                       ret;
-    margo_eventual_t          eventual;
     const struct hg_info*     hgi;
     struct margo_handle_data* handle_data;
     hg_id_t                   client_id, server_id;
@@ -1058,7 +1063,7 @@ static hg_return_t margo_provider_iforward_internal(
     }
 
     if (req->kind == MARGO_REQ_EVENTUAL) {
-        ret = MARGO_EVENTUAL_CREATE(&eventual);
+        ret = MARGO_EVENTUAL_CREATE(&req->eventual.ev);
         if (ret != 0) {
             // LCOV_EXCL_START
             margo_error(mid, "in %s: ABT_eventual_create failed: %d", __func__,
@@ -1067,7 +1072,6 @@ static hg_return_t margo_provider_iforward_internal(
             goto finish;
             // LCOV_EXCL_END
         }
-        req->u.eventual.ev = eventual;
     }
 
     req->type   = MARGO_FORWARD_REQUEST;
@@ -1077,11 +1081,10 @@ static hg_return_t margo_provider_iforward_internal(
 
     if (timeout_ms > 0) {
         /* set a timer object to expire when this forward times out */
-        hret = margo_timer_create_with_pool(mid, margo_forward_timeout_cb, req,
+        hret = margo_timer_create_with_pool(mid, margo_timeout_cb, req,
                                             ABT_POOL_NULL, &req->timer);
         if (hret != HG_SUCCESS) {
             // LCOV_EXCL_START
-            MARGO_EVENTUAL_FREE(&eventual);
             margo_error(mid, "in %s: could not create timer", __func__);
             goto finish;
             // LCOV_EXCL_END
@@ -1090,7 +1093,6 @@ static hg_return_t margo_provider_iforward_internal(
         if (hret != HG_SUCCESS) {
             // LCOV_EXCL_START
             margo_timer_destroy(req->timer);
-            MARGO_EVENTUAL_FREE(&eventual);
             margo_error(mid, "in %s: could not start timer", __func__);
             goto finish;
             // LCOV_EXCL_END
@@ -1114,7 +1116,6 @@ static hg_return_t margo_provider_iforward_internal(
     if (hret != HG_SUCCESS) {
         margo_error(mid, "in %s: HG_Forward failed: %s", __func__,
                     HG_Error_to_string(hret));
-        MARGO_EVENTUAL_FREE(&eventual);
     }
     /* remove timer if HG_Forward failed */
     if (hret != HG_SUCCESS && req->timer) {
@@ -1127,6 +1128,10 @@ static hg_return_t margo_provider_iforward_internal(
     PROGRESS_NEEDED_INCR(mid);
 
 finish:
+
+    if(hret != HG_SUCCESS && req->kind == MARGO_REQ_EVENTUAL) {
+        MARGO_EVENTUAL_FREE(&req->eventual.ev);
+    }
 
     /* monitoring */
     monitoring_args.ret = hret;
@@ -1179,8 +1184,8 @@ hg_return_t margo_provider_cforward_timed(uint16_t    provider_id,
     margo_request tmp_req = calloc(1, sizeof(*tmp_req));
     if (!tmp_req) { return HG_NOMEM_ERROR; }
     tmp_req->kind             = MARGO_REQ_CALLBACK;
-    tmp_req->u.callback.cb    = on_complete;
-    tmp_req->u.callback.uargs = uargs;
+    tmp_req->callback.cb    = on_complete;
+    tmp_req->callback.uargs = uargs;
 
     hret = margo_provider_iforward_internal(provider_id, handle, timeout_ms,
                                             in_struct, tmp_req);
@@ -1201,7 +1206,7 @@ hg_return_t margo_wait(margo_request req)
 int margo_test(margo_request req, int* flag)
 {
     if (req->kind != MARGO_REQ_EVENTUAL) return -1;
-    return MARGO_EVENTUAL_TEST(req->u.eventual.ev, flag);
+    return MARGO_EVENTUAL_TEST(req->eventual.ev, flag);
 }
 
 hg_return_t margo_wait_any(size_t count, margo_request* req, size_t* index)
@@ -1271,18 +1276,6 @@ margo_irespond_internal(hg_handle_t   handle,
 
     mid         = handle_data->mid;
 
-    if (req->kind == MARGO_REQ_EVENTUAL) {
-        ret = MARGO_EVENTUAL_CREATE(&req->u.eventual.ev);
-        if (ret != 0) {
-            // LCOV_EXCL_START
-            margo_error(mid, "in %s: ABT_eventual_create failed: %d", __func__,
-                        ret);
-            hret = HG_NOMEM_ERROR;
-            goto finish;
-            // LCOV_EXCL_END
-        }
-    }
-
     req->type   = MARGO_RESPONSE_REQUEST;
     req->handle = handle;
     req->timer  = NULL;
@@ -1298,12 +1291,16 @@ margo_irespond_internal(hg_handle_t   handle,
     __MARGO_MONITOR(mid, FN_START, respond, monitoring_args);
 
     out_cb = handle_data->out_proc_cb;
-    ret    = MARGO_EVENTUAL_CREATE(&(req->u.eventual.ev));
-    if (ret != 0) {
-        margo_error(mid, "Allocate of Argobots eventual failed in %s",
-                    __func__);
-        hret = HG_NOMEM_ERROR;
-        goto finish;
+    if (req->kind == MARGO_REQ_EVENTUAL) {
+        ret = MARGO_EVENTUAL_CREATE(&req->eventual.ev);
+        if (ret != 0) {
+            // LCOV_EXCL_START
+            margo_error(mid, "in %s: ABT_eventual_create failed: %d", __func__,
+                        ret);
+            hret = HG_NOMEM_ERROR;
+            goto finish;
+            // LCOV_EXCL_END
+        }
     }
 
     // create the margo_respond_proc_args for the serializer
@@ -1319,6 +1316,10 @@ margo_irespond_internal(hg_handle_t   handle,
     if (hret == HG_SUCCESS) { PROGRESS_NEEDED_INCR(mid); }
 
 finish:
+
+    if (hret != HG_SUCCESS && req->kind == MARGO_REQ_EVENTUAL) {
+        MARGO_EVENTUAL_FREE(&req->eventual.ev);
+    }
 
     /* monitoring */
     monitoring_args.ret = hret;
@@ -1383,8 +1384,8 @@ hg_return_t margo_crespond(hg_handle_t handle,
     margo_request tmp_req = calloc(1, sizeof(*tmp_req));
     if (!tmp_req) { return (HG_NOMEM_ERROR); }
     tmp_req->kind             = MARGO_REQ_CALLBACK;
-    tmp_req->u.callback.cb    = on_complete;
-    tmp_req->u.callback.uargs = uargs;
+    tmp_req->callback.cb    = on_complete;
+    tmp_req->callback.uargs = uargs;
     hret = margo_irespond_internal(handle, out_struct, tmp_req);
     if (hret != HG_SUCCESS) {
         free(tmp_req);
@@ -1663,6 +1664,7 @@ static hg_return_t margo_bulk_itransfer_internal(
     hg_bulk_t         local_handle,
     size_t            local_offset,
     size_t            size,
+    double            timeout_ms,
     margo_request     req) /* should have been allocated */
 {
     hg_return_t hret = HG_TIMEOUT;
@@ -1687,15 +1689,50 @@ static hg_return_t margo_bulk_itransfer_internal(
            .ret           = HG_SUCCESS};
     __MARGO_MONITOR(mid, FN_START, bulk_transfer, monitoring_args);
 
-    ret = MARGO_EVENTUAL_CREATE(&(req->u.eventual.ev));
-    if (ret != 0) {
-        hret = HG_NOMEM_ERROR;
-        goto finish;
+    if (req->kind == MARGO_REQ_EVENTUAL) {
+        ret = MARGO_EVENTUAL_CREATE(&req->eventual.ev);
+        if (ret != 0) {
+            // LCOV_EXCL_START
+            margo_error(mid, "in %s: ABT_eventual_create failed: %d", __func__,
+                        ret);
+            hret = HG_NOMEM_ERROR;
+            goto finish;
+            // LCOV_EXCL_END
+        }
     }
+
+    if (timeout_ms > 0) {
+        /* set a timer object to expire when this forward times out */
+        hret = margo_timer_create_with_pool(mid, margo_timeout_cb, req,
+                ABT_POOL_NULL, &req->timer);
+        if (hret != HG_SUCCESS) {
+            // LCOV_EXCL_START
+            margo_error(mid, "in %s: could not create timer", __func__);
+            goto finish;
+            // LCOV_EXCL_END
+        }
+        hret = margo_timer_start(req->timer, timeout_ms);
+        if (hret != HG_SUCCESS) {
+            // LCOV_EXCL_START
+            margo_timer_destroy(req->timer);
+            margo_error(mid, "in %s: could not start timer", __func__);
+            goto finish;
+            // LCOV_EXCL_END
+        }
+    }
+
     hret = HG_Bulk_transfer(mid->hg.hg_context, margo_cb, (void*)req, op,
                             origin_addr, origin_handle, origin_offset,
-                            local_handle, local_offset, size, HG_OP_ID_IGNORE);
+                            local_handle, local_offset, size, &req->bulk_op);
     if (hret == HG_SUCCESS) { PROGRESS_NEEDED_INCR(mid); }
+
+    if (hret != HG_SUCCESS && req->timer) {
+        // LCOV_EXCL_START
+        margo_timer_cancel(req->timer);
+        margo_timer_destroy(req->timer);
+        req->timer = NULL;
+        // LCOV_EXCL_END
+    }
 
 finish:
 
@@ -1705,21 +1742,77 @@ finish:
     return hret;
 }
 
-hg_return_t margo_bulk_transfer(margo_instance_id mid,
-                                hg_bulk_op_t      op,
-                                hg_addr_t         origin_addr,
-                                hg_bulk_t         origin_handle,
-                                size_t            origin_offset,
-                                hg_bulk_t         local_handle,
-                                size_t            local_offset,
-                                size_t            size)
+hg_return_t margo_bulk_transfer_timed(margo_instance_id mid,
+                                      hg_bulk_op_t      op,
+                                      hg_addr_t         origin_addr,
+                                      hg_bulk_t         origin_handle,
+                                      size_t            origin_offset,
+                                      hg_bulk_t         local_handle,
+                                      size_t            local_offset,
+                                      size_t            size,
+                                      double            timeout_ms)
 {
     struct margo_request_struct reqs = {0};
     hg_return_t                 hret = margo_bulk_itransfer_internal(
         mid, op, origin_addr, origin_handle, origin_offset, local_handle,
-        local_offset, size, &reqs);
+        local_offset, size, timeout_ms, &reqs);
     if (hret != HG_SUCCESS) return hret;
     return margo_wait_internal(&reqs);
+}
+
+hg_return_t margo_bulk_itransfer_timed(margo_instance_id mid,
+                                       hg_bulk_op_t      op,
+                                       hg_addr_t         origin_addr,
+                                       hg_bulk_t         origin_handle,
+                                       size_t            origin_offset,
+                                       hg_bulk_t         local_handle,
+                                       size_t            local_offset,
+                                       size_t            size,
+                                       double            timeout_ms,
+                                       margo_request*    req)
+{
+    margo_request tmp_req = calloc(1, sizeof(*tmp_req));
+    if (!tmp_req) { return (HG_NOMEM_ERROR); }
+    hg_return_t hret = margo_bulk_itransfer_internal(
+        mid, op, origin_addr, origin_handle, origin_offset, local_handle,
+        local_offset, size, timeout_ms, tmp_req);
+    if (hret != HG_SUCCESS) {
+        free(tmp_req);
+        return hret;
+    }
+
+    *req = tmp_req;
+
+    return (hret);
+}
+
+hg_return_t margo_bulk_ctransfer_timed(margo_instance_id mid,
+                                       hg_bulk_op_t      op,
+                                       hg_addr_t         origin_addr,
+                                       hg_bulk_t         origin_handle,
+                                       size_t            origin_offset,
+                                       hg_bulk_t         local_handle,
+                                       size_t            local_offset,
+                                       size_t            size,
+                                       double            timeout_ms,
+                                       void (*on_complete)(void*, hg_return_t),
+                                       void* uargs)
+{
+    margo_request tmp_req = calloc(1, sizeof(*tmp_req));
+    if (!tmp_req) { return (HG_NOMEM_ERROR); }
+    tmp_req->kind             = MARGO_REQ_CALLBACK;
+    tmp_req->callback.cb    = on_complete;
+    tmp_req->callback.uargs = uargs;
+
+    hg_return_t hret = margo_bulk_itransfer_internal(
+        mid, op, origin_addr, origin_handle, origin_offset, local_handle,
+        local_offset, size, timeout_ms, tmp_req);
+    if (hret != HG_SUCCESS) {
+        free(tmp_req);
+        return hret;
+    }
+
+    return (hret);
 }
 
 hg_return_t margo_bulk_parallel_transfer(margo_instance_id mid,
@@ -1748,7 +1841,7 @@ hg_return_t margo_bulk_parallel_transfer(margo_instance_id mid,
         if (remaining_size < chunk_size) chunk_size = remaining_size;
         hret_xfer = margo_bulk_itransfer_internal(
             mid, op, origin_addr, origin_handle, origin_offset, local_handle,
-            local_offset, chunk_size, reqs + i);
+            local_offset, chunk_size, 0, reqs + i);
         if (hret_xfer != HG_SUCCESS) {
             // LCOV_EXCL_START
             hret = hret_xfer;
@@ -1772,31 +1865,6 @@ wait:
 finish:
     free(reqs);
     return hret;
-}
-
-hg_return_t margo_bulk_itransfer(margo_instance_id mid,
-                                 hg_bulk_op_t      op,
-                                 hg_addr_t         origin_addr,
-                                 hg_bulk_t         origin_handle,
-                                 size_t            origin_offset,
-                                 hg_bulk_t         local_handle,
-                                 size_t            local_offset,
-                                 size_t            size,
-                                 margo_request*    req)
-{
-    margo_request tmp_req = calloc(1, sizeof(*tmp_req));
-    if (!tmp_req) { return (HG_NOMEM_ERROR); }
-    hg_return_t hret = margo_bulk_itransfer_internal(
-        mid, op, origin_addr, origin_handle, origin_offset, local_handle,
-        local_offset, size, tmp_req);
-    if (hret != HG_SUCCESS) {
-        free(tmp_req);
-        return hret;
-    }
-
-    *req = tmp_req;
-
-    return (hret);
 }
 
 static void margo_thread_sleep_cb(void* arg)
