@@ -1628,6 +1628,30 @@ hg_return_t margo_bulk_deserialize(margo_instance_id mid,
                                    hg_size_t         buf_size);
 
 /**
+ * @brief Perform a bulk transfer, with a specific timeout.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] op Type of operation to perform.
+ * @param [in] origin_addr Remote Mercury address.
+ * @param [in] origin_handle Remote Mercury bulk memory handle.
+ * @param [in] origin_offset Offset into remote bulk memory to access.
+ * @param [in] local_handle Local bulk memory handle.
+ * @param [in] local_offset Offset into local bulk memory to access.
+ * @param [in] size Size (in bytes) of transfer.
+ * @param [in] timeout_ms Timeout (milliseconds).
+ *
+ * @return 0 on success, hg_return_t values on error.
+ */
+hg_return_t margo_bulk_transfer_timed(margo_instance_id mid,
+                                      hg_bulk_op_t      op,
+                                      hg_addr_t         origin_addr,
+                                      hg_bulk_t         origin_handle,
+                                      size_t            origin_offset,
+                                      hg_bulk_t         local_handle,
+                                      size_t            local_offset,
+                                      size_t            size,
+                                      double            timeout_ms);
+/**
  * @brief Perform a bulk transfer.
  *
  * @param [in] mid Margo instance.
@@ -1641,6 +1665,7 @@ hg_return_t margo_bulk_deserialize(margo_instance_id mid,
  *
  * @return 0 on success, hg_return_t values on error.
  */
+static inline
 hg_return_t margo_bulk_transfer(margo_instance_id mid,
                                 hg_bulk_op_t      op,
                                 hg_addr_t         origin_addr,
@@ -1648,8 +1673,39 @@ hg_return_t margo_bulk_transfer(margo_instance_id mid,
                                 size_t            origin_offset,
                                 hg_bulk_t         local_handle,
                                 size_t            local_offset,
-                                size_t            size);
+                                size_t            size)
+{
+    return margo_bulk_transfer_timed(
+        mid, op, origin_addr, origin_handle, origin_offset,
+        local_handle, local_offset, size, 0);
+}
 
+/**
+ * @brief Asynchronously performs a bulk transfer, with a specific timeout.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] op Type of operation to perform.
+ * @param [in] origin_addr Remote Mercury address.
+ * @param [in] origin_handle Remote Mercury bulk memory handle.
+ * @param [in] origin_offset Offset into remote bulk memory to access.
+ * @param [in] local_handle Local bulk memory handle.
+ * @param [in] local_offset Offset into local bulk memory to access.
+ * @param [in] size Size (in bytes) of transfer.
+ * @param [in] timeout_ms Timeout (milliseconds).
+ * @param [out] req Request to wait on using margo_wait.
+ *
+ * @return 0 on success, hg_return_t values on error.
+ */
+hg_return_t margo_bulk_itransfer_timed(margo_instance_id mid,
+                                       hg_bulk_op_t      op,
+                                       hg_addr_t         origin_addr,
+                                       hg_bulk_t         origin_handle,
+                                       size_t            origin_offset,
+                                       hg_bulk_t         local_handle,
+                                       size_t            local_offset,
+                                       size_t            size,
+                                       double            timeout_ms,
+                                       margo_request*    req);
 /**
  * @brief Asynchronously performs a bulk transfer.
  *
@@ -1665,6 +1721,7 @@ hg_return_t margo_bulk_transfer(margo_instance_id mid,
  *
  * @return 0 on success, hg_return_t values on error.
  */
+static inline
 hg_return_t margo_bulk_itransfer(margo_instance_id mid,
                                  hg_bulk_op_t      op,
                                  hg_addr_t         origin_addr,
@@ -1673,7 +1730,75 @@ hg_return_t margo_bulk_itransfer(margo_instance_id mid,
                                  hg_bulk_t         local_handle,
                                  size_t            local_offset,
                                  size_t            size,
-                                 margo_request*    req);
+                                 margo_request*    req)
+{
+    return margo_bulk_itransfer_timed(
+        mid, op, origin_addr, origin_handle, origin_offset,
+        local_handle, local_offset, size, 0, req);
+}
+
+/**
+ * @brief Asynchronously performs a bulk transfer with a specific timeout,
+ * calling the provided on_complete callback upon completion.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] op Type of operation to perform.
+ * @param [in] origin_addr Remote Mercury address.
+ * @param [in] origin_handle Remote Mercury bulk memory handle.
+ * @param [in] origin_offset Offset into remote bulk memory to access.
+ * @param [in] local_handle Local bulk memory handle.
+ * @param [in] local_offset Offset into local bulk memory to access.
+ * @param [in] size Size (in bytes) of transfer.
+ * @param [in] timeout_ms Timeout (milliseconds).
+ * @param [in] on_complete Callback to call upon completion.
+ * @param [in] uargs Argument for the callback.
+ *
+ * @return 0 on success, hg_return_t values on error.
+ */
+hg_return_t margo_bulk_ctransfer_timed(margo_instance_id mid,
+                                       hg_bulk_op_t      op,
+                                       hg_addr_t         origin_addr,
+                                       hg_bulk_t         origin_handle,
+                                       size_t            origin_offset,
+                                       hg_bulk_t         local_handle,
+                                       size_t            local_offset,
+                                       size_t            size,
+                                       double            timeout_ms,
+                                       void (*on_complete)(void*, hg_return_t),
+                                       void* uargs);
+/**
+ * @brief Asynchronously performs a bulk transfer, calling the
+ * provided on_complete callback upon completion.
+ *
+ * @param [in] mid Margo instance.
+ * @param [in] op Type of operation to perform.
+ * @param [in] origin_addr Remote Mercury address.
+ * @param [in] origin_handle Remote Mercury bulk memory handle.
+ * @param [in] origin_offset Offset into remote bulk memory to access.
+ * @param [in] local_handle Local bulk memory handle.
+ * @param [in] local_offset Offset into local bulk memory to access.
+ * @param [in] size Size (in bytes) of transfer.
+ * @param [in] on_complete Callback to call upon completion.
+ * @param [in] uargs Argument for the callback.
+ *
+ * @return 0 on success, hg_return_t values on error.
+ */
+static inline
+hg_return_t margo_bulk_ctransfer(margo_instance_id mid,
+                                 hg_bulk_op_t      op,
+                                 hg_addr_t         origin_addr,
+                                 hg_bulk_t         origin_handle,
+                                 size_t            origin_offset,
+                                 hg_bulk_t         local_handle,
+                                 size_t            local_offset,
+                                 size_t            size,
+                                 void (*on_complete)(void*, hg_return_t),
+                                 void* uargs)
+{
+    return margo_bulk_ctransfer_timed(
+        mid, op, origin_addr, origin_handle, origin_offset,
+        local_handle, local_offset, size, 0, on_complete, uargs);
+}
 
 /**
  * @brief Suspends the calling ULT for a specified time duration.

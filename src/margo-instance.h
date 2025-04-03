@@ -151,7 +151,10 @@ typedef enum margo_request_kind {
 struct margo_request_struct {
     margo_timer_t        timer;
     margo_instance_id    mid;
-    hg_handle_t          handle;
+    union {
+        hg_handle_t handle;
+        hg_op_id_t  bulk_op;
+    };
     margo_monitor_data_t monitor_data;
     margo_request_type   type; // forward, respond, or bulk
     margo_request_kind   kind; // callback or eventual
@@ -164,7 +167,7 @@ struct margo_request_struct {
             void (*cb)(void*, hg_return_t);
             void* uargs;
         } callback;
-    } u;
+    };
 };
 
 // Data registered to an RPC id with HG_Register_data
