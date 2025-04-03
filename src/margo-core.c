@@ -1270,6 +1270,19 @@ margo_irespond_internal(hg_handle_t   handle,
     if (!handle_data) return HG_NO_MATCH;
 
     mid         = handle_data->mid;
+
+    if (req->kind == MARGO_REQ_EVENTUAL) {
+        ret = MARGO_EVENTUAL_CREATE(&req->u.eventual.ev);
+        if (ret != 0) {
+            // LCOV_EXCL_START
+            margo_error(mid, "in %s: ABT_eventual_create failed: %d", __func__,
+                        ret);
+            hret = HG_NOMEM_ERROR;
+            goto finish;
+            // LCOV_EXCL_END
+        }
+    }
+
     req->type   = MARGO_RESPONSE_REQUEST;
     req->handle = handle;
     req->timer  = NULL;
@@ -1358,6 +1371,25 @@ margo_irespond(hg_handle_t handle, void* out_struct, margo_request* req)
         return hret;
     }
     *req = tmp_req;
+    return HG_SUCCESS;
+}
+
+hg_return_t margo_crespond(hg_handle_t handle,
+                           void* out_struct,
+                           void (*on_complete)(void*, hg_return_t),
+                           void* uargs)
+{
+    hg_return_t   hret;
+    margo_request tmp_req = calloc(1, sizeof(*tmp_req));
+    if (!tmp_req) { return (HG_NOMEM_ERROR); }
+    tmp_req->kind             = MARGO_REQ_CALLBACK;
+    tmp_req->u.callback.cb    = on_complete;
+    tmp_req->u.callback.uargs = uargs;
+    hret = margo_irespond_internal(handle, out_struct, tmp_req);
+    if (hret != HG_SUCCESS) {
+        free(tmp_req);
+        return hret;
+    }
     return HG_SUCCESS;
 }
 

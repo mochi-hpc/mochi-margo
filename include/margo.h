@@ -1408,6 +1408,11 @@ margo_instance_id margo_request_get_instance(margo_request req);
  * @brief Send an RPC response, waiting for completion before returning
  * control to the calling ULT.
  *
+ * Note: contrary to margo_forward, which has _timed variants, there
+ * is no advantage to _timed variants for responses, as responses are
+ * sent over the wire and immediately return (the receiver of the response
+ * doesn't have to run any particular code that could cause a timeout).
+ *
  * @param [in] handle Handle of the RPC for which a response is being sent.
  * @param [in] out_struct Output argument struct for the response.
  *
@@ -1426,6 +1431,22 @@ hg_return_t margo_respond(hg_handle_t handle, void* out_struct);
  */
 hg_return_t
 margo_irespond(hg_handle_t handle, void* out_struct, margo_request* req);
+
+/**
+ * @brief Send an RPC response without blocking. The on_complete callback
+ * will be called when the response has been sent.
+ *
+ * @param [in] handle Handle of the RPC for which a response is being sent.
+ * @param [in] out_struct Output argument struct for the response.
+ * @param [in] on_complete Callback to call upon completion.
+ * @param [in] uargs Arguments for the callback.
+ *
+ * @return HG_SUCCESS on success, hg_return_t values on error.
+ */
+hg_return_t margo_crespond(hg_handle_t handle,
+                           void* out_struct,
+                           void (*on_complete)(void*, hg_return_t),
+                           void* uargs);
 
 /**
  * @brief Create an abstract bulk handle from specified memory segments.
