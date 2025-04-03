@@ -1104,6 +1104,62 @@ hg_return_t margo_free_output(hg_handle_t handle, void* out_struct);
 const char* margo_handle_get_name(hg_handle_t handle);
 
 /**
+ * @brief Forward an RPC request to a remote provider with a user-defined
+ * timeout.
+ *
+ * @param [in] provider_id Provider id.
+ * @param [in] handle Handle of the RPC to be sent.
+ * @param [in] in_struct Input argument struct for RPC.
+ * @param [in] timeout_ms Timeout in milliseconds.
+ *
+ * @return 0 on success, hg_return_t values on error.
+ */
+hg_return_t margo_provider_forward_timed(uint16_t    provider_id,
+                                         hg_handle_t handle,
+                                         void*       in_struct,
+                                         double      timeout_ms);
+
+/**
+ * @brief Non-blocking version of margo_provider_forward_timed.
+ *
+ * @param [in] provider_id Provider id.
+ * @param [in] handle Handle of the RPC to be sent.
+ * @param [in] in_struct Input argument struct for the RPC.
+ * @param [in] timeout_ms Timeout in milliseconds.
+ *
+ * @return 0 on success, hg_return_t values on error.
+ */
+hg_return_t margo_provider_iforward_timed(uint16_t       provider_id,
+                                          hg_handle_t    handle,
+                                          void*          in_struct,
+                                          double         timeout_ms,
+                                          margo_request* req);
+
+/**
+ * @brief Same as margo_provider_iforward_timed, but will invoke a user-provided
+ * callback upon completion of the RPC or timeout.
+ *
+ * Note: see note margo_provider_cforward comment regarding
+ * when to avoid using this function.
+ *
+ * @param provider_id Provider id.
+ * @param handle Handle of the RPC.
+ * @param in_struct Input arguments.
+ * @param timeout_ms Timeout.
+ * @param on_complete Completion callback.
+ * @param uargs Arguments for the callback.
+ *
+ * @return 0 on success, hg_return_t values on error.
+ */
+hg_return_t margo_provider_cforward_timed(uint16_t    provider_id,
+                                          hg_handle_t handle,
+                                          void*       in_struct,
+                                          double      timeout_ms,
+                                          void (*on_complete)(void*,
+                                                              hg_return_t),
+                                          void* uargs);
+
+/**
  * @brief Forward an RPC request to a remote provider.
  *
  * @param [in] provider_id Provider ID (may be MARGO_DEFAULT_PROVIDER_ID).
@@ -1112,9 +1168,12 @@ const char* margo_handle_get_name(hg_handle_t handle);
  *
  * @return 0 on success, hg_return_t values on error.
  */
-hg_return_t margo_provider_forward(uint16_t    provider_id,
-                                   hg_handle_t handle,
-                                   void*       in_struct);
+static inline hg_return_t margo_provider_forward(uint16_t    provider_id,
+                                                 hg_handle_t handle,
+                                                 void*       in_struct)
+{
+    return margo_provider_forward_timed(provider_id, handle, in_struct, 0);
+}
 
 /**
  * @brief Forward an RPC request to a remove host.
@@ -1139,10 +1198,13 @@ static inline hg_return_t margo_forward(hg_handle_t handle, void* in_struct)
  *
  * @return 0 on success, hg_return_t values on error.
  */
-hg_return_t margo_provider_iforward(uint16_t       provider_id,
-                                    hg_handle_t    handle,
-                                    void*          in_struct,
-                                    margo_request* req);
+static inline hg_return_t margo_provider_iforward(uint16_t       provider_id,
+                                                  hg_handle_t    handle,
+                                                  void*          in_struct,
+                                                  margo_request* req)
+{
+    return margo_provider_iforward_timed(provider_id, handle, in_struct, 0, req);
+}
 
 /**
  * @brief Forward (without blocking) an RPC request to a remote host.
@@ -1179,11 +1241,14 @@ margo_iforward(hg_handle_t handle, void* in_struct, margo_request* req)
  *
  * @return 0 on success, hg_return_t values on error.
  */
-hg_return_t margo_provider_cforward(uint16_t    provider_id,
-                                    hg_handle_t handle,
-                                    void*       in_struct,
-                                    void (*on_comblete)(void*, hg_return_t),
-                                    void* uargs);
+static inline hg_return_t margo_provider_cforward(uint16_t    provider_id,
+                                                  hg_handle_t handle,
+                                                  void*       in_struct,
+                                                  void (*on_complete)(void*, hg_return_t),
+                                                  void* uargs)
+{
+    return margo_provider_cforward_timed(provider_id, handle, in_struct, 0, on_complete, uargs);
+}
 
 /**
  * @brief Same as margo_iforward but will invoke a user-provided
@@ -1201,29 +1266,13 @@ hg_return_t margo_provider_cforward(uint16_t    provider_id,
  */
 static inline hg_return_t margo_cforward(hg_handle_t handle,
                                          void*       in_struct,
-                                         void (*on_comblete)(void*,
+                                         void (*on_complete)(void*,
                                                              hg_return_t),
                                          void* uargs)
 {
     return margo_provider_cforward(MARGO_DEFAULT_PROVIDER_ID, handle, in_struct,
-                                   on_comblete, uargs);
+                                   on_complete, uargs);
 }
-
-/**
- * @brief Forward an RPC request to a remote provider with a user-defined
- * timeout.
- *
- * @param [in] provider_id Provider id.
- * @param [in] handle Handle of the RPC to be sent.
- * @param [in] in_struct Input argument struct for RPC.
- * @param [in] timeout_ms Timeout in milliseconds.
- *
- * @return 0 on success, hg_return_t values on error.
- */
-hg_return_t margo_provider_forward_timed(uint16_t    provider_id,
-                                         hg_handle_t handle,
-                                         void*       in_struct,
-                                         double      timeout_ms);
 
 /**
  * @brief Forward an RPC request to a remote host with a user-defined timeout.
@@ -1240,22 +1289,6 @@ margo_forward_timed(hg_handle_t handle, void* in_struct, double timeout_ms)
     return margo_provider_forward_timed(MARGO_DEFAULT_PROVIDER_ID, handle,
                                         in_struct, timeout_ms);
 }
-
-/**
- * @brief Non-blocking version of margo_provider_forward_timed.
- *
- * @param [in] provider_id Provider id.
- * @param [in] handle Handle of the RPC to be sent.
- * @param [in] in_struct Input argument struct for the RPC.
- * @param [in] timeout_ms Timeout in milliseconds.
- *
- * @return 0 on success, hg_return_t values on error.
- */
-hg_return_t margo_provider_iforward_timed(uint16_t       provider_id,
-                                          hg_handle_t    handle,
-                                          void*          in_struct,
-                                          double         timeout_ms,
-                                          margo_request* req);
 
 /**
  * @brief Non-blocking version of margo_forward_timed.
@@ -1277,30 +1310,6 @@ static inline hg_return_t margo_iforward_timed(hg_handle_t    handle,
 }
 
 /**
- * @brief Same as margo_provider_iforward_timed, but will invoke a user-provided
- * callback upon completion of the RPC or timeout.
- *
- * Note: see note margo_provider_cforward comment regarding
- * when to avoid using this function.
- *
- * @param provider_id Provider id.
- * @param handle Handle of the RPC.
- * @param in_struct Input arguments.
- * @param timeout_ms Timeout.
- * @param on_complete Completion callback.
- * @param uargs Arguments for the callback.
- *
- * @return 0 on success, hg_return_t values on error.
- */
-hg_return_t margo_provider_cforward_timed(uint16_t    provider_id,
-                                          hg_handle_t handle,
-                                          void*       in_struct,
-                                          double      timeout_ms,
-                                          void (*on_comblete)(void*,
-                                                              hg_return_t),
-                                          void* uargs);
-
-/**
  * @brief Same as margo_iforward_timed but will invoke a user-provided
  * callback upon completion of the RPC or timeout.
  *
@@ -1317,12 +1326,12 @@ hg_return_t margo_provider_cforward_timed(uint16_t    provider_id,
 static inline hg_return_t margo_cforward_timed(hg_handle_t handle,
                                                void*       in_struct,
                                                double      timeout_ms,
-                                               void (*on_comblete)(void*,
+                                               void (*on_complete)(void*,
                                                                    hg_return_t),
                                                void* uargs)
 {
     return margo_provider_cforward_timed(MARGO_DEFAULT_PROVIDER_ID, handle,
-                                         in_struct, timeout_ms, on_comblete,
+                                         in_struct, timeout_ms, on_complete,
                                          uargs);
 }
 

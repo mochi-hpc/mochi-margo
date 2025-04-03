@@ -1135,32 +1135,6 @@ finish:
     return hret;
 }
 
-hg_return_t margo_provider_forward(uint16_t    provider_id,
-                                   hg_handle_t handle,
-                                   void*       in_struct)
-{
-    return margo_provider_forward_timed(provider_id, handle, in_struct, 0);
-}
-
-hg_return_t margo_provider_iforward(uint16_t       provider_id,
-                                    hg_handle_t    handle,
-                                    void*          in_struct,
-                                    margo_request* req)
-{
-    return margo_provider_iforward_timed(provider_id, handle, in_struct, 0,
-                                         req);
-}
-
-hg_return_t margo_provider_cforward(uint16_t    provider_id,
-                                    hg_handle_t handle,
-                                    void*       in_struct,
-                                    void (*on_complete)(void*, hg_return_t),
-                                    void* uargs)
-{
-    return margo_provider_cforward_timed(provider_id, handle, in_struct, 0,
-                                         on_complete, uargs);
-}
-
 hg_return_t margo_provider_forward_timed(uint16_t    provider_id,
                                          hg_handle_t handle,
                                          void*       in_struct,
