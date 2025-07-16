@@ -2166,6 +2166,34 @@ monitor_statistics_to_json(const default_monitor_state_t* state, bool reset)
         ABT_mutex_unlock(
             ABT_MUTEX_MEMORY_GET_HANDLE(&state->bulk_transfer_stats_mtx));
     }
+    // add hostname and pid
+    char hostname[1024];
+    hostname[1023] = '\0';
+    gethostname(hostname, 1023);
+    pid_t pid = getpid();
+    json_object_object_add(json, "hostname", json_object_new_string(hostname));
+    json_object_object_add(json, "pid", json_object_new_int(pid));
+
+    // add command line
+    FILE* cmdline_file = fopen("/proc/self/cmdline", "r");
+    if (cmdline_file) {
+        char* cmdline = (char*)malloc(4096);
+        if (cmdline) {
+            size_t size = fread(cmdline, 1, 4096, cmdline_file);
+            struct json_object* cmdline_json = json_object_new_array();
+            char* p = cmdline;
+            while (p < cmdline + size) {
+                size_t len = strlen(p);
+                if (len > 0) {
+                    json_object_array_add(cmdline_json, json_object_new_string(p));
+                }
+                p += len + 1;
+            }
+            json_object_object_add(json, "cmdline", cmdline_json);
+        }
+        free(cmdline);
+        fclose(cmdline_file);
+    }
     return json;
 }
 
