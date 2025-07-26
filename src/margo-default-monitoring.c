@@ -351,6 +351,8 @@ typedef struct default_monitor_state {
     int stats_pretty_json;       /* use tabs and stuff in JSON printing */
     int time_series_pretty_json; /* use tabs and stuff in JSON printing */
     int sample_progress_every;
+    /* self address */
+    char* self_addr_str;
     /* sampling counter */
     uint64_t progress_sampling;
     /* RPC information */
@@ -634,6 +636,15 @@ static void* __margo_default_monitor_initialize(margo_instance_id   mid,
         release_bulk_session(monitor, bulk_session);
     }
 
+    /* get self address */
+    char      self_addr_str[256] = {0};
+    hg_size_t self_addr_size = 256;
+    hg_addr_t self_addr = HG_ADDR_NULL;
+    margo_addr_self(mid, &self_addr);
+    margo_addr_to_string(mid, self_addr_str, &self_addr_size, self_addr);
+    margo_addr_free(mid, self_addr);
+    monitor->self_addr_str = strdup(self_addr_str[0] ? self_addr_str : "<unknown>");
+
     return (void*)monitor;
 }
 
@@ -703,6 +714,8 @@ static void __margo_default_monitor_finalize(void* uargs)
     ABT_key_free(&(monitor->callpath_key));
     /* free filename */
     free(monitor->filename_prefix);
+    /* free self_addr */
+    free(monitor->self_addr_str);
     free(monitor);
 }
 
@@ -1975,14 +1988,8 @@ monitor_statistics_to_json(const default_monitor_state_t* state, bool reset)
 {
     struct json_object* json = json_object_new_object();
     // add self address
-    char      self_addr_str[256] = {0};
-    hg_size_t self_addr_size     = 256;
-    hg_addr_t self_addr          = HG_ADDR_NULL;
-    margo_addr_self(state->mid, &self_addr);
-    margo_addr_to_string(state->mid, self_addr_str, &self_addr_size, self_addr);
-    margo_addr_free(state->mid, self_addr);
     json_object_object_add_ex(json, "address",
-                              json_object_new_string(self_addr_str),
+                              json_object_new_string(state->self_addr_str),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
     // mercury progress loop statistic
     json_object_object_add_ex(json, "progress_loop",
