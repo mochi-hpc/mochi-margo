@@ -31,6 +31,8 @@ typedef struct margo_hg {
     hg_context_t*       hg_context;
     hg_addr_t           self_addr;
     char*               self_addr_str;
+    char*               log_level;
+    char*               log_subsys;
     /* bitwise OR of MARGO_OWNS_HG_CLASS and MARGO_OWNS_HG_CONTEXT */
     uint8_t hg_ownership;
 } margo_hg_t;
