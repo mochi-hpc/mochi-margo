@@ -566,6 +566,8 @@ hg_id_t margo_provider_register_name(margo_instance_id mid,
 
 hg_return_t margo_deregister(margo_instance_id mid, hg_id_t rpc_id)
 {
+    if (!mid || !mid->hg.hg_class) return HG_SUCCESS;
+
     /* monitoring */
     struct margo_monitor_deregister_args monitoring_args
         = {.id = rpc_id, .ret = HG_SUCCESS};
