@@ -69,6 +69,9 @@ bool __margo_hg_validate_json(const struct json_object*   json,
     ASSERT_CONFIG_HAS_OPTIONAL(json, "auth_key", string, "mercury");
     ASSERT_CONFIG_HAS_OPTIONAL(json, "input_eager_size", int, "mercury");
     ASSERT_CONFIG_HAS_OPTIONAL(json, "output_eager_size", int, "mercury");
+    ASSERT_CONFIG_HAS_OPTIONAL(json, "log_level", string, "mercury");
+    ASSERT_CONFIG_HAS_OPTIONAL(json, "log_subsys", string, "mercury");
+
 #if (HG_VERSION_MAJOR > 2)       \
     || (HG_VERSION_MAJOR == 2    \
         && (HG_VERSION_MINOR > 1 \
@@ -159,6 +162,14 @@ bool __margo_hg_init_from_json(const struct json_object*   json,
         if (auth_key)
             hg->hg_init_info.na_init_info.auth_key
                 = strdup(json_object_get_string(auth_key));
+        struct json_object* log_level
+            = json_object_object_get(json, "log_level");
+        if (log_level)
+            hg->log_level = strdup(json_object_get_string(log_level));
+        struct json_object* log_subsys
+            = json_object_object_get(json, "log_subsys");
+        if (log_subsys)
+            hg->log_subsys = strdup(json_object_get_string(log_subsys));
 #if (HG_VERSION_MAJOR > 2)       \
     || (HG_VERSION_MAJOR == 2    \
         && (HG_VERSION_MINOR > 1 \
@@ -290,6 +301,13 @@ bool __margo_hg_init_from_json(const struct json_object*   json,
         }
     }
 
+    /* Set HG log defaults. */
+    /* Note that this is global and will affect any Mercury classes */
+    if (!hg->log_level) hg->log_level = strdup("warning");
+    HG_Set_log_level(hg->log_level);
+    if (!hg->log_subsys) hg->log_subsys = strdup("hg,na");
+    HG_Set_log_subsys(hg->log_subsys);
+
     return true;
 
 error:
@@ -399,6 +417,16 @@ struct json_object* __margo_hg_to_json(const margo_hg_t* hg)
             json_object_new_string(hg->hg_init_info.na_init_info.auth_key),
             flags);
 
+    // log_level
+    if (hg->log_level)
+        json_object_object_add_ex(json, "log_level",
+                                  json_object_new_string(hg->log_level), flags);
+
+    // log_subsys
+    if (hg->log_subsys)
+        json_object_object_add_ex(
+            json, "log_subsys", json_object_new_string(hg->log_subsys), flags);
+
 #if (HG_VERSION_MAJOR > 2)       \
     || (HG_VERSION_MAJOR == 2    \
         && (HG_VERSION_MINOR > 1 \
@@ -460,6 +488,10 @@ void __margo_hg_destroy(margo_hg_t* hg)
 
     free(hg->self_addr_str);
     hg->self_addr_str = NULL;
+    free(hg->log_level);
+    hg->log_level = NULL;
+    free(hg->log_subsys);
+    hg->log_subsys = NULL;
 
     if (hg->hg_class && hg->self_addr != HG_ADDR_NULL)
         HG_Addr_free(hg->hg_class, hg->self_addr);
