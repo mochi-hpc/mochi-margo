@@ -5,6 +5,7 @@ check_PROGRAMS += \
  tests/unit-tests/margo-init \
  tests/unit-tests/margo-identity \
  tests/unit-tests/margo-config \
+ tests/unit-tests/margo-config-hg-log \
  tests/unit-tests/margo-elasticity \
  tests/unit-tests/margo-pool \
  tests/unit-tests/margo-abt-pool \
@@ -26,6 +27,7 @@ TESTS += \
  tests/unit-tests/margo-init \
  tests/unit-tests/margo-identity \
  tests/unit-tests/margo-config \
+ tests/unit-tests/margo-config-hg-log \
  tests/unit-tests/margo-elasticity \
  tests/unit-tests/margo-pool \
  tests/unit-tests/margo-abt-pool \
@@ -55,6 +57,11 @@ tests_unit_tests_margo_init_SOURCES = \
 tests_unit_tests_margo_identity_SOURCES = \
  tests/unit-tests/munit/munit.c \
  tests/unit-tests/margo-identity.c \
+ tests/unit-tests/helper-server.c
+
+tests_unit_tests_margo_config_hg_log_SOURCES = \
+ tests/unit-tests/munit/munit.c \
+ tests/unit-tests/margo-config-hg-log.c \
  tests/unit-tests/helper-server.c
 
 tests_unit_tests_margo_config_SOURCES = \
