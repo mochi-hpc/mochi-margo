@@ -42,6 +42,13 @@ hg_return_t margo_provider_deregister_identity(margo_instance_id mid,
     hg_id_t     id;
     hg_bool_t   flag = HG_FALSE;
     hg_return_t hret;
+
+    /* NOTE: if the hg_class is NULL, then we assume that deregistration
+     * has already been done as part of shutting down the class, so we
+     * return success here.
+     */
+    if (!mid || !mid->hg.hg_class) return HG_SUCCESS;
+
     hret = margo_provider_registered_name(mid, "__identity__", provider_id, &id,
                                           &flag);
     if (hret != HG_SUCCESS) return hret;

@@ -566,6 +566,10 @@ hg_id_t margo_provider_register_name(margo_instance_id mid,
 
 hg_return_t margo_deregister(margo_instance_id mid, hg_id_t rpc_id)
 {
+    /* NOTE: if the hg_class is NULL, then we assume that deregistration
+     * has already been done as part of shutting down the class, so we
+     * return success here.
+     */
     if (!mid || !mid->hg.hg_class) return HG_SUCCESS;
 
     /* monitoring */
