@@ -29,6 +29,9 @@ if (ENABLE_ASAN)
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
 endif ()
 
+set (CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+set (CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
 # --- Find Dependencies -----------------------------------------------------
 
 find_package (mercury REQUIRED)
@@ -82,6 +85,28 @@ install (DIRECTORY ${PROJECT_SOURCE_DIR}/include/
 install (DIRECTORY ${PROJECT_BINARY_DIR}/include/
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
+
+include (CMakePackageConfigHelpers)
+
+write_basic_package_version_file (
+      "margo-config-version.cmake"
+      VERSION ${MARGO_VERSION}
+      COMPATIBILITY AnyNewerVersion)
+
+# generate our config file for find_package()
+set (INCLUDE_INSTALL_DIR include/)
+set (LIB_INSTALL_DIR lib/)
+configure_package_config_file (margo-config.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/margo-config.cmake
+    INSTALL_DESTINATION ${LIB_INSTALL_DIR}/margo/cmake
+    PATH_VARS INCLUDE_INSTALL_DIR)
+
+install (FILES "${CMAKE_CURRENT_BINARY_DIR}/margo-config.cmake"
+               "${CMAKE_CURRENT_BINARY_DIR}/margo-config-version.cmake"
+         DESTINATION "share/cmake/margo" )
+install (EXPORT margo-targets
+         DESTINATION "share/cmake/margo"
+         FILE "margo-targets.cmake")
 
 # --- Pkg-config Generation -------------------------------------------------
 
