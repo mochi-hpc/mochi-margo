@@ -33,9 +33,10 @@ endif ()
 
 find_package (mercury REQUIRED)
 find_package (PkgConfig REQUIRED)
-pkg_check_modules (ARGOBOTS REQUIRED IMPORTED_TARGET argobots>=1.1)
+pkg_check_modules (ARGOBOTS REQUIRED IMPORTED_TARGET argobots>=1.2)
 pkg_check_modules (JSONC REQUIRED IMPORTED_TARGET json-c)
 find_package (Threads REQUIRED)
+set (PC_REQUIRES "mercury argobots>=1.2 json-c")
 
 # --- Optional Dependencies -------------------------------------------------
 
@@ -43,6 +44,7 @@ option (ENABLE_PLUMBER "Enable support for mochi-plumber" OFF)
 if (ENABLE_PLUMBER)
     pkg_check_modules (PLUMBER REQUIRED IMPORTED_TARGET mochi-plumber)
     set (OPTIONAL_PLUMBER PkgConfig::PLUMBER)
+    set (PC_REQUIRE "${PC_REQUIRE} mochi-plumber")
     add_definitions (-DHAVE_MOCHI_PLUMBER)
 endif ()
 
