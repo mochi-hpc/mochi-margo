@@ -48,9 +48,11 @@ jobs:
     - name: Build code and run unit tests
       run: |
         eval `spack env activate --sh tests`
-        ./prepare.sh
-        ./configure --prefix=`pwd`
+        mkdir build
+        cd build
+        cmake .. -DENABLE_TESTS=ON
         make
+        make test
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3

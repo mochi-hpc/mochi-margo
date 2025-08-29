@@ -17,10 +17,16 @@ set (CMAKE_C_STANDARD_REQUIRED ON)
 
 option (ENABLE_COVERAGE "Enable code coverage" OFF)
 option (ENABLE_TESTS "Enable tests" OFF)
+option (ENABLE_ASAN "Enable address sanitizer" OFF)
 
 if (ENABLE_COVERAGE)
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --coverage -O0")
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage -lgcov")
+endif ()
+
+if (ENABLE_ASAN)
+    set (CMAKE_C_FLAGS "-fno-omit-frame-pointer -g -Wall -fsanitize=address")
+    set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
 endif ()
 
 # --- Find Dependencies -----------------------------------------------------
