@@ -12,7 +12,6 @@
 #include <stdlib.h>
 #include <json-c/json.h>
 
-#include <margo-config-private.h>
 #include "margo.h"
 #include "margo-prio-pool.h"
 #include "margo-logging.h"
