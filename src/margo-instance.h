@@ -13,7 +13,6 @@
 #include <stdlib.h>
 #include <json-c/json.h>
 
-#include <margo-config-private.h>
 #include <time.h>
 #include <math.h>
 
