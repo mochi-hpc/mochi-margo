@@ -2,10 +2,7 @@
 # General test script utilities
 #
 
-if [ -z "$TIMEOUT" ] ; then
-    echo expected TIMEOUT variable defined to its respective command
-    exit 1
-fi
+TIMEOUT=${TIMEOUT:-timeout}
 
 function run_to ()
 {
@@ -26,7 +23,7 @@ function test_start_servers ()
     for i in `seq 1 $nservers`
     do
         hostfile=`mktemp`
-        $TIMEOUT --signal=9 ${maxtime} tests/margo-test-server -a na+sm:// -f $hostfile -p $poolkind &
+        $TIMEOUT --signal=9 ${maxtime} ./margo-test-server -a na+sm:// -f $hostfile -p $poolkind &
         if [ $? -ne 0 ]; then
             # TODO: this doesn't actually work; can't check return code of
             # something executing in background.  We have to rely on the
