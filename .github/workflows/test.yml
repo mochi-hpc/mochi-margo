@@ -67,4 +67,4 @@ jobs:
     - name: Show test output
       if: always()
       run: |
-        cat Testing/Temporary/LastTest.log
+        cat build/Testing/Temporary/LastTest.log
