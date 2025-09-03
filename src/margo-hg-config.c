@@ -13,7 +13,8 @@
 void auto_set_cxi_auth_key(const char*  protocol,
                            const char** auth_key,
                            int*         cxi_used_flag,
-                           int*         cxi_env_idx);
+                           int*         cxi_env_idx,
+                           int*         cxi_explicit_auth_key_flag);
 
 bool __margo_hg_validate_json(const struct json_object*   json,
                               const margo_hg_user_args_t* user_args)
@@ -120,8 +121,9 @@ bool __margo_hg_init_from_json(const struct json_object*   json,
                                const char* plumber_nic_policy,
                                margo_hg_t* hg)
 {
-    int cxi_used_flag = 0;
-    int cxi_env_idx   = -1;
+    int cxi_used_flag              = 0;
+    int cxi_env_idx                = -1;
+    int cxi_explicit_auth_key_flag = 0;
 
     if (user->hg_init_info && !user->hg_class) {
         // initialize hg_init_info from user-provided hg_init_info
@@ -171,9 +173,9 @@ bool __margo_hg_init_from_json(const struct json_object*   json,
             hg->hg_init_info.na_init_info.auth_key
                 = strdup(json_object_get_string(auth_key));
         else
-            auto_set_cxi_auth_key(user->protocol,
-                                  &hg->hg_init_info.na_init_info.auth_key,
-                                  &cxi_used_flag, &cxi_env_idx);
+            auto_set_cxi_auth_key(
+                user->protocol, &hg->hg_init_info.na_init_info.auth_key,
+                &cxi_used_flag, &cxi_env_idx, &cxi_explicit_auth_key_flag);
         struct json_object* log_level
             = json_object_object_get(json, "log_level");
         if (log_level)
@@ -269,7 +271,8 @@ bool __margo_hg_init_from_json(const struct json_object*   json,
         if (!hg->hg_class) {
             margo_error(0, "Could not initialize hg_class with protocol %s",
                         user->protocol);
-            if (cxi_used_flag && cxi_env_idx == -1) {
+            if (cxi_used_flag && cxi_env_idx == -1
+                && !cxi_explicit_auth_key_flag) {
                 margo_error(0,
                             "CXI initialization failed, and no SLINGSHOT "
                             "environment variables were detected.");
@@ -284,10 +287,11 @@ bool __margo_hg_init_from_json(const struct json_object*   json,
                 margo_error(
                     0,
                     "   `srun --network=job_vni,single_node_vni` (for SLURM)");
-            } else if (cxi_used_flag) {
                 margo_error(0,
-                            "CXI initialization failed despite using SLINGSHOT "
-                            "environment variables.");
+                            "   Consult the mochi-margo documentation for more "
+                            "details.");
+            } else if (cxi_used_flag) {
+                margo_error(0, "CXI initialization failed.");
                 margo_error(0,
                             "   Check if a default system service is "
                             "enabled by running:");
@@ -298,6 +302,12 @@ bool __margo_hg_init_from_json(const struct json_object*   json,
                 margo_error(0, "   Try launching the process using either:");
                 margo_error(0, "   `mpiexec --no-vni` (for PBS Pro)");
                 margo_error(0, "   `srun --network=no_vni` (for SLURM)");
+                margo_error(0,
+                            "   Alternatively; consider manually specifying "
+                            "the auth_key field.");
+                margo_error(0,
+                            "   Consult the mochi-margo documentation for more "
+                            "details.");
             }
             goto error;
         }
@@ -562,20 +572,24 @@ void __margo_hg_destroy(margo_hg_t* hg)
  *  - cxi_used_flag: (output) indicates if we think CXI is being used or not
  *  - cxi_env_idx: (output) indicates the CXI environment variable index that
  *  was selected, or -1 if none was used.
+ *  - cxi_explicit_auth_key_flag: indicates if they user provided their own
+ *  auth_key
  *
  *  No return value, this is a best effort function.
  */
 void auto_set_cxi_auth_key(const char*  protocol,
                            const char** auth_key,
                            int*         cxi_used_flag,
-                           int*         cxi_env_idx)
+                           int*         cxi_env_idx,
+                           int*         cxi_explicit_auth_key_flag)
 {
     char* vni_env       = NULL;
     char* vni_env_cur   = NULL;
     int   vni_env_count = 0;
 
-    *cxi_env_idx   = -1;
-    *cxi_used_flag = 0;
+    *cxi_env_idx                = -1;
+    *cxi_used_flag              = 0;
+    *cxi_explicit_auth_key_flag = 0;
 
     if (!strstr(protocol, "cxi")) {
         /* we don't seem to be using cxi */
@@ -586,6 +600,7 @@ void auto_set_cxi_auth_key(const char*  protocol,
         /* note that users can always ask for the default service (if enabled)
          * by explicitly setting the auth_key to "1:1"
          */
+        *cxi_explicit_auth_key_flag = 1;
         return;
     }
 
