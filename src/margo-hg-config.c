@@ -277,17 +277,27 @@ bool __margo_hg_init_from_json(const struct json_object*   json,
                             "   This may indicate that no VNI was provisioned "
                             "for use by Mercury.");
                 margo_error(0,
-                            "   First check if a default system service is "
-                            "enabled (unlikely) by running:");
-                margo_error(0, "   `cxi_service list -s 1 -v`");
-                margo_error(0,
-                            "   If not, then you may need your system's "
+                            "   You may need your system's "
                             "resource manager to allocate a VNI.");
                 margo_error(0, "   Try launching the process using either:");
                 margo_error(0, "   `mpiexec --single-node-vni` (for PBS Pro)");
                 margo_error(
                     0,
                     "   `srun --network=job_vni,single_node_vni` (for SLURM)");
+            } else if (cxi_used_flag) {
+                margo_error(0,
+                            "CXI initialization failed despite using SLINGSHOT "
+                            "environment variables.");
+                margo_error(0,
+                            "   Check if a default system service is "
+                            "enabled by running:");
+                margo_error(0, "   `cxi_service list -s 1 -v`");
+                margo_error(0,
+                            "   If so, then you can use it by disabling VNI "
+                            "allocation in your launcher.");
+                margo_error(0, "   Try launching the process using either:");
+                margo_error(0, "   `mpiexec --no-vni` (for PBS Pro)");
+                margo_error(0, "   `srun --network=no_vni` (for SLURM)");
             }
             goto error;
         }
