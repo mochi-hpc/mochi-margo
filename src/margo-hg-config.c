@@ -10,6 +10,11 @@
 #endif
 #include "margo-hg-config.h"
 
+void auto_set_cxi_auth_key(const char*  protocol,
+                           const char** auth_key,
+                           int*         cxi_used_flag,
+                           int*         cxi_env_idx);
+
 bool __margo_hg_validate_json(const struct json_object*   json,
                               const margo_hg_user_args_t* user_args)
 {
@@ -115,6 +120,9 @@ bool __margo_hg_init_from_json(const struct json_object*   json,
                                const char* plumber_nic_policy,
                                margo_hg_t* hg)
 {
+    int cxi_used_flag = 0;
+    int cxi_env_idx   = -1;
+
     if (user->hg_init_info && !user->hg_class) {
         // initialize hg_init_info from user-provided hg_init_info
         if (!user->hg_class) {
@@ -162,6 +170,10 @@ bool __margo_hg_init_from_json(const struct json_object*   json,
         if (auth_key)
             hg->hg_init_info.na_init_info.auth_key
                 = strdup(json_object_get_string(auth_key));
+        else
+            auto_set_cxi_auth_key(user->protocol,
+                                  &hg->hg_init_info.na_init_info.auth_key,
+                                  &cxi_used_flag, &cxi_env_idx);
         struct json_object* log_level
             = json_object_object_get(json, "log_level");
         if (log_level)
@@ -507,4 +519,80 @@ void __margo_hg_destroy(margo_hg_t* hg)
     }
 
     memset(hg, 0, sizeof(*hg));
+}
+
+/*  auto_set_cxi_auth_key()
+ *
+ *  Detect if the CXI protocol will be used to initialize Mercury.  If so,
+ *  then interrogate CXI environment variables to specify the most likely
+ *  auth_key configuration (if not already specified by the caller).
+ *
+ *  - protocol: user-provided protocol string
+ *  - auth_key: pointer to auth_key pointer
+ *  - cxi_used_flag: (output) indicates if we think CXI is being used or not
+ *  - cxi_env_idx: (output) indicates the CXI environment variable index that
+ *  was selected, or -1 if none was used.
+ *
+ *  No return value, this is a best effort function.
+ */
+void auto_set_cxi_auth_key(const char*  protocol,
+                           const char** auth_key,
+                           int*         cxi_used_flag,
+                           int*         cxi_env_idx)
+{
+    char* vni_env       = NULL;
+    char* vni_env_cur   = NULL;
+    int   vni_env_count = 0;
+
+    *cxi_env_idx   = -1;
+    *cxi_used_flag = 0;
+
+    if (!strstr(protocol, "cxi")) {
+        /* we don't seem to be using cxi */
+        return;
+    }
+    if (*auth_key) {
+        /* auth key is already explicitly set; leave it alone */
+        return;
+    }
+
+    *cxi_used_flag = 1;
+
+    /* interrogate the SLINGSHOT_VNIS environment variable.  If set, it will
+     * have this form: "SLINGSHOT_VNIS=16369,16324", where the values are a
+     * comma-separated list.
+     */
+    vni_env = getenv("SLINGSHOT_VNIS");
+    if (vni_env) {
+        /* there is at least one VNI available */
+        vni_env_count = 1;
+        /* increment by one for every comma that we see */
+        vni_env_cur = vni_env;
+        while ((vni_env_cur = strchr(vni_env_cur, ','))) {
+            vni_env_count++;
+            vni_env_cur++;
+        }
+
+        /* Set the auth_key based on what we found.  The format is "x:y:z",
+         * where X is a service number, Y is a VNI, and Z is an (optional)
+         * index into the SLINGSHOT environment variables.  We want to leave x
+         * and y to 0 so that they are automatically populated based on the
+         * environment variables, but we want to pick the default index to use
+         * for Mochi.
+         */
+        if (vni_env_count == 1) {
+            /* there is only one VNI advertised; use it */
+            *cxi_env_idx = 0;
+            *auth_key    = strdup("0:0:0");
+        } else if (vni_env_count > 1) {
+            /* there are multiple VNIs advertised; select the second one,
+             * which is expected to be the job-level VNI allocated by the
+             * resource manager.
+             */
+            *cxi_env_idx = 1;
+            *auth_key    = strdup("0:0:1");
+        }
+    }
+
+    return;
 }
