@@ -573,6 +573,9 @@ void auto_set_cxi_auth_key(const char*  protocol,
     }
     if (*auth_key) {
         /* auth key is already explicitly set; leave it alone */
+        /* note that users can always ask for the default service (if enabled)
+         * by explicitly setting the auth_key to "1:1"
+         */
         return;
     }
 
