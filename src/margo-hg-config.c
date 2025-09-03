@@ -269,6 +269,26 @@ bool __margo_hg_init_from_json(const struct json_object*   json,
         if (!hg->hg_class) {
             margo_error(0, "Could not initialize hg_class with protocol %s",
                         user->protocol);
+            if (cxi_used_flag && cxi_env_idx == -1) {
+                margo_error(0,
+                            "CXI initialization failed, and no SLINGSHOT "
+                            "environment variables were detected.");
+                margo_error(0,
+                            "   This may indicate that no VNI was provisioned "
+                            "for use by Mercury.");
+                margo_error(0,
+                            "   First check if a default system service is "
+                            "enabled (unlikely) by running:");
+                margo_error(0, "   `cxi_service list -s 1 -v`");
+                margo_error(0,
+                            "   If not, then you may need your system's "
+                            "resource manager to allocate a VNI.");
+                margo_error(0, "   Try launching the process using either:");
+                margo_error(0, "   `mpiexec --single-node-vni` (for PBS Pro)");
+                margo_error(
+                    0,
+                    "   `srun --network=job_vni,single_node_vni` (for SLURM)");
+            }
             goto error;
         }
         hg->hg_ownership = MARGO_OWNS_HG_CLASS;
