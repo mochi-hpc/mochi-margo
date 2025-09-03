@@ -603,11 +603,7 @@ void auto_set_cxi_auth_key(const char*  protocol,
          * environment variables, but we want to pick the default index to use
          * for Mochi.
          */
-        if (vni_env_count == 1) {
-            /* there is only one VNI advertised; use it */
-            *cxi_env_idx = 0;
-            *auth_key    = strdup("0:0:0");
-        } else if (vni_env_count > 1) {
+        if (vni_env_count > 1) {
             /* there are multiple VNIs advertised; select the second one,
              * which is expected to be the job-level VNI allocated by the
              * resource manager.
@@ -615,6 +611,9 @@ void auto_set_cxi_auth_key(const char*  protocol,
             *cxi_env_idx = 1;
             *auth_key    = strdup("0:0:1");
         }
+        /* in all other cases we fall through and let the underlying libfabric
+         * select a VNI for us.
+         */
     }
 
     return;
