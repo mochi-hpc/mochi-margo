@@ -274,30 +274,41 @@ bool __margo_hg_init_from_json(const struct json_object*   json,
             if (cxi_used_flag && cxi_env_idx == -1
                 && !cxi_explicit_auth_key_flag) {
                 margo_error(0,
-                            "Mercury initilialization with CXI failed, and no SLINGSHOT environment");
+                            "Mercury initilialization with CXI failed, and no "
+                            "SLINGSHOT environment");
                 margo_error(0,
-                            "variables were detected.  This may indicate that you must use your");
+                            "variables were detected.  This may indicate that "
+                            "you must use your");
                 margo_error(0,
-                            "system's resource manager to allocate a Slingshot VNI for Mercury.");
+                            "system's resource manager to allocate a Slingshot "
+                            "VNI for Mercury.");
                 margo_error(0, "   Try launching the process using either:");
-                margo_error(0, "   * `mpiexec --single-node-vni` (for PBS Pro)");
-                margo_error(
-                    0,
-                    "   * `srun --network=job_vni,single_node_vni` (for SLURM)");
+                margo_error(0,
+                            "   * `mpiexec --single-node-vni` (for PBS Pro)");
+                margo_error(0,
+                            "   * `srun --network=job_vni,single_node_vni` "
+                            "(for SLURM)");
                 margo_error(0,
                             "   Consult the mochi-margo documentation for more "
                             "details.");
             } else if (cxi_used_flag) {
-                margo_error(0, "Mercury initialization with CXI failed. This is often caused by a VNI");
-                margo_error(0, "misconfiguration.  See the mochi-margo documentation for information about");
-                margo_error(0, "how to configure the auth key_field.  Alternatively you can use a default");
+                margo_error(0,
+                            "Mercury initialization with CXI failed. This is "
+                            "often caused by a VNI");
+                margo_error(0,
+                            "misconfiguration.  See the mochi-margo "
+                            "documentation for information about");
+                margo_error(0,
+                            "how to configure the auth key_field.  "
+                            "Alternatively you can use a default");
                 margo_error(0, "system VNI and service if one is available.");
                 margo_error(0,
                             "   Check if a default system service is "
                             "enabled by running:");
                 margo_error(0, "   `cxi_service list -s 1 -v`");
                 margo_error(0,
-                            "   If so, then you can disable your resource manager's VNI allocation.");
+                            "   If so, then you can disable your resource "
+                            "manager's VNI allocation.");
                 margo_error(0, "   Try launching the process using either:");
                 margo_error(0, "   * `mpiexec --no-vni` (for PBS Pro)");
                 margo_error(0, "   * `srun --network=no_vni` (for SLURM)");
