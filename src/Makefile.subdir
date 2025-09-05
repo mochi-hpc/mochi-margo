@@ -13,7 +13,8 @@ noinst_HEADERS += src/margo-abt-macros.h \
                   src/margo-abt-config.h \
                   src/margo-hg-config.h \
                   src/uthash.h\
-                  src/utlist.h
+                  src/utlist.h\
+		  src/mochi-plumber.h
 
 src_libmargo_la_SOURCES += \
  src/margo-core.c \
@@ -33,6 +34,10 @@ src_libmargo_la_SOURCES += \
  src/margo-efirst-pool.c \
  src/margo-monitoring.c \
  src/margo-default-monitoring.c
+
+if ENABLE_PLUMBER
+src_libmargo_la_SOURCES += src/mochi-plumber.c
+endif
 
 src_libmargo_hg_shim_la_SOURCES += \
  src/margo-hg-shim.c
