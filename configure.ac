@@ -197,19 +197,32 @@ if test "$enable_coverage" = "yes" ; then
     LDFLAGS="--coverage -lgcov"
 fi
 
-AC_ARG_WITH([mochi-plumber],
-[AS_HELP_STRING([--with-mochi-plumber],
-  [enable support for mochi-plumber])],
-[],
-[with_mochi_plumber=no])
+# libfabric and hwloc required to enable plumber
+PKG_CHECK_MODULES([LIBFABRIC],[libfabric],
+   [LIBS="$LIBFABRIC_LIBS $LIBS"
+    CPPFLAGS="$LIBFABRIC_CFLAGS $CPPFLAGS"
+    CFLAGS="$LIBFABRIC_CFLAGS $CFLAGS"
+    have_libfabric="yes"
+   ],
+   []
+)
 
-AS_IF([test "x$with_mochi_plumber" != xno],
-    [PKG_CHECK_MODULES([MOCHI_PLUMBER],[mochi-plumber],[],
-        [AC_MSG_ERROR([Could not find working mochi-plumber installation!])])
+# hwloc and hwloc required to enable plumber
+PKG_CHECK_MODULES([HWLOC],[hwloc],
+   [LIBS="$HWLOC_LIBS $LIBS"
+    CPPFLAGS="$HWLOC_CFLAGS $CPPFLAGS"
+    CFLAGS="$HWLOC_CFLAGS $CFLAGS"
+    have_hwloc="yes"
+   ],
+   []
+)
+AM_CONDITIONAL(ENABLE_PLUMBER, test x$have_libfabric = xyes && test x$have_hwloc = xyes)
+if test x$have_libfabric = xyes && test x$have_hwloc = xyes ; then
     AC_DEFINE(HAVE_MOCHI_PLUMBER, 1, [mochi-plumber support enabled])
-    LIBS="$MOCHI_PLUMBER_LIBS $LIBS"
-    CPPFLAGS="$MOCHI_PLUMBER_CFLAGS $CPPFLAGS"
-    CFLAGS="$MOCHI_PLUMBER_CFLAGS $CFLAGS"])
+    AC_MSG_NOTICE([Enabling plumber functionality])
+else
+    AC_MSG_NOTICE([Disabling plumber functionality])
+fi
 
 AC_CONFIG_LINKS([tests/unit-tests/test-configs.json:tests/unit-tests/test-configs.json])
 
