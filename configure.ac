@@ -217,8 +217,11 @@ PKG_CHECK_MODULES([HWLOC],[hwloc],
    []
 )
 AM_CONDITIONAL(ENABLE_PLUMBER, test x$have_libfabric = xyes && test x$have_hwloc = xyes)
-if test x$have_lifabric = xyes && test x$have_hwloc = xyes ; then
+if test x$have_libfabric = xyes && test x$have_hwloc = xyes ; then
     AC_DEFINE(HAVE_MOCHI_PLUMBER, 1, [mochi-plumber support enabled])
+    AC_MSG_NOTICE([Enabling plumber functionality])
+else
+    AC_MSG_NOTICE([Disabling plumber functionality])
 fi
 
 AC_CONFIG_LINKS([tests/unit-tests/test-configs.json:tests/unit-tests/test-configs.json])

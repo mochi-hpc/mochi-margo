@@ -6,7 +6,7 @@
 
 #include "margo-config-private.h"
 #ifdef HAVE_MOCHI_PLUMBER
-    #include <mochi-plumber.h>
+    #include "mochi-plumber.h"
 #endif
 #include "margo-hg-config.h"
 
