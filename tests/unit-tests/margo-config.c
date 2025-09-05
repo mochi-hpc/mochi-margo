@@ -224,6 +224,12 @@ static MunitResult test_json_abt_config(const MunitParameter params[], void* dat
         munit_assert_not_null(output_config);
         json_object_object_del(output_config, "mercury");
         json_object_object_del(output_config, "version");
+        /* NOTE: plumber settings are not hard to validate, but they will
+         * not be present unless Margo is built with hwloc and libfabric.
+         * Just delete rather than attempting to figure out if they should
+         * be present or not.
+         */
+        json_object_object_del(output_config, "plumber");
         struct json_object* argobots = json_object_object_get(output_config, "argobots");
         json_object_object_del(argobots, "lazy_stack_alloc");
 
