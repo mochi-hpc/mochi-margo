@@ -10,6 +10,12 @@
 #endif
 #include "margo-hg-config.h"
 
+void auto_set_cxi_auth_key(const char*  protocol,
+                           const char** auth_key,
+                           int*         cxi_used_flag,
+                           int*         cxi_env_idx,
+                           int*         cxi_explicit_auth_key_flag);
+
 bool __margo_hg_validate_json(const struct json_object*   json,
                               const margo_hg_user_args_t* user_args)
 {
@@ -115,6 +121,10 @@ bool __margo_hg_init_from_json(const struct json_object*   json,
                                const char* plumber_nic_policy,
                                margo_hg_t* hg)
 {
+    int cxi_used_flag              = 0;
+    int cxi_env_idx                = -1;
+    int cxi_explicit_auth_key_flag = 0;
+
     if (user->hg_init_info && !user->hg_class) {
         // initialize hg_init_info from user-provided hg_init_info
         if (!user->hg_class) {
@@ -162,6 +172,10 @@ bool __margo_hg_init_from_json(const struct json_object*   json,
         if (auth_key)
             hg->hg_init_info.na_init_info.auth_key
                 = strdup(json_object_get_string(auth_key));
+        else
+            auto_set_cxi_auth_key(
+                user->protocol, &hg->hg_init_info.na_init_info.auth_key,
+                &cxi_used_flag, &cxi_env_idx, &cxi_explicit_auth_key_flag);
         struct json_object* log_level
             = json_object_object_get(json, "log_level");
         if (log_level)
@@ -257,6 +271,48 @@ bool __margo_hg_init_from_json(const struct json_object*   json,
         if (!hg->hg_class) {
             margo_error(0, "Could not initialize hg_class with protocol %s",
                         user->protocol);
+            if (cxi_used_flag && cxi_env_idx == -1
+                && !cxi_explicit_auth_key_flag) {
+                margo_error(0,
+                            "Mercury initilialization with CXI failed, and no "
+                            "SLINGSHOT environment");
+                margo_error(0,
+                            "variables were detected.  This may indicate that "
+                            "you must use your");
+                margo_error(0,
+                            "system's resource manager to allocate a Slingshot "
+                            "VNI for Mercury.");
+                margo_error(0, "   Try launching the process using either:");
+                margo_error(0,
+                            "   * `mpiexec --single-node-vni` (for PBS Pro)");
+                margo_error(0,
+                            "   * `srun --network=job_vni,single_node_vni` "
+                            "(for SLURM)");
+                margo_error(0,
+                            "   Consult the mochi-margo documentation for more "
+                            "details.");
+            } else if (cxi_used_flag) {
+                margo_error(0,
+                            "Mercury initialization with CXI failed. This is "
+                            "often caused by a VNI");
+                margo_error(0,
+                            "misconfiguration.  See the mochi-margo "
+                            "documentation for information about");
+                margo_error(0,
+                            "how to configure the auth key_field.  "
+                            "Alternatively you can use a default");
+                margo_error(0, "system VNI and service if one is available.");
+                margo_error(0,
+                            "   Check if a default system service is "
+                            "enabled by running:");
+                margo_error(0, "   `cxi_service list -s 1 -v`");
+                margo_error(0,
+                            "   If so, then you can disable your resource "
+                            "manager's VNI allocation.");
+                margo_error(0, "   Try launching the process using either:");
+                margo_error(0, "   * `mpiexec --no-vni` (for PBS Pro)");
+                margo_error(0, "   * `srun --network=no_vni` (for SLURM)");
+            }
             goto error;
         }
         hg->hg_ownership = MARGO_OWNS_HG_CLASS;
@@ -507,4 +563,87 @@ void __margo_hg_destroy(margo_hg_t* hg)
     }
 
     memset(hg, 0, sizeof(*hg));
+}
+
+/*  auto_set_cxi_auth_key()
+ *
+ *  Detect if the CXI protocol will be used to initialize Mercury.  If so,
+ *  then interrogate CXI environment variables to specify the most likely
+ *  auth_key configuration (if not already specified by the caller).
+ *
+ *  - protocol: user-provided protocol string
+ *  - auth_key: pointer to auth_key pointer
+ *  - cxi_used_flag: (output) indicates if we think CXI is being used or not
+ *  - cxi_env_idx: (output) indicates the CXI environment variable index that
+ *  was selected, or -1 if none was used.
+ *  - cxi_explicit_auth_key_flag: indicates if they user provided their own
+ *  auth_key
+ *
+ *  No return value, this is a best effort function.
+ */
+void auto_set_cxi_auth_key(const char*  protocol,
+                           const char** auth_key,
+                           int*         cxi_used_flag,
+                           int*         cxi_env_idx,
+                           int*         cxi_explicit_auth_key_flag)
+{
+    char* vni_env       = NULL;
+    char* vni_env_cur   = NULL;
+    int   vni_env_count = 0;
+
+    *cxi_env_idx                = -1;
+    *cxi_used_flag              = 0;
+    *cxi_explicit_auth_key_flag = 0;
+
+    if (!strstr(protocol, "cxi")) {
+        /* we don't seem to be using cxi */
+        return;
+    }
+    if (*auth_key) {
+        /* auth key is already explicitly set; leave it alone */
+        /* note that users can always ask for the default service (if enabled)
+         * by explicitly setting the auth_key to "1:1"
+         */
+        *cxi_explicit_auth_key_flag = 1;
+        return;
+    }
+
+    *cxi_used_flag = 1;
+
+    /* interrogate the SLINGSHOT_VNIS environment variable.  If set, it will
+     * have this form: "SLINGSHOT_VNIS=16369,16324", where the values are a
+     * comma-separated list.
+     */
+    vni_env = getenv("SLINGSHOT_VNIS");
+    if (vni_env) {
+        /* there is at least one VNI available */
+        vni_env_count = 1;
+        /* increment by one for every comma that we see */
+        vni_env_cur = vni_env;
+        while ((vni_env_cur = strchr(vni_env_cur, ','))) {
+            vni_env_count++;
+            vni_env_cur++;
+        }
+
+        /* Set the auth_key based on what we found.  The format is "x:y:z",
+         * where X is a service number, Y is a VNI, and Z is an (optional)
+         * index into the SLINGSHOT environment variables.  We want to leave x
+         * and y to 0 so that they are automatically populated based on the
+         * environment variables, but we want to pick the default index to use
+         * for Mochi.
+         */
+        if (vni_env_count > 1) {
+            /* there are multiple VNIs advertised; select the second one,
+             * which is expected to be the job-level VNI allocated by the
+             * resource manager.
+             */
+            *cxi_env_idx = 1;
+            *auth_key    = strdup("0:0:1");
+        }
+        /* in all other cases we fall through and let the underlying libfabric
+         * select a VNI for us.
+         */
+    }
+
+    return;
 }

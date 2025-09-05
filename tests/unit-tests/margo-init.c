@@ -51,6 +51,23 @@ static MunitResult init_cycle_server(const MunitParameter params[], void* data)
     return MUNIT_OK;
 }
 
+/* test initialization with misconfigured Slingshot parameters */
+static MunitResult init_cxi_misconfig(const MunitParameter params[], void* data)
+{
+    struct test_context* ctx = (struct test_context*)data;
+
+    /* Deliberately fault VNI environment variable; this should fail even on
+     * systems where the cxi protocol is available.  This test exercises the
+     * code path in which Margo attempts to auto-select a VNI.
+     */
+    putenv("SLINGSHOT_VNIS=apple,banana");
+
+    ctx->mid = margo_init("cxi", MARGO_CLIENT_MODE, 0, 0);
+    munit_assert_null(ctx->mid);
+
+    return MUNIT_OK;
+}
+
 /* test repeated init/finalize cycles, client mode */
 static MunitResult init_cycle_client(const MunitParameter params[], void* data)
 {
@@ -286,6 +303,8 @@ static MunitTest tests[] = {
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {"/multiple-pools-progress-loop", multiple_pools_progress_loop,
      test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, NULL},
+    {"/init-cxi-misconfig", init_cxi_misconfig, test_context_setup,
+     test_context_tear_down, MUNIT_TEST_OPTION_NONE, NULL},
     {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
 
 static const MunitSuite test_suite
