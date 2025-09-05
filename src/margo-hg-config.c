@@ -297,8 +297,7 @@ bool __margo_hg_init_from_json(const struct json_object*   json,
                             "enabled by running:");
                 margo_error(0, "   `cxi_service list -s 1 -v`");
                 margo_error(0,
-                            "   If so, then you can use it by disabling VNI "
-                            "allocation in your launcher.");
+                            "   If so, then you can disable your resource manager's VNI allocation.");
                 margo_error(0, "   Try launching the process using either:");
                 margo_error(0, "   * `mpiexec --no-vni` (for PBS Pro)");
                 margo_error(0, "   * `srun --network=no_vni` (for SLURM)");
