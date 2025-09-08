@@ -7,11 +7,11 @@ find_dependency (PkgConfig REQUIRED)
 find_dependency (Threads REQUIRED)
 find_dependency (mercury REQUIRED)
 
-pkg_check_modules (ARGOBOTS REQUIRED "argobots>=1.1")
-pkg_check_modules (JSONC REQUIRED json-c)
+pkg_check_modules (ARGOBOTS REQUIRED IMPORTED_TARGET "argobots>=1.1")
+pkg_check_modules (JSONC REQUIRED IMPORTED_TARGET json-c)
 
 if (@ENABLE_PLUMBER@)
-    pkg_check_modules (PLUMBER REQUIRED mochi-plumber)
+    pkg_check_modules (PLUMBER REQUIRED IMPORTED_TARGET mochi-plumber)
 endif ()
 
 # Include the targets file
