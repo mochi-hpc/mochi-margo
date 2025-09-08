@@ -5,7 +5,7 @@ includedir=@includedir@
 
 Name: margo-hg-shim
 Description: Margo/Mercury compatibility library
-Version: @PACKAGE_VERSION@
+Version: @MARGO_VERSION@
 URL: https://github.com/mochi-hpc/mochi-margo/
 Requires: mercury
 Libs: -L${libdir} -lmargo-hg-shim

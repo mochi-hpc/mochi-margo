@@ -1,17 +1,10 @@
-/**
- * @file margo-version.h
- *
- * (C) The University of Chicago
- *
- * See COPYRIGHT in top-level directory.
- */
-#ifndef __MARGO_VERSION
-#define __MARGO_VERSION
+#ifndef __MARGO_VERSION_H_
+#define __MARGO_VERSION_H_
 
-#define MARGO_VERSION       @MARGO_VERSION@
 #define MARGO_VERSION_MAJOR @MARGO_VERSION_MAJOR@
 #define MARGO_VERSION_MINOR @MARGO_VERSION_MINOR@
 #define MARGO_VERSION_PATCH @MARGO_VERSION_PATCH@
-#define MARGO_VERSION_NUM   @MARGO_VERSION_NUM@
+#define MARGO_VERSION "@MARGO_VERSION@"
+#define MARGO_VERSION_NUM @MARGO_VERSION_NUM@
 
-#endif /* __MARGO_VERSION */
+#endif
