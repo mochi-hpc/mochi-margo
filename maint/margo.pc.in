@@ -5,8 +5,8 @@ includedir=@includedir@
 
 Name: margo
 Description: Argobots bindings for Mercury RPC library
-Version: @PACKAGE_VERSION@
+Version: @MARGO_VERSION@
 URL: https://github.com/mochi-hpc/mochi-margo/
 Requires: @PC_REQUIRES@
-Libs: -L${libdir} -lmargo @PTHREAD_LIBS@
-Cflags: -I${includedir} @PTHREAD_CFLAGS@
+Libs: -L${libdir} -lmargo -lpthread
+Cflags: -I${includedir} -pthread
