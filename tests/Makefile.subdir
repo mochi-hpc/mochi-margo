@@ -20,6 +20,11 @@ TESTS += \
  tests/timeout.sh \
  src/margo-info
 
+if ENABLE_PLUMBER
+check_PROGRAMS += tests/mochi-plumber-query
+TESTS += tests/mochi-plumber-query.sh
+endif
+
 EXTRA_DIST += \
  tests/sleep.sh \
  tests/basic.sh \
