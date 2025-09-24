@@ -39,7 +39,7 @@ find_package (PkgConfig REQUIRED)
 pkg_check_modules (ARGOBOTS REQUIRED IMPORTED_TARGET argobots>=1.2)
 pkg_check_modules (JSONC REQUIRED IMPORTED_TARGET json-c)
 find_package (Threads REQUIRED)
-set (PC_REQUIRES "mercury argobots>=1.2 json-c")
+set (PC_REQUIRES "mercury argobots >= 1.2 json-c")
 
 # --- Optional Dependencies -------------------------------------------------
 
