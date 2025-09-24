@@ -26,7 +26,7 @@ char* margo_get_config_opt(margo_instance_id mid, int options)
 
     // margo version
     json_object_object_add_ex(root, "version",
-                              json_object_new_string(PACKAGE_VERSION), flags);
+                              json_object_new_string(MARGO_VERSION), flags);
     // argobots section
     __margo_abt_lock(&mid->abt);
     struct json_object* abt_json = __margo_abt_to_json(&(mid->abt), options);
@@ -987,7 +987,6 @@ hg_return_t margo_remove_xstream_by_handle(margo_instance_id mid,
 hg_return_t margo_transfer_pool_content(ABT_pool origin_pool,
                                         ABT_pool target_pool)
 {
-#ifdef HAVE_ABT_POOL_POP_THREADS
     while (1) {
         ABT_thread threads[64];
         size_t     num = 0;
@@ -995,15 +994,5 @@ hg_return_t margo_transfer_pool_content(ABT_pool origin_pool,
         if (num == 0) break;
         ABT_pool_push_threads(target_pool, threads, num);
     }
-#else
-    ABT_unit unit;
-    size_t   pool_size;
-    while (1) {
-        ABT_pool_get_size(origin_pool, &pool_size);
-        if (pool_size == 0) break;
-        ABT_pool_pop(origin_pool, &unit);
-        ABT_pool_push(target_pool, unit);
-    }
-#endif
     return HG_SUCCESS;
 }

@@ -59,19 +59,24 @@ Example Mercury compilation:
 ```
 mkdir build
 cd build
-cmake -DMERCURY_USE_SELF_FORWARD:BOOL=ON \
+cmake .. -DMERCURY_USE_SELF_FORWARD:BOOL=ON \
  -DBUILD_TESTING:BOOL=ON -DMERCURY_USE_BOOST_PP:BOOL=ON \
  -DCMAKE_INSTALL_PREFIX=/home/pcarns/working/install \
- -DBUILD_SHARED_LIBS:BOOL=ON -DCMAKE_BUILD_TYPE:STRING=Debug ../
+ -DBUILD_SHARED_LIBS:BOOL=ON -DCMAKE_BUILD_TYPE:STRING=Debug
+make
+make install
 ```
 
 ## Building
 
-Example configuration:
+```
+mkdir build
+cd build
+cmake .. -DENABLE_TESTS=ON -DCMAKE_INSTALL_PREFIX=/home/pcarns/working/install
+make
+make install
+```
 
-    ../configure --prefix=/home/pcarns/working/install \
-        PKG_CONFIG_PATH=/home/pcarns/working/install/lib/pkgconfig \
-        CFLAGS="-g -Wall"
 
 ## Running examples
 
@@ -113,7 +118,7 @@ complete.
 
 ## Running tests
 
-`make check`
+`make test`
 
 ## Using Margo with the other NA plugins
 

@@ -165,7 +165,7 @@ static MunitResult test_json_abt_config(const MunitParameter params[], void* dat
 
     // open JSON file with reference configurations
     struct json_object* configs
-        = json_object_from_file("tests/unit-tests/test-configs.json");
+        = json_object_from_file("test-configs.json");
     munit_assert_not_null(configs);
     munit_assert(json_object_is_type(configs, json_type_object));
 
@@ -255,9 +255,9 @@ static MunitResult test_json_abt_config(const MunitParameter params[], void* dat
 int main(int argc, char** argv)
 {
     struct json_object* configs
-          = json_object_from_file("tests/unit-tests/test-configs.json");
+          = json_object_from_file("test-configs.json");
     if(!configs) {
-        fprintf(stderr, "Could not open or parse JSON file \"tests/unit-tests/test-configs.json\"\n");
+        fprintf(stderr, "Could not open or parse JSON file \"test-configs.json\"\n");
         return MUNIT_FAIL;
     }
     int num_tests = json_object_object_length(configs);

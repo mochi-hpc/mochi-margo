@@ -4,7 +4,6 @@
  * See COPYRIGHT in top-level directory.
  */
 
-#include "margo-config-private.h"
 #ifdef HAVE_MOCHI_PLUMBER
     #include "mochi-plumber.h"
 #endif

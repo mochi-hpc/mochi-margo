@@ -1171,13 +1171,11 @@ json_object_t* __margo_abt_to_json(const margo_abt_t* a, int options)
     }
     json_object_object_add_ex(json, "profiling_dir",
                               json_object_new_string(a->profiling_dir), flags);
-#ifdef HAVE_ABT_INFO_QUERY_KIND_ENABLED_LAZY_STACK_ALLOC
     ABT_bool lazy_stack_alloc;
     ABT_info_query_config(ABT_INFO_QUERY_KIND_ENABLED_LAZY_STACK_ALLOC,
                           &lazy_stack_alloc);
     json_object_object_add_ex(json, "lazy_stack_alloc",
                               json_object_new_boolean(lazy_stack_alloc), flags);
-#endif
     return json;
 }
 

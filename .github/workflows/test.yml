@@ -46,30 +46,25 @@ jobs:
     - name: Build code and run unit tests
       run: |
         eval `spack env activate --sh tests`
-        ./prepare.sh
-        ./configure --prefix=`pwd`
-        make check
+        mkdir build
+        cd build
+        cmake .. -DENABLE_TESTS=ON
+        make
+        make test
         make clean
+        cd ..
+        rm -rf build
 
     - name: Rebuild code and run unit tests with ASAN
       run: |
         eval `spack env activate --sh tests`
-        CFLAGS="-fno-omit-frame-pointer -g -Wall -fsanitize=address" LDFLAGS="-fsanitize=address" ./configure --prefix=`pwd`
-        ASAN_OPTIONS="abort_on_error=1" make check
+        mkdir build
+        cd build
+        cmake .. -DENABLE_TESTS=ON -DENABLE_ASAN=ON
+        make
+        ASAN_OPTIONS="abort_on_error=1" make test
 
     - name: Show test output
       if: always()
       run: |
-        cat test-suite.log
-        cat tests/*.log
-        cat tests/unit-tests/*.log
-
-#    - name: Push packages to buildcache and update index
-#      if: ${{ !cancelled() }}
-#      run: |
-#        export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
-#        spack -e tests mirror set --push \
-#          --oci-username ${{ github.actor }} \
-#          --oci-password-variable GITHUB_TOKEN mochi-buildcache
-#        spack -e tests buildcache push --base-image ubuntu:22.04 \
-#          --unsigned --update-index mochi-buildcache
+        cat build/Testing/Temporary/LastTest.log
