@@ -599,8 +599,8 @@ hg_return_t margo_registered_name(margo_instance_id mid,
                                   hg_id_t*          id,
                                   hg_bool_t*        flag)
 {
-    *id = gen_id(func_name, 0);
-    return (HG_Registered(mid->hg.hg_class, *id, flag));
+    return margo_provider_registered_name(
+            mid, func_name, MARGO_DEFAULT_PROVIDER_ID, id, flag);
 }
 
 hg_return_t margo_provider_registered_name(margo_instance_id mid,
