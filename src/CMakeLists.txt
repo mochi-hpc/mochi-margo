@@ -16,6 +16,7 @@ add_library (margo SHARED
     margo-efirst-pool.c
     margo-monitoring.c
     margo-default-monitoring.c
+    ${OPTIONAL_PLUMBER_SRC}
 )
 
 add_library (margo-hg-shim SHARED
@@ -38,7 +39,7 @@ target_link_libraries (margo
         PkgConfig::ARGOBOTS
         PkgConfig::JSONC
         Threads::Threads
-        ${OPTIONAL_PLUMBER}
+        ${OPTIONAL_PLUMBER_DEPS}
 )
 
 target_link_libraries (margo-hg-shim

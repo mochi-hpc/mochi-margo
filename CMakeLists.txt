@@ -46,10 +46,13 @@ set (PC_REQUIRES "mercury argobots >= 1.2 json-c")
 
 option (ENABLE_PLUMBER "Enable support for mochi-plumber" OFF)
 if (ENABLE_PLUMBER)
-    pkg_check_modules (PLUMBER REQUIRED IMPORTED_TARGET mochi-plumber)
-    set (OPTIONAL_PLUMBER PkgConfig::PLUMBER)
-    set (PC_REQUIRE "${PC_REQUIRE} mochi-plumber")
+    pkg_check_modules (libfabric REQUIRED IMPORTED_TARGET libfabric)
+    pkg_check_modules (hwloc REQUIRED IMPORTED_TARGET hwloc)
+    set (OPTIONAL_PLUMBER_DEPS PkgConfig::libfabric PkgConfig::hwloc)
+    set (OPTIONAL_PLUMBER_SRC mochi-plumber.c)
+    set (PC_REQUIRE "${PC_REQUIRE} libfabric hwloc")
     add_definitions (-DHAVE_MOCHI_PLUMBER)
+    message (STATUS "Plumber is enabled")
 endif ()
 
 # --- Configure Headers -----------------------------------------------------

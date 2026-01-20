@@ -6,8 +6,6 @@
  * See COPYRIGHT in top-level directory.
  */
 
-#include "margo-config-private.h"
-
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>

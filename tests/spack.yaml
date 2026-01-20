@@ -13,6 +13,8 @@ spack:
   - pkg-config
   - argobots
   - mercury~checksum~boostsys ^libfabric fabrics=tcp,rxm
+  - libfabric
+  - hwloc
   concretizer:
     unify: true
     reuse: true
