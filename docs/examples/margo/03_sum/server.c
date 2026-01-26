@@ -16,17 +16,14 @@ int main(int argc, char** argv)
     margo_instance_id mid = margo_init("tcp", MARGO_SERVER_MODE, 0, 0);
     assert(mid);
 
-    server_data svr_data = {
-        .max_rpcs = 4,
-        .num_rpcs = 0
-    };
+    server_data svr_data = {.max_rpcs = 4, .num_rpcs = 0};
 
     hg_addr_t my_address;
     margo_addr_self(mid, &my_address);
-    char addr_str[128];
+    char   addr_str[128];
     size_t addr_str_size = 128;
     margo_addr_to_string(mid, addr_str, &addr_str_size, my_address);
-    margo_addr_free(mid,my_address);
+    margo_addr_free(mid, my_address);
 
     margo_info(mid, "Server running at address %s", addr_str);
 
@@ -42,7 +39,7 @@ static void sum(hg_handle_t h)
 {
     hg_return_t ret;
 
-    sum_in_t in;
+    sum_in_t  in;
     sum_out_t out;
 
     margo_instance_id mid = margo_hg_handle_get_instance(h);
@@ -67,8 +64,6 @@ static void sum(hg_handle_t h)
     assert(ret == HG_SUCCESS);
 
     svr_data->num_rpcs += 1;
-    if(svr_data->num_rpcs == svr_data->max_rpcs) {
-        margo_finalize(mid);
-    }
+    if (svr_data->num_rpcs == svr_data->max_rpcs) { margo_finalize(mid); }
 }
 DEFINE_MARGO_RPC_HANDLER(sum)

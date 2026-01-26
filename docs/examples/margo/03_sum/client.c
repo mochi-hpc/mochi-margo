@@ -6,8 +6,8 @@
 
 int main(int argc, char** argv)
 {
-    if(argc != 2) {
-        fprintf(stderr,"Usage: %s <server address>\n", argv[0]);
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <server address>\n", argv[0]);
         exit(0);
     }
 
@@ -19,11 +19,11 @@ int main(int argc, char** argv)
     hg_addr_t svr_addr;
     margo_addr_lookup(mid, argv[1], &svr_addr);
 
-    int i;
+    int      i;
     sum_in_t args;
-    for(i=0; i<4; i++) {
-        args.x = 42+i*2;
-        args.y = 42+i*2+1;
+    for (i = 0; i < 4; i++) {
+        args.x = 42 + i * 2;
+        args.y = 42 + i * 2 + 1;
 
         hg_handle_t h;
         margo_create(mid, svr_addr, sum_rpc_id, &h);
@@ -34,7 +34,7 @@ int main(int argc, char** argv)
 
         margo_info(mid, "Got response: %d+%d = %d\n", args.x, args.y, resp.ret);
 
-        margo_free_output(h,&resp);
+        margo_free_output(h, &resp);
         margo_destroy(h);
     }
 

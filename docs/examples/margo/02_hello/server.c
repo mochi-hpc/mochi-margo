@@ -4,7 +4,7 @@
 #include <margo.h>
 
 static const int TOTAL_RPCS = 4;
-static int num_rpcs = 0;
+static int       num_rpcs   = 0;
 
 static void hello_world(hg_handle_t h);
 DECLARE_MARGO_RPC_HANDLER(hello_world)
@@ -16,10 +16,10 @@ int main(int argc, char** argv)
 
     hg_addr_t my_address;
     margo_addr_self(mid, &my_address);
-    char addr_str[128];
+    char   addr_str[128];
     size_t addr_str_size = 128;
     margo_addr_to_string(mid, addr_str, &addr_str_size, my_address);
-    margo_addr_free(mid,my_address);
+    margo_addr_free(mid, my_address);
 
     margo_set_log_level(mid, MARGO_LOG_INFO);
     margo_info(mid, "Server running at address %s", addr_str);
@@ -44,8 +44,6 @@ static void hello_world(hg_handle_t h)
     ret = margo_destroy(h);
     assert(ret == HG_SUCCESS);
 
-    if(num_rpcs == TOTAL_RPCS) {
-        margo_finalize(mid);
-    }
+    if (num_rpcs == TOTAL_RPCS) { margo_finalize(mid); }
 }
 DEFINE_MARGO_RPC_HANDLER(hello_world)

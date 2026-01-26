@@ -39,7 +39,7 @@ jobs:
         eval `spack env activate --sh tests`
         mkdir build
         cd build
-        cmake .. -DENABLE_TESTS=ON -DENABLE_COVERAGE=ON
+        cmake .. -DENABLE_TESTS=ON -DENABLE_EXAMPLES=ON -DENABLE_COVERAGE=ON
         make
         make test
 

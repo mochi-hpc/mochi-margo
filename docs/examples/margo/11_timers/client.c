@@ -4,14 +4,15 @@
 #include <margo-timer.h>
 #include <margo-logging.h>
 
-void my_callback(void* uargs) {
+void my_callback(void* uargs)
+{
     margo_instance_id mid = (margo_instance_id)uargs;
     margo_info(mid, "Callback called");
 }
 
 int main(int argc, char** argv)
 {
-    margo_instance_id mid = margo_init("tcp",MARGO_CLIENT_MODE, 0, 0);
+    margo_instance_id mid = margo_init("tcp", MARGO_CLIENT_MODE, 0, 0);
     margo_set_log_level(mid, MARGO_LOG_INFO);
 
     margo_timer_t timer = MARGO_TIMER_NULL;

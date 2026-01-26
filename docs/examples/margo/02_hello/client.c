@@ -5,16 +5,15 @@
 
 int main(int argc, char** argv)
 {
-    if(argc != 2) {
-        fprintf(stderr,"Usage: %s <server address>\n", argv[0]);
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <server address>\n", argv[0]);
         exit(0);
     }
 
-    hg_return_t ret;
+    hg_return_t       ret;
     margo_instance_id mid = MARGO_INSTANCE_NULL;
 
-
-    mid = margo_init("tcp",MARGO_CLIENT_MODE, 0, 0);
+    mid = margo_init("tcp", MARGO_CLIENT_MODE, 0, 0);
     assert(mid);
 
     hg_id_t hello_rpc_id = MARGO_REGISTER(mid, "hello", void, void, NULL);

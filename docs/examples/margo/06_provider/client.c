@@ -5,8 +5,8 @@
 
 int main(int argc, char** argv)
 {
-    if(argc != 3) {
-        fprintf(stderr,"Usage: %s <server address> <provider id>\n", argv[0]);
+    if (argc != 3) {
+        fprintf(stderr, "Usage: %s <server address> <provider id>\n", argv[0]);
         exit(0);
     }
 
@@ -19,7 +19,7 @@ int main(int argc, char** argv)
     hg_addr_t svr_addr;
     margo_addr_lookup(mid, svr_addr_str, &svr_addr);
 
-    alpha_client_t alpha_clt;
+    alpha_client_t          alpha_clt;
     alpha_provider_handle_t alpha_ph;
 
     alpha_client_init(mid, &alpha_clt);

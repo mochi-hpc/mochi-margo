@@ -19,6 +19,7 @@ set (CMAKE_C_STANDARD_REQUIRED ON)
 option (ENABLE_COVERAGE "Enable code coverage" OFF)
 option (ENABLE_TESTS "Enable tests" OFF)
 option (ENABLE_ASAN "Enable address sanitizer" OFF)
+option (ENABLE_EXAMPLES "Build examples in the docs folder" OFF)
 
 if (ENABLE_COVERAGE)
     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --coverage -O0")
@@ -68,6 +69,9 @@ add_subdirectory (src)
 add_subdirectory (examples)
 if (ENABLE_TESTS)
     add_subdirectory (tests)
+endif ()
+if (ENABLE_EXAMPLES)
+    add_subdirectory (docs/examples/margo)
 endif ()
 
 # --- Installation ----------------------------------------------------------
