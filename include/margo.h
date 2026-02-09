@@ -118,6 +118,7 @@ struct margo_init_info {
     struct hg_init_info*  hg_init_info;  /*!< Mercury init info     */
     struct margo_logger*  logger;        /*!< User-provided logger  */
     struct margo_monitor* monitor;       /*!< User-provided monitor */
+    margo_instance_id     parent_mid;    /*!< Parent Margo instance */
 };
 
 /**

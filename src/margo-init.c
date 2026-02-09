@@ -133,9 +133,19 @@ margo_instance_id margo_init_ext(const char*                   address,
                                    &hg))
         goto error;
 
-    margo_trace(0, "Initializing Argobots");
     struct json_object* abt_config = json_object_object_get(config, "argobots");
-    if (!__margo_abt_init_from_json(abt_config, &abt)) goto error;
+    if(args.parent_mid) {
+        if(abt_config) {
+            margo_error(0,
+                "Margo instance initialized with a parent "
+                "cannot have an \"argobots\" configuration");
+            goto error;
+        }
+        // TODO initialize argobots from parent
+    } else {
+        margo_trace(0, "Initializing Argobots");
+        if (!__margo_abt_init_from_json(abt_config, &abt)) goto error;
+    }
 
     // configm the environment variables are appropriate for Argobots
     confirm_argobots_configuration(config);
@@ -308,13 +318,21 @@ margo_instance_id margo_init_ext(const char*                   address,
     int abt_profiling_enabled
         = json_object_object_get_bool_or(config, "enable_abt_profiling", false);
 
+    mid->parent_mid = args.parent_mid;
+    margo_instance_ref_incr(mid->parent_mid);
+
     mid->refcount = 0;
 
     mid->abt_profiling_enabled = abt_profiling_enabled;
 
     mid->hg      = hg;
-    mid->abt     = abt;
-    mid->abt.mid = mid;
+    if(!mid->parent_mid) {
+        mid->abt     = (margo_abt_t*)malloc(sizeof(abt));
+        memcpy(mid->abt, &abt, sizeof(abt));
+        mid->abt->mid = mid;
+    } else {
+        mid->abt = mid->parent_mid->abt;
+    }
 
     mid->progress_pool_idx = progress_pool_idx;
     mid->rpc_pool_idx      = rpc_pool_idx;
@@ -404,6 +422,7 @@ finish:
 
 error:
     if (mid) {
+        if(mid->parent_mid) margo_instance_release(mid->parent_mid);
         __margo_handle_cache_destroy(mid);
         __margo_timer_list_free(mid);
         ABT_mutex_free(&mid->finalize_mutex);

@@ -53,11 +53,14 @@ struct margo_registered_rpc {
 };
 
 struct margo_instance {
+    /* Parent margo instance, if provided */
+    margo_instance_id parent_mid;
+
     /* Refcount */
     _Atomic unsigned refcount;
 
     /* Argobots environment */
-    struct margo_abt abt;
+    struct margo_abt* abt;
 
     /* Mercury environment */
     struct margo_hg hg;
@@ -138,9 +141,9 @@ struct margo_instance {
     char* plumber_nic_policy;
 };
 
-#define MARGO_PROGRESS_POOL(mid) (mid)->abt.pools[mid->progress_pool_idx].pool
+#define MARGO_PROGRESS_POOL(mid) (mid)->abt->pools[mid->progress_pool_idx].pool
 
-#define MARGO_RPC_POOL(mid) (mid)->abt.pools[mid->rpc_pool_idx].pool
+#define MARGO_RPC_POOL(mid) (mid)->abt->pools[mid->rpc_pool_idx].pool
 
 typedef enum margo_request_kind {
     MARGO_REQ_EVENTUAL,

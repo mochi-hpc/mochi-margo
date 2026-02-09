@@ -184,7 +184,10 @@ static void margo_cleanup(margo_instance_id mid)
     free(mid->plumber_nic_policy);
 
     MARGO_TRACE(mid, "Destroying Argobots environment");
-    __margo_abt_destroy(&(mid->abt));
+    if(!mid->parent_mid) {
+        __margo_abt_destroy(mid->abt);
+        free(mid->abt);
+    }
     free(mid);
 
     MARGO_TRACE(0, "Completed margo_cleanup");
@@ -578,10 +581,10 @@ hg_return_t margo_deregister(margo_instance_id mid, hg_id_t rpc_id)
         = (struct margo_rpc_data*)HG_Registered_data(mid->hg.hg_class, rpc_id);
     if (data) {
         /* decrement the numner of RPC id used by the pool */
-        __margo_abt_lock(&mid->abt);
-        int32_t index = __margo_abt_find_pool_by_handle(&mid->abt, data->pool);
-        if (index >= 0) mid->abt.pools[index].refcount--;
-        __margo_abt_unlock(&mid->abt);
+        __margo_abt_lock(mid->abt);
+        int32_t index = __margo_abt_find_pool_by_handle(mid->abt, data->pool);
+        if (index >= 0) mid->abt->pools[index].refcount--;
+        __margo_abt_unlock(mid->abt);
     }
 
     /* deregister */
@@ -2271,7 +2274,7 @@ static hg_id_t margo_register_internal(margo_instance_id mid,
     /* increment the number of RPC ids using the pool */
     struct margo_pool_info pool_info;
     if (margo_find_pool_by_handle(mid, pool, &pool_info) == HG_SUCCESS) {
-        mid->abt.pools[pool_info.index].refcount++;
+        mid->abt->pools[pool_info.index].refcount++;
     }
 
 finish:
@@ -2442,17 +2445,17 @@ hg_return_t margo_rpc_set_pool(margo_instance_id mid, hg_id_t id, ABT_pool pool)
     struct margo_rpc_data* data
         = (struct margo_rpc_data*)HG_Registered_data(margo_get_class(mid), id);
     if (!data) return HG_NOENTRY;
-    __margo_abt_lock(&mid->abt);
+    __margo_abt_lock(mid->abt);
     if (pool == ABT_POOL_NULL) margo_get_handler_pool(mid, &pool);
     int old_pool_entry_idx
-        = __margo_abt_find_pool_by_handle(&mid->abt, data->pool);
-    int new_pool_entry_idx = __margo_abt_find_pool_by_handle(&mid->abt, pool);
-    if (old_pool_entry_idx >= 0) mid->abt.pools[old_pool_entry_idx].refcount--;
+        = __margo_abt_find_pool_by_handle(mid->abt, data->pool);
+    int new_pool_entry_idx = __margo_abt_find_pool_by_handle(mid->abt, pool);
+    if (old_pool_entry_idx >= 0) mid->abt->pools[old_pool_entry_idx].refcount--;
     if (new_pool_entry_idx >= 0)
-        mid->abt.pools[new_pool_entry_idx].refcount++;
+        mid->abt->pools[new_pool_entry_idx].refcount++;
     else
         margo_warning(mid, "Associating RPC with a pool not know to Margo");
-    __margo_abt_unlock(&mid->abt);
+    __margo_abt_unlock(mid->abt);
     data->pool = pool;
     return HG_SUCCESS;
 }
@@ -2525,9 +2528,9 @@ int margo_set_progress_when_needed(margo_instance_id mid, bool when_needed)
 int margo_migrate_progress_loop(margo_instance_id mid, unsigned pool_idx)
 {
     if (mid == MARGO_INSTANCE_NULL) return ABT_ERR_INV_ARG;
-    if (pool_idx >= mid->abt.pools_len) return ABT_ERR_INV_ARG;
+    if (pool_idx >= mid->abt->pools_len) return ABT_ERR_INV_ARG;
     if (pool_idx == mid->progress_pool_idx) return 0;
     mid->progress_pool_idx = pool_idx;
-    ABT_pool target_pool = mid->abt.pools[pool_idx].pool;
+    ABT_pool target_pool = mid->abt->pools[pool_idx].pool;
     return ABT_thread_migrate_to_pool(mid->hg_progress_tid, target_pool);
 }

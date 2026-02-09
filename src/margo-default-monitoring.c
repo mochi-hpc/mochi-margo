@@ -1482,7 +1482,7 @@ __margo_default_monitor_on_add_pool(void*                         uargs,
         ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->pool_time_series_mtx));
     // current_num_pools = number of pools before adding
     // since event_type == MARGO_MONITOR_FN_START
-    size_t current_num_pools       = monitor->mid->abt.pools_len;
+    size_t current_num_pools       = monitor->mid->abt->pools_len;
     monitor->pool_size_time_series = realloc(
         monitor->pool_size_time_series,
         (current_num_pools + 1) * sizeof(*monitor->pool_size_time_series));
@@ -1522,7 +1522,7 @@ static void __margo_default_monitor_on_remove_pool(
         ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->pool_time_series_mtx));
     // current_num_pools = number of pools after removing
     // since event_type == MARGO_MONITOR_FN_END
-    size_t   current_num_pools = monitor->mid->abt.pools_len;
+    size_t   current_num_pools = monitor->mid->abt->pools_len;
     uint32_t index             = event_args->info->index;
     time_series_clear(&monitor->pool_size_time_series[index]);
     time_series_clear(&monitor->pool_total_size_time_series[index]);
