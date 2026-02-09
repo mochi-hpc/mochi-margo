@@ -280,6 +280,138 @@ static MunitResult multiple_pools_progress_loop(const MunitParameter params[],
     return MUNIT_OK;
 }
 
+/* test basic init with parent_mid: child shares parent's pools */
+static MunitResult init_with_parent(const MunitParameter params[], void* data)
+{
+    (void)params;
+    struct test_context* ctx = (struct test_context*)data;
+
+    /* create parent instance */
+    ctx->mid = margo_init("na+sm", MARGO_SERVER_MODE, 0, 0);
+    munit_assert_not_null(ctx->mid);
+
+    /* create child instance sharing the parent's argobots */
+    struct margo_init_info child_info = MARGO_INIT_INFO_INITIALIZER;
+    child_info.parent_mid             = ctx->mid;
+    margo_instance_id child_mid
+        = margo_init_ext("na+sm", MARGO_CLIENT_MODE, &child_info);
+    munit_assert_not_null(child_mid);
+
+    /* verify both instances resolve __primary__ to the same ABT pool */
+    ABT_pool parent_progress = ABT_POOL_NULL;
+    ABT_pool child_progress  = ABT_POOL_NULL;
+    margo_get_progress_pool(ctx->mid, &parent_progress);
+    margo_get_progress_pool(child_mid, &child_progress);
+    munit_assert_ptr_equal(parent_progress, child_progress);
+
+    ABT_pool parent_rpc = ABT_POOL_NULL;
+    ABT_pool child_rpc  = ABT_POOL_NULL;
+    margo_get_handler_pool(ctx->mid, &parent_rpc);
+    margo_get_handler_pool(child_mid, &child_rpc);
+    munit_assert_ptr_equal(parent_rpc, child_rpc);
+
+    margo_finalize(child_mid);
+    margo_finalize(ctx->mid);
+
+    return MUNIT_OK;
+}
+
+/* test child init with progress_pool and rpc_pool specified by name */
+static MunitResult init_with_parent_pool_by_name(const MunitParameter params[],
+                                                  void*                data)
+{
+    (void)params;
+    struct test_context* ctx = (struct test_context*)data;
+
+    const char* parent_config
+        = "{"
+          "\"argobots\": {"
+          "\"pools\": ["
+          "{\"name\":\"__primary__\",\"access\":\"mpmc\",\"kind\":\"fifo_wait\"},"
+          "{\"name\":\"my_pool\",\"access\":\"mpmc\",\"kind\":\"fifo_wait\"}"
+          "],"
+          "\"xstreams\": ["
+          "{\"name\":\"__primary__\","
+          "\"scheduler\":{\"pools\":[\"__primary__\"],"
+          "\"type\":\"basic_wait\"}"
+          "},"
+          "{\"name\":\"es1\","
+          "\"scheduler\":{\"pools\":[\"my_pool\"],"
+          "\"type\":\"basic_wait\"}"
+          "}"
+          "]"
+          "},"
+          "\"progress_pool\":\"__primary__\","
+          "\"rpc_pool\":\"__primary__\""
+          "}";
+
+    struct margo_init_info parent_info = MARGO_INIT_INFO_INITIALIZER;
+    parent_info.json_config            = parent_config;
+    ctx->mid = margo_init_ext("na+sm", MARGO_SERVER_MODE, &parent_info);
+    munit_assert_not_null(ctx->mid);
+
+    /* child references parent's pool by name */
+    const char* child_config
+        = "{"
+          "\"progress_pool\":\"my_pool\","
+          "\"rpc_pool\":\"my_pool\""
+          "}";
+
+    struct margo_init_info child_info = MARGO_INIT_INFO_INITIALIZER;
+    child_info.parent_mid             = ctx->mid;
+    child_info.json_config            = child_config;
+    margo_instance_id child_mid
+        = margo_init_ext("na+sm", MARGO_CLIENT_MODE, &child_info);
+    munit_assert_not_null(child_mid);
+
+    /* verify the child's progress and rpc pools match my_pool from parent */
+    struct margo_pool_info my_pool_info = {0};
+    hg_return_t hret = margo_find_pool_by_name(ctx->mid, "my_pool", &my_pool_info);
+    munit_assert_int(hret, ==, HG_SUCCESS);
+
+    ABT_pool child_progress = ABT_POOL_NULL;
+    ABT_pool child_rpc      = ABT_POOL_NULL;
+    margo_get_progress_pool(child_mid, &child_progress);
+    margo_get_handler_pool(child_mid, &child_rpc);
+
+    munit_assert_ptr_equal(child_progress, my_pool_info.pool);
+    munit_assert_ptr_equal(child_rpc, my_pool_info.pool);
+
+    margo_finalize(child_mid);
+    margo_finalize(ctx->mid);
+
+    return MUNIT_OK;
+}
+
+/* test that providing "argobots" config with parent_mid fails */
+static MunitResult init_with_parent_invalid_argobots(
+    const MunitParameter params[], void* data)
+{
+    (void)params;
+    struct test_context* ctx = (struct test_context*)data;
+
+    ctx->mid = margo_init("na+sm", MARGO_SERVER_MODE, 0, 0);
+    munit_assert_not_null(ctx->mid);
+
+    const char* child_config
+        = "{"
+          "\"argobots\": {"
+          "\"pools\": [{\"name\":\"bad\",\"access\":\"mpmc\",\"kind\":\"fifo_wait\"}]"
+          "}"
+          "}";
+
+    struct margo_init_info child_info = MARGO_INIT_INFO_INITIALIZER;
+    child_info.parent_mid             = ctx->mid;
+    child_info.json_config            = child_config;
+    margo_instance_id child_mid
+        = margo_init_ext("na+sm", MARGO_CLIENT_MODE, &child_info);
+    munit_assert_null(child_mid);
+
+    margo_finalize(ctx->mid);
+
+    return MUNIT_OK;
+}
+
 static char* protocol_params[] = {"na+sm", NULL};
 
 static char* use_progress_thread_params[] = {"0", "1", NULL};
@@ -305,6 +437,12 @@ static MunitTest tests[] = {
      test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, NULL},
     {"/init-cxi-misconfig", init_cxi_misconfig, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, NULL},
+    {"/init-with-parent", init_with_parent, test_context_setup,
+     test_context_tear_down, MUNIT_TEST_OPTION_NONE, NULL},
+    {"/init-with-parent-pool-by-name", init_with_parent_pool_by_name,
+     test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, NULL},
+    {"/init-with-parent-invalid-argobots", init_with_parent_invalid_argobots,
+     test_context_setup, test_context_tear_down, MUNIT_TEST_OPTION_NONE, NULL},
     {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
 
 static const MunitSuite test_suite

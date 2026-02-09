@@ -19,6 +19,9 @@ This instance can be used to provide any of the following.
 - :code:`hg_context`: an existing Mercury context;
 - :code:`hg_init_info`: an :code:`hg_init_info` structure to pass
   to Mercury when initializing its class.
+- :code:`parent_mid`: an existing Margo instance whose Argobots
+  environment (pools and execution streams) the new instance will
+  share. See :ref:`margo_14_parent` for details.
 
 The bellow code examplifies the use of the :code:`margo_init_ext`
 function.

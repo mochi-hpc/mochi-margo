@@ -24,7 +24,10 @@ static bool __margo_validate_json(struct json_object*           _config,
                                   const char*                   address,
                                   int                           mode,
                                   const struct margo_init_info* uargs);
-bool        __margo_plumber_validate_json(const json_object_t* p);
+static bool __margo_validate_json_with_parent(
+    struct json_object* _config, const char* address, int mode,
+    const struct margo_init_info* uargs);
+bool __margo_plumber_validate_json(const json_object_t* p);
 
 // Sets environment variables for Argobots
 static void set_argobots_environment_variables(struct json_object* config);
@@ -105,7 +108,13 @@ margo_instance_id margo_init_ext(const char*                   address,
 
     // validate and complete configuration
     margo_trace(0, "Validating JSON configuration");
-    if (!__margo_validate_json(config, address, mode, &args)) goto error;
+    if (args.parent_mid) {
+        if (!__margo_validate_json_with_parent(config, address, mode, &args))
+            goto error;
+    } else {
+        if (!__margo_validate_json(config, address, mode, &args))
+            goto error;
+    }
 
 #ifdef HAVE_MOCHI_PLUMBER
     struct json_object* plumber_config
@@ -135,29 +144,26 @@ margo_instance_id margo_init_ext(const char*                   address,
 
     struct json_object* abt_config = json_object_object_get(config, "argobots");
     if(args.parent_mid) {
-        if(abt_config) {
-            margo_error(0,
-                "Margo instance initialized with a parent "
-                "cannot have an \"argobots\" configuration");
-            goto error;
-        }
-        // TODO initialize argobots from parent
+        // child reuses parent's argobots environment
     } else {
         margo_trace(0, "Initializing Argobots");
         if (!__margo_abt_init_from_json(abt_config, &abt)) goto error;
     }
 
     // configm the environment variables are appropriate for Argobots
-    confirm_argobots_configuration(config);
+    if (!args.parent_mid)
+        confirm_argobots_configuration(config);
 
-    int primary_pool_idx = __margo_abt_find_pool_by_name(&abt, "__primary__");
+    margo_abt_t* effective_abt = args.parent_mid ? args.parent_mid->abt : &abt;
+
+    int primary_pool_idx = __margo_abt_find_pool_by_name(effective_abt, "__primary__");
     if (primary_pool_idx < 0) {
         margo_error(0,
                     "Could not find __primary__ pool after "
                     "initialization from configuration");
         goto error;
     }
-    ABT_pool primary_pool = abt.pools[primary_pool_idx].pool;
+    ABT_pool primary_pool = effective_abt->pools[primary_pool_idx].pool;
 
     // initialize progress pool
     int progress_pool_idx = -1;
@@ -176,8 +182,8 @@ margo_instance_id margo_init_ext(const char*                   address,
         } else if (args.progress_pool != ABT_POOL_NULL
                    && args.progress_pool != NULL) {
             /* external progress pool specified and not primary, add it */
-            progress_pool_idx = (int)abt.pools_len;
-            if (!__margo_abt_add_external_pool(&abt, NULL, args.progress_pool))
+            progress_pool_idx = (int)effective_abt->pools_len;
+            if (!__margo_abt_add_external_pool(effective_abt, NULL, args.progress_pool))
                 goto error;
         } else if (jprogress_pool) {
             /* progress_pool specified in JSON, find it by index or by name */
@@ -185,7 +191,7 @@ margo_instance_id margo_init_ext(const char*                   address,
                 progress_pool_idx = json_object_get_int(jprogress_pool);
             } else { /* it's a string */
                 progress_pool_idx = __margo_abt_find_pool_by_name(
-                    &abt, json_object_get_string(jprogress_pool));
+                    effective_abt, json_object_get_string(jprogress_pool));
             }
 
         } else if (juse_progress_thread
@@ -195,8 +201,8 @@ margo_instance_id margo_init_ext(const char*                   address,
             jprogress_pool = json_object_new_object();
             json_object_object_add(jprogress_pool, "access",
                                    json_object_new_string("mpmc"));
-            progress_pool_idx = abt.pools_len;
-            ret = __margo_abt_add_pool_from_json(&abt, jprogress_pool);
+            progress_pool_idx = effective_abt->pools_len;
+            ret = __margo_abt_add_pool_from_json(effective_abt, jprogress_pool);
             json_object_put(jprogress_pool);
             if (!ret) goto error;
             /* add a proress ES */
@@ -210,7 +216,7 @@ margo_instance_id margo_init_ext(const char*                   address,
                                    jprogress_xstream_pools);
             json_object_array_add(jprogress_xstream_pools,
                                   json_object_new_int(progress_pool_idx));
-            ret = __margo_abt_add_xstream_from_json(&abt, jprogress_xstream);
+            ret = __margo_abt_add_xstream_from_json(effective_abt, jprogress_xstream);
             json_object_put(jprogress_xstream);
             if (!ret) goto error;
 
@@ -243,8 +249,8 @@ margo_instance_id margo_init_ext(const char*                   address,
 
         } else if (args.rpc_pool != ABT_POOL_NULL && args.rpc_pool != NULL) {
             /* external RPC pool specified, add it as external */
-            rpc_pool_idx = (int)abt.pools_len;
-            ret = __margo_abt_add_external_pool(&abt, NULL, args.rpc_pool);
+            rpc_pool_idx = (int)effective_abt->pools_len;
+            ret = __margo_abt_add_external_pool(effective_abt, NULL, args.rpc_pool);
             if (!ret) goto error;
 
         } else if (jrpc_pool) {
@@ -253,7 +259,7 @@ margo_instance_id margo_init_ext(const char*                   address,
                 rpc_pool_idx = json_object_get_int(jrpc_pool);
             } else { /* it's a string */
                 rpc_pool_idx = __margo_abt_find_pool_by_name(
-                    &abt, json_object_get_string(jrpc_pool));
+                    effective_abt, json_object_get_string(jrpc_pool));
             }
 
         } else if (jrpc_thread_count
@@ -268,8 +274,8 @@ margo_instance_id margo_init_ext(const char*                   address,
             jrpc_pool = json_object_new_object();
             json_object_object_add(jrpc_pool, "access",
                                    json_object_new_string("mpmc"));
-            rpc_pool_idx = abt.pools_len;
-            ret          = __margo_abt_add_pool_from_json(&abt, jrpc_pool);
+            rpc_pool_idx = effective_abt->pools_len;
+            ret          = __margo_abt_add_pool_from_json(effective_abt, jrpc_pool);
             json_object_put(jrpc_pool);
             if (!ret) goto error;
             /* add a __rpc_X__ ESs */
@@ -283,7 +289,7 @@ margo_instance_id margo_init_ext(const char*                   address,
                 json_object_object_add(jrpc_sched, "pools", jrpc_xstream_pools);
                 json_object_array_add(jrpc_xstream_pools,
                                       json_object_new_int(rpc_pool_idx));
-                ret = __margo_abt_add_xstream_from_json(&abt, jrpc_xstream);
+                ret = __margo_abt_add_xstream_from_json(effective_abt, jrpc_xstream);
                 json_object_put(jrpc_xstream);
                 if (!ret) goto error;
             }
@@ -296,9 +302,11 @@ margo_instance_id margo_init_ext(const char*                   address,
     }
 
     // sanity check configuration of pools and ES
-    if (!sanity_check_abt_configuration(&abt, progress_pool_idx)) {
-        MARGO_ERROR(0, "Configuration did not pass sanity checks");
-        goto error;
+    if (!args.parent_mid) {
+        if (!sanity_check_abt_configuration(effective_abt, progress_pool_idx)) {
+            MARGO_ERROR(0, "Configuration did not pass sanity checks");
+            goto error;
+        }
     }
 
     // allocate margo instance
@@ -435,7 +443,8 @@ error:
     free(plumber_bucket_policy);
     free(plumber_nic_policy);
     __margo_hg_destroy(&hg);
-    __margo_abt_destroy(&abt);
+    if (!args.parent_mid)
+        __margo_abt_destroy(&abt);
     goto finish;
 }
 
@@ -621,6 +630,164 @@ static bool __margo_validate_json(struct json_object*           _margo,
                           " because \"rpc_pool\" field was specified");
         }
     }
+    if (has_external_rpc_pool && _rpc_pool) {
+        margo_warning(0,
+                      "\"rpc_pool\" will be ignored because"
+                      " external rpc pool was provided");
+    }
+
+    return true;
+#undef HANDLE_CONFIG_ERROR
+}
+
+/**
+ * This function validates a margo configuration for a child instance
+ * that shares its parent's Argobots environment. It rejects argobots-related
+ * fields and validates pool references against the parent's existing pools.
+ */
+static bool __margo_validate_json_with_parent(
+    struct json_object* _margo, const char* address, int mode,
+    const struct margo_init_info* uargs)
+{
+    struct json_object* ignore = NULL;
+
+#define HANDLE_CONFIG_ERROR return false
+
+    /* ------- Mercury configuration ------ */
+    struct json_object*  _mercury = json_object_object_get(_margo, "mercury");
+    margo_hg_user_args_t hg_uargs = {.protocol     = address,
+                                     .listening    = mode == MARGO_SERVER_MODE,
+                                     .hg_init_info = uargs->hg_init_info,
+                                     .hg_class     = uargs->hg_class,
+                                     .hg_context   = uargs->hg_context};
+    if (!__margo_hg_validate_json(_mercury, &hg_uargs)) { return false; }
+
+    /* ------- Reject argobots-related fields ------ */
+    if (json_object_object_get(_margo, "argobots")) {
+        margo_error(0,
+                    "Margo instance initialized with a parent "
+                    "cannot have an \"argobots\" configuration");
+        HANDLE_CONFIG_ERROR;
+    }
+
+    if (json_object_object_get(_margo, "use_progress_thread")) {
+        margo_error(0,
+                    "Margo instance initialized with a parent "
+                    "cannot have a \"use_progress_thread\" configuration");
+        HANDLE_CONFIG_ERROR;
+    }
+
+    if (json_object_object_get(_margo, "rpc_thread_count")) {
+        margo_error(0,
+                    "Margo instance initialized with a parent "
+                    "cannot have an \"rpc_thread_count\" configuration");
+        HANDLE_CONFIG_ERROR;
+    }
+
+    /* ------- Plumber configuration ------ */
+    struct json_object* _plumber = json_object_object_get(_margo, "plumber");
+    if (!__margo_plumber_validate_json(_plumber)) { return false; }
+
+    /* ------- Optional integer fields ------ */
+    ASSERT_CONFIG_HAS_OPTIONAL(_margo, "progress_spindown_msec", int, "margo");
+    if (CONFIG_HAS(_margo, "progress_spindown_msec", ignore)) {
+        CONFIG_INTEGER_MUST_BE_POSITIVE(_margo, "progress_spindown_msec",
+                                        "progress_spindown_msec");
+    }
+
+    ASSERT_CONFIG_HAS_OPTIONAL(_margo, "progress_timeout_ub_msec", int,
+                               "margo");
+    if (CONFIG_HAS(_margo, "progress_timeout_ub_msec", ignore)) {
+        CONFIG_INTEGER_MUST_BE_POSITIVE(_margo, "progress_timeout_ub_msec",
+                                        "progress_timeout_ub_msec");
+    }
+
+    ASSERT_CONFIG_HAS_OPTIONAL(_margo, "handle_cache_size", int, "margo");
+    if (CONFIG_HAS(_margo, "handle_cache_size", ignore)) {
+        CONFIG_INTEGER_MUST_BE_POSITIVE(_margo, "handle_cache_size",
+                                        "handle_cache_size");
+    }
+
+    /* ------- Validate progress_pool against parent's pools ------ */
+    margo_abt_t* parent_abt = uargs->parent_mid->abt;
+    struct json_object* _progress_pool
+        = json_object_object_get(_margo, "progress_pool");
+    if (_progress_pool
+        && !(json_object_is_type(_progress_pool, json_type_int)
+             || json_object_is_type(_progress_pool, json_type_string))) {
+        margo_error(0,
+                    "\"progress_pool\" field in configuration "
+                    "should be an integer or a string");
+        HANDLE_CONFIG_ERROR;
+    }
+
+    if (_progress_pool) {
+        if (json_object_is_type(_progress_pool, json_type_int64)) {
+            int progress_pool_idx = json_object_get_int(_progress_pool);
+            if (progress_pool_idx < 0
+                || progress_pool_idx >= (int)parent_abt->pools_len) {
+                margo_error(0, "Invalid \"progress_pool\" index (%d)",
+                            progress_pool_idx);
+                HANDLE_CONFIG_ERROR;
+            }
+        } else {
+            const char* progress_pool_name
+                = json_object_get_string(_progress_pool);
+            if (strcmp(progress_pool_name, "__primary__") != 0
+                && __margo_abt_find_pool_by_name(parent_abt,
+                                                 progress_pool_name) < 0) {
+                margo_error(0,
+                            "Could not find pool named \"%s\" in parent's "
+                            "pool list",
+                            progress_pool_name);
+                HANDLE_CONFIG_ERROR;
+            }
+        }
+    }
+
+    bool has_external_progress_pool = (uargs->progress_pool != ABT_POOL_NULL)
+                                   && (uargs->progress_pool != NULL);
+    if (has_external_progress_pool && _progress_pool) {
+        margo_warning(0,
+                      "\"progress_pool\" will be ignored because"
+                      " external progress pool was provided");
+    }
+
+    /* ------- Validate rpc_pool against parent's pools ------ */
+    struct json_object* _rpc_pool = json_object_object_get(_margo, "rpc_pool");
+    if (_rpc_pool
+        && !(json_object_is_type(_rpc_pool, json_type_int)
+             || json_object_is_type(_rpc_pool, json_type_string))) {
+        margo_error(0,
+                    "\"rpc_pool\" field in configuration "
+                    "should be an integer or a string");
+        HANDLE_CONFIG_ERROR;
+    }
+
+    if (_rpc_pool) {
+        if (json_object_is_type(_rpc_pool, json_type_int64)) {
+            int rpc_pool_idx = json_object_get_int(_rpc_pool);
+            if (rpc_pool_idx < 0
+                || rpc_pool_idx >= (int)parent_abt->pools_len) {
+                margo_error(0, "Invalid \"rpc_pool\" index (%d)", rpc_pool_idx);
+                HANDLE_CONFIG_ERROR;
+            }
+        } else {
+            const char* rpc_pool_name = json_object_get_string(_rpc_pool);
+            if (strcmp(rpc_pool_name, "__primary__") != 0
+                && __margo_abt_find_pool_by_name(parent_abt,
+                                                 rpc_pool_name) < 0) {
+                margo_error(0,
+                            "Could not find pool named \"%s\" in parent's "
+                            "pool list",
+                            rpc_pool_name);
+                HANDLE_CONFIG_ERROR;
+            }
+        }
+    }
+
+    bool has_external_rpc_pool
+        = (uargs->rpc_pool != ABT_POOL_NULL) && (uargs->rpc_pool != NULL);
     if (has_external_rpc_pool && _rpc_pool) {
         margo_warning(0,
                       "\"rpc_pool\" will be ignored because"
