@@ -61,14 +61,14 @@ static FILE* margo_output_file_open(margo_instance_id mid,
     if (revised_file_name[0] == '/') {
         absolute_file_name = strdup(revised_file_name);
     } else {
-        absolute_file_name = malloc(strlen(mid->abt.profiling_dir)
+        absolute_file_name = malloc(strlen(mid->abt->profiling_dir)
                                     + strlen(revised_file_name) + 2);
         if (!absolute_file_name) {
             MARGO_ERROR(mid, "malloc() failure: %d\n", errno);
             free(revised_file_name);
             return NULL;
         }
-        sprintf(absolute_file_name, "%s/%s", mid->abt.profiling_dir,
+        sprintf(absolute_file_name, "%s/%s", mid->abt->profiling_dir,
                 revised_file_name);
     }
     free(revised_file_name);
@@ -242,13 +242,13 @@ int margo_state_dump(margo_instance_id mid,
     fprintf(outfile, "# ================================================\n");
 
     /* for each pool that margo is aware of */
-    for (i = 0; i < (int)mid->abt.pools_len; i++) {
+    for (i = 0; i < (int)mid->abt->pools_len; i++) {
         /* Display stack trace of ULTs within that pool.  This will not
          * include any ULTs that are presently executing (including the
          * caller).
          */
-        fprintf(outfile, "# Pool: %s\n", mid->abt.pools[i].name);
-        ABT_info_print_thread_stacks_in_pool(outfile, mid->abt.pools[i].pool);
+        fprintf(outfile, "# Pool: %s\n", mid->abt->pools[i].name);
+        ABT_info_print_thread_stacks_in_pool(outfile, mid->abt->pools[i].pool);
     }
 
     if (outfile != stdout) fclose(outfile);
