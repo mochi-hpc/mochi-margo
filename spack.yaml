@@ -1,10 +1,7 @@
 spack:
   specs:
+  - cmake
   - json-c
-  - autoconf
-  - m4
-  - automake
-  - libtool
   - pkg-config
   - argobots
   - mercury~boostsys ^libfabric fabrics=tcp,rxm
