@@ -26,3 +26,6 @@ spack:
   config:
     install_tree:
       padded_length: 128
+  repos:
+    mochi:
+      git: https://github.com/mochi-hpc/mochi-spack-packages.git
