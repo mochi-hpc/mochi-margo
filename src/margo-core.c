@@ -188,6 +188,7 @@ static void margo_cleanup(margo_instance_id mid)
         __margo_abt_destroy(mid->abt);
         free(mid->abt);
     }
+    if (mid->parent_mid) margo_instance_release(mid->parent_mid);
     free(mid);
 
     MARGO_TRACE(0, "Completed margo_cleanup");

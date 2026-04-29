@@ -22,6 +22,7 @@ static void test_context_tear_down(void* data)
 {
     struct test_context* ctx = (struct test_context*)data;
 
+    if (ctx->mid) margo_finalize(ctx->mid);
     free(ctx);
 }
 
@@ -41,12 +42,14 @@ static MunitResult init_cycle_server(const MunitParameter params[], void* data)
     munit_assert_not_null(ctx->mid);
 
     margo_finalize(ctx->mid);
+    ctx->mid = MARGO_INSTANCE_NULL;
 
     ctx->mid = margo_init(protocol, MARGO_SERVER_MODE, use_progress_thread,
                           rpc_thread_count);
     munit_assert_not_null(ctx->mid);
 
     margo_finalize(ctx->mid);
+    ctx->mid = MARGO_INSTANCE_NULL;
 
     return MUNIT_OK;
 }
@@ -84,12 +87,14 @@ static MunitResult init_cycle_client(const MunitParameter params[], void* data)
     munit_assert_not_null(ctx->mid);
 
     margo_finalize(ctx->mid);
+    ctx->mid = MARGO_INSTANCE_NULL;
 
     ctx->mid = margo_init(protocol, MARGO_CLIENT_MODE, use_progress_thread,
                           rpc_thread_count);
     munit_assert_not_null(ctx->mid);
 
     margo_finalize(ctx->mid);
+    ctx->mid = MARGO_INSTANCE_NULL;
 
     return MUNIT_OK;
 }
@@ -123,6 +128,7 @@ static MunitResult finalize_and_wait(const MunitParameter params[], void* data)
     munit_assert_not_null(ctx->mid);
 
     margo_finalize_and_wait(ctx->mid);
+    ctx->mid = MARGO_INSTANCE_NULL;
 
     /* init and finalize_and_wait but issue a slow RPC first */
     ctx->mid = margo_init(protocol, MARGO_SERVER_MODE, use_progress_thread,
@@ -143,6 +149,7 @@ static MunitResult finalize_and_wait(const MunitParameter params[], void* data)
 
     // double t1 = ABT_get_wtime();
     margo_finalize_and_wait(ctx->mid);
+    ctx->mid = MARGO_INSTANCE_NULL;
     // double t2 = ABT_get_wtime();
     // munit_assert_double(t2-t1, >=, 0.5);
 
@@ -171,6 +178,7 @@ static MunitResult ref_incr_and_release(const MunitParameter params[],
     munit_assert_not_null(ctx->mid);
 
     margo_finalize_and_wait(ctx->mid);
+    ctx->mid = MARGO_INSTANCE_NULL;
 
     /* init and finalize_and_wait but issue a slow RPC first */
     ctx->mid = margo_init(protocol, MARGO_SERVER_MODE, use_progress_thread,
@@ -206,6 +214,7 @@ static MunitResult ref_incr_and_release(const MunitParameter params[],
 
     hret = margo_instance_release(ctx->mid);
     munit_assert_int(hret, ==, HG_SUCCESS);
+    ctx->mid = MARGO_INSTANCE_NULL;
 
     ABT_finalize();
 
@@ -295,23 +304,26 @@ static MunitResult init_with_parent(const MunitParameter params[], void* data)
     child_info.parent_mid             = ctx->mid;
     margo_instance_id child_mid
         = margo_init_ext("na+sm", MARGO_CLIENT_MODE, &child_info);
-    munit_assert_not_null(child_mid);
+    if (!child_mid) return MUNIT_FAIL; /* ctx->mid cleaned up by teardown */
 
-    /* verify both instances resolve __primary__ to the same ABT pool */
+    /* collect pool handles before finalization */
     ABT_pool parent_progress = ABT_POOL_NULL;
     ABT_pool child_progress  = ABT_POOL_NULL;
     margo_get_progress_pool(ctx->mid, &parent_progress);
     margo_get_progress_pool(child_mid, &child_progress);
-    munit_assert_ptr_equal(parent_progress, child_progress);
 
     ABT_pool parent_rpc = ABT_POOL_NULL;
     ABT_pool child_rpc  = ABT_POOL_NULL;
     margo_get_handler_pool(ctx->mid, &parent_rpc);
     margo_get_handler_pool(child_mid, &child_rpc);
-    munit_assert_ptr_equal(parent_rpc, child_rpc);
 
     margo_finalize(child_mid);
     margo_finalize(ctx->mid);
+    ctx->mid = MARGO_INSTANCE_NULL;
+
+    /* verify both instances resolved __primary__ to the same ABT pool */
+    munit_assert_ptr_equal(parent_progress, child_progress);
+    munit_assert_ptr_equal(parent_rpc, child_rpc);
 
     return MUNIT_OK;
 }
@@ -362,23 +374,25 @@ static MunitResult init_with_parent_pool_by_name(const MunitParameter params[],
     child_info.json_config            = child_config;
     margo_instance_id child_mid
         = margo_init_ext("na+sm", MARGO_CLIENT_MODE, &child_info);
-    munit_assert_not_null(child_mid);
+    if (!child_mid) return MUNIT_FAIL; /* ctx->mid cleaned up by teardown */
 
-    /* verify the child's progress and rpc pools match my_pool from parent */
+    /* collect pool handles before finalization */
     struct margo_pool_info my_pool_info = {0};
     hg_return_t hret = margo_find_pool_by_name(ctx->mid, "my_pool", &my_pool_info);
-    munit_assert_int(hret, ==, HG_SUCCESS);
 
     ABT_pool child_progress = ABT_POOL_NULL;
     ABT_pool child_rpc      = ABT_POOL_NULL;
     margo_get_progress_pool(child_mid, &child_progress);
     margo_get_handler_pool(child_mid, &child_rpc);
 
-    munit_assert_ptr_equal(child_progress, my_pool_info.pool);
-    munit_assert_ptr_equal(child_rpc, my_pool_info.pool);
-
     margo_finalize(child_mid);
     margo_finalize(ctx->mid);
+    ctx->mid = MARGO_INSTANCE_NULL;
+
+    /* verify the child's progress and rpc pools match my_pool from parent */
+    munit_assert_int(hret, ==, HG_SUCCESS);
+    munit_assert_ptr_equal(child_progress, my_pool_info.pool);
+    munit_assert_ptr_equal(child_rpc, my_pool_info.pool);
 
     return MUNIT_OK;
 }
@@ -408,6 +422,7 @@ static MunitResult init_with_parent_invalid_argobots(
     munit_assert_null(child_mid);
 
     margo_finalize(ctx->mid);
+    ctx->mid = MARGO_INSTANCE_NULL;
 
     return MUNIT_OK;
 }
