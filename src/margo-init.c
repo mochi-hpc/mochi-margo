@@ -336,6 +336,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     mid->hg      = hg;
     if(!mid->parent_mid) {
         mid->abt     = (margo_abt_t*)malloc(sizeof(abt));
+        if (!mid->abt) goto error;
         memcpy(mid->abt, &abt, sizeof(abt));
         mid->abt->mid = mid;
     } else {
@@ -399,6 +400,10 @@ margo_instance_id margo_init_ext(const char*                   address,
         }
 
         mid->monitor = (struct margo_monitor*)malloc(sizeof(*(mid->monitor)));
+        if (!mid->monitor) {
+            json_object_put(monitoring_config);
+            goto error;
+        }
         memcpy(mid->monitor, args.monitor, sizeof(*(mid->monitor)));
         if (mid->monitor->initialize)
             mid->monitor->uargs = mid->monitor->initialize(
@@ -813,6 +818,9 @@ static bool sanity_check_abt_configuration(margo_abt_t* abt,
     const uint8_t BEFORE_PROGRESS = 0b00001000;
 
     uint8_t* pool_flags = calloc(abt->pools_len, sizeof(*pool_flags));
+    /* This is only a best-effort sanity check that emits warnings; if the
+     * allocation fails (or there are no pools), skip it rather than crash. */
+    if (!pool_flags) return true;
 
     for (int i = 0; i < abt->xstreams_len; ++i) {
         margo_abt_xstream_t* es    = &abt->xstreams[i];

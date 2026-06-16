@@ -79,9 +79,17 @@ bool __margo_abt_pool_init_from_json(const json_object_t* jpool,
     json_object_t* jname = json_object_object_get(jpool, "name");
     pool->name           = jname ? strdup(json_object_get_string(jname))
                                  : generate_unused_pool_name(abt);
+    if (!pool->name) {
+        __margo_abt_pool_destroy(pool, abt);
+        return false;
+    }
 
     pool->kind
         = strdup(json_object_object_get_string_or(jpool, "kind", "fifo_wait"));
+    if (!pool->kind) {
+        __margo_abt_pool_destroy(pool, abt);
+        return false;
+    }
     if (strcmp(pool->kind, "fifo_wait") == 0)
         kind = ABT_POOL_FIFO_WAIT;
     else if (strcmp(pool->kind, "fifo") == 0)
@@ -94,6 +102,10 @@ bool __margo_abt_pool_init_from_json(const json_object_t* jpool,
     json_object_t* jaccess = json_object_object_get(jpool, "access");
     if (jaccess) {
         pool->access = strdup(json_object_get_string(jaccess));
+        if (!pool->access) {
+            __margo_abt_pool_destroy(pool, abt);
+            return false;
+        }
         if (strcmp(pool->access, "private") == 0)
             access = ABT_POOL_ACCESS_PRIV;
         else if (strcmp(pool->access, "mpmc") == 0)
@@ -322,6 +334,10 @@ bool __margo_abt_sched_init_from_json(const json_object_t* jsched,
     json_object_t* jpools     = json_object_object_get(jsched, "pools");
     size_t         jpools_len = jpools ? json_object_array_length(jpools) : 0;
     ABT_pool*      abt_pools  = malloc(jpools_len * sizeof(*abt_pools));
+    if (jpools_len != 0 && abt_pools == NULL) {
+        __margo_abt_sched_destroy(s);
+        return false;
+    }
     for (unsigned i = 0; i < jpools_len; i++) {
         json_object_t* jpool    = json_object_array_get_idx(jpools, i);
         uint32_t       pool_idx = 0;
@@ -542,6 +558,12 @@ bool __margo_abt_xstream_init_from_json(const json_object_t* jxstream,
     else {
         x->name = generate_unused_xstream_name(abt);
     }
+    /* Note: cannot 'goto error' here because the 'affinity' pointer freed at
+     * the 'finish' label is not yet initialized at this point. */
+    if (!x->name) {
+        __margo_abt_xstream_destroy(x, abt);
+        return false;
+    }
 
     int cpubind = json_object_object_get_int_or(jxstream, "cpubind", -1);
 
@@ -551,6 +573,7 @@ bool __margo_abt_xstream_init_from_json(const json_object_t* jxstream,
     if (jaffinity) {
         affinity_len = json_object_array_length(jaffinity);
         affinity     = malloc(sizeof(*affinity) * affinity_len);
+        if (affinity_len != 0 && affinity == NULL) goto error;
         for (int i = 0; i < affinity_len; i++) {
             affinity[i]
                 = json_object_get_int(json_object_array_get_idx(jaffinity, i));
@@ -743,16 +766,19 @@ json_object_t* __margo_abt_xstream_to_json(const margo_abt_xstream_t* x,
     ret = ABT_xstream_get_affinity(x->xstream, 0, NULL, &num_cpus);
     if (ret == ABT_SUCCESS) {
         int* cpuids = malloc(num_cpus * sizeof(*cpuids));
-        ret = ABT_xstream_get_affinity(x->xstream, num_cpus, cpuids, &num_cpus);
-        if (ret == ABT_SUCCESS) {
-            json_object_t* jcpuids = json_object_new_array_ext(num_cpus);
-            for (int i = 0; i < num_cpus; i++) {
-                json_object_array_add(jcpuids,
-                                      json_object_new_int64(cpuids[i]));
+        if (cpuids) {
+            ret = ABT_xstream_get_affinity(x->xstream, num_cpus, cpuids,
+                                           &num_cpus);
+            if (ret == ABT_SUCCESS) {
+                json_object_t* jcpuids = json_object_new_array_ext(num_cpus);
+                for (int i = 0; i < num_cpus; i++) {
+                    json_object_array_add(jcpuids,
+                                          json_object_new_int64(cpuids[i]));
+                }
+                json_object_object_add_ex(jxstream, "affinity", jcpuids, flags);
             }
-            json_object_object_add_ex(jxstream, "affinity", jcpuids, flags);
+            free(cpuids);
         }
-        free(cpuids);
     }
     return jxstream;
 }
@@ -1013,6 +1039,10 @@ bool __margo_abt_init_from_json(const json_object_t* jabt, margo_abt_t* a)
     a->pools_len       = 0;
     a->pools_cap       = num_pools + 3;
     a->pools           = calloc(a->pools_cap, sizeof(*(a->pools)));
+    if (!a->pools) {
+        result = false;
+        goto error;
+    }
     for (unsigned i = 0; i < num_pools; ++i) {
         json_object_t* jpool = json_object_array_get_idx(jpools, i);
         if (!__margo_abt_pool_init_from_json(jpool, a, &(a->pools[i]))) {
@@ -1030,6 +1060,10 @@ bool __margo_abt_init_from_json(const json_object_t* jabt, margo_abt_t* a)
     a->xstreams_len       = 0;
     a->xstreams_cap       = num_xstreams + 1;
     a->xstreams           = calloc(a->xstreams_cap, sizeof(*(a->xstreams)));
+    if (!a->xstreams) {
+        result = false;
+        goto error;
+    }
     for (unsigned i = 0; i < num_xstreams; ++i) {
         json_object_t* jxstream = json_object_array_get_idx(jxstreams, i);
         if (!__margo_abt_xstream_init_from_json(jxstream, a,
@@ -1276,11 +1310,13 @@ bool __margo_abt_add_pool_from_json(margo_abt_t*         abt,
 
     // check that the pools array has space
     if (abt->pools_len == abt->pools_cap) {
-        const size_t psize = sizeof(*abt->pools);
-        abt->pools_cap *= 1.5;
-        abt->pools_cap += 1;
-        abt->pools
-            = (margo_abt_pool_t*)realloc(abt->pools, abt->pools_cap * psize);
+        const size_t      psize   = sizeof(*abt->pools);
+        unsigned          new_cap = (unsigned)(abt->pools_cap * 1.5) + 1;
+        margo_abt_pool_t* new_pools
+            = (margo_abt_pool_t*)realloc(abt->pools, new_cap * psize);
+        if (!new_pools) return false;
+        abt->pools     = new_pools;
+        abt->pools_cap = new_cap;
         memset(&(abt->pools[abt->pools_len]), 0,
                psize * (abt->pools_cap - abt->pools_len));
     }
@@ -1315,11 +1351,13 @@ bool __margo_abt_add_xstream_from_json(margo_abt_t*         abt,
 
     // check that the xstreams array has space
     if (abt->xstreams_len == abt->xstreams_cap) {
-        const size_t psize = sizeof(*abt->xstreams);
-        abt->xstreams_cap *= 1.5;
-        abt->xstreams_cap += 1;
-        abt->xstreams = (margo_abt_xstream_t*)realloc(
-            abt->xstreams, abt->xstreams_cap * psize);
+        const size_t         psize   = sizeof(*abt->xstreams);
+        unsigned             new_cap = (unsigned)(abt->xstreams_cap * 1.5) + 1;
+        margo_abt_xstream_t* new_xstreams = (margo_abt_xstream_t*)realloc(
+            abt->xstreams, new_cap * psize);
+        if (!new_xstreams) return false;
+        abt->xstreams     = new_xstreams;
+        abt->xstreams_cap = new_cap;
         memset(&(abt->xstreams[abt->xstreams_len]), 0,
                psize * (abt->xstreams_cap - abt->xstreams_len));
     }
@@ -1357,11 +1395,13 @@ bool __margo_abt_add_external_pool(margo_abt_t* abt,
 
     // check that the pools array has space
     if (abt->pools_len == abt->pools_cap) {
-        const size_t psize = sizeof(*abt->pools);
-        abt->pools_cap *= 1.5;
-        abt->pools_cap += 1;
-        abt->pools
-            = (margo_abt_pool_t*)realloc(abt->pools, abt->pools_cap * psize);
+        const size_t      psize   = sizeof(*abt->pools);
+        unsigned          new_cap = (unsigned)(abt->pools_cap * 1.5) + 1;
+        margo_abt_pool_t* new_pools
+            = (margo_abt_pool_t*)realloc(abt->pools, new_cap * psize);
+        if (!new_pools) return false;
+        abt->pools     = new_pools;
+        abt->pools_cap = new_cap;
         memset(&(abt->pools[abt->pools_len]), 0,
                psize * (abt->pools_cap - abt->pools_len));
     }
@@ -1399,11 +1439,13 @@ bool __margo_abt_add_external_xstream(margo_abt_t* abt,
 
     // check that the xstreams array has space
     if (abt->xstreams_len == abt->xstreams_cap) {
-        const size_t psize = sizeof(*abt->xstreams);
-        abt->xstreams_cap *= 1.5;
-        abt->xstreams_cap += 1;
-        abt->xstreams = (margo_abt_xstream_t*)realloc(
-            abt->xstreams, abt->xstreams_cap * psize);
+        const size_t         psize   = sizeof(*abt->xstreams);
+        unsigned             new_cap = (unsigned)(abt->xstreams_cap * 1.5) + 1;
+        margo_abt_xstream_t* new_xstreams = (margo_abt_xstream_t*)realloc(
+            abt->xstreams, new_cap * psize);
+        if (!new_xstreams) return false;
+        abt->xstreams     = new_xstreams;
+        abt->xstreams_cap = new_cap;
         memset(&(abt->xstreams[abt->xstreams_len]), 0,
                psize * (abt->xstreams_cap - abt->xstreams_len));
     }

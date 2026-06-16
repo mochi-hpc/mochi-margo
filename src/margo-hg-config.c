@@ -351,6 +351,10 @@ bool __margo_hg_init_from_json(const struct json_object*   json,
             hg->self_addr_str = NULL;
         } else {
             hg->self_addr_str = calloc(1, buf_size);
+            if (!hg->self_addr_str) {
+                margo_error(0, "Could not allocate self address string");
+                goto error;
+            }
             HG_Addr_to_string(hg->hg_class, hg->self_addr_str, &buf_size,
                               hg->self_addr);
         }
