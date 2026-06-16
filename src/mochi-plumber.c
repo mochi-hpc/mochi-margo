@@ -317,6 +317,7 @@ static int select_nic_roundrobin(int            bucket_idx,
         perror("pread");
         fprintf(stderr, "Error: failed to read %s\n", tokenpath);
         flock(fd, LOCK_UN);
+        close(fd);
         return (-1);
     }
     /* select next nic */
@@ -327,9 +328,11 @@ static int select_nic_roundrobin(int            bucket_idx,
         perror("pwrite");
         fprintf(stderr, "Error: failed to write %s\n", tokenpath);
         flock(fd, LOCK_UN);
+        close(fd);
         return (-1);
     }
     flock(fd, LOCK_UN);
+    close(fd);
 
     *out_nic = bucket->nics[nic_idx];
     return (0);
