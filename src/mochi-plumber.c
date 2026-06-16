@@ -211,10 +211,17 @@ static int select_nic(hwloc_topology_t* topology,
             }
             hwloc_cpuset_to_nodeset(*topology, last_cpu, last_numa);
             bucket_idx = hwloc_bitmap_first(last_numa);
-            assert(bucket_idx < nbuckets);
 
             hwloc_bitmap_free(last_cpu);
             hwloc_bitmap_free(last_numa);
+
+            if (bucket_idx < 0 || bucket_idx >= nbuckets) {
+                fprintf(stderr,
+                        "Error: process maps to out-of-range bucket index "
+                        "%d (nbuckets=%d).\n",
+                        bucket_idx, nbuckets);
+                return (-1);
+            }
         } else if (strcmp(bucket_policy, "package") == 0) {
             last_cpu = hwloc_bitmap_alloc();
             assert(last_cpu);
@@ -234,9 +241,16 @@ static int select_nic(hwloc_topology_t* topology,
                 *topology, HWLOC_OBJ_PACKAGE, covering);
 
             bucket_idx = package->os_index;
-            assert(bucket_idx < nbuckets);
 
             hwloc_bitmap_free(last_cpu);
+
+            if (bucket_idx < 0 || bucket_idx >= nbuckets) {
+                fprintf(stderr,
+                        "Error: process maps to out-of-range bucket index "
+                        "%d (nbuckets=%d).\n",
+                        bucket_idx, nbuckets);
+                return (-1);
+            }
         } else {
             fprintf(stderr, "Error: inconsistent bucket policy %s.\n",
                     bucket_policy);
@@ -519,12 +533,7 @@ static int setup_buckets(hwloc_topology_t* topology,
             if (!pci_dev) {
                 fprintf(stderr, "Error: can't find %s in hwloc topology.\n",
                         cur->domain_attr->name);
-                fi_freeinfo(info);
-                for (i = 0; i < *nbuckets; i++) {
-                    if ((*buckets)[i].nics) free((*buckets)[i].nics);
-                }
-                free(*buckets);
-                return (-1);
+                goto error;
             }
             if (*nbuckets == 1) {
                 /* add to the global bucket */
@@ -545,21 +554,42 @@ static int setup_buckets(hwloc_topology_t* topology,
                 bucket_idx = package_ancestor->os_index;
             }
 
-            (*buckets)[bucket_idx].num_nics++;
-            (*buckets)[bucket_idx].nics
-                = realloc((*buckets)[bucket_idx].nics,
-                          (*buckets)[bucket_idx].num_nics
-                              * sizeof(*(*buckets)[bucket_idx].nics));
-            assert((*buckets)[bucket_idx].nics);
-            (*buckets)[bucket_idx].nics[(*buckets)[bucket_idx].num_nics - 1]
-                = strdup(cur->domain_attr->name);
-            assert((*buckets)[bucket_idx]
-                       .nics[(*buckets)[bucket_idx].num_nics - 1]);
+            /* The bucket index is derived from hardware OS indices
+             * (package os_index / NUMA node id), which are not guaranteed to
+             * be dense or to start at 0, while the bucket array is sized by a
+             * count. A sparse or empty-set (-1) index would otherwise write
+             * out of bounds. */
+            if (bucket_idx < 0 || bucket_idx >= *nbuckets) {
+                fprintf(stderr,
+                        "Error: NIC maps to out-of-range bucket index %d "
+                        "(nbuckets=%d).\n",
+                        bucket_idx, *nbuckets);
+                goto error;
+            }
+
+            struct bucket* b        = &(*buckets)[bucket_idx];
+            char**         new_nics = realloc(
+                b->nics, (b->num_nics + 1) * sizeof(*b->nics));
+            if (!new_nics) goto error;
+            b->nics = new_nics;
+
+            char* nic_name = strdup(cur->domain_attr->name);
+            if (!nic_name) goto error;
+            b->nics[b->num_nics] = nic_name;
+            b->num_nics++;
         }
     }
     fi_freeinfo(info);
 
     return (0);
+
+error:
+    fi_freeinfo(info);
+    for (i = 0; i < *nbuckets; i++) {
+        if ((*buckets)[i].nics) free((*buckets)[i].nics);
+    }
+    free(*buckets);
+    return (-1);
 }
 
 static void release_buckets(int nbuckets, struct bucket* buckets)
