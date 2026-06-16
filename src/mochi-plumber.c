@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <pwd.h>
+#include <errno.h>
 #include <sched.h>
 #include <sys/stat.h>
 #include <sys/file.h>
@@ -18,6 +19,7 @@
 #include <rdma/fabric.h>
 #include <rdma/fi_errno.h>
 #include <hwloc.h>
+#include "margo-logging.h"
 
 struct bucket {
     int    num_nics;
@@ -150,7 +152,7 @@ int mochi_plumber_resolve_nic(const char* in_address,
     ret = select_nic(&topology, bucket_policy, nic_policy, nbuckets, buckets,
                      &selected_nic);
     if (ret < 0) {
-        fprintf(stderr, "Error: failed to select NIC.\n");
+        margo_error(0, "Could not select NIC");
         release_buckets(nbuckets, buckets);
         hwloc_topology_destroy(topology);
         *out_address = canon_address;
@@ -206,7 +208,7 @@ static int select_nic(hwloc_topology_t* topology,
             if (ret < 0) {
                 hwloc_bitmap_free(last_cpu);
                 hwloc_bitmap_free(last_numa);
-                fprintf(stderr, "hwloc_get_last_cpu_location() failure.\n");
+                margo_error(0, "hwloc_get_last_cpu_location() failed");
                 return (-1);
             }
             hwloc_cpuset_to_nodeset(*topology, last_cpu, last_numa);
@@ -216,10 +218,10 @@ static int select_nic(hwloc_topology_t* topology,
             hwloc_bitmap_free(last_numa);
 
             if (bucket_idx < 0 || bucket_idx >= nbuckets) {
-                fprintf(stderr,
-                        "Error: process maps to out-of-range bucket index "
-                        "%d (nbuckets=%d).\n",
-                        bucket_idx, nbuckets);
+                margo_error(0,
+                            "Process maps to out-of-range bucket index "
+                            "%d (nbuckets=%d)",
+                            bucket_idx, nbuckets);
                 return (-1);
             }
         } else if (strcmp(bucket_policy, "package") == 0) {
@@ -233,7 +235,7 @@ static int select_nic(hwloc_topology_t* topology,
                                               HWLOC_CPUBIND_THREAD);
             if (ret < 0) {
                 hwloc_bitmap_free(last_cpu);
-                fprintf(stderr, "hwloc_get_last_cpu_location() failure.\n");
+                margo_error(0, "hwloc_get_last_cpu_location() failed");
                 return (-1);
             }
             covering = hwloc_get_obj_covering_cpuset(*topology, last_cpu);
@@ -245,15 +247,14 @@ static int select_nic(hwloc_topology_t* topology,
             hwloc_bitmap_free(last_cpu);
 
             if (bucket_idx < 0 || bucket_idx >= nbuckets) {
-                fprintf(stderr,
-                        "Error: process maps to out-of-range bucket index "
-                        "%d (nbuckets=%d).\n",
-                        bucket_idx, nbuckets);
+                margo_error(0,
+                            "Process maps to out-of-range bucket index "
+                            "%d (nbuckets=%d)",
+                            bucket_idx, nbuckets);
                 return (-1);
             }
         } else {
-            fprintf(stderr, "Error: inconsistent bucket policy %s.\n",
-                    bucket_policy);
+            margo_error(0, "Inconsistent bucket policy %s", bucket_policy);
             return (-1);
         }
     }
@@ -275,7 +276,7 @@ static int select_nic(hwloc_topology_t* topology,
         ret = select_nic_byset(topology, bucket_idx, &buckets[bucket_idx],
                                out_nic);
     } else {
-        fprintf(stderr, "Error: unknown nic_policy \"%s\"\n", nic_policy);
+        margo_error(0, "Unknown nic_policy \"%s\"", nic_policy);
         ret = -1;
     }
 
@@ -308,16 +309,14 @@ static int select_nic_roundrobin(int            bucket_idx,
     snprintf(tokenpath, 256, "/tmp/%s-mochi-plumber", user);
     ret = mkdir(tokenpath, 0700);
     if (ret != 0 && errno != EEXIST) {
-        perror("mkdir");
-        fprintf(stderr, "Error: failed to create %s\n", tokenpath);
+        margo_error(0, "Could not create %s: %s", tokenpath, strerror(errno));
         return (-1);
     }
 
     snprintf(tokenpath, 256, "/tmp/%s-mochi-plumber/%d", user, bucket_idx);
     fd = open(tokenpath, O_RDWR | O_CREAT | O_SYNC, 0600);
     if (fd < 0) {
-        perror("open");
-        fprintf(stderr, "Error: failed to open %s\n", tokenpath);
+        margo_error(0, "Could not open %s: %s", tokenpath, strerror(errno));
         return (-1);
     }
 
@@ -330,8 +329,7 @@ static int select_nic_roundrobin(int            bucket_idx,
      */
     ret = pread(fd, &nic_idx, sizeof(nic_idx), 0);
     if (ret < 0) {
-        perror("pread");
-        fprintf(stderr, "Error: failed to read %s\n", tokenpath);
+        margo_error(0, "Could not read %s: %s", tokenpath, strerror(errno));
         flock(fd, LOCK_UN);
         close(fd);
         return (-1);
@@ -342,8 +340,7 @@ static int select_nic_roundrobin(int            bucket_idx,
     /* write selection back to file */
     ret = pwrite(fd, &nic_idx, sizeof(nic_idx), 0);
     if (ret < 0) {
-        perror("pwrite");
-        fprintf(stderr, "Error: failed to write %s\n", tokenpath);
+        margo_error(0, "Could not write %s: %s", tokenpath, strerror(errno));
         flock(fd, LOCK_UN);
         close(fd);
         return (-1);
@@ -394,13 +391,13 @@ static int select_nic_bycore(hwloc_topology_t* topology,
                                       HWLOC_CPUBIND_THREAD);
     if (ret < 0) {
         hwloc_bitmap_free(last_cpu);
-        fprintf(stderr, "hwloc_get_last_cpu_location() failure.\n");
+        margo_error(0, "hwloc_get_last_cpu_location() failed");
         return (-1);
     }
     first = hwloc_bitmap_first(last_cpu);
     hwloc_bitmap_free(last_cpu);
     if (first < 0) {
-        fprintf(stderr, "hwloc_bitmap_first() returned an empty set.\n");
+        margo_error(0, "hwloc_bitmap_first() returned an empty set");
         return (-1);
     }
     nic_idx = first % bucket->num_nics;
@@ -428,13 +425,13 @@ static int select_nic_byset(hwloc_topology_t* topology,
     ret = hwloc_get_cpubind(*topology, cpuset, HWLOC_CPUBIND_PROCESS);
     if (ret < 0) {
         hwloc_bitmap_free(cpuset);
-        fprintf(stderr, "hwloc_get_cpuset_location() failure.\n");
+        margo_error(0, "hwloc_get_cpuset_location() failed");
         return (-1);
     }
     first = hwloc_bitmap_first(cpuset);
     hwloc_bitmap_free(cpuset);
     if (first < 0) {
-        fprintf(stderr, "hwloc_bitmap_first() returned an empty set.\n");
+        margo_error(0, "hwloc_bitmap_first() returned an empty set");
         return (-1);
     }
     nic_idx = first % bucket->num_nics;
@@ -488,9 +485,8 @@ static int setup_buckets(hwloc_topology_t* topology,
         /* query number of packages and make a bucket for each */
         *nbuckets = count_packages(topology);
     } else {
-        fprintf(stderr,
-                "mochi_plumber_resolve_nic: unknown bucket policy \"%s\"\n",
-                bucket_policy);
+        margo_error(0, "mochi_plumber_resolve_nic: unknown bucket policy \"%s\"",
+                    bucket_policy);
         return (-1);
     }
 
@@ -531,8 +527,8 @@ static int setup_buckets(hwloc_topology_t* topology,
                                                 pci.bus_id, pci.device_id,
                                                 pci.function_id);
             if (!pci_dev) {
-                fprintf(stderr, "Error: can't find %s in hwloc topology.\n",
-                        cur->domain_attr->name);
+                margo_error(0, "Could not find %s in hwloc topology",
+                            cur->domain_attr->name);
                 goto error;
             }
             if (*nbuckets == 1) {
@@ -560,10 +556,10 @@ static int setup_buckets(hwloc_topology_t* topology,
              * count. A sparse or empty-set (-1) index would otherwise write
              * out of bounds. */
             if (bucket_idx < 0 || bucket_idx >= *nbuckets) {
-                fprintf(stderr,
-                        "Error: NIC maps to out-of-range bucket index %d "
-                        "(nbuckets=%d).\n",
-                        bucket_idx, *nbuckets);
+                margo_error(0,
+                            "NIC maps to out-of-range bucket index %d "
+                            "(nbuckets=%d)",
+                            bucket_idx, *nbuckets);
                 goto error;
             }
 
