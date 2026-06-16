@@ -349,6 +349,18 @@ bool __margo_abt_sched_init_from_json(const json_object_t* jsched,
                 if (strcmp(abt->pools[pool_idx].name, pool_name) == 0) break;
             }
         }
+        /* Defensively bound-check pool_idx before indexing the pools array:
+         * an out-of-range integer index, or a name that was not found (in
+         * which case the loop above leaves pool_idx == abt->pools_len), would
+         * otherwise cause an out-of-bounds read. This must not rely solely on
+         * the separate JSON validation pass. */
+        if (pool_idx >= abt->pools_len) {
+            margo_error(abt->mid,
+                        "Invalid pool reference in scheduler configuration");
+            free(abt_pools);
+            __margo_abt_sched_destroy(s);
+            return false;
+        }
         abt_pools[i] = abt->pools[pool_idx].pool;
     }
 
