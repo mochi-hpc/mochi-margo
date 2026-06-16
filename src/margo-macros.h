@@ -278,12 +278,12 @@ inline static const char* json_object_object_get_string_or(
             margo_error(0, "Empty \"name\" field");                          \
             HANDLE_CONFIG_ERROR;                                             \
         }                                                                    \
-        if (isdigit(_name[0])) {                                             \
+        if (isdigit((unsigned char)_name[0])) {                              \
             margo_error(0, "First character of a name cannot be a digit");   \
             HANDLE_CONFIG_ERROR;                                             \
         }                                                                    \
         for (unsigned _i = 0; _i < _len; _i++) {                             \
-            if (!(isalnum(_name[_i]) || _name[_i] == '_')) {                 \
+            if (!(isalnum((unsigned char)_name[_i]) || _name[_i] == '_')) {  \
                 margo_error(0,                                               \
                             "Invalid character \"%c\" found in name \"%s\"", \
                             _name[_i], _name);                               \
