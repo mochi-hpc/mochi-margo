@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <pwd.h>
 #include <sched.h>
 #include <sys/stat.h>
 #include <sys/file.h>
@@ -157,8 +158,15 @@ int mochi_plumber_resolve_nic(const char* in_address,
     }
 
     /* generate new address with specific nic */
-    *out_address = malloc(strlen(canon_address) + strlen(selected_nic) + 1);
-    sprintf(*out_address, "%s%s", canon_address, selected_nic);
+    size_t addr_len = strlen(canon_address) + strlen(selected_nic) + 1;
+    *out_address    = malloc(addr_len);
+    if (*out_address == NULL) {
+        release_buckets(nbuckets, buckets);
+        hwloc_topology_destroy(topology);
+        free(canon_address);
+        return (-1);
+    }
+    snprintf(*out_address, addr_len, "%s%s", canon_address, selected_nic);
 
     release_buckets(nbuckets, buckets);
     hwloc_topology_destroy(topology);
@@ -269,7 +277,19 @@ static int select_nic_roundrobin(int            bucket_idx,
     int  fd;
     int  nic_idx = -1;
 
-    snprintf(tokenpath, 256, "/tmp/%s-mochi-plumber", getlogin());
+    /* getlogin() can return NULL (no controlling terminal, detached/batch
+     * process, etc.), which would be passed to a "%s" conversion.  Use the
+     * passwd database keyed on the real uid, and fall back to the numeric
+     * uid if that is also unavailable. */
+    char           userbuf[64];
+    struct passwd* pw   = getpwuid(getuid());
+    const char*    user = (pw && pw->pw_name) ? pw->pw_name : NULL;
+    if (user == NULL) {
+        snprintf(userbuf, sizeof(userbuf), "%u", (unsigned)getuid());
+        user = userbuf;
+    }
+
+    snprintf(tokenpath, 256, "/tmp/%s-mochi-plumber", user);
     ret = mkdir(tokenpath, 0700);
     if (ret != 0 && errno != EEXIST) {
         perror("mkdir");
@@ -277,12 +297,12 @@ static int select_nic_roundrobin(int            bucket_idx,
         return (-1);
     }
 
-    snprintf(tokenpath, 256, "/tmp/%s-mochi-plumber/%d", getlogin(),
-             bucket_idx);
+    snprintf(tokenpath, 256, "/tmp/%s-mochi-plumber/%d", user, bucket_idx);
     fd = open(tokenpath, O_RDWR | O_CREAT | O_SYNC, 0600);
     if (fd < 0) {
         perror("open");
         fprintf(stderr, "Error: failed to open %s\n", tokenpath);
+        return (-1);
     }
 
     /* exlusive lock file */
