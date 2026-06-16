@@ -277,6 +277,8 @@ static int select_nic_roundrobin(int            bucket_idx,
     int  fd;
     int  nic_idx = -1;
 
+    if (bucket->num_nics <= 0) return (-1);
+
     /* getlogin() can return NULL (no controlling terminal, detached/batch
      * process, etc.), which would be passed to a "%s" conversion.  Use the
      * passwd database keyed on the real uid, and fall back to the numeric
@@ -320,7 +322,8 @@ static int select_nic_roundrobin(int            bucket_idx,
         close(fd);
         return (-1);
     }
-    /* select next nic */
+    /* select next nic (guard against a corrupted/negative stored value) */
+    if (nic_idx < 0) nic_idx = -1;
     nic_idx = (nic_idx + 1) % (bucket->num_nics);
     /* write selection back to file */
     ret = pwrite(fd, &nic_idx, sizeof(nic_idx), 0);
@@ -343,6 +346,8 @@ select_nic_random(int bucket_idx, struct bucket* bucket, const char** out_nic)
 {
     int nic_idx = -1;
 
+    if (bucket->num_nics <= 0) return (-1);
+
     /* we only need to worry about unique seeding within a single node, so
      * its sufficient to just use the pid
      */
@@ -362,8 +367,11 @@ static int select_nic_bycore(hwloc_topology_t* topology,
                              const char**      out_nic)
 {
     int            nic_idx = -1;
+    int            first;
     int            ret;
     hwloc_cpuset_t last_cpu;
+
+    if (bucket->num_nics <= 0) return (-1);
 
     last_cpu = hwloc_bitmap_alloc();
     assert(last_cpu);
@@ -375,8 +383,13 @@ static int select_nic_bycore(hwloc_topology_t* topology,
         fprintf(stderr, "hwloc_get_last_cpu_location() failure.\n");
         return (-1);
     }
-    nic_idx = hwloc_bitmap_first(last_cpu) % bucket->num_nics;
+    first = hwloc_bitmap_first(last_cpu);
     hwloc_bitmap_free(last_cpu);
+    if (first < 0) {
+        fprintf(stderr, "hwloc_bitmap_first() returned an empty set.\n");
+        return (-1);
+    }
+    nic_idx = first % bucket->num_nics;
 
     *out_nic = bucket->nics[nic_idx];
     return (0);
@@ -389,8 +402,11 @@ static int select_nic_byset(hwloc_topology_t* topology,
                             const char**      out_nic)
 {
     int            nic_idx = -1;
+    int            first;
     int            ret;
     hwloc_cpuset_t cpuset;
+
+    if (bucket->num_nics <= 0) return (-1);
 
     cpuset = hwloc_bitmap_alloc();
     assert(cpuset);
@@ -401,8 +417,13 @@ static int select_nic_byset(hwloc_topology_t* topology,
         fprintf(stderr, "hwloc_get_cpuset_location() failure.\n");
         return (-1);
     }
-    nic_idx = hwloc_bitmap_first(cpuset) % bucket->num_nics;
+    first = hwloc_bitmap_first(cpuset);
     hwloc_bitmap_free(cpuset);
+    if (first < 0) {
+        fprintf(stderr, "hwloc_bitmap_first() returned an empty set.\n");
+        return (-1);
+    }
+    nic_idx = first % bucket->num_nics;
 
     *out_nic = bucket->nics[nic_idx];
     return (0);
