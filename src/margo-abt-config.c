@@ -999,7 +999,8 @@ bool __margo_abt_init_from_json(const json_object_t* jabt, margo_abt_t* a)
                 jabt, "abt_thread_stacksize",
                 MARGO_DEFAULT_ABT_THREAD_STACKSIZE);
             char abt_thread_stacksize_str[128];
-            sprintf(abt_thread_stacksize_str, "%d", abt_thread_stacksize);
+            snprintf(abt_thread_stacksize_str, sizeof(abt_thread_stacksize_str),
+                     "%d", abt_thread_stacksize);
             setenv("ABT_THREAD_STACKSIZE", abt_thread_stacksize_str, 1);
         }
         if (!getenv("ABT_MEM_MAX_NUM_STACKS")) {
@@ -1007,7 +1008,9 @@ bool __margo_abt_init_from_json(const json_object_t* jabt, margo_abt_t* a)
                 jabt, "abt_mem_max_num_stacks",
                 MARGO_DEFAULT_ABT_MEM_MAX_NUM_STACKS);
             char abt_mem_max_num_stacks_str[128];
-            sprintf(abt_mem_max_num_stacks_str, "%d", abt_mem_max_num_stacks);
+            snprintf(abt_mem_max_num_stacks_str,
+                     sizeof(abt_mem_max_num_stacks_str), "%d",
+                     abt_mem_max_num_stacks);
             setenv("ABT_MEM_MAX_NUM_STACKS", abt_mem_max_num_stacks_str, 1);
         }
         ret = ABT_init(0, NULL);
