@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <unistd.h>
 #include <errno.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <abt.h>
 
@@ -41,8 +42,17 @@ hg_return_t margo_bulk_pool_create(margo_instance_id  mid,
 {
     int               ret;
     hg_return_t       hret;
-    margo_bulk_pool_t p;
+    margo_bulk_pool_t p = NULL;
     hg_size_t         i;
+
+    /* guard against integer overflow in the size*count allocation below:
+     * a wrapped (small) allocation would later be sliced into `count`
+     * regions of `size` bytes and registered as bulk handles pointing past
+     * the buffer (out-of-bounds). */
+    if (count != 0 && size > SIZE_MAX / count) {
+        hret = HG_INVALID_ARG;
+        goto err;
+    }
 
     p = malloc(sizeof(*p));
     if (p == NULL) {

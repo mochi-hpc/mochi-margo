@@ -889,7 +889,7 @@ hg_return_t margo_remove_xstream_by_index(margo_instance_id mid, uint32_t index)
     if (!mid) return HG_INVALID_ARG;
     __margo_abt_lock(mid->abt);
 
-    if (index > mid->abt->xstreams_len) {
+    if (index >= mid->abt->xstreams_len) {
         __margo_abt_unlock(mid->abt);
         return HG_OTHER_ERROR;
     }
