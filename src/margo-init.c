@@ -301,6 +301,22 @@ margo_instance_id margo_init_ext(const char*                   address,
         }
     }
 
+    /* Defensively re-validate the resolved pool indices against the effective
+     * set of pools. The earlier JSON validation bounds integer indices against
+     * the raw JSON pool count, but the effective set may differ (e.g. added
+     * __primary__/__progress__/__rpc__ pools), and a pool referenced by an
+     * unknown name resolves to -1. Either case would later index pools[] out
+     * of bounds (e.g. in margo_get_config). */
+    if (progress_pool_idx < 0
+        || progress_pool_idx >= (int)effective_abt->pools_len) {
+        MARGO_ERROR(0, "Invalid progress pool index (%d)", progress_pool_idx);
+        goto error;
+    }
+    if (rpc_pool_idx < 0 || rpc_pool_idx >= (int)effective_abt->pools_len) {
+        MARGO_ERROR(0, "Invalid rpc pool index (%d)", rpc_pool_idx);
+        goto error;
+    }
+
     // sanity check configuration of pools and ES
     if (!args.parent_mid) {
         if (!sanity_check_abt_configuration(effective_abt, progress_pool_idx)) {
