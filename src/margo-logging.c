@@ -134,10 +134,14 @@ static inline void set_global_log_level_from_env()
         va_start(args1, fmt);                                                \
         va_list args2;                                                       \
         va_copy(args2, args1);                                               \
-        size_t msg_size = vsnprintf(NULL, 0, fmt, args1);                    \
-        char   buf[msg_size + 1];                                            \
+        int msg_size = vsnprintf(NULL, 0, fmt, args1);                       \
         va_end(args1);                                                       \
-        vsnprintf(buf, msg_size + 1, fmt, args2);                            \
+        if (msg_size < 0) {                                                  \
+            va_end(args2);                                                   \
+            return;                                                          \
+        }                                                                    \
+        char buf[(size_t)msg_size + 1];                                      \
+        vsnprintf(buf, (size_t)msg_size + 1, fmt, args2);                    \
         if (mid && mid->logger.__level__)                                    \
             mid->logger.__level__(mid->logger.uargs, buf);                   \
         else if (!mid && global_logger.__level__)                            \
