@@ -72,7 +72,12 @@ static inline void destroy_queue(queue_t* queue)
 
 static inline void queue_push_prio(queue_t* queue, unit_t* p_unit)
 {
-    if (queue->prio.size >= queue->prio.capacity) {
+    /* Called under p_pool->mutex, so prio.size cannot change underneath us.
+     * Work on a local copy and publish it with a single atomic store at the
+     * end, instead of doing atomic RMW/loads on every access. */
+    size_t size = queue->prio.size;
+
+    if (size >= queue->prio.capacity) {
         size_t   new_capacity = queue->prio.capacity * 2; // Double the capacity
         entry_t* new_entries  = (entry_t*)realloc(
             queue->prio.entries, (new_capacity + 1) * sizeof(entry_t));
@@ -81,7 +86,7 @@ static inline void queue_push_prio(queue_t* queue, unit_t* p_unit)
     }
 
     entry_t new_entry = p_unit;
-    size_t  index     = ++queue->prio.size;
+    size_t  index     = ++size;
 
     while (index > 1
            && new_entry->priority < queue->prio.entries[index / 2]->priority) {
@@ -90,6 +95,7 @@ static inline void queue_push_prio(queue_t* queue, unit_t* p_unit)
     }
 
     queue->prio.entries[index] = new_entry;
+    queue->prio.size           = size;
     p_unit->flag |= IS_IN_POOL;
 }
 
@@ -119,17 +125,22 @@ static inline void queue_push(queue_t* queue, unit_t* p_unit)
 
 static inline unit_t* queue_pop_prio(queue_t* queue)
 {
-    if (queue->prio.size == 0) { return NULL; }
+    /* Called under p_pool->mutex, so prio.size cannot change underneath us.
+     * Work on a local copy (the sift-down loop reads it twice per iteration)
+     * and publish it with a single atomic store at the end. */
+    size_t size = queue->prio.size;
+    if (size == 0) { return NULL; }
 
     entry_t min_entry  = queue->prio.entries[1];
-    entry_t last_entry = queue->prio.entries[queue->prio.size--];
+    entry_t last_entry = queue->prio.entries[size];
+    size -= 1;
 
     size_t index = 1;
     size_t child;
 
-    while (index * 2 <= queue->prio.size) {
+    while (index * 2 <= size) {
         child = index * 2;
-        if (child != queue->prio.size
+        if (child != size
             && queue->prio.entries[child + 1]->priority
                    < queue->prio.entries[child]->priority)
             child++;
@@ -143,6 +154,7 @@ static inline unit_t* queue_pop_prio(queue_t* queue)
     }
 
     queue->prio.entries[index] = last_entry;
+    queue->prio.size           = size;
     min_entry->flag ^= IS_IN_POOL;
 
     return min_entry;
