@@ -913,11 +913,8 @@ __margo_default_monitor_on_forward(void*                        uargs,
         event_args->uctx.f = timestamp;
 
         // get address info
-        ABT_mutex_spinlock(
-            ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->addr_info_mtx));
         addr_info_t* addr_info
             = addr_info_find_or_add(monitor, mid, handle_info->addr);
-        ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->addr_info_mtx));
 
         // attach statistics to session
         hg_id_t id = handle_info->id;
@@ -1184,11 +1181,8 @@ static void __margo_default_monitor_on_rpc_handler(
 
     if (event_type == MARGO_MONITOR_FN_START) {
         // get address info
-        ABT_mutex_spinlock(
-            ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->addr_info_mtx));
         addr_info_t* addr_info
             = addr_info_find_or_add(monitor, mid, handle_info->addr);
-        ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->addr_info_mtx));
 
         // form callpath key
         hg_id_t    id  = margo_get_info(event_args->handle)->id;
@@ -1364,11 +1358,8 @@ static void __margo_default_monitor_on_bulk_transfer(
     if (event_type == MARGO_MONITOR_FN_START) {
 
         // get address info
-        ABT_mutex_spinlock(
-            ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->addr_info_mtx));
         addr_info_t* addr_info
             = addr_info_find_or_add(monitor, mid, event_args->origin_addr);
-        ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->addr_info_mtx));
 
         // create the bulk_key for the bulk_transfer_statistics in the hash
         // table
@@ -2284,29 +2275,40 @@ static void rpc_info_clear(rpc_info_t* hash)
  * Functions related to the hash of addr_info_t maintained by the monitor
  * ======================================================================== */
 
+/* Look up (or create) the addr_info_t mapping a peer address to a stable id.
+ * The (potentially costly) Mercury address-to-string conversion is done first,
+ * *before* taking monitor->addr_info_mtx, so the critical section covers only
+ * the hash-table lookup/insert. The returned pointer stays valid until monitor
+ * teardown and its id is immutable, so it is safe to read after this returns. */
 static addr_info_t* addr_info_find_or_add(default_monitor_state_t* monitor,
                                           margo_instance_id        mid,
                                           hg_addr_t                addr)
 {
-    addr_info_t* info          = NULL;
-    char         addr_str[128] = {0};
-    hg_size_t    addr_str_size = 128;
-    hg_return_t  hret
-        = margo_addr_to_string(mid, addr_str, &addr_str_size, addr);
+    /* convert the address to its string form (the canonical peer identity)
+     * outside the lock, falling back to "<unknown>" on error */
+    char        addr_str[128] = {0};
+    hg_size_t   addr_str_size = 128;
+    hg_return_t hret = margo_addr_to_string(mid, addr_str, &addr_str_size, addr);
     if (hret != HG_SUCCESS) {
         strcpy(addr_str, "<unknown>");
         addr_str_size = 9;
     }
+
+    addr_info_t* info = NULL;
+    ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->addr_info_mtx));
     HASH_FIND(hh_by_name, monitor->addr_info_by_name, addr_str, addr_str_size,
               info);
-    if (info) return info;
-    info = (addr_info_t*)calloc(1, sizeof(*info) + addr_str_size);
-    monitor->addr_info_last_id += 1;
-    info->id = monitor->addr_info_last_id;
-    memcpy(info->name, addr_str, addr_str_size);
-    HASH_ADD(hh_by_name, monitor->addr_info_by_name, name[0], addr_str_size,
-             info);
-    HASH_ADD(hh_by_id, monitor->addr_info_by_id, id, sizeof(info->id), info);
+    if (!info) {
+        info = (addr_info_t*)calloc(1, sizeof(*info) + addr_str_size);
+        monitor->addr_info_last_id += 1;
+        info->id = monitor->addr_info_last_id;
+        memcpy(info->name, addr_str, addr_str_size);
+        HASH_ADD(hh_by_name, monitor->addr_info_by_name, name[0], addr_str_size,
+                 info);
+        HASH_ADD(hh_by_id, monitor->addr_info_by_id, id, sizeof(info->id),
+                 info);
+    }
+    ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->addr_info_mtx));
     return info;
 }
 
