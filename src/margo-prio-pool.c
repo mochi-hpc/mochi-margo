@@ -6,6 +6,7 @@
 
 #include <abt.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 
 #include "margo-prio-pool.h"
@@ -88,7 +89,7 @@ static inline unit_t* queue_pop(queue_t* p_queue)
 typedef struct pool_t {
     queue_t         high_prio_queue;
     queue_t         low_prio_queue;
-    int             num;
+    _Atomic int     num; /* read locklessly in pool_pop's fast path */
     int             cnt;
     pthread_mutex_t mutex;
     pthread_cond_t  cond;
@@ -218,6 +219,13 @@ static ABT_unit pool_pop(ABT_pool pool)
 {
     pool_t* p_pool;
     ABT_pool_get_data(pool, (void**)&p_pool);
+
+    /* Fast path: an idle scheduler calls pool_pop in a tight loop, so skip
+     * taking the mutex when the pool is empty. num is atomic, so this lock-free
+     * check is safe: a unit pushed concurrently is simply seen on a subsequent
+     * pool_pop call (the scheduler keeps polling). */
+    if (atomic_load_explicit(&p_pool->num, memory_order_relaxed) == 0)
+        return ABT_UNIT_NULL;
 
     /* Sometimes it should pop from low_prio_queue to avoid a deadlock. */
     pthread_mutex_lock(&p_pool->mutex);

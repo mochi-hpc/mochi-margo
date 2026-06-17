@@ -6,6 +6,7 @@
 
 #include <abt.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 
 #include "margo-efirst-pool.h"
@@ -267,6 +268,17 @@ static ABT_unit pool_pop(ABT_pool pool)
 {
     pool_t* p_pool;
     ABT_pool_get_data(pool, (void**)&p_pool);
+
+    /* Fast path: an idle scheduler calls pool_pop in a tight loop, so skip
+     * taking the mutex when the pool is empty. Both queue sizes are atomic, so
+     * this lock-free check is safe: a unit pushed concurrently is simply seen
+     * on a subsequent pop_pop call (the scheduler keeps polling). */
+    if (atomic_load_explicit(&p_pool->queue->prio.size, memory_order_relaxed)
+            == 0
+        && atomic_load_explicit(&p_pool->queue->fifo.size, memory_order_relaxed)
+               == 0)
+        return ABT_UNIT_NULL;
+
     pthread_mutex_lock(&p_pool->mutex);
     unit_t* p_unit = queue_pop(p_pool->queue);
     pthread_mutex_unlock(&p_pool->mutex);
