@@ -796,26 +796,23 @@ __margo_default_monitor_on_progress(void*                         uargs,
         update_pool_time_series(monitor, timestamp);
     }
 
-    if (event_type == MARGO_MONITOR_FN_START) monitor->progress_sampling += 1;
-
     /* statistics */
     if (!monitor->enable_statistics) return;
 
     if (event_type == MARGO_MONITOR_FN_START) {
-        if (!monitor->sample_progress_every
-            || (monitor->progress_sampling % monitor->sample_progress_every))
-            return;
+        if (!monitor->sample_progress_every) return;
+        if (monitor->progress_sampling == 0)
+            monitor->progress_sampling = monitor->sample_progress_every;
+        if (--monitor->progress_sampling != 0) return;
 
         event_args->uctx.f = timestamp;
         return;
     }
 
-    if (!monitor->sample_progress_every
-        || (monitor->progress_sampling % monitor->sample_progress_every))
-        return;
-    monitor->progress_sampling %= monitor->sample_progress_every;
-
     // MARGO_MONITOR_FN_END
+    if (!monitor->sample_progress_every || monitor->progress_sampling != 0)
+        return;
+
     double t = timestamp - event_args->uctx.f;
     if (event_args->timeout_ms) {
         UPDATE_STATISTICS_WITH(monitor->hg_stats.progress_with_timeout, t);
