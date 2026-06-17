@@ -1557,6 +1557,11 @@ static void __margo_default_monitor_on_remove_xstream(
     (void)event_args;
 }
 
+/* These events have no statistics to record. The handlers are kept (the X-macro
+ * initializer of __margo_default_monitor below references them) but their
+ * on_<event> pointers are explicitly reset to NULL after the X-macro expansion,
+ * so the dispatch macro skips the clock read and indirect call for these events
+ * instead of calling an empty function ~20+ times per RPC. */
 #define __MONITOR_FN_EMPTY(__name__) \
     __MONITOR_FN(__name__)           \
     {                                \
@@ -1628,7 +1633,19 @@ struct margo_monitor __margo_default_monitor
 #define X(__x__, __y__) .on_##__y__ = __margo_default_monitor_on_##__y__,
        MARGO_EXPAND_MONITOR_MACROS
 #undef X
-};
+       /* The handlers below do nothing, so leave their pointers NULL: the
+        * __MARGO_MONITOR dispatch macro skips the clock read and the indirect
+        * call entirely when on_<event> is NULL. These override the X-macro
+        * assignments above (later designated initializers win). */
+       .on_bulk_free   = NULL,
+       .on_deregister  = NULL,
+       .on_lookup      = NULL,
+       .on_sleep       = NULL,
+       .on_free_input  = NULL,
+       .on_free_output = NULL,
+       .on_prefinalize = NULL,
+       .on_finalize    = NULL,
+       .on_user        = NULL};
 
 struct margo_monitor* margo_default_monitor = &__margo_default_monitor;
 
