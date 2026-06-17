@@ -170,7 +170,6 @@ static void margo_cleanup(margo_instance_id mid)
     MARGO_TRACE(mid, "Destroying mutex and condition variables");
     ABT_mutex_free(&mid->finalize_mutex);
     ABT_cond_free(&mid->finalize_cond);
-    ABT_mutex_free(&mid->pending_operations_mtx);
     ABT_key_free(&(mid->current_rpc_id_key));
 
     /* monitoring (destroyed before Argobots since it contains mutexes) */
@@ -237,17 +236,18 @@ void margo_finalize(margo_instance_id mid)
     MARGO_TRACE(mid, "Calling margo_finalize");
     int do_cleanup;
 
-    /* check if there are pending operations */
-    int pending;
-    ABT_mutex_lock(mid->pending_operations_mtx);
-    pending = mid->pending_operations;
-    if (pending) {
-        mid->finalize_requested = 1;
-        ABT_mutex_unlock(mid->pending_operations_mtx);
+    /* Request finalization and read the pending count in a single atomic
+     * fetch_or. This pairs with the check-and-increment CAS in
+     * __margo_internal_incr_pending: if we observe no pending operations here,
+     * any racing incr is guaranteed to see the flag and refuse, so no operation
+     * can be admitted concurrently with this teardown. If operations are still
+     * pending we defer, and the last one to complete re-enters margo_finalize
+     * via __margo_internal_decr_pending. */
+    uint32_t prev_state = atomic_fetch_or(&mid->shutdown_state, MARGO_FINALIZE_BIT);
+    if (prev_state & MARGO_PENDING_MASK) {
         MARGO_TRACE(mid, "Pending operations, exiting margo_finalize");
         return;
     }
-    ABT_mutex_unlock(mid->pending_operations_mtx);
 
     MARGO_TRACE(mid, "Executing pre-finalize callbacks");
     /* before exiting the progress loop, pre-finalize callbacks need to be
@@ -303,7 +303,7 @@ void margo_finalize_and_wait(margo_instance_id mid)
     int do_cleanup;
 
     ABT_mutex_lock(mid->finalize_mutex);
-    mid->finalize_requested = 1;
+    atomic_fetch_or(&mid->shutdown_state, MARGO_FINALIZE_BIT);
     mid->finalize_refcount++;
     ABT_mutex_unlock(mid->finalize_mutex);
 
@@ -2101,9 +2101,7 @@ void __margo_hg_progress_fn(void* foo)
              * should avoid running the Margo progress function in pools
              * that share execution streams with other pools.
              */
-            ABT_mutex_lock(mid->pending_operations_mtx);
-            pending = mid->pending_operations;
-            ABT_mutex_unlock(mid->pending_operations_mtx);
+            pending = atomic_load(&mid->shutdown_state) & MARGO_PENDING_MASK;
 
             /*
              * Note that we intentionally use get_total_size() rather
@@ -2283,28 +2281,31 @@ finish:
 int __margo_internal_finalize_requested(margo_instance_id mid)
 {
     if (!mid) return 0;
-    return mid->finalize_requested;
+    return (atomic_load(&mid->shutdown_state) & MARGO_FINALIZE_BIT) ? 1 : 0;
 }
 
 int __margo_internal_incr_pending(margo_instance_id mid)
 {
     if (!mid) return 0;
-    int ret = 1;
-    ABT_mutex_lock(mid->pending_operations_mtx);
-    if (mid->finalize_requested)
-        ret = 0;
-    else
-        mid->pending_operations += 1;
-    ABT_mutex_unlock(mid->pending_operations_mtx);
-    return ret;
+    /* Increment the pending count unless finalization has been requested, as a
+     * single CAS. Doing the check-and-increment atomically (rather than an
+     * optimistic bump + recheck) is what guarantees the shutdown handshake:
+     * the increment only ever becomes visible to margo_finalize if it commits
+     * while the flag is clear, i.e. as a genuinely admitted operation that will
+     * later decrement and retrigger finalize. A transient bump can never fool
+     * margo_finalize into deferring on an operation that then backs out. */
+    uint32_t cur = atomic_load(&mid->shutdown_state);
+    do {
+        if (cur & MARGO_FINALIZE_BIT) return 0;
+    } while (!atomic_compare_exchange_weak(&mid->shutdown_state, &cur, cur + 1));
+    return 1;
 }
 
 void __margo_internal_decr_pending(margo_instance_id mid)
 {
     if (!mid) return;
-    ABT_mutex_lock(mid->pending_operations_mtx);
-    mid->pending_operations -= 1;
-    ABT_mutex_unlock(mid->pending_operations_mtx);
+    /* count is > 0 here, so subtracting 1 never borrows into the flag bit */
+    atomic_fetch_sub(&mid->shutdown_state, 1);
 }
 
 hg_return_t margo_set_current_rpc_id(margo_instance_id mid, hg_id_t parent_id)

@@ -52,6 +52,10 @@ struct margo_registered_rpc {
     struct margo_registered_rpc* next;          /* pointer to next in list */
 };
 
+/* Bit layout of margo_instance::shutdown_state */
+#define MARGO_FINALIZE_BIT ((uint32_t)0x80000000u)
+#define MARGO_PENDING_MASK ((uint32_t)0x7FFFFFFFu)
+
 struct margo_instance {
     /* Parent margo instance, if provided */
     margo_instance_id parent_mid;
@@ -97,11 +101,16 @@ struct margo_instance {
     struct margo_finalize_cb* finalize_cb;
     struct margo_finalize_cb* prefinalize_cb;
 
-    /* control logic to prevent margo_finalize from destroying
-       the instance when some operations are pending */
-    unsigned  pending_operations;
-    ABT_mutex pending_operations_mtx;
-    int       finalize_requested;
+    /* control logic to prevent margo_finalize from destroying the instance
+       while operations are pending. The pending-operation count and the
+       finalize-requested flag are packed into a single atomic word so the
+       per-RPC hot path needs no lock while keeping the exact atomicity the old
+       pending_operations_mtx provided: __margo_internal_incr_pending does
+       "increment unless finalizing" as one CAS, and margo_finalize does
+       "request finalize and read the count" as one fetch_or. Bit 31 is the
+       finalize-requested flag, bits 0..30 are the pending-operation count
+       (see MARGO_FINALIZE_BIT / MARGO_PENDING_MASK). */
+    _Atomic uint32_t shutdown_state;
 
     /* control logic for shutting down */
     hg_id_t shutdown_rpc_id;

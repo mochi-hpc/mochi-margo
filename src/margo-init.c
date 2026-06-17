@@ -379,9 +379,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     mid->finalize_cb    = NULL;
     mid->prefinalize_cb = NULL;
 
-    mid->pending_operations = 0;
-    ABT_mutex_create(&mid->pending_operations_mtx);
-    mid->finalize_requested = 0;
+    mid->shutdown_state = 0;
 
     mid->shutdown_rpc_id        = 0;
     mid->enable_remote_shutdown = 0;
@@ -455,7 +453,6 @@ error:
         __margo_timer_list_free(mid);
         ABT_mutex_free(&mid->finalize_mutex);
         ABT_cond_free(&mid->finalize_cond);
-        ABT_mutex_free(&mid->pending_operations_mtx);
         if (mid->current_rpc_id_key) ABT_key_free(&(mid->current_rpc_id_key));
         free(mid);
     }

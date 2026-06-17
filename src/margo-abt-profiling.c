@@ -194,9 +194,8 @@ int margo_state_dump(margo_instance_id mid,
     fprintf(outfile,
             "\n# Margo instance state\n"
             "# ==========================\n");
-    ABT_mutex_lock(mid->pending_operations_mtx);
-    pending_operations = mid->pending_operations;
-    ABT_mutex_unlock(mid->pending_operations_mtx);
+    pending_operations
+        = atomic_load(&mid->shutdown_state) & MARGO_PENDING_MASK;
     fprintf(outfile, "pending_operations: %d\n", pending_operations);
 
     fprintf(outfile,
