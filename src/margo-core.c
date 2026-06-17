@@ -740,7 +740,7 @@ hg_return_t margo_addr_self(margo_instance_id mid, hg_addr_t* addr)
         = {.name = NULL, .addr = HG_ADDR_NULL, .ret = HG_SUCCESS};
     __MARGO_MONITOR(mid, FN_START, lookup, monitoring_args);
 
-    hret = HG_Addr_self(mid->hg.hg_class, addr);
+    hret = HG_Addr_dup(mid->hg.hg_class, mid->hg.self_addr, addr);
 
     /* monitoring */
     monitoring_args.addr = addr ? *addr : HG_ADDR_NULL;
