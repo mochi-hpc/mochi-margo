@@ -338,7 +338,7 @@ margo_instance_id margo_init_ext(const char*                   address,
     int progress_timeout_ub = json_object_object_get_int_or(
         config, "progress_timeout_ub_msec", 100);
     int handle_cache_size
-        = json_object_object_get_int_or(config, "handle_cache_size", 32);
+        = json_object_object_get_int_or(config, "handle_cache_size", 256);
     int abt_profiling_enabled
         = json_object_object_get_bool_or(config, "enable_abt_profiling", false);
 
@@ -392,7 +392,6 @@ margo_instance_id margo_init_ext(const char*                   address,
 
     mid->handle_cache_size = handle_cache_size;
     mid->free_handle_list  = NULL;
-    mid->used_handle_hash  = NULL;
     hret                   = __margo_handle_cache_init(mid, handle_cache_size);
     if (hret != HG_SUCCESS) goto error;
 

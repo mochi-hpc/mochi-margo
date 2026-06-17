@@ -830,20 +830,13 @@ hg_return_t margo_destroy(hg_handle_t handle)
         = {.handle = handle, .ret = HG_SUCCESS};
     __MARGO_MONITOR(mid, FN_START, destroy, monitoring_args);
 
-    /* remove the margo_handle_data associated with the handle */
-    struct margo_handle_data* handle_data = HG_Get_data(handle);
-    if (handle_data) {
-        if (handle_data->user_free_callback) {
-            handle_data->user_free_callback(handle_data->user_data);
-        }
-        memset(handle_data, 0, sizeof(*handle_data));
-    }
-
     if (mid) {
-        /* recycle this handle if it came from the handle cache */
+        /* recycle this handle if it came from the handle cache; the cache runs
+         * the user free callback and resets the handle's data for reuse */
         hret = __margo_handle_cache_put(mid, handle);
         if (hret != HG_SUCCESS) {
-            /* else destroy the handle manually and free the handle data */
+            /* otherwise destroy the handle: HG_Destroy frees the handle data
+             * and runs the user free callback via __margo_handle_data_free */
             hret = HG_Destroy(handle);
         }
     } else {
@@ -2383,12 +2376,12 @@ void __margo_internal_post_wrapper_hooks(
     if (__margo_internal_finalize_requested(mid)) { margo_finalize(mid); }
 }
 
-static void margo_handle_data_free(void* args)
+void __margo_handle_data_free(void* args)
 {
-    /* Note: normally this function should not be called by Mercury
-     * because we are manually freeing the handle's data and calling
-     * HG_Set_data(handle, NULL, NULL) in margo_destroy.
-     */
+    /* Called by Mercury when a handle is actually destroyed (HG_Destroy bringing
+     * the refcount to 0). For handles recycled into the handle cache this is not
+     * invoked; the cache resets the data in place instead (see
+     * __margo_handle_cache_put). */
     struct margo_handle_data* handle_data = (struct margo_handle_data*)args;
     if (!handle_data) return;
     if (handle_data->user_free_callback)
@@ -2414,7 +2407,7 @@ hg_return_t __margo_internal_set_handle_data(hg_handle_t handle)
     handle_data->in_proc_cb  = rpc_data->in_proc_cb;
     handle_data->out_proc_cb = rpc_data->out_proc_cb;
     if (!handle_data_attached)
-        return HG_Set_data(handle, handle_data, margo_handle_data_free);
+        return HG_Set_data(handle, handle_data, __margo_handle_data_free);
     else
         return HG_SUCCESS;
 }

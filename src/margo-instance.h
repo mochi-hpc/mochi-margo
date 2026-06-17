@@ -113,11 +113,12 @@ struct margo_instance {
     /* timer data */
     struct margo_timer_list* timer_list;
 
-    /* linked list of free hg handles and a hash of in-use handles */
+    /* linked list of free hg handles; in-use handles are identified by a
+     * back-pointer stored in their margo_handle_data (cache_el), so no
+     * separate hash of in-use handles is needed. */
     size_t                        handle_cache_size;
     struct margo_handle_cache_el* free_handle_list;
-    struct margo_handle_cache_el* used_handle_hash;
-    ABT_mutex handle_cache_mtx; /* mutex protecting access to above caches */
+    ABT_mutex handle_cache_mtx; /* mutex protecting access to the free list */
 
     /* logging */
     struct margo_logger logger;
@@ -194,7 +195,17 @@ struct margo_handle_data {
     void*        user_data;
     void (*user_free_callback)(void*);
     margo_monitor_data_t monitor_data;
+    /* if this handle came from the instance's handle cache, points back to
+     * the cache element wrapping it; NULL for manually-allocated handles.
+     * Set once when the cache attaches the data, and used by
+     * __margo_handle_cache_put to recycle the handle in O(1) without a lookup. */
+    struct margo_handle_cache_el* cache_el;
 };
+
+/* Frees a margo_handle_data; installed as the HG_Set_data free callback so
+ * Mercury releases it when a handle is destroyed. Exposed so the handle cache
+ * can attach pre-allocated data to cached handles with the same callback. */
+void __margo_handle_data_free(void* args);
 
 struct lookup_cb_evt {
     hg_return_t hret;
