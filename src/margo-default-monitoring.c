@@ -1185,7 +1185,7 @@ static void __margo_default_monitor_on_rpc_handler(
             = addr_info_find_or_add(monitor, mid, handle_info->addr);
 
         // form callpath key
-        hg_id_t    id  = margo_get_info(event_args->handle)->id;
+        hg_id_t    id  = handle_info->id;
         callpath_t key = {.rpc_id    = id,
                           .parent_id = event_args->parent_rpc_id,
                           .addr_id   = addr_info->id};
@@ -1308,6 +1308,13 @@ static void __margo_default_monitor_on_bulk_create(
 
     bulk_create_statistics_t* bulk_stats = NULL;
 
+    if (event_type == MARGO_MONITOR_FN_START) {
+        // just record the start timestamp; the statistics entry is only needed
+        // on END, where the result is actually consumed.
+        event_args->uctx.f = timestamp;
+        return;
+    }
+
     // no bulk_statistics_t attached to current ULT
     callpath_t default_key = {0};
     default_key.parent_id  = mux_id(0, MARGO_DEFAULT_PROVIDER_ID);
@@ -1317,6 +1324,10 @@ static void __margo_default_monitor_on_bulk_create(
     ABT_key_get(monitor->callpath_key, (void**)&pkey);
     if (!pkey) pkey = (callpath_t*)&default_key;
 
+    // look up (or create) the statistics entry only on END. Doing it on START
+    // too would just double the acquisitions of bulk_create_stats_mtx for a
+    // result that gets discarded (find-or-add semantics mean END still creates
+    // the entry if it is missing).
     ABT_mutex_spinlock(
         ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->bulk_create_stats_mtx));
     HASH_FIND(hh, monitor->bulk_create_stats, pkey, sizeof(*pkey), bulk_stats);
@@ -1329,18 +1340,14 @@ static void __margo_default_monitor_on_bulk_create(
     ABT_mutex_unlock(
         ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->bulk_create_stats_mtx));
 
-    if (event_type == MARGO_MONITOR_FN_START) {
-        event_args->uctx.f = timestamp;
-    } else {
-        double t = timestamp - event_args->uctx.f;
-        // compute total size
-        size_t size = 0;
-        for (unsigned i = 0; i < event_args->count; i++) {
-            size += event_args->sizes[i];
-        }
-        UPDATE_STATISTICS_WITH(bulk_stats->duration, t);
-        UPDATE_STATISTICS_WITH(bulk_stats->size, (double)size);
+    double t = timestamp - event_args->uctx.f;
+    // compute total size
+    size_t size = 0;
+    for (unsigned i = 0; i < event_args->count; i++) {
+        size += event_args->sizes[i];
     }
+    UPDATE_STATISTICS_WITH(bulk_stats->duration, t);
+    UPDATE_STATISTICS_WITH(bulk_stats->size, (double)size);
 }
 
 static void __margo_default_monitor_on_bulk_transfer(
