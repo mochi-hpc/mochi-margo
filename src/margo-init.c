@@ -393,6 +393,12 @@ margo_instance_id margo_init_ext(const char*                   address,
     hret                   = __margo_handle_cache_init(mid, handle_cache_size);
     if (hret != HG_SUCCESS) goto error;
 
+    mid->request_arena
+        = mochi_arena_create(sizeof(struct margo_request_struct), 64);
+    mid->handle_data_arena
+        = mochi_arena_create(sizeof(struct margo_handle_data), 64);
+    if (!mid->request_arena || !mid->handle_data_arena) goto error;
+
     // create current_rpc_id_key ABT_key
     ret = ABT_key_create(NULL, &(mid->current_rpc_id_key));
     if (ret != ABT_SUCCESS) goto error;
@@ -450,6 +456,8 @@ error:
     if (mid) {
         if(mid->parent_mid) margo_instance_release(mid->parent_mid);
         __margo_handle_cache_destroy(mid);
+        mochi_arena_destroy(mid->request_arena);
+        mochi_arena_destroy(mid->handle_data_arena);
         __margo_timer_list_free(mid);
         ABT_mutex_free(&mid->finalize_mutex);
         ABT_cond_free(&mid->finalize_cond);

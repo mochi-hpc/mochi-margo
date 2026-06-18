@@ -12,6 +12,7 @@ add_library (margo SHARED
     margo-logging.c
     margo-timer.c
     margo-util.c
+    mochi-arena.c
     margo-prio-pool.c
     margo-efirst-pool.c
     margo-monitoring.c

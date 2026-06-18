@@ -26,6 +26,7 @@
 #include "margo-monitoring.h"
 #include "margo-bulk-util.h"
 #include "margo-timer-private.h"
+#include "mochi-arena.h"
 #include "utlist.h"
 #include "uthash.h"
 
@@ -128,6 +129,11 @@ struct margo_instance {
     size_t                        handle_cache_size;
     struct margo_handle_cache_el* free_handle_list;
     ABT_mutex handle_cache_mtx; /* mutex protecting access to the free list */
+
+    /* arenas recycling the per-call structs that the async/callback and
+     * server-receive paths would otherwise calloc/free on every operation */
+    mochi_arena_t request_arena;     /* margo_request_struct */
+    mochi_arena_t handle_data_arena; /* margo_handle_data */
 
     /* logging */
     struct margo_logger logger;

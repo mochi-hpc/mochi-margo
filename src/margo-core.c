@@ -163,6 +163,13 @@ static void margo_cleanup(margo_instance_id mid)
         mid->registered_rpcs = next_rpc;
     }
 
+    /* Destroy the per-call object arenas only now: requests and handle-data can
+     * still be released into them above (margo_cb cancellations and handle
+     * destruction happen during __margo_hg_destroy). */
+    MARGO_TRACE(mid, "Destroying per-call object arenas");
+    mochi_arena_destroy(mid->request_arena);
+    mochi_arena_destroy(mid->handle_data_arena);
+
     /* shut down pending timers */
     MARGO_TRACE(mid, "Cleaning up pending timers");
     __margo_timer_list_free(mid);
@@ -904,9 +911,10 @@ static hg_return_t margo_cb(const struct hg_cb_info* info)
         break;
     };
 
-    // a callback-based request is heap-allocated but is not
-    // handed to the user, hence it has to be freed here.
-    if (req->kind == MARGO_REQ_CALLBACK) free(req);
+    // a callback-based request comes from the instance's request arena but is
+    // not handed to the user, hence it has to be released here.
+    if (req->kind == MARGO_REQ_CALLBACK)
+        mochi_arena_release(mid->request_arena, req);
 
     PROGRESS_NEEDED_DECR(mid);
 
@@ -1158,13 +1166,14 @@ hg_return_t margo_provider_iforward_timed(uint16_t       provider_id,
                                           double         timeout_ms,
                                           margo_request* req)
 {
-    hg_return_t   hret;
-    margo_request tmp_req = calloc(1, sizeof(*tmp_req));
+    hg_return_t       hret;
+    margo_instance_id mid     = margo_hg_handle_get_instance(handle);
+    margo_request     tmp_req = mochi_arena_get(mid->request_arena);
     if (!tmp_req) { return HG_NOMEM_ERROR; }
     hret = margo_provider_iforward_internal(provider_id, handle, timeout_ms,
                                             in_struct, tmp_req);
     if (hret != HG_SUCCESS) {
-        free(tmp_req);
+        mochi_arena_release(mid->request_arena, tmp_req);
         return hret;
     }
     *req = tmp_req;
@@ -1179,8 +1188,9 @@ hg_return_t margo_provider_cforward_timed(uint16_t    provider_id,
                                                               hg_return_t),
                                           void* uargs)
 {
-    hg_return_t   hret;
-    margo_request tmp_req = calloc(1, sizeof(*tmp_req));
+    hg_return_t       hret;
+    margo_instance_id mid     = margo_hg_handle_get_instance(handle);
+    margo_request     tmp_req = mochi_arena_get(mid->request_arena);
     if (!tmp_req) { return HG_NOMEM_ERROR; }
     tmp_req->kind             = MARGO_REQ_CALLBACK;
     tmp_req->callback.cb    = on_complete;
@@ -1189,7 +1199,7 @@ hg_return_t margo_provider_cforward_timed(uint16_t    provider_id,
     hret = margo_provider_iforward_internal(provider_id, handle, timeout_ms,
                                             in_struct, tmp_req);
     if (hret != HG_SUCCESS) {
-        free(tmp_req);
+        mochi_arena_release(mid->request_arena, tmp_req);
         return hret;
     }
     return HG_SUCCESS;
@@ -1197,8 +1207,9 @@ hg_return_t margo_provider_cforward_timed(uint16_t    provider_id,
 
 hg_return_t margo_wait(margo_request req)
 {
-    hg_return_t hret = margo_wait_internal(req);
-    free(req);
+    margo_instance_id mid  = req->mid;
+    hg_return_t       hret = margo_wait_internal(req);
+    mochi_arena_release(mid->request_arena, req);
     return hret;
 }
 
@@ -1362,12 +1373,13 @@ hg_return_t margo_respond(hg_handle_t handle, void* out_struct)
 hg_return_t
 margo_irespond(hg_handle_t handle, void* out_struct, margo_request* req)
 {
-    hg_return_t   hret;
-    margo_request tmp_req = calloc(1, sizeof(*tmp_req));
+    hg_return_t       hret;
+    margo_instance_id mid     = margo_hg_handle_get_instance(handle);
+    margo_request     tmp_req = mochi_arena_get(mid->request_arena);
     if (!tmp_req) { return (HG_NOMEM_ERROR); }
     hret = margo_irespond_internal(handle, out_struct, tmp_req);
     if (hret != HG_SUCCESS) {
-        free(tmp_req);
+        mochi_arena_release(mid->request_arena, tmp_req);
         return hret;
     }
     *req = tmp_req;
@@ -1379,15 +1391,16 @@ hg_return_t margo_crespond(hg_handle_t handle,
                            void (*on_complete)(void*, hg_return_t),
                            void* uargs)
 {
-    hg_return_t   hret;
-    margo_request tmp_req = calloc(1, sizeof(*tmp_req));
+    hg_return_t       hret;
+    margo_instance_id mid     = margo_hg_handle_get_instance(handle);
+    margo_request     tmp_req = mochi_arena_get(mid->request_arena);
     if (!tmp_req) { return (HG_NOMEM_ERROR); }
     tmp_req->kind             = MARGO_REQ_CALLBACK;
     tmp_req->callback.cb    = on_complete;
     tmp_req->callback.uargs = uargs;
     hret = margo_irespond_internal(handle, out_struct, tmp_req);
     if (hret != HG_SUCCESS) {
-        free(tmp_req);
+        mochi_arena_release(mid->request_arena, tmp_req);
         return hret;
     }
     return HG_SUCCESS;
@@ -1770,13 +1783,13 @@ hg_return_t margo_bulk_itransfer_timed(margo_instance_id mid,
                                        double            timeout_ms,
                                        margo_request*    req)
 {
-    margo_request tmp_req = calloc(1, sizeof(*tmp_req));
+    margo_request tmp_req = mochi_arena_get(mid->request_arena);
     if (!tmp_req) { return (HG_NOMEM_ERROR); }
     hg_return_t hret = margo_bulk_itransfer_internal(
         mid, op, origin_addr, origin_handle, origin_offset, local_handle,
         local_offset, size, timeout_ms, tmp_req);
     if (hret != HG_SUCCESS) {
-        free(tmp_req);
+        mochi_arena_release(mid->request_arena, tmp_req);
         return hret;
     }
 
@@ -1797,7 +1810,7 @@ hg_return_t margo_bulk_ctransfer_timed(margo_instance_id mid,
                                        void (*on_complete)(void*, hg_return_t),
                                        void* uargs)
 {
-    margo_request tmp_req = calloc(1, sizeof(*tmp_req));
+    margo_request tmp_req = mochi_arena_get(mid->request_arena);
     if (!tmp_req) { return (HG_NOMEM_ERROR); }
     tmp_req->kind             = MARGO_REQ_CALLBACK;
     tmp_req->callback.cb    = on_complete;
@@ -1807,7 +1820,7 @@ hg_return_t margo_bulk_ctransfer_timed(margo_instance_id mid,
         mid, op, origin_addr, origin_handle, origin_offset, local_handle,
         local_offset, size, timeout_ms, tmp_req);
     if (hret != HG_SUCCESS) {
-        free(tmp_req);
+        mochi_arena_release(mid->request_arena, tmp_req);
         return hret;
     }
 
@@ -1834,6 +1847,9 @@ hg_return_t margo_bulk_parallel_transfer(margo_instance_id mid,
 
     size_t count = size / chunk_size;
     if (count * chunk_size < size) count += 1;
+    /* a contiguous array of requests waited on as a block and freed in one go;
+     * intentionally not drawn from the per-instance request arena (which hands
+     * out single objects, not arrays) */
     struct margo_request_struct* reqs = calloc(count, sizeof(*reqs));
 
     for (i = 0; i < count; i++) {
@@ -2387,7 +2403,14 @@ void __margo_handle_data_free(void* args)
     if (!handle_data) return;
     if (handle_data->user_free_callback)
         handle_data->user_free_callback(handle_data->user_data);
-    free(handle_data);
+    /* return the object to the instance's handle-data arena; cache-origin data
+     * that was never used for an RPC has a NULL mid (only cache_el is set at
+     * cache init), so fall back to free() for those */
+    margo_instance_id mid = handle_data->mid;
+    if (mid)
+        mochi_arena_release(mid->handle_data_arena, handle_data);
+    else
+        free(handle_data);
 }
 
 hg_return_t __margo_internal_set_handle_data(hg_handle_t handle)
@@ -2401,7 +2424,8 @@ hg_return_t __margo_internal_set_handle_data(hg_handle_t handle)
     struct margo_handle_data* handle_data;
     handle_data               = HG_Get_data(handle);
     bool handle_data_attached = handle_data != NULL;
-    if (!handle_data) handle_data = calloc(1, sizeof(*handle_data));
+    if (!handle_data)
+        handle_data = mochi_arena_get(rpc_data->mid->handle_data_arena);
     handle_data->mid         = rpc_data->mid;
     handle_data->pool        = rpc_data->pool;
     handle_data->rpc_name    = rpc_data->rpc_name;

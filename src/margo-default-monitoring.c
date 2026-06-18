@@ -386,11 +386,9 @@ typedef struct default_monitor_state {
     ABT_mutex_memory pool_time_series_mtx;
     double           rpc_time_series_last_ts;
     double           time_series_interval;
-    /* session and bulk_session pools */
-    struct session*      session_pool;
-    ABT_mutex_memory     session_pool_mtx;
-    struct bulk_session* bulk_session_pool;
-    ABT_mutex_memory     bulk_session_pool_mtx;
+    /* arenas recycling session and bulk_session objects */
+    mochi_arena_t session_arena;
+    mochi_arena_t bulk_session_arena;
     /* Time series */
 } default_monitor_state_t;
 
@@ -427,92 +425,34 @@ typedef struct session {
         double                   respond_end_ts;
         target_rpc_statistics_t* stats;
     } target;
-    struct session* next; /* used to managed the session pool */
 } session_t;
 
 typedef struct bulk_session {
     double                      transfer_start_ts;
     double                      transfer_end_ts;
     bulk_transfer_statistics_t* stats;
-    struct bulk_session* next; /* used to managed the bulk_session pool */
 } bulk_session_t;
 
 static inline session_t* new_session(default_monitor_state_t* monitor)
 {
-    session_t* result = NULL;
-    ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->session_pool_mtx));
-    if (monitor->session_pool) {
-        result                = monitor->session_pool;
-        monitor->session_pool = result->next;
-        memset(result, 0, sizeof(*result));
-    } else {
-        result = (session_t*)calloc(1, sizeof(*result));
-    }
-    ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->session_pool_mtx));
-    return result;
+    return (session_t*)mochi_arena_get(monitor->session_arena);
 }
 
 static inline void release_session(default_monitor_state_t* monitor,
                                    session_t*               session)
 {
-    ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->session_pool_mtx));
-    session->next         = monitor->session_pool;
-    monitor->session_pool = session;
-    ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->session_pool_mtx));
-}
-
-static inline void clear_session_pool(default_monitor_state_t* monitor)
-{
-    ABT_mutex_spinlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->session_pool_mtx));
-    session_t* session = monitor->session_pool;
-    while (session) {
-        session_t* next = session->next;
-        free(session);
-        session = next;
-    }
-    ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->session_pool_mtx));
+    mochi_arena_release(monitor->session_arena, session);
 }
 
 static inline bulk_session_t* new_bulk_session(default_monitor_state_t* monitor)
 {
-    bulk_session_t* result = NULL;
-    ABT_mutex_spinlock(
-        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->bulk_session_pool_mtx));
-    if (monitor->bulk_session_pool) {
-        result                     = monitor->bulk_session_pool;
-        monitor->bulk_session_pool = result->next;
-        memset(result, 0, sizeof(*result));
-    } else {
-        result = (bulk_session_t*)calloc(1, sizeof(*result));
-    }
-    ABT_mutex_unlock(
-        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->bulk_session_pool_mtx));
-    return result;
+    return (bulk_session_t*)mochi_arena_get(monitor->bulk_session_arena);
 }
 
 static inline void release_bulk_session(default_monitor_state_t* monitor,
                                         bulk_session_t*          session)
 {
-    ABT_mutex_spinlock(
-        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->bulk_session_pool_mtx));
-    session->next              = monitor->bulk_session_pool;
-    monitor->bulk_session_pool = session;
-    ABT_mutex_unlock(
-        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->bulk_session_pool_mtx));
-}
-
-static inline void clear_bulk_session_pool(default_monitor_state_t* monitor)
-{
-    ABT_mutex_spinlock(
-        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->bulk_session_pool_mtx));
-    bulk_session_t* session = monitor->bulk_session_pool;
-    while (session) {
-        bulk_session_t* next = session->next;
-        free(session);
-        session = next;
-    }
-    ABT_mutex_unlock(
-        ABT_MUTEX_MEMORY_GET_HANDLE(&monitor->bulk_session_pool_mtx));
+    mochi_arena_release(monitor->bulk_session_arena, session);
 }
 
 /* ========================================================================
@@ -526,7 +466,9 @@ static void* __margo_default_monitor_initialize(margo_instance_id   mid,
     (void)uargs;
     default_monitor_state_t* monitor = calloc(1, sizeof(*monitor));
     ABT_key_create(NULL, &(monitor->callpath_key));
-    monitor->mid = mid;
+    monitor->mid                = mid;
+    monitor->session_arena      = mochi_arena_create(sizeof(session_t), 64);
+    monitor->bulk_session_arena = mochi_arena_create(sizeof(bulk_session_t), 32);
 
     /* default configuration */
     const char* prefix         = getenv("MARGO_MONITORING_FILENAME_PREFIX");
@@ -627,14 +569,8 @@ static void* __margo_default_monitor_initialize(margo_instance_id   mid,
         }
     }
 
-    /* preinitialize sessions */
-    for (int i = 0; i < 32; i++) {
-        session_t* session = (session_t*)malloc(sizeof(*session));
-        release_session(monitor, session);
-        bulk_session_t* bulk_session
-            = (bulk_session_t*)malloc(sizeof(*bulk_session));
-        release_bulk_session(monitor, bulk_session);
-    }
+    /* sessions are recycled through session_arena / bulk_session_arena, which
+     * pre-allocate a block of objects on first use; no manual warm-up needed. */
 
     /* get self address */
     char      self_addr_str[256] = {0};
@@ -707,9 +643,9 @@ static void __margo_default_monitor_finalize(void* uargs)
     }
     /* free RPC and bulk time series */
     free_all_time_series(monitor);
-    /* free session pools */
-    clear_session_pool(monitor);
-    clear_bulk_session_pool(monitor);
+    /* free session arenas */
+    mochi_arena_destroy(monitor->session_arena);
+    mochi_arena_destroy(monitor->bulk_session_arena);
     /* free ABT key */
     ABT_key_free(&(monitor->callpath_key));
     /* free filename */
