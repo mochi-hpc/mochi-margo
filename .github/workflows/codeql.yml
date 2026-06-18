@@ -35,7 +35,7 @@ jobs:
         spack -e tests find -dlv
 
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v1
+      uses: github/codeql-action/init@v4
       with:
         languages: cpp
         queries: security-and-quality
