@@ -13,7 +13,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     permissions:
       packages: write
     steps:
@@ -57,7 +57,12 @@ jobs:
         cd build
         cmake .. -DENABLE_TESTS=ON -DENABLE_ASAN=ON
         make
-        ASAN_OPTIONS="abort_on_error=1" make test
+        # detect_stack_use_after_return is enabled by default on GCC >= 12.
+        # Its fake-stack is thread-local and incompatible with Argobots
+        # migrating a ULT across execution streams (e.g. margo-migrate-progress),
+        # since Argobots is not built with __sanitizer_*_switch_fiber annotations.
+        # Disable it so the suite passes regardless of the runner's toolchain.
+        ASAN_OPTIONS="abort_on_error=1:detect_stack_use_after_return=0" make test
 
     - name: Show test output
       if: always()
