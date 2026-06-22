@@ -23,6 +23,20 @@ static void rpc_ult(hg_handle_t handle)
 }
 DEFINE_MARGO_RPC_HANDLER(rpc_ult)
 
+DECLARE_MARGO_RPC_HANDLER(rpc_respond_timed_ult)
+static void rpc_respond_timed_ult(hg_handle_t handle)
+{
+    /* A response normally completes immediately, so a generous timeout is
+     * never hit; this exercises the timer create/cancel/destroy lifecycle of
+     * margo_respond_timed on the normal (non-expired) path. Deterministically
+     * forcing an actual response timeout would require a peer that never drains
+     * the response, which is out of scope for this unit test. */
+    margo_respond_timed(handle, NULL, 30000.0);
+    margo_destroy(handle);
+    return;
+}
+DEFINE_MARGO_RPC_HANDLER(rpc_respond_timed_ult)
+
 DECLARE_MARGO_RPC_HANDLER(get_name_ult)
 static void get_name_ult(hg_handle_t handle)
 {
@@ -55,6 +69,7 @@ static int svr_init_fn(margo_instance_id mid, void* arg)
 {
     (void)arg;
     MARGO_REGISTER(mid, "rpc", void, void, rpc_ult);
+    MARGO_REGISTER(mid, "rpc_respond_timed", void, void, rpc_respond_timed_ult);
     MARGO_REGISTER(mid, "sum", sum_in_t, int32_t, sum_ult);
     MARGO_REGISTER(mid, "null_rpc", void, void, NULL);
     MARGO_REGISTER_PROVIDER(mid, "provider_rpc", void, void, rpc_ult, 42, ABT_POOL_NULL);
@@ -145,6 +160,44 @@ static MunitResult test_forward(const MunitParameter params[],
 
     // "rpc" is registered on the server, everything should be fine
     hg_id_t rpc_id = MARGO_REGISTER(ctx->mid, "rpc", void, void, NULL);
+
+    hret[0] = margo_addr_lookup(ctx->mid, ctx->remote_addr, &addr);
+    if(hret[0] != HG_SUCCESS) goto cleanup;
+
+    hret[1] = margo_create(ctx->mid, addr, rpc_id, &handle);
+    if(hret[1] != HG_SUCCESS) goto cleanup;
+
+    hret[2] = margo_forward(handle, NULL);
+
+cleanup:
+    hret[3] = margo_destroy(handle);
+
+    hret[4] = margo_addr_free(ctx->mid, addr);
+
+    munit_assert_int_goto(hret[0], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[1], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[2], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[3], ==, HG_SUCCESS, error);
+    munit_assert_int_goto(hret[4], ==, HG_SUCCESS, error);
+    return MUNIT_OK;
+
+error:
+    return MUNIT_FAIL;
+}
+
+static MunitResult test_respond_timed(const MunitParameter params[],
+                                      void*                data)
+{
+    (void)params;
+    (void)data;
+    hg_return_t hret[5] = {0,0,0,0,0};
+    hg_handle_t handle = HG_HANDLE_NULL;
+    hg_addr_t   addr = HG_ADDR_NULL;
+
+    struct test_context* ctx = (struct test_context*)data;
+
+    // the server responds using margo_respond_timed with a generous timeout
+    hg_id_t rpc_id = MARGO_REGISTER(ctx->mid, "rpc_respond_timed", void, void, NULL);
 
     hret[0] = margo_addr_lookup(ctx->mid, ctx->remote_addr, &addr);
     if(hret[0] != HG_SUCCESS) goto cleanup;
@@ -689,6 +742,8 @@ static MunitParameterEnum test_params2[]
 
 static MunitTest test_suite_tests[] = {
     {(char*)"/forward", test_forward, test_context_setup,
+     test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
+    {(char*)"/respond_timed", test_respond_timed, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},
     {(char*)"/forward_with_args", test_forward_with_args, test_context_setup,
      test_context_tear_down, MUNIT_TEST_OPTION_NONE, test_params},

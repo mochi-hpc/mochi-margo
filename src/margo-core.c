@@ -958,6 +958,10 @@ static void margo_timeout_cb(void* arg)
         /* cancel the Mercury op if the forward timed out */
         HG_Cancel(req->handle);
     }
+    if(req->type == MARGO_RESPONSE_REQUEST) {
+        /* cancel the Mercury op if the response timed out */
+        HG_Cancel(req->handle);
+    }
     if(req->type == MARGO_BULK_REQUEST) {
         /* cancel the Mercury op if the bulk transfer timed out */
         HG_Bulk_cancel(req->bulk_op);
@@ -1272,6 +1276,7 @@ margo_instance_id margo_request_get_instance(margo_request req)
 
 static hg_return_t
 margo_irespond_internal(hg_handle_t   handle,
+                        double        timeout_ms,
                         void*         out_struct,
                         margo_request req) /* should have been allocated */
 {
@@ -1294,7 +1299,7 @@ margo_irespond_internal(hg_handle_t   handle,
     /* monitoring */
     struct margo_monitor_respond_args monitoring_args = {.handle = handle,
                                                          .data   = out_struct,
-                                                         .timeout_ms = 0.0,
+                                                         .timeout_ms = timeout_ms,
                                                          .error      = false,
                                                          .request    = req,
                                                          .ret = HG_SUCCESS};
@@ -1313,6 +1318,26 @@ margo_irespond_internal(hg_handle_t   handle,
         }
     }
 
+    if (timeout_ms > 0) {
+        /* set a timer object to expire when this response times out */
+        hret = margo_timer_create_with_pool(mid, margo_timeout_cb, req,
+                                            ABT_POOL_NULL, &req->timer);
+        if (hret != HG_SUCCESS) {
+            // LCOV_EXCL_START
+            margo_error(mid, "in %s: could not create timer", __func__);
+            goto finish;
+            // LCOV_EXCL_END
+        }
+        hret = margo_timer_start(req->timer, timeout_ms);
+        if (hret != HG_SUCCESS) {
+            // LCOV_EXCL_START
+            margo_timer_destroy(req->timer);
+            margo_error(mid, "in %s: could not start timer", __func__);
+            goto finish;
+            // LCOV_EXCL_END
+        }
+    }
+
     // create the margo_respond_proc_args for the serializer
     struct margo_respond_proc_args respond_args
         = {.handle    = handle,
@@ -1322,6 +1347,15 @@ margo_irespond_internal(hg_handle_t   handle,
            .header    = {.hg_ret = HG_SUCCESS}};
 
     hret = HG_Respond(handle, margo_cb, (void*)req, (void*)&respond_args);
+
+    /* remove timer if HG_Respond failed */
+    if (hret != HG_SUCCESS && req->timer) {
+        // LCOV_EXCL_START
+        margo_timer_cancel(req->timer);
+        margo_timer_destroy(req->timer);
+        req->timer = NULL;
+        // LCOV_EXCL_END
+    }
 
     if (hret == HG_SUCCESS) { PROGRESS_NEEDED_INCR(mid); }
 
@@ -1365,7 +1399,25 @@ hg_return_t margo_respond(hg_handle_t handle, void* out_struct)
 
     hg_return_t                 hret;
     struct margo_request_struct reqs = {0};
-    hret = margo_irespond_internal(handle, out_struct, &reqs);
+    hret = margo_irespond_internal(handle, 0, out_struct, &reqs);
+    if (hret != HG_SUCCESS) return hret;
+    return margo_wait_internal(&reqs);
+}
+
+hg_return_t
+margo_respond_timed(hg_handle_t handle, void* out_struct, double timeout_ms)
+{
+
+    margo_instance_id mid = margo_hg_handle_get_instance(handle);
+    if (mid == NULL) {
+        margo_error(NULL,
+                    "Could not get margo instance in margo_respond_timed()");
+        return (HG_OTHER_ERROR);
+    }
+
+    hg_return_t                 hret;
+    struct margo_request_struct reqs = {0};
+    hret = margo_irespond_internal(handle, timeout_ms, out_struct, &reqs);
     if (hret != HG_SUCCESS) return hret;
     return margo_wait_internal(&reqs);
 }
@@ -1377,7 +1429,25 @@ margo_irespond(hg_handle_t handle, void* out_struct, margo_request* req)
     margo_instance_id mid     = margo_hg_handle_get_instance(handle);
     margo_request     tmp_req = mochi_arena_get(mid->request_arena);
     if (!tmp_req) { return (HG_NOMEM_ERROR); }
-    hret = margo_irespond_internal(handle, out_struct, tmp_req);
+    hret = margo_irespond_internal(handle, 0, out_struct, tmp_req);
+    if (hret != HG_SUCCESS) {
+        mochi_arena_release(mid->request_arena, tmp_req);
+        return hret;
+    }
+    *req = tmp_req;
+    return HG_SUCCESS;
+}
+
+hg_return_t margo_irespond_timed(hg_handle_t    handle,
+                                 void*          out_struct,
+                                 double         timeout_ms,
+                                 margo_request* req)
+{
+    hg_return_t       hret;
+    margo_instance_id mid     = margo_hg_handle_get_instance(handle);
+    margo_request     tmp_req = mochi_arena_get(mid->request_arena);
+    if (!tmp_req) { return (HG_NOMEM_ERROR); }
+    hret = margo_irespond_internal(handle, timeout_ms, out_struct, tmp_req);
     if (hret != HG_SUCCESS) {
         mochi_arena_release(mid->request_arena, tmp_req);
         return hret;
@@ -1398,7 +1468,28 @@ hg_return_t margo_crespond(hg_handle_t handle,
     tmp_req->kind             = MARGO_REQ_CALLBACK;
     tmp_req->callback.cb    = on_complete;
     tmp_req->callback.uargs = uargs;
-    hret = margo_irespond_internal(handle, out_struct, tmp_req);
+    hret = margo_irespond_internal(handle, 0, out_struct, tmp_req);
+    if (hret != HG_SUCCESS) {
+        mochi_arena_release(mid->request_arena, tmp_req);
+        return hret;
+    }
+    return HG_SUCCESS;
+}
+
+hg_return_t margo_crespond_timed(hg_handle_t handle,
+                                 void*       out_struct,
+                                 double      timeout_ms,
+                                 void (*on_complete)(void*, hg_return_t),
+                                 void* uargs)
+{
+    hg_return_t       hret;
+    margo_instance_id mid     = margo_hg_handle_get_instance(handle);
+    margo_request     tmp_req = mochi_arena_get(mid->request_arena);
+    if (!tmp_req) { return (HG_NOMEM_ERROR); }
+    tmp_req->kind             = MARGO_REQ_CALLBACK;
+    tmp_req->callback.cb    = on_complete;
+    tmp_req->callback.uargs = uargs;
+    hret = margo_irespond_internal(handle, timeout_ms, out_struct, tmp_req);
     if (hret != HG_SUCCESS) {
         mochi_arena_release(mid->request_arena, tmp_req);
         return hret;
