@@ -296,6 +296,7 @@ struct margo_monitor_forward_args {
     hg_handle_t   handle;
     const void*   data;
     double        timeout_ms;
+    uint64_t      trace_id;
     margo_request request;
     /* output */
     hg_return_t ret;
@@ -363,6 +364,7 @@ struct margo_monitor_rpc_handler_args {
     /* input */
     hg_handle_t handle;
     hg_id_t     parent_rpc_id;
+    uint64_t    parent_trace_id;
     /* output */
     ABT_pool    pool;
     hg_return_t ret;

@@ -58,8 +58,7 @@ static hg_id_t margo_register_internal(margo_instance_id mid,
                                        ABT_pool          pool);
 
 static hg_return_t check_error_in_output(hg_handle_t out);
-static hg_return_t check_parent_id_in_input(hg_handle_t handle,
-                                            hg_id_t*    parent_id);
+static hg_return_t check_parent_id_in_input(hg_handle_t handle, hg_id_t* parent_id, uint64_t* parent_trace_id);
 
 margo_instance_id margo_init(const char* addr_str,
                              int         mode,
@@ -968,6 +967,9 @@ static void margo_timeout_cb(void* arg)
     }
 }
 
+/* incremental per-process id for forward/respond monitoring */
+static _Atomic uint64_t trace_id_counter = 0;
+
 static hg_return_t margo_provider_iforward_internal(
     uint16_t      provider_id,
     hg_handle_t   handle,
@@ -1007,12 +1009,14 @@ static hg_return_t margo_provider_iforward_internal(
     }
 
     /* monitoring */
+    uint64_t trace_id = ++trace_id_counter;
     struct margo_monitor_forward_args monitoring_args
         = {.provider_id = provider_id,
            .handle      = handle,
            .data        = in_struct,
            .timeout_ms  = timeout_ms,
            .request     = req,
+           .trace_id    = trace_id,
            .ret         = HG_SUCCESS};
     __MARGO_MONITOR(mid, FN_START, forward, monitoring_args);
 
@@ -1120,7 +1124,7 @@ static hg_return_t margo_provider_iforward_internal(
            .request   = req,
            .user_args = (void*)in_struct,
            .user_cb   = in_cb,
-           .header    = {.parent_rpc_id = parent_rpc_id}};
+           .header    = {.parent_rpc_id = parent_rpc_id, .parent_trace_id = trace_id}};
 
     hret = HG_Forward(handle, margo_cb, (void*)req, (void*)&forward_args);
 
@@ -2442,8 +2446,10 @@ void __margo_internal_pre_handler_hooks(
     struct margo_monitor_rpc_handler_args* monitoring_args)
 {
     hg_id_t parent_id = 0;
-    check_parent_id_in_input(handle, &parent_id);
+    uint64_t parent_trace_id = 0;
+    check_parent_id_in_input(handle, &parent_id, &parent_trace_id);
     monitoring_args->parent_rpc_id = parent_id;
+    monitoring_args->parent_trace_id = parent_trace_id;
 
     /* monitoring */
     __MARGO_MONITOR(mid, FN_START, rpc_handler, (*monitoring_args));
@@ -2601,7 +2607,7 @@ hg_return_t check_error_in_output(hg_handle_t handle)
     return hret;
 }
 
-hg_return_t check_parent_id_in_input(hg_handle_t handle, hg_id_t* parent_id)
+hg_return_t check_parent_id_in_input(hg_handle_t handle, hg_id_t* parent_id, uint64_t* parent_trace_id)
 {
     struct margo_forward_proc_args forward_args
         = {.user_args = NULL, .user_cb = NULL};
@@ -2612,6 +2618,7 @@ hg_return_t check_parent_id_in_input(hg_handle_t handle, hg_id_t* parent_id)
     // whole input.
     if (hret != HG_SUCCESS && hret != HG_CHECKSUM_ERROR) return hret;
     *parent_id = forward_args.header.parent_rpc_id;
+    *parent_trace_id = forward_args.header.parent_trace_id;
     if (hret == HG_CHECKSUM_ERROR) return HG_SUCCESS;
     HG_Free_input(handle, (void*)&forward_args);
     return HG_SUCCESS;
