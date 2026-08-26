@@ -285,11 +285,11 @@ void margo_finalize(margo_instance_id mid)
     ABT_thread_join(mid->hg_progress_tid);
     ABT_thread_free(&mid->hg_progress_tid);
     PROGRESS_NEEDED_DECR(mid);
-    mid->refcount--;
 
     ABT_mutex_lock(mid->finalize_mutex);
     mid->finalize_flag = true;
     margo_call_finalization_callbacks(mid);
+    mid->refcount--;
     do_cleanup = mid->finalize_refcount == 0 && mid->refcount == 0;
 
     ABT_mutex_unlock(mid->finalize_mutex);
