@@ -101,6 +101,10 @@ struct margo_instance {
     ABT_cond                  finalize_cond;
     struct margo_finalize_cb* finalize_cb;
     struct margo_finalize_cb* prefinalize_cb;
+    /* protects the finalize_cb and prefinalize_cb lists against concurrent
+       push/pop/top (e.g. several providers being destroyed at once on the same
+       instance) and against the finalize-time consumers below */
+    ABT_mutex_memory          finalize_cb_mtx;
 
     /* control logic to prevent margo_finalize from destroying the instance
        while operations are pending. The pending-operation count and the

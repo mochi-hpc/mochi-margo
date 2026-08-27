@@ -120,6 +120,11 @@ add_executable (margo-migrate-progress
     helper-server.c
 )
 
+add_executable (margo-finalize-cb
+    munit/munit.c
+    margo-finalize-cb.c
+)
+
 target_link_libraries (margo-addr margo)
 target_link_libraries (margo-init margo)
 target_link_libraries (margo-identity margo)
@@ -140,6 +145,7 @@ target_link_libraries (margo-forward margo margo-hg-shim)
 target_link_libraries (margo-monitoring margo)
 target_link_libraries (margo-sanity-warnings margo)
 target_link_libraries (margo-migrate-progress margo)
+target_link_libraries (margo-finalize-cb margo)
 
 add_test (NAME margo-addr COMMAND margo-addr)
 add_test (NAME margo-init COMMAND margo-init)
@@ -161,3 +167,4 @@ add_test (NAME margo-forward COMMAND margo-forward)
 add_test (NAME margo-monitoring COMMAND margo-monitoring)
 add_test (NAME margo-sanity-warnings COMMAND margo-sanity-warnings)
 add_test (NAME margo-migrate-progress COMMAND margo-migrate-progress)
+add_test (NAME margo-finalize-cb COMMAND margo-finalize-cb)

@@ -117,13 +117,18 @@ static void margo_call_finalization_callbacks(margo_instance_id mid)
 {
     /* call finalize callbacks */
     MARGO_TRACE(mid, "Calling finalize callbacks");
-    struct margo_finalize_cb* fcb = mid->finalize_cb;
-    while (fcb) {
-        mid->finalize_cb = fcb->next;
+    ABT_mutex mtx = ABT_MUTEX_MEMORY_GET_HANDLE(&mid->finalize_cb_mtx);
+    /* Detach the head under the lock, then invoke the callback with the lock
+       released: callbacks may themselves push/pop callbacks (which take the same
+       lock), and the list may be mutated concurrently by other threads. */
+    while (1) {
+        ABT_mutex_lock(mtx);
+        struct margo_finalize_cb* fcb = mid->finalize_cb;
+        if (fcb) mid->finalize_cb = fcb->next;
+        ABT_mutex_unlock(mtx);
+        if (!fcb) break;
         (fcb->callback)(fcb->uargs);
-        struct margo_finalize_cb* tmp = fcb;
-        fcb                           = mid->finalize_cb;
-        free(tmp);
+        free(fcb);
     }
 }
 
@@ -263,13 +268,15 @@ void margo_finalize(margo_instance_id mid)
     struct margo_monitor_prefinalize_args monitoring_args = {0};
     __MARGO_MONITOR(mid, FN_START, prefinalize, monitoring_args);
 
-    struct margo_finalize_cb* fcb = mid->prefinalize_cb;
-    while (fcb) {
-        mid->prefinalize_cb = fcb->next;
+    ABT_mutex prefinalize_mtx = ABT_MUTEX_MEMORY_GET_HANDLE(&mid->finalize_cb_mtx);
+    while (1) {
+        ABT_mutex_lock(prefinalize_mtx);
+        struct margo_finalize_cb* fcb = mid->prefinalize_cb;
+        if (fcb) mid->prefinalize_cb = fcb->next;
+        ABT_mutex_unlock(prefinalize_mtx);
+        if (!fcb) break;
         (fcb->callback)(fcb->uargs);
-        struct margo_finalize_cb* tmp = fcb;
-        fcb                           = mid->prefinalize_cb;
-        free(tmp);
+        free(fcb);
     }
 
     /* monitoring */
@@ -393,9 +400,11 @@ void margo_provider_push_prefinalize_callback(margo_instance_id         mid,
     fcb->callback = cb;
     fcb->uargs    = uargs;
 
-    struct margo_finalize_cb* next = mid->prefinalize_cb;
-    fcb->next                      = next;
-    mid->prefinalize_cb            = fcb;
+    ABT_mutex mtx = ABT_MUTEX_MEMORY_GET_HANDLE(&mid->finalize_cb_mtx);
+    ABT_mutex_lock(mtx);
+    fcb->next           = mid->prefinalize_cb;
+    mid->prefinalize_cb = fcb;
+    ABT_mutex_unlock(mtx);
 }
 
 int margo_provider_top_prefinalize_callback(margo_instance_id          mid,
@@ -403,29 +412,40 @@ int margo_provider_top_prefinalize_callback(margo_instance_id          mid,
                                             margo_finalize_callback_t* cb,
                                             void**                     uargs)
 {
+    ABT_mutex mtx = ABT_MUTEX_MEMORY_GET_HANDLE(&mid->finalize_cb_mtx);
+    ABT_mutex_lock(mtx);
     struct margo_finalize_cb* fcb = mid->prefinalize_cb;
     while (fcb != NULL && fcb->owner != owner) { fcb = fcb->next; }
-    if (fcb == NULL) return 0;
-    if (cb) *cb = fcb->callback;
-    if (uargs) *uargs = fcb->uargs;
-    return 1;
+    int found = 0;
+    if (fcb != NULL) {
+        if (cb) *cb = fcb->callback;
+        if (uargs) *uargs = fcb->uargs;
+        found = 1;
+    }
+    ABT_mutex_unlock(mtx);
+    return found;
 }
 
 int margo_provider_pop_prefinalize_callback(margo_instance_id mid,
                                             const void*       owner)
 {
+    ABT_mutex mtx = ABT_MUTEX_MEMORY_GET_HANDLE(&mid->finalize_cb_mtx);
+    ABT_mutex_lock(mtx);
     struct margo_finalize_cb* prev = NULL;
     struct margo_finalize_cb* fcb  = mid->prefinalize_cb;
     while (fcb != NULL && fcb->owner != owner) {
         prev = fcb;
         fcb  = fcb->next;
     }
-    if (fcb == NULL) return 0;
-    if (prev == NULL) {
-        mid->prefinalize_cb = fcb->next;
-    } else {
-        prev->next = fcb->next;
+    if (fcb != NULL) {
+        if (prev == NULL) {
+            mid->prefinalize_cb = fcb->next;
+        } else {
+            prev->next = fcb->next;
+        }
     }
+    ABT_mutex_unlock(mtx);
+    if (fcb == NULL) return 0;
     free(fcb);
     return 1;
 }
@@ -462,26 +482,33 @@ void margo_provider_push_finalize_callback(margo_instance_id         mid,
     fcb->callback = cb;
     fcb->uargs    = uargs;
 
-    struct margo_finalize_cb* next = mid->finalize_cb;
-    fcb->next                      = next;
-    mid->finalize_cb               = fcb;
+    ABT_mutex mtx = ABT_MUTEX_MEMORY_GET_HANDLE(&mid->finalize_cb_mtx);
+    ABT_mutex_lock(mtx);
+    fcb->next        = mid->finalize_cb;
+    mid->finalize_cb = fcb;
+    ABT_mutex_unlock(mtx);
 }
 
 int margo_provider_pop_finalize_callback(margo_instance_id mid,
                                          const void*       owner)
 {
+    ABT_mutex mtx = ABT_MUTEX_MEMORY_GET_HANDLE(&mid->finalize_cb_mtx);
+    ABT_mutex_lock(mtx);
     struct margo_finalize_cb* prev = NULL;
     struct margo_finalize_cb* fcb  = mid->finalize_cb;
     while (fcb != NULL && fcb->owner != owner) {
         prev = fcb;
         fcb  = fcb->next;
     }
-    if (fcb == NULL) return 0;
-    if (prev == NULL) {
-        mid->finalize_cb = fcb->next;
-    } else {
-        prev->next = fcb->next;
+    if (fcb != NULL) {
+        if (prev == NULL) {
+            mid->finalize_cb = fcb->next;
+        } else {
+            prev->next = fcb->next;
+        }
     }
+    ABT_mutex_unlock(mtx);
+    if (fcb == NULL) return 0;
     free(fcb);
     return 1;
 }
@@ -491,12 +518,18 @@ int margo_provider_top_finalize_callback(margo_instance_id          mid,
                                          margo_finalize_callback_t* cb,
                                          void**                     uargs)
 {
+    ABT_mutex mtx = ABT_MUTEX_MEMORY_GET_HANDLE(&mid->finalize_cb_mtx);
+    ABT_mutex_lock(mtx);
     struct margo_finalize_cb* fcb = mid->finalize_cb;
     while (fcb != NULL && fcb->owner != owner) { fcb = fcb->next; }
-    if (fcb == NULL) return 0;
-    if (cb) *cb = fcb->callback;
-    if (uargs) *uargs = fcb->uargs;
-    return 1;
+    int found = 0;
+    if (fcb != NULL) {
+        if (cb) *cb = fcb->callback;
+        if (uargs) *uargs = fcb->uargs;
+        found = 1;
+    }
+    ABT_mutex_unlock(mtx);
+    return found;
 }
 
 void margo_enable_remote_shutdown(margo_instance_id mid)
