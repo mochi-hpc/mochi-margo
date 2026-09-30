@@ -920,14 +920,15 @@ static hg_return_t margo_cb(const struct hg_cb_info* info)
         margo_timer_destroy(req->timer);
     }
 
-    if (req->kind == MARGO_REQ_CALLBACK) {
-        if (req->callback.cb) req->callback.cb(req->callback.uargs, hret);
-    } else {
-        req->eventual.hret = hret;
-        MARGO_EVENTUAL_SET(req->eventual.ev);
-    }
-
-    /* monitoring */
+    /* monitoring
+     *
+     * The FN_END callback must run before the waiter is woken (or the user
+     * callback is invoked). Waking the waiter lets the handler ULT return
+     * from margo_respond/margo_forward and call margo_destroy, which recycles
+     * the monitor session read here; it also unwinds the stack frame that owns
+     * an eventual request. Either would make the reads below a use-after-free.
+     * See issue #322.
+     */
     monitoring_args.ret = hret;
     switch (info->type) {
     case HG_CB_FORWARD:
@@ -942,6 +943,13 @@ static hg_return_t margo_cb(const struct hg_cb_info* info)
     default:
         break;
     };
+
+    if (req->kind == MARGO_REQ_CALLBACK) {
+        if (req->callback.cb) req->callback.cb(req->callback.uargs, hret);
+    } else {
+        req->eventual.hret = hret;
+        MARGO_EVENTUAL_SET(req->eventual.ev);
+    }
 
     // a callback-based request comes from the instance's request arena but is
     // not handed to the user, hence it has to be released here.
