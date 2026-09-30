@@ -17,6 +17,7 @@
 #include "margo-util.h"
 #include "margo-prio-pool.h"
 #include "abtx_prof.h"
+#include <dlfcn.h>
 
 // Validates the format of the configuration and
 // fill default values if they are note provided
@@ -65,6 +66,51 @@ int margo_set_environment(const char* optional_json_config)
     return (0);
 }
 
+static int margo_init_monitor(struct margo_monitor** monitor)
+{
+    const char* monitor_so = getenv("MARGO_MONITOR_LIBRARY");
+    if(monitor_so) {
+        // load external monitoring module
+        dlerror();
+        void* so_handle = dlopen(monitor_so, RTLD_NOW | RTLD_GLOBAL);
+        if(!so_handle) {
+            MARGO_ERROR(0, "Failed to dlopen monitoring library \"%s\": %s",
+                        monitor_so, dlerror());
+            return (0);
+        }
+
+        int (*init_handle)(struct margo_monitor**)
+            = dlsym(so_handle, "margo_monitor_init");
+        if(!init_handle) {
+            const char* dlsym_err = dlerror();
+            MARGO_ERROR(0, "Failed to find \"margo_monitor_init\" symbol in \"%s\": %s",
+                        monitor_so, dlsym_err ? dlsym_err : "symbol not found");
+            dlclose(so_handle);
+            return (0);
+        }
+
+        if(init_handle(monitor) != 0) {
+            MARGO_ERROR(0,
+                        "\"margo_monitor_init\" from \"%s\" returned an error",
+                        monitor_so);
+            dlclose(so_handle);
+            *monitor = NULL;
+            return (0);
+        }
+
+        MARGO_TRACE(0, "Monitoring library \"%s\" initialized successfully",
+                    monitor_so);
+
+        return (0);
+    }
+
+    if (getenv("MARGO_ENABLE_MONITORING")) {
+        *monitor = margo_default_monitor;
+    }
+
+    return (0);
+}
+
 margo_instance_id margo_init_ext(const char*                   address,
                                  int                           mode,
                                  const struct margo_init_info* uargs)
@@ -83,8 +129,8 @@ margo_instance_id margo_init_ext(const char*                   address,
         = {HG_INIT_INFO_INITIALIZER, NULL, NULL, HG_ADDR_NULL, NULL, 0};
     struct margo_abt abt = {0};
 
-    if (getenv("MARGO_ENABLE_MONITORING") && !args.monitor) {
-        args.monitor = margo_default_monitor;
+    if(!args.monitor) {
+        margo_init_monitor(&args.monitor);
     }
 
     if (args.json_config && strlen(args.json_config) > 0) {
