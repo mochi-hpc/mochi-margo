@@ -78,15 +78,14 @@ void __margo_handle_cache_destroy(margo_instance_id mid)
 {
     struct margo_handle_cache_el *el, *tmp;
 
-    /* only free elements still on the free list -- handles currently in use are
-     * owned by the application and will be released via margo_destroy.
-     * HG_Destroy releases each handle's attached data via __margo_handle_data_free. */
-    LL_FOREACH_SAFE(mid->free_handle_list, el, tmp)
-    {
-        LL_DELETE(mid->free_handle_list, el);
-        HG_Destroy(el->handle);
-        free(el);
-    }
+    /* Destroy the handles still on the free list. HG_Destroy brings each handle
+     * to a zero reference count and runs __margo_handle_data_free, which frees
+     * both the attached handle data and this cache element (see that function).
+     * Do not touch el after HG_Destroy, and do not free it here, or it would be
+     * a double free. Handles that are in use are owned by the application and
+     * are freed the same way when it destroys them. */
+    LL_FOREACH_SAFE(mid->free_handle_list, el, tmp) { HG_Destroy(el->handle); }
+    mid->free_handle_list = NULL;
 
     ABT_mutex_free(&mid->handle_cache_mtx);
 

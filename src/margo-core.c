@@ -2541,9 +2541,22 @@ void __margo_handle_data_free(void* args)
     if (!handle_data) return;
     if (handle_data->user_free_callback)
         handle_data->user_free_callback(handle_data->user_data);
-    /* return the object to the instance's handle-data arena; cache-origin data
-     * that was never used for an RPC has a NULL mid (only cache_el is set at
-     * cache init), so fall back to free() for those */
+    if (handle_data->cache_el) {
+        /* The handle came from the handle cache. Both the cache element and this
+         * data were allocated by the cache with malloc/calloc (not from the
+         * handle-data arena, which did not exist yet at cache init), so free
+         * them directly. This runs when a cached handle is actually destroyed:
+         * at instance teardown for handles still on the free list, or when the
+         * last reference to an in-use handle is dropped (which can happen even
+         * after the application called margo_destroy, if a forward completion
+         * released its reference only after the waiter resumed). Either way the
+         * cache element is reclaimed here, so it is never orphaned. */
+        free(handle_data->cache_el);
+        free(handle_data);
+        return;
+    }
+    /* Otherwise the data came from the instance's handle-data arena when mid is
+     * set; a NULL mid means it was never bound to an instance, so free it. */
     margo_instance_id mid = handle_data->mid;
     if (mid)
         mochi_arena_release(mid->handle_data_arena, handle_data);
