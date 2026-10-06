@@ -93,6 +93,10 @@ struct margo_instance {
     /* list of rpcs registered on this instance for debugging and profiling
      * purposes */
     struct margo_registered_rpc* registered_rpcs;
+    /* serializes RPC registration (explicit via margo_provider_register_name and
+     * lazy via margo_provider_iforward_internal) so two threads never register
+     * the same id at once. Mercury assumes a single thread edits a given id. */
+    ABT_mutex_memory registration_mtx;
 
     /* control logic for callers waiting on margo to be finalized */
     _Atomic bool              finalize_flag;

@@ -590,7 +590,13 @@ hg_id_t margo_provider_register_name(margo_instance_id mid,
     tmp_rpc = calloc(1, sizeof(*tmp_rpc));
     if (!tmp_rpc) return (0);
     strncpy(tmp_rpc->func_name, func_name, 63);
-    tmp_rpc->id          = id;
+    tmp_rpc->id = id;
+
+    /* serialize with the lazy registration done in the forward path so the two
+     * never register the same id at once, and so the registered_rpcs list is not
+     * edited concurrently (see issue #325) */
+    ABT_mutex_lock(ABT_MUTEX_MEMORY_GET_HANDLE(&mid->registration_mtx));
+
     tmp_rpc->next        = mid->registered_rpcs;
     mid->registered_rpcs = tmp_rpc;
     mid->num_registered_rpcs++;
@@ -601,8 +607,9 @@ hg_id_t margo_provider_register_name(margo_instance_id mid,
         mid->registered_rpcs = tmp_rpc->next;
         free(tmp_rpc);
         mid->num_registered_rpcs--;
-        return (id);
     }
+
+    ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&mid->registration_mtx));
 
     return (id);
 }
@@ -627,8 +634,11 @@ hg_return_t margo_deregister(margo_instance_id mid, hg_id_t rpc_id)
         __margo_abt_unlock(mid->abt);
     }
 
-    /* deregister */
+    /* deregister (serialized with registration so a given id is never edited by
+     * two threads at once; see issue #325) */
+    ABT_mutex_lock(ABT_MUTEX_MEMORY_GET_HANDLE(&mid->registration_mtx));
     hg_return_t hret = HG_Deregister(mid->hg.hg_class, rpc_id);
+    ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&mid->registration_mtx));
 
     /* monitoring */
     monitoring_args.ret = hret;
@@ -1074,41 +1084,53 @@ static hg_return_t margo_provider_iforward_internal(
     if (!is_registered) {
 
         /* if Mercury does not recognize this ID (with provider id included)
-         * then register it now
-         */
+         * then register it now. Serialize with the registration mutex so two
+         * ULTs cannot both register the same id: Mercury assumes a single
+         * thread edits a given id, and a duplicate HG_Register would free the
+         * hg_core_rpc_info a concurrent handle still caches (see issue #325). */
+        ABT_mutex_lock(ABT_MUTEX_MEMORY_GET_HANDLE(&mid->registration_mtx));
 
-        /* find out if disable_response was called for this RPC */
-        // TODO this information could be added to margo_handle_data
-        hg_bool_t response_disabled;
-        hret = HG_Registered_disabled_response(mid->hg.hg_class, client_id,
-                                               &response_disabled);
-        if (hret != HG_SUCCESS) {
-            // LCOV_EXCL_START
-            margo_error(mid,
-                        "in %s: HG_Registered_disabled_response failed: %s",
-                        __func__, HG_Error_to_string(hret));
-            goto finish;
-            // LCOV_EXCL_END
+        /* re-check under the lock: another ULT may have registered the id while
+         * we waited for the lock */
+        hret = HG_Registered(mid->hg.hg_class, server_id, &is_registered);
+        if (hret == HG_SUCCESS && !is_registered) {
+
+            /* find out if disable_response was called for this RPC */
+            // TODO this information could be added to margo_handle_data
+            hg_bool_t response_disabled;
+            hret = HG_Registered_disabled_response(mid->hg.hg_class, client_id,
+                                                   &response_disabled);
+            if (hret == HG_SUCCESS) {
+                /* register new ID that includes provider id */
+                hg_id_t id = margo_register_internal(
+                    mid, handle_data->rpc_name, server_id, in_cb, out_cb,
+                    _handler_for_NULL, ABT_POOL_NULL);
+                if (id == 0) {
+                    // LCOV_EXCL_START
+                    hret = HG_OTHER_ERROR;
+                    // LCOV_EXCL_END
+                } else {
+                    hret = HG_Registered_disable_response(
+                        hgi->hg_class, server_id, response_disabled);
+                    if (hret != HG_SUCCESS) {
+                        margo_error(mid,
+                                    "in %s: HG_Registered_disable_response "
+                                    "failed: %s",
+                                    __func__, HG_Error_to_string(hret));
+                    }
+                }
+            } else {
+                // LCOV_EXCL_START
+                margo_error(mid,
+                            "in %s: HG_Registered_disabled_response failed: %s",
+                            __func__, HG_Error_to_string(hret));
+                // LCOV_EXCL_END
+            }
         }
 
-        /* register new ID that includes provider id */
-        hg_id_t id = margo_register_internal(mid, handle_data->rpc_name,
-                                             server_id, in_cb, out_cb,
-                                             _handler_for_NULL, ABT_POOL_NULL);
-        if (id == 0) {
-            // LCOV_EXCL_START
-            hret = HG_OTHER_ERROR;
-            goto finish;
-            // LCOV_EXCL_END
-        }
+        ABT_mutex_unlock(ABT_MUTEX_MEMORY_GET_HANDLE(&mid->registration_mtx));
 
-        hret = HG_Registered_disable_response(hgi->hg_class, server_id,
-                                              response_disabled);
-        if (hret != HG_SUCCESS) {
-            margo_error(mid, "in %s: HG_Registered_disable_response failed: %s",
-                        __func__, HG_Error_to_string(hret));
-            goto finish;
-        }
+        if (hret != HG_SUCCESS) goto finish;
     }
 
     hret = HG_Reset(handle, hgi->addr, server_id);
