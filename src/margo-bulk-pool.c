@@ -54,17 +54,23 @@ hg_return_t margo_bulk_pool_create(margo_instance_id  mid,
         goto err;
     }
 
-    p = malloc(sizeof(*p));
+    /* calloc so the error path sees a zeroed struct (bulks == NULL,
+     * count == 0, buf == NULL) should any allocation below fail. */
+    p = calloc(1, sizeof(*p));
     if (p == NULL) {
         hret = HG_NOMEM_ERROR;
         goto err;
     }
 
-    ret = posix_memalign(&p->buf, 4096, size * count);
+    /* posix_memalign leaves *memptr unspecified on failure, so keep its
+     * result in a local and store it only after the call succeeds. */
+    void* buf = NULL;
+    ret       = posix_memalign(&buf, 4096, size * count);
     if (ret != 0) {
         hret = HG_NOMEM_ERROR;
         goto err;
     }
+    p->buf = buf;
 
     p->mid      = mid;
     p->count    = count;
