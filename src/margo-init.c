@@ -68,11 +68,12 @@ int margo_set_environment(const char* optional_json_config)
 
 static int margo_init_monitor(struct margo_monitor** monitor)
 {
+//#ifdef ENABLE_DYNAMIC_MONITORING
     const char* monitor_so = getenv("MARGO_MONITOR_LIBRARY");
     if(monitor_so) {
         // load external monitoring module
         dlerror();
-        void* so_handle = dlopen(monitor_so, RTLD_NOW | RTLD_GLOBAL);
+        void* so_handle = dlopen(monitor_so, RTLD_NOW | RTLD_LOCAL);
         if(!so_handle) {
             MARGO_ERROR(0, "Failed to dlopen monitoring library \"%s\": %s",
                         monitor_so, dlerror());
@@ -103,6 +104,7 @@ static int margo_init_monitor(struct margo_monitor** monitor)
 
         return (0);
     }
+//#endif
 
     if (getenv("MARGO_ENABLE_MONITORING")) {
         *monitor = margo_default_monitor;
