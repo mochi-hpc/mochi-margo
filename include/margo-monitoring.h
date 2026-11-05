@@ -115,6 +115,27 @@ struct json_object; /* forward declaration to avoid including json-c */
 extern struct margo_monitor* margo_default_monitor;
 
 /**
+ * A monitoring library can be loaded at run time via the margo configuration.
+ * Monitoring must first be enabled by setting the MARGO_ENABLE_MONITORING
+ * environment variable; without it no monitor is installed, even if a library
+ * is configured. When enabled, setting the "library" field of the "monitoring"
+ * object to the path of a shared library makes margo load that library and call
+ * a function named "margo_monitor_init" (with the margo_monitor_init_fn
+ * signature below) to obtain the margo_monitor to install in the instance. If
+ * no library is configured, the built-in default monitor is used. The function
+ * must set *monitor to a valid margo_monitor and return 0 on success, or return
+ * a non-zero value on failure, in which case margo_init_ext fails.
+ *
+ * The returned margo_monitor should set at least its "initialize", "name" and
+ * "config" hooks to be configurable through the "monitoring" object:
+ *  - "initialize" receives the "monitoring.config" object and returns the
+ *    monitor state;
+ *  - "name" and "config" are called when margo serializes its configuration,
+ *    and are written back as "monitoring.name" and "monitoring.config".
+ */
+typedef int (*margo_monitor_init_fn)(struct margo_monitor** monitor);
+
+/**
  * The margo_monitor_data_t union is used in all the
  * margo_monitor_*_args structures so that developers
  * of a custom monitoring system can pass some data

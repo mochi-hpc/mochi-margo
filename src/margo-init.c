@@ -66,37 +66,56 @@ int margo_set_environment(const char* optional_json_config)
     return (0);
 }
 
-static int margo_init_monitor(struct margo_monitor** monitor)
+// Resolves the monitoring backend to install. Monitoring is enabled only when
+// the MARGO_ENABLE_MONITORING environment variable is set; otherwise no monitor
+// is installed, even if the configuration provides a monitoring library. When
+// enabled, the "library" field of the "monitoring" configuration object (passed
+// as the "monitoring" argument, which may be NULL) selects a shared library to
+// load: margo calls its "margo_monitor_init" symbol to obtain the monitor. If
+// no library is provided, the built-in default monitor is used. Returns 0 on
+// success, -1 on failure (a requested library could not be loaded or
+// initialized).
+static int margo_init_monitor(struct margo_monitor** monitor,
+                              struct json_object*    monitoring)
 {
-//#ifdef ENABLE_DYNAMIC_MONITORING
-    const char* monitor_so = getenv("MARGO_MONITOR_LIBRARY");
-    if(monitor_so) {
+    // MARGO_ENABLE_MONITORING is the master switch: no monitoring without it
+    if (!getenv("MARGO_ENABLE_MONITORING")) return (0);
+
+    const char* monitor_so = NULL;
+    if (monitoring) {
+        struct json_object* library
+            = json_object_object_get(monitoring, "library");
+        if (library) monitor_so = json_object_get_string(library);
+    }
+
+    if (monitor_so) {
         // load external monitoring module
         dlerror();
         void* so_handle = dlopen(monitor_so, RTLD_NOW | RTLD_LOCAL);
-        if(!so_handle) {
+        if (!so_handle) {
             MARGO_ERROR(0, "Failed to dlopen monitoring library \"%s\": %s",
                         monitor_so, dlerror());
-            return (0);
+            return (-1);
         }
 
-        int (*init_handle)(struct margo_monitor**)
-            = dlsym(so_handle, "margo_monitor_init");
-        if(!init_handle) {
+        margo_monitor_init_fn init_handle
+            = (margo_monitor_init_fn)dlsym(so_handle, "margo_monitor_init");
+        if (!init_handle) {
             const char* dlsym_err = dlerror();
-            MARGO_ERROR(0, "Failed to find \"margo_monitor_init\" symbol in \"%s\": %s",
-                        monitor_so, dlsym_err ? dlsym_err : "symbol not found");
+            MARGO_ERROR(
+                0, "Failed to find \"margo_monitor_init\" symbol in \"%s\": %s",
+                monitor_so, dlsym_err ? dlsym_err : "symbol not found");
             dlclose(so_handle);
-            return (0);
+            return (-1);
         }
 
-        if(init_handle(monitor) != 0) {
+        if (init_handle(monitor) != 0) {
             MARGO_ERROR(0,
                         "\"margo_monitor_init\" from \"%s\" returned an error",
                         monitor_so);
             dlclose(so_handle);
             *monitor = NULL;
-            return (0);
+            return (-1);
         }
 
         MARGO_TRACE(0, "Monitoring library \"%s\" initialized successfully",
@@ -104,11 +123,9 @@ static int margo_init_monitor(struct margo_monitor** monitor)
 
         return (0);
     }
-//#endif
 
-    if (getenv("MARGO_ENABLE_MONITORING")) {
-        *monitor = margo_default_monitor;
-    }
+    // enabled but no library configured: use the built-in default monitor
+    *monitor = margo_default_monitor;
 
     return (0);
 }
@@ -130,10 +147,6 @@ margo_instance_id margo_init_ext(const char*                   address,
     struct margo_hg hg
         = {HG_INIT_INFO_INITIALIZER, NULL, NULL, HG_ADDR_NULL, NULL, 0};
     struct margo_abt abt = {0};
-
-    if(!args.monitor) {
-        margo_init_monitor(&args.monitor);
-    }
 
     if (args.json_config && strlen(args.json_config) > 0) {
         // read JSON config from provided string argument
@@ -162,6 +175,13 @@ margo_instance_id margo_init_ext(const char*                   address,
     } else {
         if (!__margo_validate_json(config, address, mode, &args))
             goto error;
+    }
+
+    // resolve the monitoring backend (unless the caller provided one)
+    if (!args.monitor) {
+        struct json_object* monitoring
+            = json_object_object_get(config, "monitoring");
+        if (margo_init_monitor(&args.monitor, monitoring) != 0) goto error;
     }
 
 #ifdef HAVE_MOCHI_PLUMBER
@@ -548,6 +568,8 @@ static bool __margo_validate_json(struct json_object*           _margo,
        - [optional] progress_pool: integer or string
        - [optional] rpc_pool: integer or string
        - [optional] monitoring: object
+       -            [optional]: library: string
+       -            [optional]: config: object
        - [optional] plumber: object
        -            [optional]: bucket_policy: string
        -            [optional]: nic_policy: string
@@ -569,6 +591,17 @@ static bool __margo_validate_json(struct json_object*           _margo,
     // check "plumber" configuration field
     struct json_object* _plumber = json_object_object_get(_margo, "plumber");
     if (!__margo_plumber_validate_json(_plumber)) { return false; }
+
+    // check "monitoring" configuration field
+    ASSERT_CONFIG_HAS_OPTIONAL(_margo, "monitoring", object, "margo");
+    struct json_object* _monitoring
+        = json_object_object_get(_margo, "monitoring");
+    if (_monitoring) {
+        // "library" selects a monitoring backend to load at run time
+        ASSERT_CONFIG_HAS_OPTIONAL(_monitoring, "library", string, "monitoring");
+        // "config" is passed as-is to the backend's initialize function
+        ASSERT_CONFIG_HAS_OPTIONAL(_monitoring, "config", object, "monitoring");
+    }
 
     // check "progress_spindown_msec" field
     ASSERT_CONFIG_HAS_OPTIONAL(_margo, "progress_spindown_msec", int, "margo");

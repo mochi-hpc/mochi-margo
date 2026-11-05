@@ -63,6 +63,16 @@
         "output": {"argobots":{"pools":[{"kind":"fifo_wait","name":"__primary__","access":"mpmc"}],"xstreams":[{"scheduler":{"type":"basic_wait","pools":[0]},"name":"__primary__"}],"abt_mem_max_num_stacks":8,"abt_thread_stacksize":2097152,"profiling_dir":"."},"monitoring":{"name":"default","config":{"filename_prefix":"margo","precision":9,"statistics":{"pretty_json":false,"disable":true},"time_series":{"pretty_json":false,"disable":true,"time_interval_sec":1.0}}},"progress_timeout_ub_msec":100,"progress_spindown_msec":10,"handle_cache_size":256,"enable_abt_profiling":false,"progress_pool":0,"rpc_pool":0}
     },
 
+    "monitoring_library_must_be_a_string": {
+        "pass": false,
+        "input": {"monitoring":{"library": 123}}
+    },
+
+    "monitoring_config_must_be_an_object": {
+        "pass": false,
+        "input": {"monitoring":{"config": "not-an-object"}}
+    },
+
     "abt_thread_stacksize_must_be_an_integer": {
         "pass": false,
         "input": {"argobots":{"abt_thread_stacksize": true}}
