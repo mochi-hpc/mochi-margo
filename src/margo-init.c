@@ -72,17 +72,29 @@ int margo_set_environment(const char* optional_json_config)
 // enabled, the "library" field of the "monitoring" configuration object (passed
 // as the "monitoring" argument, which may be NULL) selects a shared library to
 // load: margo calls its "margo_monitor_init" symbol to obtain the monitor. If
-// no library is provided, the built-in default monitor is used. Returns 0 on
-// success, -1 on failure (a requested library could not be loaded or
-// initialized).
+// no library is provided, the built-in default monitor is used. The
+// MARGO_MONITORING_LIBRARY_OVERRIDE environment variable, when set, overrides
+// the "library" field. Returns 0 on success, -1 on failure (a requested library
+// could not be loaded or initialized).
 static int margo_init_monitor(struct margo_monitor** monitor,
                               struct json_object*    monitoring)
 {
     // MARGO_ENABLE_MONITORING is the master switch: no monitoring without it
     if (!getenv("MARGO_ENABLE_MONITORING")) return (0);
 
-    const char* monitor_so = NULL;
-    if (monitoring) {
+    // MARGO_MONITORING_LIBRARY_OVERRIDE overrides the "library" field, for
+    // systems that instrument margo without control over its JSON input
+    const char* monitor_so = getenv("MARGO_MONITORING_LIBRARY_OVERRIDE");
+    if (monitor_so) {
+        // the overriding library may not expect the configuration meant for
+        // the library it replaces, unless the config is overridden too
+        if (!getenv("MARGO_MONITORING_CONFIG_OVERRIDE"))
+            margo_warning(
+                0,
+                "MARGO_MONITORING_LIBRARY_OVERRIDE is set without "
+                "MARGO_MONITORING_CONFIG_OVERRIDE, so the overriding library "
+                "may pick up a configuration not intended for it");
+    } else if (monitoring) {
         struct json_object* library
             = json_object_object_get(monitoring, "library");
         if (library) monitor_so = json_object_get_string(library);
@@ -476,14 +488,35 @@ margo_instance_id margo_init_ext(const char*                   address,
 
     // set monitor
     if (args.monitor) {
-        struct json_object* monitoring
-            = json_object_object_get(config, "monitoring");
         struct json_object* monitoring_config = NULL;
-        if (monitoring) {
-            monitoring_config = json_object_object_get(monitoring, "config");
-            json_object_get(monitoring_config);
-        } else {
-            monitoring_config = json_object_new_object();
+        // MARGO_MONITORING_CONFIG_OVERRIDE overrides the "config" field, for
+        // systems that instrument margo without control over its JSON input
+        const char* config_override
+            = getenv("MARGO_MONITORING_CONFIG_OVERRIDE");
+        if (config_override) {
+            struct json_tokener* tokener = json_tokener_new();
+            monitoring_config            = json_tokener_parse_ex(
+                tokener, config_override, strlen(config_override));
+            if (!monitoring_config) {
+                margo_warning(0,
+                              "Could not parse MARGO_MONITORING_CONFIG_OVERRIDE "
+                              "as JSON (%s), falling back to the \"config\" "
+                              "field",
+                              json_tokener_error_desc(
+                                  json_tokener_get_error(tokener)));
+            }
+            json_tokener_free(tokener);
+        }
+        if (!monitoring_config) {
+            struct json_object* monitoring
+                = json_object_object_get(config, "monitoring");
+            if (monitoring) {
+                monitoring_config
+                    = json_object_object_get(monitoring, "config");
+                json_object_get(monitoring_config);
+            } else {
+                monitoring_config = json_object_new_object();
+            }
         }
 
         mid->monitor = (struct margo_monitor*)malloc(sizeof(*(mid->monitor)));
