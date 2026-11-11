@@ -109,6 +109,16 @@ add_executable (margo-monitoring
     margo-monitoring.c
 )
 
+# shared library loaded at run time by the margo-monitor-plugin test
+add_library (test-monitor-plugin MODULE
+    test-monitor-plugin.c
+)
+
+add_executable (margo-monitor-plugin
+    munit/munit.c
+    margo-monitor-plugin.c
+)
+
 add_executable (margo-sanity-warnings
     munit/munit.c
     margo-sanity-warnings.c
@@ -143,6 +153,10 @@ target_link_libraries (margo-timer margo)
 target_link_libraries (margo-bulk margo)
 target_link_libraries (margo-forward margo margo-hg-shim)
 target_link_libraries (margo-monitoring margo)
+target_link_libraries (test-monitor-plugin margo)
+target_link_libraries (margo-monitor-plugin margo)
+target_compile_definitions (margo-monitor-plugin PRIVATE
+    TEST_MONITOR_PLUGIN="$<TARGET_FILE:test-monitor-plugin>")
 target_link_libraries (margo-sanity-warnings margo)
 target_link_libraries (margo-migrate-progress margo)
 target_link_libraries (margo-finalize-cb margo)
@@ -165,6 +179,7 @@ add_test (NAME margo-timer COMMAND margo-timer)
 add_test (NAME margo-bulk COMMAND margo-bulk)
 add_test (NAME margo-forward COMMAND margo-forward)
 add_test (NAME margo-monitoring COMMAND margo-monitoring)
+add_test (NAME margo-monitor-plugin COMMAND margo-monitor-plugin)
 add_test (NAME margo-sanity-warnings COMMAND margo-sanity-warnings)
 add_test (NAME margo-migrate-progress COMMAND margo-migrate-progress)
 add_test (NAME margo-finalize-cb COMMAND margo-finalize-cb)
